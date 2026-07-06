@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ZGCA 学习工作台
 
-## Getting Started
+日历驱动的中关村备考学习管理系统。当前内容源来自上级 `zgca` 文件夹，尤其是 `知识地图页面.html` 和 `agent沟通/02_十周做题驱动备考计划.md`。
 
-First, run the development server:
+## 本地开发
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+打开 `http://localhost:3000`。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 生产运行
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm run start
+```
 
-## Learn More
+## Docker / Mac mini
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+docker compose up -d --build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+默认端口：`3000`。
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+默认持久化：
 
-## Deploy on Vercel
+- `data/workbench.sqlite`
+- `data/uploads/YYYY/MM/DD/original`
+- `backups/`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Tailscale Serve 示例：
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+tailscale serve --bg 3000
+```
+
+## 备份
+
+```bash
+npm run backup
+```
+
+建议在 Mac mini 上用 cron 或 launchd 每天跑一次。备份会写到 `backups/YYYY-MM-DD/`。
+
+## 已实现范围
+
+- 日历页：按天显示学习、资料、复习、错题和总结状态。
+- 当天工作台：管理当天计划、日记、总结、学习记录、错题和资料流。
+- 右侧收纳窗口：Uppy 拖拽上传，文件默认复制入库。
+- 知识地图：从当前 `知识地图页面.html` 抽取 M1-M7 知识点。
+- 科目页：按 M1-M7 聚合知识点、资料、学习记录和错题。
+- SQLite 本地数据库与 Docker 部署文件。

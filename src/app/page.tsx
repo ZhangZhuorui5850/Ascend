@@ -1,66 +1,65 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+import Link from "next/link";
+import { getDashboard } from "@/lib/repository";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default function DashboardPage() {
+  const dashboard = getDashboard() as {
+    today: string;
+    pointStats: { total: number; mastered: number; openRed: number; examCount: number };
+    todayStats: { assets: number; studyMinutes: number; reviews: number; mistakes: number };
+    due: Array<{ id: string; title: string; subject_code: string; tier_name: string; next_review: string }>;
+    subjects: Array<{ code: string; name: string; description: string }>;
+  };
+
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="pageStack">
+      <section className="heroBand">
+        <span className="eyebrow">Calendar-first Learning OS</span>
+        <h1>今天先看日历，再进入当天工作台。</h1>
+        <p>
+          资料收纳、学习记录、错题、复习和总结都落到日期上；再按 M1-M7 和知识点重新聚合。
+        </p>
+        <div className="heroActions">
+          <Link className="primaryButton" href={`/day/${dashboard.today}`}>进入今日</Link>
+          <Link className="secondaryButton" href="/calendar">查看日历</Link>
         </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+
+      <section className="metricGrid">
+        <div className="metricCard"><strong>{dashboard.pointStats.total}</strong><span>知识点</span></div>
+        <div className="metricCard danger"><strong>{dashboard.pointStats.openRed}</strong><span>未掌握红点</span></div>
+        <div className="metricCard"><strong>{dashboard.todayStats.assets}</strong><span>今日资料</span></div>
+        <div className="metricCard"><strong>{dashboard.todayStats.studyMinutes}m</strong><span>今日学习</span></div>
+        <div className="metricCard"><strong>{dashboard.todayStats.reviews}</strong><span>今日复习</span></div>
+        <div className="metricCard"><strong>{dashboard.todayStats.mistakes}</strong><span>今日错题</span></div>
+      </section>
+
+      <section className="grid2">
+        <div className="card">
+          <div className="sectionTitle"><span className="eyebrow">Due</span><h2>到期复习</h2></div>
+          <div className="list">
+            {dashboard.due.length ? dashboard.due.map((item) => (
+              <div className="listRow" key={item.id}>
+                <span>{item.subject_code}</span>
+                <strong>{item.title}</strong>
+                <small>{item.next_review}</small>
+              </div>
+            )) : <p className="empty">暂无到期复习。先从右侧收纳窗口记录今天的学习。</p>}
+          </div>
         </div>
-      </main>
+        <div className="card">
+          <div className="sectionTitle"><span className="eyebrow">Subjects</span><h2>M1-M7 科目</h2></div>
+          <div className="subjectGrid">
+            {dashboard.subjects.map((subject) => (
+              <Link href={`/subjects/${subject.code}`} key={subject.code} className="subjectTile">
+                <b>{subject.code}</b>
+                <span>{subject.name}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
