@@ -35,7 +35,7 @@ function fileKind(file: File) {
   return file.type || "文件";
 }
 
-export function CapturePanel() {
+export function CapturePanel({ onClose }: { onClose?: () => void }) {
   const [day, setDay] = useState(today());
   const [tags, setTags] = useState("待整理");
   const [subjectCode, setSubjectCode] = useState("");
@@ -207,6 +207,9 @@ export function CapturePanel() {
           <span className="eyebrow">Quick Capture</span>
           <h2>收纳小窗口</h2>
         </div>
+        <button className="captureClose" onClick={onClose} type="button" aria-label="关闭收纳小窗口">
+          <X size={16} />
+        </button>
       </div>
 
       <label className="field">

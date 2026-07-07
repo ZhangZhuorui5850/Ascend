@@ -24,6 +24,14 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
         <h1>{date}</h1>
         <p>当天所有资料、学习、复习、错题、日记和总结都在这里收口。</p>
       </div>
+      <section className="todayFocus">
+        <div>
+          <span className="eyebrow">Now</span>
+          <h2>{day.entry.plan || "先写下今天最重要的一步"}</h2>
+          <p>{day.entry.tomorrow || "记录会自动保存；资料拖到收纳窗口会即时上传。"}</p>
+        </div>
+        <Link className="secondaryButton" href="/calendar">切换日期</Link>
+      </section>
       <section className="metricGrid compact">
         <div className="metricCard"><strong>{day.assets.length}</strong><span>资料</span></div>
         <div className="metricCard"><strong>{studyMinutes}m</strong><span>学习</span></div>

@@ -106,6 +106,11 @@ select {
   background: var(--surface-soft);
 }
 
+.sidebar a.active {
+  color: var(--ink);
+  background: var(--accent-soft);
+}
+
 .mainPane {
   min-width: 0;
   padding: 28px;
@@ -125,10 +130,23 @@ select {
   background: #f4f7ff;
 }
 
+.captureBackdrop,
+.captureClose,
+.mobileNav {
+  display: none;
+}
+
 .panelHeader,
 .sectionTitle,
 .pageHeader {
   margin-bottom: 16px;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 h1,
@@ -203,6 +221,28 @@ h2 {
 
 .metricGrid.compact {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.todayFocus {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.todayFocus h2 {
+  margin-top: 4px;
+  font-size: 22px;
+}
+
+.todayFocus p {
+  margin-top: 6px;
+  color: var(--muted);
+  line-height: 1.55;
 }
 
 .metricCard,
@@ -970,12 +1010,17 @@ h2 {
     position: static;
     grid-column: 1 / -1;
     height: auto;
+    max-height: 560px;
     border-left: 0;
     border-top: 1px solid var(--line);
   }
 }
 
 @media (max-width: 820px) {
+  body {
+    background: var(--surface-soft);
+  }
+
   .appFrame,
   .grid2,
   .grid3,
@@ -989,12 +1034,144 @@ h2 {
   }
 
   .sidebar {
-    position: static;
-    height: auto;
+    display: none;
   }
 
   .mainPane {
-    padding: 18px;
+    padding: 16px 14px 88px;
+  }
+
+  h1 {
+    font-size: 30px;
+    letter-spacing: 0;
+  }
+
+  .pageStack {
+    gap: 14px;
+  }
+
+  .heroBand,
+  .card,
+  .calendarShell,
+  .metricCard,
+  .todayFocus {
+    border-radius: 8px;
+  }
+
+  .todayFocus {
+    display: grid;
+  }
+
+  .todayFocus .secondaryButton {
+    width: 100%;
+  }
+
+  .metricGrid,
+  .metricGrid.compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metricCard {
+    padding: 13px;
+  }
+
+  .metricCard strong {
+    font-size: 24px;
+  }
+
+  .inlineComposer,
+  .inlineComposer:last-child {
+    grid-template-columns: 1fr;
+  }
+
+  .captureBackdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: block;
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
+    background: rgba(21, 32, 43, 0.34);
+    transition: opacity 0.18s ease;
+  }
+
+  .captureOpen .captureBackdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .capturePanel {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 40;
+    grid-column: auto;
+    height: min(82vh, 680px);
+    max-height: none;
+    padding: 16px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-bottom: 0;
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -18px 48px rgba(21, 32, 43, 0.16);
+    transform: translateY(100%);
+    transition: transform 0.2s ease;
+  }
+
+  .captureOpen .capturePanel {
+    transform: translateY(0);
+  }
+
+  .captureClose {
+    display: inline-grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--muted);
+    background: var(--surface);
+    cursor: pointer;
+  }
+
+  .mobileNav {
+    position: fixed;
+    right: 10px;
+    bottom: 10px;
+    left: 10px;
+    z-index: 50;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px;
+    padding: 7px;
+    padding-bottom: calc(7px + env(safe-area-inset-bottom));
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 12px 32px rgba(21, 32, 43, 0.16);
+    backdrop-filter: blur(16px);
+  }
+
+  .mobileNav a,
+  .mobileNav button {
+    display: grid;
+    place-items: center;
+    gap: 3px;
+    min-height: 48px;
+    border: 0;
+    border-radius: 10px;
+    color: var(--muted);
+    background: transparent;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 650;
+  }
+
+  .mobileNav a.active,
+  .mobileNav button:active {
+    color: var(--ink);
+    background: var(--accent-soft);
   }
 
   .loginShell {
@@ -1009,7 +1186,55 @@ h2 {
   .kpRow,
   .knowledgeList.inset .kpRow,
   .listRow,
-  .assetRow {
+  .assetRow,
+  .timelineItem {
     grid-template-columns: 1fr;
+  }
+
+  .attachmentCard {
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+  }
+
+  .attachmentPreview {
+    width: 42px;
+    height: 42px;
+  }
+
+  .attachmentLink {
+    grid-column: 2 / 4;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 480px) {
+  .mainPane {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .heroBand,
+  .card,
+  .calendarShell {
+    padding: 14px;
+  }
+
+  .pageHeader p,
+  .heroBand p {
+    line-height: 1.55;
+  }
+
+  .fc {
+    font-size: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
