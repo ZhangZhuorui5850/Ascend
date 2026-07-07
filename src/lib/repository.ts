@@ -17,7 +17,17 @@ export function getDay(date: string) {
   assertDateKey(date);
   const db = getDb();
   db.prepare("INSERT OR IGNORE INTO daily_entries (date) VALUES (?)").run(date);
-  const entry = db.prepare("SELECT * FROM daily_entries WHERE date = ?").get(date);
+  const entry = db.prepare("SELECT * FROM daily_entries WHERE date = ?").get(date) as Record<string, string>;
+  const drafts = db.prepare(`
+    SELECT field, content
+    FROM drafts
+    WHERE scope_type = 'day' AND scope_id = ? AND status = 'active'
+  `).all(date) as Array<{ field: string; content: string }>;
+  for (const draft of drafts) {
+    if (["plan", "diary", "summary", "blockers", "tomorrow"].includes(draft.field)) {
+      entry[draft.field] = draft.content;
+    }
+  }
   const assets = db.prepare("SELECT * FROM assets WHERE day = ? ORDER BY created_at DESC").all(date);
   const sessions = db.prepare("SELECT * FROM study_sessions WHERE day = ? ORDER BY created_at DESC").all(date);
   const reviews = db.prepare(`

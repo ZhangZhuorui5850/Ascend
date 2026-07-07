@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useAutosyncedFields } from "@/hooks/useAutosyncedFields";
 
 type DayWorkspaceProps = {
   date: string;
@@ -10,19 +11,29 @@ type DayWorkspaceProps = {
 
 export function DayWorkspace({ date, entry }: DayWorkspaceProps) {
   const router = useRouter();
-  const [form, setForm] = useState({
+  const initialFields = useMemo(() => ({
     plan: entry.plan || "",
     diary: entry.diary || "",
     summary: entry.summary || "",
     blockers: entry.blockers || "",
     tomorrow: entry.tomorrow || "",
+  }), [entry.blockers, entry.diary, entry.plan, entry.summary, entry.tomorrow]);
+  const {
+    fields: form,
+    updateField,
+    statusByField,
+    globalStatus,
+  } = useAutosyncedFields({
+    scopeType: "day",
+    scopeId: date,
+    initial: initialFields,
   });
   const [sessionTitle, setSessionTitle] = useState("");
   const [minutes, setMinutes] = useState(50);
   const [mistakeTitle, setMistakeTitle] = useState("");
 
   function update(key: keyof typeof form, value: string) {
-    setForm((current) => ({ ...current, [key]: value }));
+    updateField(key, value);
   }
 
   async function saveDay() {
@@ -62,30 +73,36 @@ export function DayWorkspace({ date, entry }: DayWorkspaceProps) {
         <span className="eyebrow">Daily Hub</span>
         <h2>日记 / 总结</h2>
       </div>
+      <p className={`syncStatus sync-${globalStatus}`}>自动同步：{syncLabel(globalStatus)}</p>
       <label className="field">
         今日计划
         <textarea value={form.plan} onChange={(event) => update("plan", event.target.value)} />
+        <FieldStatus status={statusByField.plan} />
       </label>
       <label className="field">
         日记
         <textarea value={form.diary} onChange={(event) => update("diary", event.target.value)} />
+        <FieldStatus status={statusByField.diary} />
       </label>
       <label className="field">
         晚间总结
         <textarea value={form.summary} onChange={(event) => update("summary", event.target.value)} />
+        <FieldStatus status={statusByField.summary} />
       </label>
       <div className="grid2">
         <label className="field">
           阻塞
           <input value={form.blockers} onChange={(event) => update("blockers", event.target.value)} />
+          <FieldStatus status={statusByField.blockers} />
         </label>
         <label className="field">
           明日第一步
           <input value={form.tomorrow} onChange={(event) => update("tomorrow", event.target.value)} />
+          <FieldStatus status={statusByField.tomorrow} />
         </label>
       </div>
       <button className="primaryButton" onClick={saveDay} type="button">
-        保存当天
+        提交当天正式记录
       </button>
 
       <div className="inlineComposer">
@@ -99,4 +116,24 @@ export function DayWorkspace({ date, entry }: DayWorkspaceProps) {
       </div>
     </section>
   );
+}
+
+function FieldStatus({ status }: { status?: string }) {
+  return <small className={`fieldStatus ${status === "error" ? "error" : ""}`}>{fieldStatusLabel(status)}</small>;
+}
+
+function fieldStatusLabel(status?: string) {
+  if (status === "dirty") return "等待自动保存";
+  if (status === "saving") return "保存中...";
+  if (status === "saved") return "已保存草稿";
+  if (status === "remote") return "已同步其它终端";
+  if (status === "error") return "自动保存失败";
+  return "自动保存";
+}
+
+function syncLabel(status: string) {
+  if (status === "saving") return "保存中";
+  if (status === "remote") return "已收到其它终端更新";
+  if (status === "error") return "有字段失败";
+  return "已保存草稿";
 }

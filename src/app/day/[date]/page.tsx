@@ -30,7 +30,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
         <div className="metricCard"><strong>{day.mistakes.length}</strong><span>错题</span></div>
       </section>
       <section className="grid2">
-        <DayWorkspace date={date} entry={day.entry} />
+        <DayWorkspace key={date} date={date} entry={day.entry} />
         <div className="card">
           <div className="sectionTitle"><span className="eyebrow">Assets</span><h2>资料流</h2></div>
           <div className="assetList">

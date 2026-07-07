@@ -282,6 +282,29 @@ h2 {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+.syncStatus,
+.fieldStatus {
+  color: var(--quiet);
+  font-size: 12px;
+}
+
+.syncStatus {
+  margin-top: -8px;
+}
+
+.sync-saving {
+  color: var(--warn);
+}
+
+.sync-remote {
+  color: var(--accent);
+}
+
+.sync-error,
+.fieldStatus.error {
+  color: var(--danger);
+}
+
 .hint,
 .empty {
   color: var(--quiet);
