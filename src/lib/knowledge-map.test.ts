@@ -16,4 +16,17 @@ describe("extractKnowledgeSeed", () => {
     expect(seed.points.filter((point) => point.tier === "r").length).toBeGreaterThan(50);
     expect(seed.points.some((point) => point.exam && point.title.includes("PCA"))).toBe(true);
   });
+
+  it("falls back to the bundled M1-M7 seed when the source page is only a deployment placeholder", () => {
+    const seed = extractKnowledgeSeed(`
+      <script>
+        const DATA = [];
+        const TIERNAME = {};
+      </script>
+    `);
+
+    expect(seed.subjects).toHaveLength(7);
+    expect(seed.points.length).toBeGreaterThan(100);
+    expect(seed.points.some((point) => point.exam && point.title.includes("PCA"))).toBe(true);
+  });
 });
