@@ -277,34 +277,39 @@ git commit -m "feat: add database migrations"
 - Produces: `requireSession(request?: Request): Promise<{ id: string; email: string; displayName: string }>`
 - Produces: `assertSameOrigin(request: Request): void`
 
-- [ ] **Step 1: Extend migrations for users and sessions**
+- [ ] **Step 1: Add a new auth migration for users and sessions**
 
-Modify the `0001_foundation` SQL in `src/lib/migrations.ts` to include:
+Append a second migration entry in `src/lib/migrations.ts`. Do not edit the already-applied `0001_foundation` migration. The new entry must be:
 
-```sql
-CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
-  display_name TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+```ts
+{
+  version: "0002_auth_sessions",
+  sql: `
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      display_name TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
 
-CREATE TABLE IF NOT EXISTS sessions (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  token_hash TEXT NOT NULL UNIQUE,
-  expires_at TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  user_agent TEXT NOT NULL DEFAULT '',
-  ip_hint TEXT NOT NULL DEFAULT '',
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      user_agent TEXT NOT NULL DEFAULT '',
+      ip_hint TEXT NOT NULL DEFAULT '',
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
 
-CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);
-CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);
+    CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+  `,
+}
 ```
 
 - [ ] **Step 2: Write failing auth tests**
@@ -805,6 +810,7 @@ git commit -m "feat: guard api routes"
 
 **Files:**
 - Create: `src/lib/assets.ts`
+- Modify: `src/lib/migrations.ts`
 - Modify: `src/lib/repository.ts`
 - Modify: `src/lib/storage.ts`
 - Modify: `src/app/api/assets/route.ts`
@@ -817,7 +823,40 @@ git commit -m "feat: guard api routes"
 - Produces: `resolveAssetPath(relativePath: string): string`
 - Produces: `contentDispositionFor(mimeType: string, originalName: string): string`
 
-- [ ] **Step 1: Write asset safety tests**
+- [ ] **Step 1: Add an asset blob migration**
+
+Append a third migration entry in `src/lib/migrations.ts`. Do not edit earlier migrations after they have shipped. The new entry must be:
+
+```ts
+{
+  version: "0003_asset_blobs",
+  sql: `
+    CREATE TABLE IF NOT EXISTS blobs (
+      id TEXT PRIMARY KEY,
+      sha256 TEXT NOT NULL UNIQUE,
+      size INTEGER NOT NULL,
+      mime_type TEXT NOT NULL DEFAULT '',
+      storage_key TEXT NOT NULL UNIQUE,
+      ref_count INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS upload_sessions (
+      id TEXT PRIMARY KEY,
+      blob_id TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      received_bytes INTEGER NOT NULL DEFAULT 0,
+      expires_at TEXT NOT NULL,
+      FOREIGN KEY (blob_id) REFERENCES blobs(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_blobs_sha256 ON blobs(sha256);
+    CREATE INDEX IF NOT EXISTS idx_upload_sessions_status ON upload_sessions(status, expires_at);
+  `,
+}
+```
+
+- [ ] **Step 2: Write asset safety tests**
 
 Create `src/lib/assets.test.ts`:
 
@@ -865,13 +904,13 @@ describe("asset storage safety", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 3: Run test to verify it fails**
 
 Run: `npm test -- src/lib/assets.test.ts`
 
 Expected: FAIL because `src/lib/assets.ts` does not exist.
 
-- [ ] **Step 3: Implement asset helpers**
+- [ ] **Step 4: Implement asset helpers**
 
 Create `src/lib/assets.ts`:
 
@@ -940,7 +979,7 @@ export async function streamAssetFile(absolutePath: string): Promise<ReadableStr
 }
 ```
 
-- [ ] **Step 4: Update repository upload path**
+- [ ] **Step 5: Update repository upload path**
 
 In `src/lib/repository.ts`, replace temp-file copy logic in `createAssetFromUpload` with:
 
@@ -968,7 +1007,7 @@ Insert blob metadata if the `blobs` table exists:
 
 Use `stored.relativePath`, `stored.safeName`, and `stored.size` for the asset row.
 
-- [ ] **Step 5: Update download route**
+- [ ] **Step 6: Update download route**
 
 Modify `src/app/api/assets/[id]/file/route.ts`:
 
@@ -998,7 +1037,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 }
 ```
 
-- [ ] **Step 6: Run tests**
+- [ ] **Step 7: Run tests**
 
 Run:
 
@@ -1009,7 +1048,7 @@ npm run lint
 
 Expected: both pass.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add src/lib/assets.ts src/lib/assets.test.ts src/lib/repository.ts src/app/api/assets src/lib/storage.ts
