@@ -11,6 +11,7 @@ type Attachment = {
   name: string;
   size: number;
   type: string;
+  assetId?: number;
   previewUrl?: string;
   status: AttachmentStatus;
   error?: string;
@@ -42,16 +43,21 @@ export function CapturePanel() {
   const [message, setMessage] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const attachmentsRef = useRef<Attachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragDepthRef = useRef(0);
 
   useEffect(() => {
+    attachmentsRef.current = attachments;
+  }, [attachments]);
+
+  useEffect(() => {
     return () => {
-      attachments.forEach((attachment) => {
+      attachmentsRef.current.forEach((attachment) => {
         if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
       });
     };
-  }, [attachments]);
+  }, []);
 
   function addFiles(files: FileList | File[]) {
     const incoming = Array.from(files);
@@ -68,7 +74,10 @@ export function CapturePanel() {
     }));
 
     setAttachments((current) => [...current, ...next]);
-    setMessage(`已加入 ${next.length} 个文件，确认后发送入库`);
+    setMessage(`已加入 ${next.length} 个文件，正在上传入库`);
+    for (const attachment of next) {
+      void uploadQueuedAttachment(attachment);
+    }
   }
 
   function removeAttachment(id: string) {
@@ -117,7 +126,7 @@ export function CapturePanel() {
     event.target.value = "";
   }
 
-  async function uploadAttachment(attachment: Attachment) {
+  async function uploadAttachment(attachment: Attachment): Promise<{ id: number }> {
     const formData = new FormData();
     formData.append("file", attachment.file, attachment.name);
     formData.append("day", day);
@@ -132,6 +141,33 @@ export function CapturePanel() {
     if (!response.ok) {
       const text = await response.text();
       throw new Error(text || "上传失败");
+    }
+
+    return (await response.json()) as { id: number };
+  }
+
+  async function uploadQueuedAttachment(attachment: Attachment) {
+    setAttachments((current) =>
+      current.map((item) => (item.id === attachment.id ? { ...item, status: "uploading", error: undefined } : item)),
+    );
+
+    try {
+      const asset = await uploadAttachment(attachment);
+      setAttachments((current) =>
+        current.map((item) =>
+          item.id === attachment.id ? { ...item, status: "uploaded", assetId: Number(asset.id) } : item,
+        ),
+      );
+      setMessage("文件已上传到当天资料流");
+    } catch (error) {
+      setAttachments((current) =>
+        current.map((item) =>
+          item.id === attachment.id
+            ? { ...item, status: "error", error: error instanceof Error ? error.message : "上传失败" }
+            : item,
+        ),
+      );
+      setMessage("有文件上传失败，可以重试");
     }
   }
 
@@ -151,32 +187,11 @@ export function CapturePanel() {
       return;
     }
 
-    setMessage("正在写入当天...");
-
     if (quickNote.trim()) {
       await submitQuickNote();
     }
 
-    for (const attachment of attachments) {
-      setAttachments((current) =>
-        current.map((item) => (item.id === attachment.id ? { ...item, status: "uploading", error: undefined } : item)),
-      );
-
-      try {
-        await uploadAttachment(attachment);
-        setAttachments((current) => current.map((item) => (item.id === attachment.id ? { ...item, status: "uploaded" } : item)));
-      } catch (error) {
-        setAttachments((current) =>
-          current.map((item) =>
-            item.id === attachment.id
-              ? { ...item, status: "error", error: error instanceof Error ? error.message : "上传失败" }
-              : item,
-          ),
-        );
-      }
-    }
-
-    setMessage("已发送到当天资料流");
+    setMessage("记录已写入；文件会在上传成功后自动进入资料流");
   }
 
   return (
@@ -246,6 +261,16 @@ export function CapturePanel() {
                   {attachment.status === "uploaded" ? <CheckCircle2 size={15} /> : null}
                   {attachment.status === "error" ? <AlertCircle size={15} /> : null}
                 </div>
+                {attachment.status === "uploaded" && attachment.assetId ? (
+                  <a className="attachmentLink" href={`/api/assets/${attachment.assetId}/file`} target="_blank">
+                    下载
+                  </a>
+                ) : null}
+                {attachment.status === "error" ? (
+                  <button className="attachmentLink" onClick={() => uploadQueuedAttachment(attachment)} type="button">
+                    重试
+                  </button>
+                ) : null}
                 <button className="removeAttachment" onClick={() => removeAttachment(attachment.id)} type="button" aria-label="移除文件">
                   <X size={14} />
                 </button>
@@ -267,7 +292,7 @@ export function CapturePanel() {
         <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileInput} />
       </div>
 
-      {message ? <p className="hint">{message}</p> : <p className="hint">发送后，文件会复制入库并进入当天资料流。</p>}
+      {message ? <p className="hint">{message}</p> : <p className="hint">文件会即时上传，文字记录点击发送后写入当天。</p>}
     </aside>
   );
 }
