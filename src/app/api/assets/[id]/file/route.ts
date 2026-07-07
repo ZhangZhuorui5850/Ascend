@@ -1,22 +1,24 @@
-import { getDb, getUploadRoot } from "@/lib/db";
+import { contentDispositionFor, resolveAssetPath, streamAssetFile } from "@/lib/assets";
+import { getDb } from "@/lib/db";
 import { authErrorResponse, requireSession } from "@/lib/request-auth";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     await requireSession(request);
     const { id } = await context.params;
     const asset = getDb().prepare("SELECT * FROM assets WHERE id = ?").get(id) as
-      | { relative_path: string; mime_type: string; original_name: string }
+      | { relative_path: string; mime_type: string; original_name: string; size: number }
       | undefined;
     if (!asset) return new Response("Not found", { status: 404 });
 
-    const file = await readFile(path.join(getUploadRoot(), asset.relative_path));
-    return new Response(file, {
+    const absolutePath = resolveAssetPath(asset.relative_path);
+    const body = await streamAssetFile(absolutePath);
+    return new Response(body, {
       headers: {
         "content-type": asset.mime_type || "application/octet-stream",
-        "content-disposition": `inline; filename="${encodeURIComponent(asset.original_name)}"`,
+        "content-disposition": contentDispositionFor(asset.mime_type || "", asset.original_name),
+        "x-content-type-options": "nosniff",
+        "content-length": String(asset.size ?? 0),
       },
     });
   } catch (error) {

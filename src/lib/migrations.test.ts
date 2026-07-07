@@ -10,6 +10,7 @@ describe("runMigrations", () => {
 
     expect(getAppliedMigrations(db)).toContain("0001_foundation");
     expect(getAppliedMigrations(db)).toContain("0002_auth_sessions");
+    expect(getAppliedMigrations(db)).toContain("0003_asset_blobs");
     expect(
       db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'devices'").get(),
     ).toMatchObject({ name: "devices" });
@@ -25,6 +26,12 @@ describe("runMigrations", () => {
     expect(
       db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sessions'").get(),
     ).toMatchObject({ name: "sessions" });
+    expect(
+      db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'blobs'").get(),
+    ).toMatchObject({ name: "blobs" });
+    expect(
+      db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'upload_sessions'").get(),
+    ).toMatchObject({ name: "upload_sessions" });
   });
 
   it("is idempotent", () => {

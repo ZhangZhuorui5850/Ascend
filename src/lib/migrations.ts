@@ -94,6 +94,32 @@ const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
     `,
   },
+  {
+    version: "0003_asset_blobs",
+    sql: `
+      CREATE TABLE IF NOT EXISTS blobs (
+        id TEXT PRIMARY KEY,
+        sha256 TEXT NOT NULL UNIQUE,
+        size INTEGER NOT NULL,
+        mime_type TEXT NOT NULL DEFAULT '',
+        storage_key TEXT NOT NULL UNIQUE,
+        ref_count INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS upload_sessions (
+        id TEXT PRIMARY KEY,
+        blob_id TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        received_bytes INTEGER NOT NULL DEFAULT 0,
+        expires_at TEXT NOT NULL,
+        FOREIGN KEY (blob_id) REFERENCES blobs(id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_blobs_sha256 ON blobs(sha256);
+      CREATE INDEX IF NOT EXISTS idx_upload_sessions_status ON upload_sessions(status, expires_at);
+    `,
+  },
 ];
 
 function checksum(sql: string): string {

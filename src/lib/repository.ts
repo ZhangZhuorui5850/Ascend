@@ -1,11 +1,9 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import path from "node:path";
+import { storeUploadedFile } from "./assets";
 import type { CalendarSummary } from "./types";
 import { buildCalendarSummaries } from "./calendar-summary";
 import { assertDateKey, todayKey } from "./dates";
-import { getDb, getUploadRoot } from "./db";
+import { getDb } from "./db";
 import { nextReviewDate } from "./review-schedule";
-import { copyAssetIntoLibrary } from "./storage";
 import { applyViewFilters, DEFAULT_VIEWS, getDefaultViewBySlug, type DataRow, type SavedView } from "./views";
 
 export function ensureDay(date: string) {
@@ -195,20 +193,25 @@ export async function createAssetFromUpload(input: {
 }) {
   const day = assertDateKey(input.day || todayKey());
   ensureDay(day);
-  const bytes = Buffer.from(await input.file.arrayBuffer());
-  const tempDir = path.join(getUploadRoot(), ".tmp");
-  mkdirSync(tempDir, { recursive: true });
-  const tempPath = path.join(tempDir, `${crypto.randomUUID()}-${input.file.name}`);
-  writeFileSync(tempPath, bytes);
-
-  const stored = await copyAssetIntoLibrary({
-    sourcePath: tempPath,
-    originalName: input.file.name,
+  const stored = await storeUploadedFile({
+    file: input.file,
     day,
-    uploadRoot: getUploadRoot(),
   });
 
   const db = getDb();
+  const mimeType = input.file.type || "application/octet-stream";
+  db.prepare(`
+    INSERT INTO blobs (id, sha256, size, mime_type, storage_key, ref_count)
+    VALUES (@id, @sha256, @size, @mimeType, @storageKey, 0)
+    ON CONFLICT(id) DO UPDATE SET ref_count = ref_count
+  `).run({
+    id: stored.sha256,
+    sha256: stored.sha256,
+    size: stored.size,
+    mimeType,
+    storageKey: stored.relativePath,
+  });
+
   const result = db.prepare(`
     INSERT INTO assets (day, original_name, safe_name, relative_path, mime_type, size)
     VALUES (@day, @originalName, @safeName, @relativePath, @mimeType, @size)
@@ -217,10 +220,11 @@ export async function createAssetFromUpload(input: {
     originalName: input.file.name,
     safeName: stored.safeName,
     relativePath: stored.relativePath,
-    mimeType: input.file.type || "application/octet-stream",
-    size: input.file.size,
+    mimeType,
+    size: stored.size,
   });
   const assetId = Number(result.lastInsertRowid);
+  db.prepare("UPDATE blobs SET ref_count = ref_count + 1 WHERE id = ?").run(stored.sha256);
   linkAsset(assetId, input.subjectCode, input.knowledgePointId);
   setAssetTags(assetId, input.tags || []);
   return db.prepare("SELECT * FROM assets WHERE id = ?").get(assetId);
