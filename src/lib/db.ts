@@ -28,6 +28,12 @@ export function getSourceRoot(): string {
 }
 
 export function getDb(): Database.Database {
+  const database = getDbHandle();
+  seedKnowledgeMap(database);
+  return database;
+}
+
+export function getDbHandle(): Database.Database {
   if (db) return db;
 
   const dataRoot = getDataRoot();
@@ -39,7 +45,6 @@ export function getDb(): Database.Database {
   db.pragma("synchronous = NORMAL");
   initializeDatabase(db);
   runMigrations(db);
-  seedKnowledgeMap(db);
   return db;
 }
 

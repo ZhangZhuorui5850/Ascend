@@ -879,6 +879,51 @@ h2 {
   font-size: 12px;
 }
 
+.loginShell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  gap: 28px;
+  min-height: 100vh;
+  padding: 28px;
+  align-items: center;
+}
+
+.loginHero,
+.loginCard {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.loginHero {
+  min-height: calc(100vh - 56px);
+  padding: 32px;
+  display: grid;
+  align-items: end;
+}
+
+.loginHero h2 {
+  margin-top: 16px;
+  font-size: 34px;
+}
+
+.loginHero p,
+.loginCard p {
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.loginCard {
+  display: grid;
+  gap: 14px;
+  padding: 24px;
+}
+
+.formError {
+  color: var(--danger);
+  font-size: 13px;
+}
+
 @media (max-width: 1180px) {
   .appFrame {
     grid-template-columns: 190px minmax(0, 1fr);
@@ -913,6 +958,15 @@ h2 {
 
   .mainPane {
     padding: 18px;
+  }
+
+  .loginShell {
+    grid-template-columns: 1fr;
+    padding: 18px;
+  }
+
+  .loginHero {
+    min-height: auto;
   }
 
   .kpRow,

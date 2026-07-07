@@ -66,6 +66,34 @@ const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_drafts_scope ON drafts(scope_type, scope_id, field);
     `,
   },
+  {
+    version: "0002_auth_sessions",
+    sql: `
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        display_name TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        user_agent TEXT NOT NULL DEFAULT '',
+        ip_hint TEXT NOT NULL DEFAULT '',
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);
+      CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+    `,
+  },
 ];
 
 function checksum(sql: string): string {
