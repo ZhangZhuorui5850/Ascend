@@ -1,0 +1,110 @@
+import type Database from "better-sqlite3";
+import { createHash } from "node:crypto";
+
+type Migration = {
+  version: string;
+  sql: string;
+};
+
+const migrations: Migration[] = [
+  {
+    version: "0001_foundation",
+    sql: `
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version TEXT PRIMARY KEY,
+        applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        checksum TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS devices (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL DEFAULT '',
+        last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_pulled_seq INTEGER NOT NULL DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS entity_changes (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT,
+        op_id TEXT NOT NULL UNIQUE,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        op TEXT NOT NULL,
+        base_version INTEGER,
+        patch_json TEXT NOT NULL DEFAULT '{}',
+        snapshot_json TEXT NOT NULL DEFAULT '{}',
+        device_id TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS drafts (
+        id TEXT PRIMARY KEY,
+        scope_type TEXT NOT NULL,
+        scope_id TEXT NOT NULL,
+        field TEXT NOT NULL,
+        content TEXT NOT NULL DEFAULT '',
+        base_version INTEGER NOT NULL DEFAULT 0,
+        version INTEGER NOT NULL DEFAULT 1,
+        status TEXT NOT NULL DEFAULT 'active',
+        device_id TEXT,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(scope_type, scope_id, field)
+      );
+
+      CREATE TABLE IF NOT EXISTS conflicts (
+        id TEXT PRIMARY KEY,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        base_version INTEGER NOT NULL,
+        local_json TEXT NOT NULL,
+        incoming_json TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open',
+        resolved_at TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_entity_changes_seq ON entity_changes(seq);
+      CREATE INDEX IF NOT EXISTS idx_entity_changes_entity ON entity_changes(entity_type, entity_id);
+      CREATE INDEX IF NOT EXISTS idx_drafts_scope ON drafts(scope_type, scope_id, field);
+    `,
+  },
+];
+
+function checksum(sql: string): string {
+  return createHash("sha256").update(sql).digest("hex");
+}
+
+export function runMigrations(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version TEXT PRIMARY KEY,
+      applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      checksum TEXT NOT NULL
+    );
+  `);
+
+  const applied = new Set(getAppliedMigrations(database));
+  const insert = database.prepare("INSERT INTO schema_migrations (version, checksum) VALUES (?, ?)");
+
+  for (const migration of migrations) {
+    if (applied.has(migration.version)) continue;
+
+    const apply = database.transaction(() => {
+      database.exec(migration.sql);
+      insert.run(migration.version, checksum(migration.sql));
+    });
+
+    apply();
+  }
+}
+
+export function getAppliedMigrations(database: Database.Database): string[] {
+  const exists = database
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'")
+    .get();
+
+  if (!exists) return [];
+
+  return database
+    .prepare("SELECT version FROM schema_migrations ORDER BY version ASC")
+    .all()
+    .map((row) => (row as { version: string }).version);
+}

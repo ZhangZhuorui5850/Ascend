@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { extractKnowledgeSeed } from "./knowledge-map";
+import { runMigrations } from "./migrations";
 
 let db: Database.Database | null = null;
 
@@ -33,7 +34,11 @@ export function getDb(): Database.Database {
   mkdirSync(dataRoot, { recursive: true });
   db = new Database(path.join(dataRoot, "workbench.sqlite"));
   db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
+  db.pragma("busy_timeout = 5000");
+  db.pragma("synchronous = NORMAL");
   initializeDatabase(db);
+  runMigrations(db);
   seedKnowledgeMap(db);
   return db;
 }
