@@ -1,9 +1,12 @@
 import Link from "next/link";
+import { requirePageSession } from "@/lib/page-auth";
 import { getAssets } from "@/lib/repository";
 
 export const dynamic = "force-dynamic";
 
-export default function AssetsPage() {
+export default async function AssetsPage() {
+  await requirePageSession("/assets");
+
   const assets = getAssets() as Array<{ id: number; day: string; original_name: string; mime_type: string; size: number }>;
   return (
     <div className="pageStack">

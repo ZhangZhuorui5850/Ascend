@@ -1,9 +1,12 @@
 import { CalendarView } from "@/components/CalendarView";
+import { requirePageSession } from "@/lib/page-auth";
 import { getCalendarSummaries } from "@/lib/repository";
 
 export const dynamic = "force-dynamic";
 
-export default function CalendarPage() {
+export default async function CalendarPage() {
+  await requirePageSession("/calendar");
+
   return (
     <div className="pageStack">
       <div className="pageHeader">

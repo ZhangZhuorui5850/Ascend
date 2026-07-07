@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requirePageSession } from "@/lib/page-auth";
 import { getViewData } from "@/lib/repository";
 import type { SavedView } from "@/lib/views";
 
@@ -8,6 +9,8 @@ type Row = Record<string, unknown>;
 
 export default async function ViewPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  await requirePageSession(`/views/${slug}`);
+
   const data = getViewData(slug) as { view: SavedView; views: SavedView[]; rows: Row[] };
 
   return (

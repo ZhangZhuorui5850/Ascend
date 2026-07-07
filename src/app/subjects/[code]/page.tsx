@@ -1,9 +1,12 @@
+import { requirePageSession } from "@/lib/page-auth";
 import { getSubject } from "@/lib/repository";
 
 export const dynamic = "force-dynamic";
 
 export default async function SubjectPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
+  await requirePageSession(`/subjects/${code}`);
+
   const data = getSubject(code) as {
     subject?: { code: string; name: string; description: string };
     points: Array<{ id: string; title: string; tier: string; tier_name: string; status: string; exam: number }>;

@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { DayWorkspace } from "@/components/DayWorkspace";
+import { requirePageSession } from "@/lib/page-auth";
 import { getDay } from "@/lib/repository";
 
 export default async function DayPage({ params }: { params: Promise<{ date: string }> }) {
   const { date } = await params;
+  await requirePageSession(`/day/${date}`);
+
   const day = getDay(date) as {
     entry: Record<string, string>;
     assets: Array<{ id: number; original_name: string; mime_type: string; size: number; note: string }>;

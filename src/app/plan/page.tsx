@@ -1,10 +1,13 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { getSourceRoot } from "@/lib/db";
+import { requirePageSession } from "@/lib/page-auth";
 
 export const dynamic = "force-dynamic";
 
-export default function PlanPage() {
+export default async function PlanPage() {
+  await requirePageSession("/plan");
+
   const planPath = path.join(getSourceRoot(), "agent沟通", "02_十周做题驱动备考计划.md");
   const plan = readFileSync(planPath, "utf8").slice(0, 12000);
   return (

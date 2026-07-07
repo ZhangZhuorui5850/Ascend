@@ -1,9 +1,12 @@
 import Link from "next/link";
+import { requirePageSession } from "@/lib/page-auth";
 import { getSubjects } from "@/lib/repository";
 
 export const dynamic = "force-dynamic";
 
-export default function SubjectsPage() {
+export default async function SubjectsPage() {
+  await requirePageSession("/subjects");
+
   const subjects = getSubjects() as Array<{ code: string; name: string; description: string }>;
   return (
     <div className="pageStack">

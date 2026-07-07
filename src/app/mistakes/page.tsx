@@ -1,8 +1,11 @@
 import { getDb } from "@/lib/db";
+import { requirePageSession } from "@/lib/page-auth";
 
 export const dynamic = "force-dynamic";
 
-export default function MistakesPage() {
+export default async function MistakesPage() {
+  await requirePageSession("/mistakes");
+
   const mistakes = getDb().prepare("SELECT * FROM mistakes ORDER BY created_at DESC").all() as Array<{
     id: number;
     day: string;

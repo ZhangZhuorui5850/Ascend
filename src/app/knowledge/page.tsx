@@ -1,8 +1,11 @@
+import { requirePageSession } from "@/lib/page-auth";
 import { getKnowledgePoints } from "@/lib/repository";
 
 export const dynamic = "force-dynamic";
 
-export default function KnowledgePage() {
+export default async function KnowledgePage() {
+  await requirePageSession("/knowledge");
+
   const points = getKnowledgePoints() as Array<{
     id: string;
     subject_code: string;

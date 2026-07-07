@@ -1,9 +1,12 @@
 import Link from "next/link";
+import { requirePageSession } from "@/lib/page-auth";
 import { getDashboard } from "@/lib/repository";
 
 export const dynamic = "force-dynamic";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  await requirePageSession("/");
+
   const dashboard = getDashboard() as {
     today: string;
     pointStats: { total: number; mastered: number; openRed: number; examCount: number };
