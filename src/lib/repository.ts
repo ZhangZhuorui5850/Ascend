@@ -1,3 +1,4 @@
+import type Database from "better-sqlite3";
 import { storeUploadedFile } from "./assets";
 import type { CalendarSummary } from "./types";
 import { buildCalendarSummaries } from "./calendar-summary";
@@ -45,6 +46,14 @@ export function updateDay(date: string, input: Record<string, unknown>) {
   assertDateKey(date);
   const db = getDb();
   ensureDay(date);
+  const nextEntry = {
+    date,
+    plan: String(input.plan ?? ""),
+    diary: String(input.diary ?? ""),
+    summary: String(input.summary ?? ""),
+    blockers: String(input.blockers ?? ""),
+    tomorrow: String(input.tomorrow ?? ""),
+  };
   db.prepare(`
     UPDATE daily_entries
     SET plan = @plan,
@@ -54,20 +63,30 @@ export function updateDay(date: string, input: Record<string, unknown>) {
         tomorrow = @tomorrow,
         updated_at = CURRENT_TIMESTAMP
     WHERE date = @date
-  `).run({
-    date,
-    plan: String(input.plan ?? ""),
-    diary: String(input.diary ?? ""),
-    summary: String(input.summary ?? ""),
-    blockers: String(input.blockers ?? ""),
-    tomorrow: String(input.tomorrow ?? ""),
-  });
-  db.prepare(`
+  `).run(nextEntry);
+  markCommittedDayDraftsWithDb(db, date, nextEntry);
+  return getDay(date);
+}
+
+export function markCommittedDayDraftsWithDb(
+  database: Database.Database,
+  date: string,
+  input: Record<string, string>,
+) {
+  const commitMatchingDraft = database.prepare(`
     UPDATE drafts
     SET status = 'committed'
-    WHERE scope_type = 'day' AND scope_id = ?
-  `).run(date);
-  return getDay(date);
+    WHERE scope_type = 'day'
+      AND scope_id = @date
+      AND field = @field
+      AND content = @content
+  `);
+  const transaction = database.transaction(() => {
+    for (const field of ["plan", "diary", "summary", "blockers", "tomorrow"]) {
+      commitMatchingDraft.run({ date, field, content: input[field] ?? "" });
+    }
+  });
+  transaction();
 }
 
 export function getDashboard() {
