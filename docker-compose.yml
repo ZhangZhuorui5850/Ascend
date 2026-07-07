@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    env_file:
+      - .env.local
     environment:
       ZGCA_DATA_ROOT: /app/data
       ZGCA_UPLOAD_ROOT: /app/data/uploads
