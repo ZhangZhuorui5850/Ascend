@@ -61,6 +61,7 @@ The design center remains the day page. The learner can open today on desktop, t
 - Tablet keeps navigation and places capture as a docked lower panel to preserve reading width.
 - Phone uses bottom navigation for Today, Calendar, Knowledge, Mistakes, and Capture.
 - Phone capture opens as a bottom sheet with backdrop and close control.
+- Closed phone/tablet capture sheets are hidden from pointer and keyboard interaction; opening Capture restores the backdrop, sheet, drag/drop area, and close affordance.
 - The day page now includes a `Now` focus band above metrics so mobile users see the next action before the detailed timeline.
 - Motion is limited to useful state changes: capture sheet open/close, upload spinner, focus/drop affordances, and sync state changes. Reduced-motion preferences are respected.
 
@@ -88,7 +89,7 @@ What is strong:
 Needs improvement:
 - Add conflict history and audit views so resolved conflicts can be reviewed later.
 - Add optimistic refresh or live insertion for newly uploaded assets on the day page.
-- Add small touch-target QA screenshots at 390px, 768px, and 1180px as a future visual regression step.
+- Convert the browser layout audit into a repeatable visual regression check.
 
 ### Database and Sync Reviewer
 
@@ -118,6 +119,11 @@ Needs improvement:
 
 Latest verification run:
 
+- Browser login and responsive QA passed on the local Next.js server:
+  - `1440x900` desktop day page: sidebar, main workspace, and persistent capture panel visible with no horizontal overflow.
+  - `1024x900` tablet day page: sidebar and main workspace visible, capture docked below, mobile nav hidden, no horizontal overflow.
+  - `390x844` phone day page: sidebar hidden, bottom nav visible, capture closed by default, capture bottom sheet opens with backdrop and upload copy visible, no horizontal overflow.
+  - `1440x900` and `390x844` login page: redesigned login shell and card fit without horizontal overflow.
 - `npm run lint` passed.
 - `npm test` passed: 15 test files, 38 tests.
 - `npm run build` passed with Next.js 16.2.10.
@@ -136,11 +142,11 @@ Important targeted tests added:
 
 ## Remaining Iteration Backlog
 
-1. Add visual QA screenshots for mobile, tablet, desktop, and wide desktop.
-2. Add repository-level duplicate-upload tests that verify one blob path and correct `ref_count`.
-3. Add final analytics views for weekly learning review and weak-point prioritization.
-4. Add conflict history and pruning views for long-running sync usage.
-5. Add richer review/mistake prompts for low scores and repeated errors.
+1. Add repository-level duplicate-upload tests that verify one blob path and correct `ref_count`.
+2. Add final analytics views for weekly learning review and weak-point prioritization.
+3. Add conflict history and pruning views for long-running sync usage.
+4. Add richer review/mistake prompts for low scores and repeated errors.
+5. Promote the browser responsive checks into a scripted visual regression command.
 
 ## Git Notes
 

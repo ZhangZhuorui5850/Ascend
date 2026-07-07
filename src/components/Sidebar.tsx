@@ -50,7 +50,7 @@ export function MobileNav({ onCaptureClick }: { onCaptureClick: () => void }) {
   const mobileLinks = [links[2], links[1], links[4], links[7]];
 
   return (
-    <nav className="mobileNav" aria-label="移动端主导航">
+    <nav className="mobileNav" aria-label="移动端主导航" data-testid="mobile-nav">
       {mobileLinks.map((item) => {
         const Icon = item.icon;
         const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));

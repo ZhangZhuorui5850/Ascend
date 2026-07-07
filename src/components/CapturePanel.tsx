@@ -197,6 +197,7 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
   return (
     <aside
       className={`capturePanel ${isDragging ? "captureDragging" : ""}`}
+      data-testid="capture-panel"
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
