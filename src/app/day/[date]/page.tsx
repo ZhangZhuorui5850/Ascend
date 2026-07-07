@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DayWorkspace } from "@/components/DayWorkspace";
+import { LearningActionPanel } from "@/components/LearningActionPanel";
 import { requirePageSession } from "@/lib/page-auth";
 import { getDay } from "@/lib/repository";
 
@@ -16,6 +17,8 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
       local: { content?: string };
       incoming: { content?: string; version?: number };
     }>;
+    dueReviews?: Array<{ id: string; title: string; subject_code: string; tier_name: string; mastery: number; next_review: string }>;
+    dueMistakes?: Array<{ id: number; title: string; cause: string; knowledge_point_id?: string | null; next_review: string }>;
     assets: Array<{ id: number; original_name: string; mime_type: string; size: number; note: string }>;
     sessions: Array<{ id: number; title: string; duration_minutes: number; output: string }>;
     reviews: Array<{ id: number; knowledge_title: string; score: number; note: string }>;
@@ -44,6 +47,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
         <div className="metricCard"><strong>{day.reviews.length}</strong><span>复习</span></div>
         <div className="metricCard"><strong>{day.mistakes.length}</strong><span>错题</span></div>
       </section>
+      <LearningActionPanel day={date} dueReviews={day.dueReviews || []} dueMistakes={day.dueMistakes || []} />
       <section className="grid2">
         <DayWorkspace key={date} date={date} entry={day.entry} draftVersions={day.draftVersions} conflicts={day.conflicts || []} />
         <div className="card">

@@ -779,6 +779,71 @@ h2 {
   background: var(--ink);
 }
 
+.learningActions {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.actionList {
+  display: grid;
+  gap: 8px;
+}
+
+.actionCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.actionCard span,
+.actionCard small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.actionCard strong {
+  display: block;
+  margin-top: 3px;
+}
+
+.mistakeAction {
+  border-color: var(--danger-soft);
+  background: #fff8fa;
+}
+
+.scoreButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.scoreButtons button {
+  min-width: 34px;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--surface);
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.scoreButtons button:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
 .inlineComposer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 90px auto;
@@ -1277,6 +1342,14 @@ h2 {
   .attachmentLink {
     grid-column: 2 / 4;
     justify-self: start;
+  }
+
+  .actionCard {
+    grid-template-columns: 1fr;
+  }
+
+  .scoreButtons {
+    justify-content: flex-start;
   }
 }
 

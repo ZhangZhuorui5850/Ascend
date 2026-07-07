@@ -33,7 +33,21 @@ export function getDay(date: string) {
   `).all(date);
   const mistakes = db.prepare("SELECT * FROM mistakes WHERE day = ? ORDER BY created_at DESC").all(date);
   const conflicts = listOpenConflictsWithDb(db, { scopeType: "day", scopeId: date });
-  return { entry, draftVersions: draftOverlay.versions, conflicts, assets, sessions, reviews, mistakes };
+  const dueReviews = db.prepare(`
+    SELECT id, title, subject_code, tier_name, mastery, next_review
+    FROM knowledge_points
+    WHERE next_review IS NOT NULL AND next_review <= ?
+    ORDER BY tier ASC, next_review ASC
+    LIMIT 6
+  `).all(date);
+  const dueMistakes = db.prepare(`
+    SELECT id, title, cause, knowledge_point_id, next_review
+    FROM mistakes
+    WHERE graduated = 0 AND next_review IS NOT NULL AND next_review <= ?
+    ORDER BY next_review ASC, created_at ASC
+    LIMIT 6
+  `).all(date);
+  return { entry, draftVersions: draftOverlay.versions, conflicts, dueReviews, dueMistakes, assets, sessions, reviews, mistakes };
 }
 
 export function getActiveDayDraftsWithDb(database: Database.Database, date: string) {
@@ -351,6 +365,44 @@ export function createReviewEvent(input: Record<string, unknown>) {
   });
   if (point && knowledgePointId) applyReviewOutcomeWithDb(db, { knowledgePointId, day, score: Number(input.score || 0) });
   return getDay(day);
+}
+
+export function reattemptMistake(input: Record<string, unknown>) {
+  const day = assertDateKey(String(input.day || todayKey()));
+  const id = Number(input.id || 0);
+  const score = Number(input.score || 0);
+  const db = getDb();
+  reattemptMistakeWithDb(db, { id, day, score });
+  return getDay(day);
+}
+
+export function reattemptMistakeWithDb(
+  database: Database.Database,
+  input: { id: number; day: string; score: number },
+) {
+  const mistake = database.prepare("SELECT * FROM mistakes WHERE id = ?").get(input.id) as
+    | { id: number; knowledge_point_id: string | null; graduated: number }
+    | undefined;
+  if (!mistake) throw new Error("Mistake not found");
+
+  const nextReview = input.score >= 2 ? null : nextReviewDate(input.day, 0);
+  const graduated = input.score >= 2 ? 1 : 0;
+  database.prepare(`
+    UPDATE mistakes
+    SET graduated = @graduated,
+        next_review = @nextReview
+    WHERE id = @id
+  `).run({ id: input.id, graduated, nextReview });
+
+  if (mistake.knowledge_point_id) {
+    database.prepare(`
+      INSERT INTO review_events (day, knowledge_point_id, score, note)
+      VALUES (@day, @knowledgePointId, @score, '错题回炉')
+    `).run({ day: input.day, knowledgePointId: mistake.knowledge_point_id, score: input.score });
+    applyReviewOutcomeWithDb(database, { knowledgePointId: mistake.knowledge_point_id, day: input.day, score: input.score });
+  }
+
+  return database.prepare("SELECT id, graduated, next_review AS nextReview FROM mistakes WHERE id = ?").get(input.id);
 }
 
 export function applyReviewOutcomeWithDb(
