@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { CalendarDays, ClipboardList, Database, FileText, Home, LayoutGrid, Map, Tag, Target } from "lucide-react";
 import { todayKey } from "@/lib/dates";

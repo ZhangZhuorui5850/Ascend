@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE, getSessionUser } from "./src/lib/auth";
+import { SESSION_COOKIE } from "./src/lib/auth";
 
-const PUBLIC_PATHS = ["/login", "/api/auth/login"];
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/logout"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -11,8 +11,9 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const user = getSessionUser(request.cookies.get(SESSION_COOKIE)?.value);
-  if (user) return NextResponse.next();
+  if (request.cookies.has(SESSION_COOKIE)) {
+    return NextResponse.next();
+  }
 
   if (pathname.startsWith("/api/")) {
     return Response.json({ error: "Authentication required" }, { status: 401 });

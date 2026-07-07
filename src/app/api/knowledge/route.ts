@@ -1,5 +1,11 @@
 import { getKnowledgePoints } from "@/lib/repository";
+import { authErrorResponse, requireSession } from "@/lib/request-auth";
 
 export async function GET() {
-  return Response.json(getKnowledgePoints());
+  try {
+    await requireSession();
+    return Response.json(getKnowledgePoints());
+  } catch (error) {
+    return authErrorResponse(error);
+  }
 }

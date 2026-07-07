@@ -45,3 +45,12 @@ export async function assertSameOrigin(request: Request): Promise<void> {
     throw error;
   }
 }
+
+export function authErrorResponse(error: unknown): Response {
+  const status = error instanceof Error && typeof (error as Error & { status?: number }).status === "number"
+    ? (error as Error & { status?: number }).status!
+    : 500;
+  const message = error instanceof Error ? error.message : "Internal server error";
+
+  return Response.json({ error: message }, { status });
+}

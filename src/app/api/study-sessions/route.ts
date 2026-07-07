@@ -1,5 +1,12 @@
 import { createStudySession } from "@/lib/repository";
+import { assertSameOrigin, authErrorResponse, requireSession } from "@/lib/request-auth";
 
 export async function POST(request: Request) {
-  return Response.json(createStudySession(await request.json()));
+  try {
+    await requireSession(request);
+    await assertSameOrigin(request);
+    return Response.json(createStudySession(await request.json()));
+  } catch (error) {
+    return authErrorResponse(error);
+  }
 }
