@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-type FieldStatus = "idle" | "dirty" | "saving" | "saved" | "error" | "remote";
+type FieldStatus = "idle" | "dirty" | "saving" | "saved" | "error" | "remote" | "conflict";
 
 type SyncChange = {
   seq: number;
@@ -77,6 +77,7 @@ export function useAutosyncedFields<T extends Record<string, string>>(input: {
             opId,
           }),
         });
+        if (response.status === 409) throw new Error("conflict");
         if (!response.ok) throw new Error("Draft save failed");
         const draft = (await response.json()) as { version?: number };
         versionRef.current[fieldName] = Math.max(versionRef.current[fieldName] ?? 0, Number(draft.version ?? 0));
@@ -84,10 +85,10 @@ export function useAutosyncedFields<T extends Record<string, string>>(input: {
           delete pendingOpRef.current[fieldName];
           setStatusByField((current) => ({ ...current, [field]: "saved" }));
         }
-      } catch {
+      } catch (error) {
         if (pendingOpRef.current[fieldName] === opId) {
           delete pendingOpRef.current[fieldName];
-          setStatusByField((current) => ({ ...current, [field]: "error" }));
+          setStatusByField((current) => ({ ...current, [field]: error instanceof Error && error.message === "conflict" ? "conflict" : "error" }));
         }
       }
     }, input.debounceMs ?? 600);
@@ -150,6 +151,8 @@ export function useAutosyncedFields<T extends Record<string, string>>(input: {
   const statuses = Object.values(statusByField);
   const globalStatus = statuses.includes("error")
     ? "error"
+    : statuses.includes("conflict")
+      ? "conflict"
     : statuses.includes("saving") || statuses.includes("dirty")
       ? "saving"
       : statuses.includes("remote")

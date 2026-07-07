@@ -24,6 +24,7 @@ The design center remains the day page. The learner can open today on desktop, t
 - Added `devices`, `drafts`, `entity_changes`, `conflicts`, `users`, `sessions`, `blobs`, and `upload_sessions`.
 - Enabled WAL, foreign keys, busy timeout, and synchronous NORMAL for local durability and concurrency.
 - Added draft versioning, idempotent `op_id` handling, stale base-version rejection, and monotonic change pull.
+- Stale draft writes now create open `conflicts` records instead of disappearing as generic errors.
 - Added careful draft retirement: explicit day commit only marks drafts committed when draft content matches the submitted canonical snapshot.
 
 ### Learning Loop
@@ -40,7 +41,7 @@ The design center remains the day page. The learner can open today on desktop, t
 - Active drafts overlay canonical `daily_entries` on page load, including per-field versions so the first edit after reopen preserves stale-write protection.
 - Clients poll `/api/sync/pull` and apply newer remote draft versions when local fields are not dirty or saving.
 - In-flight autosave responses no longer clear newer local edits.
-- UI shows field-level and global sync status.
+- UI shows field-level and global sync status, including explicit conflict state for stale write rejections.
 
 ### Upload and Download
 
@@ -82,7 +83,7 @@ What is strong:
 - The `Now` band better matches daily use: open the page, see what matters, write.
 
 Needs improvement:
-- Add visual conflict resolution when two devices edit the same field and the server rejects a stale write.
+- Add a merge drawer for open conflicts so users can choose local, remote, or merged text.
 - Add optimistic refresh or live insertion for newly uploaded assets on the day page.
 - Add small touch-target QA screenshots at 390px, 768px, and 1180px as a future visual regression step.
 
@@ -125,12 +126,13 @@ Important targeted tests added:
 - Auth endpoint same-origin failures.
 - Asset path confinement, SVG disposition, content-addressed storage, and legacy backfill.
 - Draft sync idempotency, stale base rejection, and day commit draft preservation.
+- Conflict recording for stale draft writes.
 - Active draft content plus version hydration for reload-safe autosave.
 - Learning loop mastery/status/next-review updates for review scores and mistakes.
 
 ## Remaining Iteration Backlog
 
-1. Add conflict-resolution UI for stale draft rejections.
+1. Add conflict-resolution merge UI for open conflict records.
 2. Add visible review and mistake action cards on the day page, above passive timelines.
 3. Add visual QA screenshots for mobile, tablet, desktop, and wide desktop.
 4. Add repository-level duplicate-upload tests that verify one blob path and correct `ref_count`.

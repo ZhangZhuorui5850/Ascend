@@ -121,7 +121,7 @@ export function DayWorkspace({ date, entry, draftVersions = {} }: DayWorkspacePr
 }
 
 function FieldStatus({ status }: { status?: string }) {
-  return <small className={`fieldStatus ${status === "error" ? "error" : ""}`}>{fieldStatusLabel(status)}</small>;
+  return <small className={`fieldStatus ${status === "error" || status === "conflict" ? "error" : ""}`}>{fieldStatusLabel(status)}</small>;
 }
 
 function fieldStatusLabel(status?: string) {
@@ -129,6 +129,7 @@ function fieldStatusLabel(status?: string) {
   if (status === "saving") return "保存中...";
   if (status === "saved") return "已保存草稿";
   if (status === "remote") return "已同步其它终端";
+  if (status === "conflict") return "同步冲突：请复制本字段后刷新合并";
   if (status === "error") return "自动保存失败";
   return "自动保存";
 }
@@ -136,6 +137,7 @@ function fieldStatusLabel(status?: string) {
 function syncLabel(status: string) {
   if (status === "saving") return "保存中";
   if (status === "remote") return "已收到其它终端更新";
+  if (status === "conflict") return "有字段冲突";
   if (status === "error") return "有字段失败";
   return "已保存草稿";
 }

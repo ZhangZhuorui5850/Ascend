@@ -91,5 +91,22 @@ describe("sync foundation", () => {
         opId: "op-3",
       }),
     ).toThrow("Draft conflict");
+
+    const conflict = db.prepare("SELECT entity_type, entity_id, base_version, local_json, incoming_json, status FROM conflicts").get() as {
+      entity_type: string;
+      entity_id: string;
+      base_version: number;
+      local_json: string;
+      incoming_json: string;
+      status: string;
+    };
+    expect(conflict).toMatchObject({
+      entity_type: "draft",
+      entity_id: "day:2026-07-07:summary",
+      base_version: 1,
+      status: "open",
+    });
+    expect(JSON.parse(conflict.local_json)).toMatchObject({ content: "stale" });
+    expect(JSON.parse(conflict.incoming_json)).toMatchObject({ content: "v2", version: 2 });
   });
 });

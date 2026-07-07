@@ -52,12 +52,22 @@ export function saveDraftWithDb(database: Database.Database, input: SaveDraftInp
     .get(input.opId) as { snapshot_json: string } | undefined;
   if (existingChange) return JSON.parse(existingChange.snapshot_json) as DraftResult;
 
-  const transaction = database.transaction(() => {
-    const existingDraft = database.prepare("SELECT version FROM drafts WHERE id = ?").get(id) as { version: number } | undefined;
-    if (existingDraft && input.baseVersion > 0 && existingDraft.version > input.baseVersion) {
-      throw new SyncConflictError("Draft conflict");
-    }
+  const existingDraft = database.prepare("SELECT version FROM drafts WHERE id = ?").get(id) as { version: number } | undefined;
+  if (existingDraft && input.baseVersion > 0 && existingDraft.version > input.baseVersion) {
+    recordDraftConflict(database, {
+      id,
+      baseVersion: input.baseVersion,
+      localJson: JSON.stringify({ content: input.content, baseVersion: input.baseVersion, deviceId: input.deviceId || null }),
+      incomingJson: JSON.stringify(database.prepare(`
+        SELECT id, content, version, updated_at AS updatedAt
+        FROM drafts
+        WHERE id = ?
+      `).get(id)),
+    });
+    throw new SyncConflictError("Draft conflict");
+  }
 
+  const transaction = database.transaction(() => {
     database.prepare(`
       INSERT INTO drafts (id, scope_type, scope_id, field, content, base_version, version, device_id, updated_at)
       VALUES (@id, @scopeType, @scopeId, @field, @content, @baseVersion, 1, @deviceId, CURRENT_TIMESTAMP)
@@ -93,6 +103,23 @@ export function saveDraftWithDb(database: Database.Database, input: SaveDraftInp
   });
 
   return transaction();
+}
+
+function recordDraftConflict(
+  database: Database.Database,
+  input: { id: string; baseVersion: number; localJson: string; incomingJson: string },
+) {
+  database.prepare(`
+    INSERT INTO conflicts (id, entity_type, entity_id, base_version, local_json, incoming_json, status)
+    VALUES (@conflictId, 'draft', @id, @baseVersion, @localJson, @incomingJson, 'open')
+    ON CONFLICT(id) DO UPDATE SET
+      local_json = excluded.local_json,
+      incoming_json = excluded.incoming_json,
+      status = 'open'
+  `).run({
+    conflictId: `draft-conflict:${input.id}:${input.baseVersion}`,
+    ...input,
+  });
 }
 
 export function pullChanges(sinceSeq: number): SyncPull {
