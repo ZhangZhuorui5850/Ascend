@@ -7,9 +7,10 @@ import { useAutosyncedFields } from "@/hooks/useAutosyncedFields";
 type DayWorkspaceProps = {
   date: string;
   entry: Record<string, string>;
+  draftVersions?: Record<string, number>;
 };
 
-export function DayWorkspace({ date, entry }: DayWorkspaceProps) {
+export function DayWorkspace({ date, entry, draftVersions = {} }: DayWorkspaceProps) {
   const router = useRouter();
   const initialFields = useMemo(() => ({
     plan: entry.plan || "",
@@ -27,6 +28,7 @@ export function DayWorkspace({ date, entry }: DayWorkspaceProps) {
     scopeType: "day",
     scopeId: date,
     initial: initialFields,
+    initialVersions: draftVersions,
   });
   const [sessionTitle, setSessionTitle] = useState("");
   const [minutes, setMinutes] = useState(50);

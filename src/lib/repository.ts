@@ -19,16 +19,8 @@ export function getDay(date: string) {
   const db = getDb();
   db.prepare("INSERT OR IGNORE INTO daily_entries (date) VALUES (?)").run(date);
   const entry = db.prepare("SELECT * FROM daily_entries WHERE date = ?").get(date) as Record<string, string>;
-  const drafts = db.prepare(`
-    SELECT field, content
-    FROM drafts
-    WHERE scope_type = 'day' AND scope_id = ? AND status = 'active'
-  `).all(date) as Array<{ field: string; content: string }>;
-  for (const draft of drafts) {
-    if (["plan", "diary", "summary", "blockers", "tomorrow"].includes(draft.field)) {
-      entry[draft.field] = draft.content;
-    }
-  }
+  const draftOverlay = getActiveDayDraftsWithDb(db, date);
+  Object.assign(entry, draftOverlay.values);
   const assets = db.prepare("SELECT * FROM assets WHERE day = ? ORDER BY created_at DESC").all(date);
   const sessions = db.prepare("SELECT * FROM study_sessions WHERE day = ? ORDER BY created_at DESC").all(date);
   const reviews = db.prepare(`
@@ -39,7 +31,24 @@ export function getDay(date: string) {
     ORDER BY r.created_at DESC
   `).all(date);
   const mistakes = db.prepare("SELECT * FROM mistakes WHERE day = ? ORDER BY created_at DESC").all(date);
-  return { entry, assets, sessions, reviews, mistakes };
+  return { entry, draftVersions: draftOverlay.versions, assets, sessions, reviews, mistakes };
+}
+
+export function getActiveDayDraftsWithDb(database: Database.Database, date: string) {
+  const drafts = database.prepare(`
+    SELECT field, content, version
+    FROM drafts
+    WHERE scope_type = 'day' AND scope_id = ? AND status = 'active'
+  `).all(date) as Array<{ field: string; content: string; version: number }>;
+  const values: Record<string, string> = {};
+  const versions: Record<string, number> = {};
+  for (const draft of drafts) {
+    if (["plan", "diary", "summary", "blockers", "tomorrow"].includes(draft.field)) {
+      values[draft.field] = draft.content;
+      versions[draft.field] = draft.version;
+    }
+  }
+  return { values, versions };
 }
 
 export function updateDay(date: string, input: Record<string, unknown>) {

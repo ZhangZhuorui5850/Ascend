@@ -18,6 +18,7 @@ export function useAutosyncedFields<T extends Record<string, string>>(input: {
   scopeType: string;
   scopeId: string;
   initial: T;
+  initialVersions?: Partial<Record<keyof T, number>>;
   debounceMs?: number;
   pollMs?: number;
 }) {
@@ -28,7 +29,7 @@ export function useAutosyncedFields<T extends Record<string, string>>(input: {
   const fieldsRef = useRef(fields);
   const statusRef = useRef(statusByField);
   const scopeRef = useRef({ scopeType: input.scopeType, scopeId: input.scopeId });
-  const versionRef = useRef<Record<string, number>>({});
+  const versionRef = useRef<Record<string, number>>(normalizeVersions(input.initialVersions));
   const pendingOpRef = useRef<Record<string, string>>({});
   const deviceId = useMemo(() => readOrCreateDeviceId(), []);
 
@@ -166,4 +167,12 @@ function readOrCreateDeviceId() {
   const next = crypto.randomUUID();
   window.localStorage.setItem(key, next);
   return next;
+}
+
+function normalizeVersions<T extends Record<string, string>>(versions: Partial<Record<keyof T, number>> | undefined) {
+  const normalized: Record<string, number> = {};
+  for (const [field, version] of Object.entries(versions ?? {})) {
+    normalized[field] = Number(version || 0);
+  }
+  return normalized;
 }
