@@ -42,6 +42,7 @@ The design center remains the day page. The learner can open today on desktop, t
 - Clients poll `/api/sync/pull` and apply newer remote draft versions when local fields are not dirty or saving.
 - In-flight autosave responses no longer clear newer local edits.
 - UI shows field-level and global sync status, including explicit conflict state for stale write rejections.
+- Open conflicts appear on the day page with local/remote comparison and controls to use local, use remote, or save a merged version.
 
 ### Upload and Download
 
@@ -83,7 +84,7 @@ What is strong:
 - The `Now` band better matches daily use: open the page, see what matters, write.
 
 Needs improvement:
-- Add a merge drawer for open conflicts so users can choose local, remote, or merged text.
+- Add conflict history and audit views so resolved conflicts can be reviewed later.
 - Add optimistic refresh or live insertion for newly uploaded assets on the day page.
 - Add small touch-target QA screenshots at 390px, 768px, and 1180px as a future visual regression step.
 
@@ -95,7 +96,7 @@ What is strong:
 - Asset blobs are content-addressed and path-confined.
 
 Needs improvement:
-- Add a visible conflicts queue backed by the existing `conflicts` table.
+- Add a global conflicts queue for non-day scopes if more entity types begin producing conflicts.
 - Add pruning or compaction policy for `entity_changes`.
 - Add repository-level tests for duplicate upload end-to-end behavior.
 
@@ -116,7 +117,7 @@ Needs improvement:
 Latest verification run:
 
 - `npm run lint` passed.
-- `npm test` passed: 15 test files, 36 tests.
+- `npm test` passed: 15 test files, 37 tests.
 - `npm run build` passed with Next.js 16.2.10.
 
 Important targeted tests added:
@@ -126,17 +127,17 @@ Important targeted tests added:
 - Auth endpoint same-origin failures.
 - Asset path confinement, SVG disposition, content-addressed storage, and legacy backfill.
 - Draft sync idempotency, stale base rejection, and day commit draft preservation.
-- Conflict recording for stale draft writes.
+- Conflict recording and resolution for stale draft writes.
 - Active draft content plus version hydration for reload-safe autosave.
 - Learning loop mastery/status/next-review updates for review scores and mistakes.
 
 ## Remaining Iteration Backlog
 
-1. Add conflict-resolution merge UI for open conflict records.
-2. Add visible review and mistake action cards on the day page, above passive timelines.
-3. Add visual QA screenshots for mobile, tablet, desktop, and wide desktop.
-4. Add repository-level duplicate-upload tests that verify one blob path and correct `ref_count`.
-5. Add final analytics views for weekly learning review and weak-point prioritization.
+1. Add visible review and mistake action cards on the day page, above passive timelines.
+2. Add visual QA screenshots for mobile, tablet, desktop, and wide desktop.
+3. Add repository-level duplicate-upload tests that verify one blob path and correct `ref_count`.
+4. Add final analytics views for weekly learning review and weak-point prioritization.
+5. Add conflict history and pruning views for long-running sync usage.
 
 ## Git Notes
 

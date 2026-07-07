@@ -10,6 +10,12 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
   const day = getDay(date) as {
     entry: Record<string, string>;
     draftVersions?: Record<string, number>;
+    conflicts?: Array<{
+      id: string;
+      field: string;
+      local: { content?: string };
+      incoming: { content?: string; version?: number };
+    }>;
     assets: Array<{ id: number; original_name: string; mime_type: string; size: number; note: string }>;
     sessions: Array<{ id: number; title: string; duration_minutes: number; output: string }>;
     reviews: Array<{ id: number; knowledge_title: string; score: number; note: string }>;
@@ -39,7 +45,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
         <div className="metricCard"><strong>{day.mistakes.length}</strong><span>错题</span></div>
       </section>
       <section className="grid2">
-        <DayWorkspace key={date} date={date} entry={day.entry} draftVersions={day.draftVersions} />
+        <DayWorkspace key={date} date={date} entry={day.entry} draftVersions={day.draftVersions} conflicts={day.conflicts || []} />
         <div className="card">
           <div className="sectionTitle"><span className="eyebrow">Assets</span><h2>资料流</h2></div>
           <div className="assetList">

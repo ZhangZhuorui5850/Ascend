@@ -5,6 +5,7 @@ import { buildCalendarSummaries } from "./calendar-summary";
 import { assertDateKey, todayKey } from "./dates";
 import { getDb } from "./db";
 import { nextReviewDate } from "./review-schedule";
+import { listOpenConflictsWithDb } from "./sync";
 import { applyViewFilters, DEFAULT_VIEWS, getDefaultViewBySlug, type DataRow, type SavedView } from "./views";
 
 export function ensureDay(date: string) {
@@ -31,7 +32,8 @@ export function getDay(date: string) {
     ORDER BY r.created_at DESC
   `).all(date);
   const mistakes = db.prepare("SELECT * FROM mistakes WHERE day = ? ORDER BY created_at DESC").all(date);
-  return { entry, draftVersions: draftOverlay.versions, assets, sessions, reviews, mistakes };
+  const conflicts = listOpenConflictsWithDb(db, { scopeType: "day", scopeId: date });
+  return { entry, draftVersions: draftOverlay.versions, conflicts, assets, sessions, reviews, mistakes };
 }
 
 export function getActiveDayDraftsWithDb(database: Database.Database, date: string) {

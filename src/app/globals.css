@@ -706,6 +706,79 @@ h2 {
   gap: 4px;
 }
 
+.conflictStack {
+  display: grid;
+  gap: 10px;
+}
+
+.conflictCard {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  background: var(--warn-soft);
+}
+
+.conflictCard h3 {
+  margin: 3px 0 0;
+  font-size: 16px;
+}
+
+.conflictCard p {
+  margin-top: 5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.conflictCompare {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.conflictCompare label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.conflictCompare textarea,
+.conflictCard .field textarea {
+  min-height: 86px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  resize: vertical;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.conflictActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.conflictActions button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--ink);
+  background: var(--surface);
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.conflictActions button:last-child {
+  color: white;
+  border-color: var(--ink);
+  background: var(--ink);
+}
+
 .inlineComposer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 90px auto;
@@ -1080,7 +1153,8 @@ h2 {
   }
 
   .inlineComposer,
-  .inlineComposer:last-child {
+  .inlineComposer:last-child,
+  .conflictCompare {
     grid-template-columns: 1fr;
   }
 

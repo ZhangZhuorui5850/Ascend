@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { runMigrations } from "./migrations";
-import { pullChangesWithDb, registerDeviceWithDb, saveDraftWithDb } from "./sync";
+import { listOpenConflictsWithDb, pullChangesWithDb, registerDeviceWithDb, resolveConflictWithDb, saveDraftWithDb } from "./sync";
 
 describe("sync foundation", () => {
   it("registers devices and records draft changes", () => {
@@ -108,5 +108,53 @@ describe("sync foundation", () => {
     });
     expect(JSON.parse(conflict.local_json)).toMatchObject({ content: "stale" });
     expect(JSON.parse(conflict.incoming_json)).toMatchObject({ content: "v2", version: 2 });
+  });
+
+  it("resolves draft conflicts by saving merged content on top of the remote version", () => {
+    const db = new Database(":memory:");
+    runMigrations(db);
+    saveDraftWithDb(db, {
+      scopeType: "day",
+      scopeId: "2026-07-07",
+      field: "summary",
+      content: "remote",
+      baseVersion: 0,
+      deviceId: "device-1",
+      opId: "op-1",
+    });
+    saveDraftWithDb(db, {
+      scopeType: "day",
+      scopeId: "2026-07-07",
+      field: "summary",
+      content: "remote v2",
+      baseVersion: 1,
+      deviceId: "device-1",
+      opId: "op-remote-2",
+    });
+    expect(() =>
+      saveDraftWithDb(db, {
+        scopeType: "day",
+        scopeId: "2026-07-07",
+        field: "summary",
+        content: "local",
+        baseVersion: 1,
+        deviceId: "device-2",
+        opId: "op-2",
+      }),
+    ).toThrow("Draft conflict");
+
+    const conflict = listOpenConflictsWithDb(db, { scopeType: "day", scopeId: "2026-07-07" })[0];
+    const resolved = resolveConflictWithDb(db, {
+      conflictId: conflict.id,
+      content: "merged",
+      deviceId: "device-2",
+      opId: "op-resolve",
+    });
+    const draft = db.prepare("SELECT content, version FROM drafts WHERE id = ?").get("day:2026-07-07:summary");
+    const storedConflict = db.prepare("SELECT status FROM conflicts WHERE id = ?").get(conflict.id);
+
+    expect(resolved).toMatchObject({ status: "resolved" });
+    expect(draft).toMatchObject({ content: "merged", version: 3 });
+    expect(storedConflict).toEqual({ status: "resolved" });
   });
 });

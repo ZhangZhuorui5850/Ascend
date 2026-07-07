@@ -15,6 +15,16 @@ export type SaveDraftInput = {
 
 export type DraftResult = { id: string; content: string; version: number; updatedAt: string };
 export type SyncPull = { latestSeq: number; changes: Array<Record<string, unknown>> };
+export type DraftConflict = {
+  id: string;
+  scopeType: string;
+  scopeId: string;
+  field: string;
+  baseVersion: number;
+  local: { content?: string };
+  incoming: { content?: string; version?: number };
+  status: string;
+};
 
 export class SyncConflictError extends Error {
   status = 409;
@@ -136,4 +146,79 @@ export function pullChangesWithDb(database: Database.Database, sinceSeq: number)
   `).all(sinceSeq) as Array<Record<string, unknown>>;
   const latestSeq = changes.length ? Number(changes[changes.length - 1].seq) : sinceSeq;
   return { latestSeq, changes };
+}
+
+export function listOpenConflicts(input: { scopeType: string; scopeId: string }): DraftConflict[] {
+  return listOpenConflictsWithDb(getDb(), input);
+}
+
+export function listOpenConflictsWithDb(
+  database: Database.Database,
+  input: { scopeType: string; scopeId: string },
+): DraftConflict[] {
+  const prefix = `${input.scopeType}:${input.scopeId}:`;
+  const rows = database.prepare(`
+    SELECT id, entity_id, base_version, local_json, incoming_json, status
+    FROM conflicts
+    WHERE entity_type = 'draft'
+      AND entity_id LIKE ?
+      AND status = 'open'
+    ORDER BY id ASC
+  `).all(`${prefix}%`) as Array<{
+    id: string;
+    entity_id: string;
+    base_version: number;
+    local_json: string;
+    incoming_json: string;
+    status: string;
+  }>;
+
+  return rows.map((row) => {
+    const [scopeType, scopeId, field] = row.entity_id.split(":");
+    return {
+      id: row.id,
+      scopeType,
+      scopeId,
+      field,
+      baseVersion: row.base_version,
+      local: JSON.parse(row.local_json),
+      incoming: JSON.parse(row.incoming_json),
+      status: row.status,
+    };
+  });
+}
+
+export function resolveConflict(input: { conflictId: string; content?: string; deviceId?: string; opId?: string }) {
+  return resolveConflictWithDb(getDb(), input);
+}
+
+export function resolveConflictWithDb(
+  database: Database.Database,
+  input: { conflictId: string; content?: string; deviceId?: string; opId?: string },
+) {
+  const conflict = database.prepare(`
+    SELECT id, entity_id, incoming_json
+    FROM conflicts
+    WHERE id = ? AND entity_type = 'draft' AND status = 'open'
+  `).get(input.conflictId) as { id: string; entity_id: string; incoming_json: string } | undefined;
+  if (!conflict) throw new Error("Conflict not found");
+
+  const [scopeType, scopeId, field] = conflict.entity_id.split(":");
+  const incoming = JSON.parse(conflict.incoming_json) as { content?: string; version?: number };
+  const content = input.content ?? incoming.content ?? "";
+  const transaction = database.transaction(() => {
+    const draft = saveDraftWithDb(database, {
+      scopeType,
+      scopeId,
+      field,
+      content,
+      baseVersion: Number(incoming.version ?? 0),
+      deviceId: input.deviceId,
+      opId: input.opId || crypto.randomUUID(),
+    });
+    database.prepare("UPDATE conflicts SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP WHERE id = ?").run(conflict.id);
+    return { status: "resolved", draft };
+  });
+
+  return transaction();
 }

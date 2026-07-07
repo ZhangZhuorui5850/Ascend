@@ -8,9 +8,25 @@ type DayWorkspaceProps = {
   date: string;
   entry: Record<string, string>;
   draftVersions?: Record<string, number>;
+  conflicts?: DraftConflictView[];
 };
 
-export function DayWorkspace({ date, entry, draftVersions = {} }: DayWorkspaceProps) {
+type DraftConflictView = {
+  id: string;
+  field: string;
+  local: { content?: string };
+  incoming: { content?: string; version?: number };
+};
+
+const fieldLabels: Record<string, string> = {
+  plan: "今日计划",
+  diary: "日记",
+  summary: "晚间总结",
+  blockers: "阻塞",
+  tomorrow: "明日第一步",
+};
+
+export function DayWorkspace({ date, entry, draftVersions = {}, conflicts = [] }: DayWorkspaceProps) {
   const router = useRouter();
   const initialFields = useMemo(() => ({
     plan: entry.plan || "",
@@ -76,6 +92,7 @@ export function DayWorkspace({ date, entry, draftVersions = {} }: DayWorkspacePr
         <h2>日记 / 总结</h2>
       </div>
       <p className={`syncStatus sync-${globalStatus}`}>自动同步：{syncLabel(globalStatus)}</p>
+      <ConflictList conflicts={conflicts} />
       <label className="field">
         今日计划
         <textarea value={form.plan} onChange={(event) => update("plan", event.target.value)} />
@@ -117,6 +134,71 @@ export function DayWorkspace({ date, entry, draftVersions = {} }: DayWorkspacePr
         <button onClick={addMistake} type="button">添加错题</button>
       </div>
     </section>
+  );
+}
+
+function ConflictList({ conflicts }: { conflicts: DraftConflictView[] }) {
+  const router = useRouter();
+  const [drafts, setDrafts] = useState<Record<string, string>>(() =>
+    Object.fromEntries(conflicts.map((conflict) => [conflict.id, conflict.local.content ?? ""])),
+  );
+  const [resolving, setResolving] = useState<string | null>(null);
+
+  if (!conflicts.length) return null;
+
+  async function resolve(conflict: DraftConflictView, content: string) {
+    setResolving(conflict.id);
+    await fetch("/api/conflicts/resolve", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ conflictId: conflict.id, content, opId: crypto.randomUUID() }),
+    });
+    setResolving(null);
+    router.refresh();
+  }
+
+  return (
+    <div className="conflictStack">
+      {conflicts.map((conflict) => {
+        const local = conflict.local.content ?? "";
+        const incoming = conflict.incoming.content ?? "";
+        const merged = drafts[conflict.id] ?? local;
+        return (
+          <div className="conflictCard" key={conflict.id}>
+            <div>
+              <span className="eyebrow">Sync Conflict</span>
+              <h3>{fieldLabels[conflict.field] || conflict.field} 有多端冲突</h3>
+              <p>远端已有更新，你可以保留远端、使用本机内容，或编辑合并后的版本。</p>
+            </div>
+            <div className="conflictCompare">
+              <label>
+                本机尝试保存
+                <textarea readOnly value={local} />
+              </label>
+              <label>
+                当前远端版本
+                <textarea readOnly value={incoming} />
+              </label>
+            </div>
+            <label className="field">
+              合并结果
+              <textarea value={merged} onChange={(event) => setDrafts((current) => ({ ...current, [conflict.id]: event.target.value }))} />
+            </label>
+            <div className="conflictActions">
+              <button disabled={resolving === conflict.id} onClick={() => resolve(conflict, incoming)} type="button">
+                使用远端
+              </button>
+              <button disabled={resolving === conflict.id} onClick={() => resolve(conflict, local)} type="button">
+                使用本机
+              </button>
+              <button disabled={resolving === conflict.id} onClick={() => resolve(conflict, merged)} type="button">
+                保存合并
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
