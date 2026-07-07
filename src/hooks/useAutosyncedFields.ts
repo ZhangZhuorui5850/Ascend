@@ -12,6 +12,8 @@ type SyncChange = {
   device_id?: string | null;
 };
 
+type DraftSnapshot = { content?: string; version?: number };
+
 export function useAutosyncedFields<T extends Record<string, string>>(input: {
   scopeType: string;
   scopeId: string;
@@ -23,9 +25,16 @@ export function useAutosyncedFields<T extends Record<string, string>>(input: {
   const [statusByField, setStatusByField] = useState<Record<keyof T, FieldStatus>>({} as Record<keyof T, FieldStatus>);
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const latestSeq = useRef(0);
+  const fieldsRef = useRef(fields);
   const statusRef = useRef(statusByField);
   const scopeRef = useRef({ scopeType: input.scopeType, scopeId: input.scopeId });
+  const versionRef = useRef<Record<string, number>>({});
+  const pendingOpRef = useRef<Record<string, string>>({});
   const deviceId = useMemo(() => readOrCreateDeviceId(), []);
+
+  useEffect(() => {
+    fieldsRef.current = fields;
+  }, [fields]);
 
   useEffect(() => {
     statusRef.current = statusByField;
@@ -50,6 +59,8 @@ export function useAutosyncedFields<T extends Record<string, string>>(input: {
     const fieldName = String(field);
     clearTimeout(timers.current[fieldName]);
     timers.current[fieldName] = setTimeout(async () => {
+      const opId = crypto.randomUUID();
+      pendingOpRef.current[fieldName] = opId;
       setStatusByField((current) => ({ ...current, [field]: "saving" }));
       try {
         const response = await fetch("/api/drafts", {
@@ -60,15 +71,23 @@ export function useAutosyncedFields<T extends Record<string, string>>(input: {
             scopeId: input.scopeId,
             field: fieldName,
             content: value,
-            baseVersion: 0,
+            baseVersion: versionRef.current[fieldName] ?? 0,
             deviceId,
-            opId: crypto.randomUUID(),
+            opId,
           }),
         });
         if (!response.ok) throw new Error("Draft save failed");
-        setStatusByField((current) => ({ ...current, [field]: "saved" }));
+        const draft = (await response.json()) as { version?: number };
+        versionRef.current[fieldName] = Math.max(versionRef.current[fieldName] ?? 0, Number(draft.version ?? 0));
+        if (pendingOpRef.current[fieldName] === opId && fieldsRef.current[field] === value) {
+          delete pendingOpRef.current[fieldName];
+          setStatusByField((current) => ({ ...current, [field]: "saved" }));
+        }
       } catch {
-        setStatusByField((current) => ({ ...current, [field]: "error" }));
+        if (pendingOpRef.current[fieldName] === opId) {
+          delete pendingOpRef.current[fieldName];
+          setStatusByField((current) => ({ ...current, [field]: "error" }));
+        }
       }
     }, input.debounceMs ?? 600);
   }
@@ -85,7 +104,10 @@ export function useAutosyncedFields<T extends Record<string, string>>(input: {
       const currentStatus = statusRef.current[fieldKey];
       if (currentStatus === "dirty" || currentStatus === "saving") continue;
 
-      const snapshot = JSON.parse(change.snapshot_json) as { content?: string };
+      const snapshot = JSON.parse(change.snapshot_json) as DraftSnapshot;
+      const remoteVersion = Number(snapshot.version ?? 0);
+      if (remoteVersion <= (versionRef.current[field] ?? 0)) continue;
+      versionRef.current[field] = remoteVersion;
       setFields((current) => ({ ...current, [fieldKey]: String(snapshot.content ?? "") }));
       setStatusByField((current) => ({ ...current, [fieldKey]: "remote" }));
     }

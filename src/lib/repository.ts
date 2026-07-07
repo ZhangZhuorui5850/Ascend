@@ -62,6 +62,11 @@ export function updateDay(date: string, input: Record<string, unknown>) {
     blockers: String(input.blockers ?? ""),
     tomorrow: String(input.tomorrow ?? ""),
   });
+  db.prepare(`
+    UPDATE drafts
+    SET status = 'committed'
+    WHERE scope_type = 'day' AND scope_id = ?
+  `).run(date);
   return getDay(date);
 }
 

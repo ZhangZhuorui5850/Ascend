@@ -16,6 +16,10 @@ export type SaveDraftInput = {
 export type DraftResult = { id: string; content: string; version: number; updatedAt: string };
 export type SyncPull = { latestSeq: number; changes: Array<Record<string, unknown>> };
 
+export class SyncConflictError extends Error {
+  status = 409;
+}
+
 export function registerDevice(input: { id?: string; name?: string }): Device {
   return registerDeviceWithDb(getDb(), input);
 }
@@ -43,7 +47,17 @@ export function saveDraft(input: SaveDraftInput): DraftResult {
 
 export function saveDraftWithDb(database: Database.Database, input: SaveDraftInput): DraftResult {
   const id = `${input.scopeType}:${input.scopeId}:${input.field}`;
+  const existingChange = database
+    .prepare("SELECT snapshot_json FROM entity_changes WHERE op_id = ?")
+    .get(input.opId) as { snapshot_json: string } | undefined;
+  if (existingChange) return JSON.parse(existingChange.snapshot_json) as DraftResult;
+
   const transaction = database.transaction(() => {
+    const existingDraft = database.prepare("SELECT version FROM drafts WHERE id = ?").get(id) as { version: number } | undefined;
+    if (existingDraft && input.baseVersion > 0 && existingDraft.version > input.baseVersion) {
+      throw new SyncConflictError("Draft conflict");
+    }
+
     database.prepare(`
       INSERT INTO drafts (id, scope_type, scope_id, field, content, base_version, version, device_id, updated_at)
       VALUES (@id, @scopeType, @scopeId, @field, @content, @baseVersion, 1, @deviceId, CURRENT_TIMESTAMP)
