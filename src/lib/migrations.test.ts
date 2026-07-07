@@ -28,4 +28,13 @@ describe("runMigrations", () => {
 
     expect(getAppliedMigrations(db).filter((version) => version === "0001_foundation")).toHaveLength(1);
   });
+
+  it("rejects edited migrations that no longer match the applied checksum", () => {
+    const db = new Database(":memory:");
+
+    runMigrations(db);
+    db.prepare("UPDATE schema_migrations SET checksum = ? WHERE version = ?").run("drifted", "0001_foundation");
+
+    expect(() => runMigrations(db)).toThrow("Migration checksum mismatch for 0001_foundation");
+  });
 });

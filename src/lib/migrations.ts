@@ -81,15 +81,30 @@ export function runMigrations(database: Database.Database): void {
     );
   `);
 
-  const applied = new Set(getAppliedMigrations(database));
+  const applied = new Map(
+    database
+      .prepare("SELECT version, checksum FROM schema_migrations")
+      .all()
+      .map((row) => {
+        const migration = row as { version: string; checksum: string };
+        return [migration.version, migration.checksum];
+      }),
+  );
   const insert = database.prepare("INSERT INTO schema_migrations (version, checksum) VALUES (?, ?)");
 
   for (const migration of migrations) {
-    if (applied.has(migration.version)) continue;
+    const expectedChecksum = checksum(migration.sql);
+    const appliedChecksum = applied.get(migration.version);
+    if (appliedChecksum) {
+      if (appliedChecksum !== expectedChecksum) {
+        throw new Error(`Migration checksum mismatch for ${migration.version}`);
+      }
+      continue;
+    }
 
     const apply = database.transaction(() => {
       database.exec(migration.sql);
-      insert.run(migration.version, checksum(migration.sql));
+      insert.run(migration.version, expectedChecksum);
     });
 
     apply();
