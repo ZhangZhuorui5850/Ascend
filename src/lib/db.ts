@@ -48,7 +48,7 @@ export function getDbHandle(): Database.Database {
   return db;
 }
 
-function initializeDatabase(database: Database.Database): void {
+export function initializeDatabase(database: Database.Database): void {
   database.exec(`
     CREATE TABLE IF NOT EXISTS subjects (
       code TEXT PRIMARY KEY,

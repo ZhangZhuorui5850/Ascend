@@ -1,7 +1,15 @@
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { runMigrations } from "./migrations";
-import { listOpenConflictsWithDb, pullChangesWithDb, registerDeviceWithDb, resolveConflictWithDb, saveDraftWithDb } from "./sync";
+import {
+  listConflictHistoryWithDb,
+  listOpenConflictsWithDb,
+  pruneResolvedConflictsWithDb,
+  pullChangesWithDb,
+  registerDeviceWithDb,
+  resolveConflictWithDb,
+  saveDraftWithDb,
+} from "./sync";
 
 describe("sync foundation", () => {
   it("registers devices and records draft changes", () => {
@@ -156,5 +164,28 @@ describe("sync foundation", () => {
     expect(resolved).toMatchObject({ status: "resolved" });
     expect(draft).toMatchObject({ content: "merged", version: 3 });
     expect(storedConflict).toEqual({ status: "resolved" });
+  });
+
+  it("lists conflict history and prunes old resolved conflicts", () => {
+    const db = new Database(":memory:");
+    runMigrations(db);
+    db.prepare(`
+      INSERT INTO conflicts (id, entity_type, entity_id, base_version, local_json, incoming_json, status, resolved_at)
+      VALUES
+        ('old-resolved', 'draft', 'day:2026-07-01:diary', 1, '{"content":"local old"}', '{"content":"remote old"}', 'resolved', '2026-07-01 00:00:00'),
+        ('new-resolved', 'draft', 'day:2026-07-07:summary', 2, '{"content":"local new"}', '{"content":"remote new"}', 'resolved', '2026-07-07 00:00:00'),
+        ('open-conflict', 'draft', 'day:2026-07-08:plan', 3, '{"content":"local open"}', '{"content":"remote open"}', 'open', NULL)
+    `).run();
+
+    expect(listConflictHistoryWithDb(db).map((conflict) => conflict.id)).toEqual([
+      "open-conflict",
+      "new-resolved",
+      "old-resolved",
+    ]);
+
+    const pruned = pruneResolvedConflictsWithDb(db, { resolvedBefore: "2026-07-05 00:00:00" });
+
+    expect(pruned).toEqual({ deleted: 1 });
+    expect(listConflictHistoryWithDb(db).map((conflict) => conflict.id)).toEqual(["open-conflict", "new-resolved"]);
   });
 });

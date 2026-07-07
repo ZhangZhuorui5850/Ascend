@@ -23,13 +23,13 @@ export function storageKeyFor(day: string, sha256: string, originalName: string)
   return path.posix.join("blobs", sha256.slice(0, 2), sha256);
 }
 
-export async function storeUploadedFile(input: { file: File; day: string }): Promise<StoredUpload> {
+export async function storeUploadedFile(input: { file: File; day: string; uploadRoot?: string }): Promise<StoredUpload> {
   if (input.file.size > MAX_UPLOAD_BYTES) throw new Error("File is too large");
 
   const bytes = Buffer.from(await input.file.arrayBuffer());
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const relativePath = storageKeyFor(input.day, sha256, input.file.name);
-  const absolutePath = resolveAssetPath(relativePath);
+  const absolutePath = input.uploadRoot ? resolveAssetPathForRoot(input.uploadRoot, relativePath) : resolveAssetPath(relativePath);
 
   mkdirSync(path.dirname(absolutePath), { recursive: true });
   try {

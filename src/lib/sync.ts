@@ -25,6 +25,10 @@ export type DraftConflict = {
   incoming: { content?: string; version?: number };
   status: string;
 };
+export type ConflictHistoryItem = DraftConflict & {
+  entityType: string;
+  resolvedAt: string | null;
+};
 
 export class SyncConflictError extends Error {
   status = 409;
@@ -186,6 +190,71 @@ export function listOpenConflictsWithDb(
       status: row.status,
     };
   });
+}
+
+export function listConflictHistory(): ConflictHistoryItem[] {
+  return listConflictHistoryWithDb(getDb());
+}
+
+export function listConflictHistoryWithDb(database: Database.Database): ConflictHistoryItem[] {
+  const rows = database.prepare(`
+    SELECT id, entity_type, entity_id, base_version, local_json, incoming_json, status, resolved_at
+    FROM conflicts
+    ORDER BY
+      CASE WHEN status = 'open' THEN 0 ELSE 1 END,
+      COALESCE(resolved_at, '') DESC,
+      id DESC
+  `).all() as Array<{
+    id: string;
+    entity_type: string;
+    entity_id: string;
+    base_version: number;
+    local_json: string;
+    incoming_json: string;
+    status: string;
+    resolved_at: string | null;
+  }>;
+
+  return rows.map((row) => conflictRowToView(row));
+}
+
+export function pruneResolvedConflicts(input: { resolvedBefore: string }) {
+  return pruneResolvedConflictsWithDb(getDb(), input);
+}
+
+export function pruneResolvedConflictsWithDb(database: Database.Database, input: { resolvedBefore: string }) {
+  const result = database.prepare(`
+    DELETE FROM conflicts
+    WHERE status = 'resolved'
+      AND resolved_at IS NOT NULL
+      AND resolved_at < ?
+  `).run(input.resolvedBefore);
+  return { deleted: result.changes };
+}
+
+function conflictRowToView(row: {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  base_version: number;
+  local_json: string;
+  incoming_json: string;
+  status: string;
+  resolved_at: string | null;
+}): ConflictHistoryItem {
+  const [scopeType, scopeId, field] = row.entity_id.split(":");
+  return {
+    id: row.id,
+    entityType: row.entity_type,
+    scopeType,
+    scopeId,
+    field,
+    baseVersion: row.base_version,
+    local: JSON.parse(row.local_json),
+    incoming: JSON.parse(row.incoming_json),
+    status: row.status,
+    resolvedAt: row.resolved_at,
+  };
 }
 
 export function resolveConflict(input: { conflictId: string; content?: string; deviceId?: string; opId?: string }) {

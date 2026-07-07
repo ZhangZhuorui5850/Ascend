@@ -34,7 +34,7 @@ export function LearningActionPanel({ day, dueReviews, dueMistakes }: {
     await fetch("/api/reviews", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ day, knowledgePointId: point.id, score, note: "当天行动卡" }),
+      body: JSON.stringify({ day, knowledgePointId: point.id, score, note: reviewNoteFor(score) }),
     });
     setBusyKey("");
     router.refresh();
@@ -67,6 +67,7 @@ export function LearningActionPanel({ day, dueReviews, dueMistakes }: {
               <div>
                 <span>{point.subject_code} · {point.tier_name} · mastery {point.mastery}</span>
                 <strong>{point.title}</strong>
+                <small>{reviewPromptFor(point.mastery)}</small>
               </div>
               <div className="scoreButtons" aria-label={`${point.title} 复习评分`}>
                 {[0, 1, 2, 3].map((score) => (
@@ -87,6 +88,7 @@ export function LearningActionPanel({ day, dueReviews, dueMistakes }: {
                 <span>错题回炉 · {mistake.next_review}</span>
                 <strong>{mistake.title}</strong>
                 {mistake.cause ? <small>{mistake.cause}</small> : null}
+                <small>仍错时先补“为什么又错”，已会时再给自己出一道变式。</small>
               </div>
               <div className="scoreButtons">
                 <button disabled={busyKey === `mistake-${mistake.id}-1`} onClick={() => reattemptMistake(mistake, 1)} type="button">
@@ -102,4 +104,16 @@ export function LearningActionPanel({ day, dueReviews, dueMistakes }: {
       ) : null}
     </section>
   );
+}
+
+function reviewPromptFor(mastery: number) {
+  if (mastery < 40) return "先讲清定义和条件，再做题；低分会继续排到近期复习。";
+  if (mastery < 70) return "先做一道最小变式，确认不是只记住答案。";
+  return "用 2 分钟回忆关键步骤，确认能独立复现。";
+}
+
+function reviewNoteFor(score: number) {
+  if (score <= 1) return "当天行动卡：低分，需补原因和变式";
+  if (score === 2) return "当天行动卡：基本会，需再巩固";
+  return "当天行动卡：已掌握";
 }

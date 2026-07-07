@@ -49,6 +49,7 @@ export function DayWorkspace({ date, entry, draftVersions = {}, conflicts = [] }
   const [sessionTitle, setSessionTitle] = useState("");
   const [minutes, setMinutes] = useState(50);
   const [mistakeTitle, setMistakeTitle] = useState("");
+  const [mistakeCause, setMistakeCause] = useState("");
 
   function update(key: keyof typeof form, value: string) {
     updateField(key, value);
@@ -79,9 +80,10 @@ export function DayWorkspace({ date, entry, draftVersions = {}, conflicts = [] }
     await fetch("/api/mistakes", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ day: date, title: mistakeTitle, cause: "待归因" }),
+      body: JSON.stringify({ day: date, title: mistakeTitle, cause: mistakeCause.trim() || "待归因" }),
     });
     setMistakeTitle("");
+    setMistakeCause("");
     router.refresh();
   }
 
@@ -93,19 +95,36 @@ export function DayWorkspace({ date, entry, draftVersions = {}, conflicts = [] }
       </div>
       <p className={`syncStatus sync-${globalStatus}`}>自动同步：{syncLabel(globalStatus)}</p>
       <ConflictList conflicts={conflicts} />
+      <div className="reflectionPrompts">
+        <span>今天最关键的推进是什么？</span>
+        <span>哪个知识点仍然不稳，为什么？</span>
+        <span>明天打开页面后的第一步是什么？</span>
+      </div>
       <label className="field">
         今日计划
-        <textarea value={form.plan} onChange={(event) => update("plan", event.target.value)} />
+        <textarea
+          value={form.plan}
+          onChange={(event) => update("plan", event.target.value)}
+          placeholder="写 1-3 个今天必须完成的学习动作..."
+        />
         <FieldStatus status={statusByField.plan} />
       </label>
       <label className="field">
         日记
-        <textarea value={form.diary} onChange={(event) => update("diary", event.target.value)} />
+        <textarea
+          value={form.diary}
+          onChange={(event) => update("diary", event.target.value)}
+          placeholder="记录过程、卡点、临时想法；未提交也会自动保存。"
+        />
         <FieldStatus status={statusByField.diary} />
       </label>
       <label className="field">
         晚间总结
-        <textarea value={form.summary} onChange={(event) => update("summary", event.target.value)} />
+        <textarea
+          value={form.summary}
+          onChange={(event) => update("summary", event.target.value)}
+          placeholder="今天学会了什么？哪里是假会？明天怎么验证？"
+        />
         <FieldStatus status={statusByField.summary} />
       </label>
       <div className="grid2">
@@ -129,8 +148,13 @@ export function DayWorkspace({ date, entry, draftVersions = {}, conflicts = [] }
         <input value={minutes} onChange={(event) => setMinutes(Number(event.target.value))} type="number" min="0" />
         <button onClick={addSession} type="button">添加学习</button>
       </div>
-      <div className="inlineComposer">
+      <div className="inlineComposer mistakeComposer">
         <input value={mistakeTitle} onChange={(event) => setMistakeTitle(event.target.value)} placeholder="错题：CNN 参数量漏 bias" />
+        <input
+          value={mistakeCause}
+          onChange={(event) => setMistakeCause(event.target.value)}
+          placeholder="原因/重复模式：概念混淆、审题漏条件、公式不熟..."
+        />
         <button onClick={addMistake} type="button">添加错题</button>
       </div>
     </section>

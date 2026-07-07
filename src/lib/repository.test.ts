@@ -1,7 +1,18 @@
 import Database from "better-sqlite3";
-import { describe, expect, it } from "vitest";
+import { existsSync, rmSync } from "node:fs";
+import { mkdtemp } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import { runMigrations } from "./migrations";
-import { getActiveDayDraftsWithDb, markCommittedDayDraftsWithDb } from "./repository";
+import { initializeDatabase } from "./db";
+import { createAssetFromUploadWithDb, getActiveDayDraftsWithDb, markCommittedDayDraftsWithDb } from "./repository";
+
+const tempRoots: string[] = [];
+
+afterEach(() => {
+  for (const root of tempRoots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
 
 describe("day draft commits", () => {
   it("commits only drafts matching the submitted day snapshot", () => {
@@ -41,5 +52,38 @@ describe("day draft commits", () => {
       values: { summary: "reopened draft" },
       versions: { summary: 4 },
     });
+  });
+});
+
+describe("repository asset uploads", () => {
+  it("deduplicates identical file content while keeping separate asset records", async () => {
+    const uploadRoot = await mkdtemp(path.join(os.tmpdir(), "zgca-repository-upload-"));
+    tempRoots.push(uploadRoot);
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    runMigrations(db, { uploadRoot });
+
+    const first = (await createAssetFromUploadWithDb(db, {
+      file: new File(["same bytes"], "notes-a.txt", { type: "text/plain" }),
+      uploadRoot,
+      day: "2026-07-07",
+      tags: ["linear algebra"],
+    })) as { id: number; relative_path: string; original_name: string };
+    const second = (await createAssetFromUploadWithDb(db, {
+      file: new File(["same bytes"], "notes-b.txt", { type: "text/plain" }),
+      uploadRoot,
+      day: "2026-07-07",
+      tags: ["linear algebra"],
+    })) as { id: number; relative_path: string; original_name: string };
+
+    expect(first.id).not.toBe(second.id);
+    expect(first.original_name).toBe("notes-a.txt");
+    expect(second.original_name).toBe("notes-b.txt");
+    expect(first.relative_path).toBe(second.relative_path);
+    expect(existsSync(path.join(uploadRoot, first.relative_path))).toBe(true);
+
+    expect(db.prepare("SELECT COUNT(*) AS count FROM blobs").get()).toEqual({ count: 1 });
+    expect(db.prepare("SELECT ref_count FROM blobs").get()).toEqual({ ref_count: 2 });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM assets").get()).toEqual({ count: 2 });
   });
 });

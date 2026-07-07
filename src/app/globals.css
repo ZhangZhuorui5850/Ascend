@@ -142,6 +142,13 @@ select {
   margin-bottom: 16px;
 }
 
+.splitTitle {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .panelHeader {
   display: flex;
   align-items: center;
@@ -285,6 +292,91 @@ h2 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
+}
+
+.analyticsGrid {
+  align-items: stretch;
+}
+
+.analyticsNarrative {
+  display: grid;
+  gap: 12px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.analyticsNarrative strong {
+  color: var(--ink);
+}
+
+.nextWeakPoint {
+  display: grid;
+  gap: 10px;
+}
+
+.nextWeakPoint > span {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.nextWeakPoint strong {
+  font-size: 20px;
+}
+
+.nextWeakPoint small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.weakPointList {
+  display: grid;
+  gap: 10px;
+}
+
+.weakPointRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px;
+  gap: 12px;
+  align-items: center;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.weakPointRow > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+
+.weakPointRow .tierBadge {
+  width: fit-content;
+}
+
+.weakPointRow small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.priorityScore {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+}
+
+.priorityScore b {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 24px;
+}
+
+.priorityScore span {
+  color: var(--quiet);
+  font-size: 12px;
 }
 
 .field {
@@ -706,6 +798,23 @@ h2 {
   gap: 4px;
 }
 
+.reflectionPrompts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.reflectionPrompts span {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .conflictStack {
   display: grid;
   gap: 10px;
@@ -777,6 +886,73 @@ h2 {
   color: white;
   border-color: var(--ink);
   background: var(--ink);
+}
+
+.conflictHistoryList {
+  display: grid;
+  gap: 10px;
+}
+
+.conflictHistoryRow {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.conflictHistoryRow.status-open {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.conflictHistoryMeta,
+.conflictHistoryText {
+  display: grid;
+  gap: 5px;
+}
+
+.conflictHistoryMeta span {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.conflictHistoryRow.status-open .conflictHistoryMeta span {
+  color: var(--warn);
+}
+
+.conflictHistoryMeta small,
+.conflictHistoryText p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.conflictHistoryText p {
+  display: grid;
+  gap: 3px;
+}
+
+.conflictHistoryText b {
+  color: var(--ink);
+}
+
+.pruneControl {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+}
+
+.pruneControl small {
+  color: var(--muted);
 }
 
 .learningActions {
@@ -853,6 +1029,10 @@ h2 {
 
 .inlineComposer:last-child {
   grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.inlineComposer.mistakeComposer {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
 }
 
 .markdownBlock pre {
@@ -1219,6 +1399,8 @@ h2 {
 
   .inlineComposer,
   .inlineComposer:last-child,
+  .inlineComposer.mistakeComposer,
+  .reflectionPrompts,
   .conflictCompare {
     grid-template-columns: 1fr;
   }
@@ -1336,8 +1518,22 @@ h2 {
   .knowledgeList.inset .kpRow,
   .listRow,
   .assetRow,
-  .timelineItem {
+  .timelineItem,
+  .weakPointRow,
+  .conflictHistoryRow {
     grid-template-columns: 1fr;
+  }
+
+  .priorityScore {
+    justify-items: start;
+  }
+
+  .splitTitle {
+    display: grid;
+  }
+
+  .pruneControl {
+    justify-items: start;
   }
 
   .attachmentCard {

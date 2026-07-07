@@ -1,7 +1,7 @@
 # ZGCA Workbench Phase 1 Briefing
 
 Date: 2026-07-07
-Status: implemented foundation, ready for the next learning-loop iteration
+Status: implemented multi-device learning cockpit with scripted QA
 
 ## Executive Summary
 
@@ -25,6 +25,7 @@ The design center remains the day page. The learner can open today on desktop, t
 - Enabled WAL, foreign keys, busy timeout, and synchronous NORMAL for local durability and concurrency.
 - Added draft versioning, idempotent `op_id` handling, stale base-version rejection, and monotonic change pull.
 - Stale draft writes now create open `conflicts` records instead of disappearing as generic errors.
+- Added a global conflict audit page with open/resolved history and a protected cleanup API for old resolved conflicts.
 - Added careful draft retirement: explicit day commit only marks drafts committed when draft content matches the submitted canonical snapshot.
 
 ### Learning Loop
@@ -34,7 +35,10 @@ The design center remains the day page. The learner can open today on desktop, t
 - Weak reviews keep the point in the near review queue.
 - New mistakes lower linked knowledge point mastery and schedule next-day review.
 - Due reviews and due mistakes now appear as action cards on the day page before passive timelines.
+- Review action cards now show score-specific learning prompts; low scores are recorded with a note that asks for cause and a variant problem.
 - Mistake reattempts can be scored directly from the day page; passing reattempts graduate the mistake and create a review outcome.
+- Daily writing now includes reflection prompts, and new mistake capture includes a cause/repeated-pattern field.
+- A new learning analytics page summarizes the recent week and ranks weak knowledge points by mastery, tier, due state, open mistakes, and exam relevance.
 - These rules make daily review/mistake capture affect the knowledge map rather than only appending history.
 
 ### Daily Autosync
@@ -51,6 +55,7 @@ The design center remains the day page. The learner can open today on desktop, t
 - Drag, paste, or file picker starts upload immediately.
 - Upload cards show uploading, uploaded, failed, retry, and download states.
 - Files are stored under content-addressed blob paths to avoid same-name overwrites and renamed duplicate drift.
+- Repository-level duplicate upload coverage now verifies identical content shares one blob path and increments `ref_count` across separate asset records.
 - Legacy assets are backfilled into blob metadata and content-addressed storage.
 - Downloads stream from disk through upload-root path confinement.
 - SVG/HTML and other active content are forced to download as attachments; passive image formats and PDFs can render inline.
@@ -63,7 +68,9 @@ The design center remains the day page. The learner can open today on desktop, t
 - Phone capture opens as a bottom sheet with backdrop and close control.
 - Closed phone/tablet capture sheets are hidden from pointer and keyboard interaction; opening Capture restores the backdrop, sheet, drag/drop area, and close affordance.
 - The day page now includes a `Now` focus band above metrics so mobile users see the next action before the detailed timeline.
+- Navigation now includes Analytics and Conflict audit pages on desktop, with mobile bottom navigation focused on Today, Calendar, Analytics, Mistakes, and Capture.
 - Motion is limited to useful state changes: capture sheet open/close, upload spinner, focus/drop affordances, and sync state changes. Reduced-motion preferences are respected.
+- Added `npm run responsive:audit`, a Playwright-powered smoke check for login, desktop, tablet, phone, mobile capture, and horizontal overflow.
 
 ## Expert Review Synthesis
 
@@ -75,9 +82,8 @@ What is strong:
 - Mistakes, reviews, assets, and study sessions are all tied back to dates, which makes weekly review easier.
 
 Needs improvement:
-- The next phase should make mastery changes visible in the day page immediately after review/mistake actions.
-- Add richer prompts for why a review score was low or why a mistake recurred.
-- Add lightweight end-of-day prompts that ask what changed, what remains weak, and what tomorrow's first action is.
+- The next phase can make mastery deltas animate immediately after review/mistake actions.
+- Add richer spaced-repetition explanations, such as why a point moved to a specific next-review date.
 
 ### UX and Interaction Reviewer
 
@@ -87,9 +93,8 @@ What is strong:
 - The `Now` band better matches daily use: open the page, see what matters, write.
 
 Needs improvement:
-- Add conflict history and audit views so resolved conflicts can be reviewed later.
 - Add optimistic refresh or live insertion for newly uploaded assets on the day page.
-- Convert the browser layout audit into a repeatable visual regression check.
+- Extend the responsive audit into screenshot diffing if this becomes a shared UI surface.
 
 ### Database and Sync Reviewer
 
@@ -101,7 +106,7 @@ What is strong:
 Needs improvement:
 - Add a global conflicts queue for non-day scopes if more entity types begin producing conflicts.
 - Add pruning or compaction policy for `entity_changes`.
-- Add repository-level tests for duplicate upload end-to-end behavior.
+- Add upload tests for symlink escape attempts inside the upload root.
 
 ### Security Reviewer
 
@@ -124,8 +129,9 @@ Latest verification run:
   - `1024x900` tablet day page: sidebar and main workspace visible, capture docked below, mobile nav hidden, no horizontal overflow.
   - `390x844` phone day page: sidebar hidden, bottom nav visible, capture closed by default, capture bottom sheet opens with backdrop and upload copy visible, no horizontal overflow.
   - `1440x900` and `390x844` login page: redesigned login shell and card fit without horizontal overflow.
+- `npm run responsive:audit` passed against `http://localhost:3002`.
 - `npm run lint` passed.
-- `npm test` passed: 15 test files, 38 tests.
+- `npm test` passed: 16 test files, 41 tests.
 - `npm run build` passed with Next.js 16.2.10.
 
 Important targeted tests added:
@@ -139,14 +145,17 @@ Important targeted tests added:
 - Active draft content plus version hydration for reload-safe autosave.
 - Learning loop mastery/status/next-review updates for review scores and mistakes.
 - Mistake reattempt graduation and linked review outcome creation.
+- Learning analytics week summary and weak-point priority scoring.
+- Repository duplicate upload deduplication and blob `ref_count`.
+- Conflict history listing and resolved-conflict pruning.
 
 ## Remaining Iteration Backlog
 
-1. Add repository-level duplicate-upload tests that verify one blob path and correct `ref_count`.
-2. Add final analytics views for weekly learning review and weak-point prioritization.
-3. Add conflict history and pruning views for long-running sync usage.
-4. Add richer review/mistake prompts for low scores and repeated errors.
-5. Promote the browser responsive checks into a scripted visual regression command.
+1. Add optimistic refresh or live insertion for newly uploaded assets on the day page after capture upload succeeds.
+2. Add `entity_changes` compaction for very long-running sync histories.
+3. Add upload tests for symlink escape attempts inside the upload root.
+4. Add screenshot diffing to `responsive:audit` if visual regressions become frequent.
+5. Add animated mastery deltas after review and mistake actions.
 
 ## Git Notes
 

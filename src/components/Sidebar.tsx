@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, ClipboardList, Database, FileText, Home, LayoutGrid, Map, PlusCircle, Tag, Target } from "lucide-react";
+import { AlertTriangle, BarChart3, CalendarDays, ClipboardList, Database, FileText, Home, LayoutGrid, Map, PlusCircle, Tag, Target } from "lucide-react";
 import { todayKey } from "@/lib/dates";
 
 export const links = [
   { href: "/", label: "总控台", icon: Home },
   { href: "/calendar", label: "日历", icon: CalendarDays },
   { href: `/day/${todayKey()}`, label: "今日", icon: ClipboardList },
+  { href: "/analytics", label: "分析", icon: BarChart3 },
+  { href: "/conflicts", label: "冲突", icon: AlertTriangle },
   { href: "/views", label: "视图", icon: LayoutGrid },
   { href: "/knowledge", label: "知识地图", icon: Map },
   { href: "/subjects", label: "科目", icon: Target },
@@ -47,7 +49,7 @@ export function Sidebar() {
 
 export function MobileNav({ onCaptureClick }: { onCaptureClick: () => void }) {
   const pathname = usePathname();
-  const mobileLinks = [links[2], links[1], links[4], links[7]];
+  const mobileLinks = [links[2], links[1], links[3], links[9]];
 
   return (
     <nav className="mobileNav" aria-label="移动端主导航" data-testid="mobile-nav">
