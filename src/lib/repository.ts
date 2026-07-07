@@ -312,18 +312,21 @@ export function createStudySession(input: Record<string, unknown>) {
 
 export function createMistake(input: Record<string, unknown>) {
   const day = assertDateKey(String(input.day || todayKey()));
+  const knowledgePointId = String(input.knowledgePointId || "");
   ensureDay(day);
-  getDb().prepare(`
+  const db = getDb();
+  db.prepare(`
     INSERT INTO mistakes (day, subject_code, knowledge_point_id, title, cause, next_review)
     VALUES (@day, @subjectCode, @knowledgePointId, @title, @cause, @nextReview)
   `).run({
     day,
     subjectCode: String(input.subjectCode || "") || null,
-    knowledgePointId: String(input.knowledgePointId || "") || null,
+    knowledgePointId: knowledgePointId || null,
     title: String(input.title || "错题"),
     cause: String(input.cause || ""),
     nextReview: nextReviewDate(day, 0),
   });
+  applyMistakeOutcomeWithDb(db, { knowledgePointId, day });
   return getDay(day);
 }
 
@@ -344,15 +347,68 @@ export function createReviewEvent(input: Record<string, unknown>) {
     score: Number(input.score || 0),
     note: String(input.note || ""),
   });
-  if (point && knowledgePointId) {
-    db.prepare(`
-      UPDATE knowledge_points
-      SET reviews = reviews + 1,
-          last_review = @day,
-          next_review = @nextReview,
-          status = CASE WHEN status = '未学' THEN '学习中' ELSE status END
-      WHERE id = @knowledgePointId
-    `).run({ day, nextReview: nextReviewDate(day, point.reviews), knowledgePointId });
-  }
+  if (point && knowledgePointId) applyReviewOutcomeWithDb(db, { knowledgePointId, day, score: Number(input.score || 0) });
   return getDay(day);
+}
+
+export function applyReviewOutcomeWithDb(
+  database: Database.Database,
+  input: { knowledgePointId: string; day: string; score: number },
+) {
+  if (!input.knowledgePointId) return;
+  const point = database.prepare("SELECT reviews, mastery FROM knowledge_points WHERE id = ?").get(input.knowledgePointId) as
+    | { reviews: number; mastery: number }
+    | undefined;
+  if (!point) return;
+
+  const reviews = point.reviews + 1;
+  const mastery = clamp(point.mastery + reviewMasteryDelta(input.score), 0, 100);
+  const status = mastery >= 80 ? "已掌握" : mastery > 0 ? "学习中" : "未学";
+  const nextReview = nextReviewDate(input.day, input.score <= 1 ? 0 : reviews);
+
+  database.prepare(`
+    UPDATE knowledge_points
+    SET reviews = @reviews,
+        mastery = @mastery,
+        last_review = @day,
+        next_review = @nextReview,
+        status = @status
+    WHERE id = @knowledgePointId
+  `).run({ ...input, reviews, mastery, status, nextReview });
+}
+
+export function applyMistakeOutcomeWithDb(
+  database: Database.Database,
+  input: { knowledgePointId: string; day: string },
+) {
+  if (!input.knowledgePointId) return;
+  const point = database.prepare("SELECT mastery FROM knowledge_points WHERE id = ?").get(input.knowledgePointId) as
+    | { mastery: number }
+    | undefined;
+  if (!point) return;
+
+  const mastery = clamp(point.mastery - 15, 0, 100);
+  database.prepare(`
+    UPDATE knowledge_points
+    SET mastery = @mastery,
+        status = @status,
+        next_review = @nextReview
+    WHERE id = @knowledgePointId
+  `).run({
+    knowledgePointId: input.knowledgePointId,
+    mastery,
+    status: mastery >= 80 ? "已掌握" : "学习中",
+    nextReview: nextReviewDate(input.day, 0),
+  });
+}
+
+function reviewMasteryDelta(score: number) {
+  if (score >= 3) return 16;
+  if (score === 2) return 8;
+  if (score === 1) return -4;
+  return -12;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
 }

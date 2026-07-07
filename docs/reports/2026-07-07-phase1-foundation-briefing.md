@@ -26,6 +26,14 @@ The design center remains the day page. The learner can open today on desktop, t
 - Added draft versioning, idempotent `op_id` handling, stale base-version rejection, and monotonic change pull.
 - Added careful draft retirement: explicit day commit only marks drafts committed when draft content matches the submitted canonical snapshot.
 
+### Learning Loop
+
+- Review scores now update knowledge point mastery, review count, status, last review date, and next review date.
+- Strong reviews increase mastery and can promote a point to `已掌握`.
+- Weak reviews keep the point in the near review queue.
+- New mistakes lower linked knowledge point mastery and schedule next-day review.
+- These rules make daily review/mistake capture affect the knowledge map rather than only appending history.
+
 ### Daily Autosync
 
 - Daily fields autosave to `/api/drafts` with debounce.
@@ -62,8 +70,8 @@ What is strong:
 - Mistakes, reviews, assets, and study sessions are all tied back to dates, which makes weekly review easier.
 
 Needs improvement:
-- The next phase should turn review and mistake events into explicit mastery updates.
-- The day page should eventually surface "next review" and "reattempt this mistake" actions before passive timelines.
+- The next phase should make mastery changes visible in the day page immediately after review/mistake actions.
+- The day page should surface "next review" and "reattempt this mistake" actions before passive timelines.
 - Add lightweight end-of-day prompts that ask what changed, what remains weak, and what tomorrow's first action is.
 
 ### UX and Interaction Reviewer
@@ -107,7 +115,7 @@ Needs improvement:
 Latest verification run:
 
 - `npm run lint` passed.
-- `npm test` passed: 14 test files, 34 tests.
+- `npm test` passed: 15 test files, 36 tests.
 - `npm run build` passed with Next.js 16.2.10.
 
 Important targeted tests added:
@@ -118,11 +126,12 @@ Important targeted tests added:
 - Asset path confinement, SVG disposition, content-addressed storage, and legacy backfill.
 - Draft sync idempotency, stale base rejection, and day commit draft preservation.
 - Active draft content plus version hydration for reload-safe autosave.
+- Learning loop mastery/status/next-review updates for review scores and mistakes.
 
 ## Remaining Iteration Backlog
 
 1. Add conflict-resolution UI for stale draft rejections.
-2. Add learning-loop actions that update mastery, confidence, next review, and mistake graduation.
+2. Add visible review and mistake action cards on the day page, above passive timelines.
 3. Add visual QA screenshots for mobile, tablet, desktop, and wide desktop.
 4. Add repository-level duplicate-upload tests that verify one blob path and correct `ref_count`.
 5. Add final analytics views for weekly learning review and weak-point prioritization.
