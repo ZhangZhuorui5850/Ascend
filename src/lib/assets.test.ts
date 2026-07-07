@@ -11,8 +11,9 @@ describe("asset storage safety", () => {
     for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
   });
 
-  it("uses hash-prefixed storage keys to avoid same-name overwrites", () => {
-    expect(storageKeyFor("2026-07-07", "abc123", "PCA.png")).toBe("2026/07/07/original/abc123-PCA.png");
+  it("uses content-addressed storage keys to dedupe renamed uploads", () => {
+    expect(storageKeyFor("2026-07-07", "abc123", "PCA.png")).toBe("blobs/ab/abc123");
+    expect(storageKeyFor("2026-07-08", "abc123", "renamed.png")).toBe("blobs/ab/abc123");
   });
 
   it("rejects paths that escape the upload root", () => {
@@ -36,6 +37,7 @@ describe("asset storage safety", () => {
 
   it("forces active content to download", () => {
     expect(contentDispositionFor("text/html", "x.html")).toMatch(/^attachment;/);
+    expect(contentDispositionFor("image/svg+xml", "x.svg")).toMatch(/^attachment;/);
     expect(contentDispositionFor("image/png", "x.png")).toMatch(/^inline;/);
   });
 });

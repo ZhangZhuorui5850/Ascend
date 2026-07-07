@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
-import { SESSION_COOKIE, getSessionUser } from "./auth";
+import { getSessionUser } from "./auth";
+import { SESSION_COOKIE } from "./auth-constants";
 
 export class AuthError extends Error {
   status = 401;

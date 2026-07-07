@@ -44,7 +44,7 @@ export function getDbHandle(): Database.Database {
   db.pragma("busy_timeout = 5000");
   db.pragma("synchronous = NORMAL");
   initializeDatabase(db);
-  runMigrations(db);
+  runMigrations(db, { uploadRoot: getUploadRoot() });
   return db;
 }
 

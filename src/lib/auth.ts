@@ -1,7 +1,8 @@
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
+import { SESSION_COOKIE } from "./auth-constants";
 import { getDbHandle } from "./db";
 
-export const SESSION_COOKIE = "zgca_session";
+export { SESSION_COOKIE };
 
 const SESSION_DAYS = 30;
 

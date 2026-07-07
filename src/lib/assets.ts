@@ -19,7 +19,8 @@ export type StoredUpload = {
 export function storageKeyFor(day: string, sha256: string, originalName: string): string {
   const [year, month, date] = day.split("-");
   if (!year || !month || !date) throw new Error(`Invalid day: ${day}`);
-  return path.posix.join(year, month, date, "original", `${sha256.slice(0, 12)}-${sanitizeFileName(originalName)}`);
+  void originalName;
+  return path.posix.join("blobs", sha256.slice(0, 2), sha256);
 }
 
 export async function storeUploadedFile(input: { file: File; day: string }): Promise<StoredUpload> {
@@ -58,7 +59,8 @@ export function resolveAssetPath(relativePath: string): string {
 }
 
 export function contentDispositionFor(mimeType: string, originalName: string): string {
-  const disposition = mimeType.startsWith("image/") || mimeType === "application/pdf" ? "inline" : "attachment";
+  const inlineMimeTypes = new Set(["application/pdf", "image/gif", "image/jpeg", "image/png", "image/webp"]);
+  const disposition = inlineMimeTypes.has(mimeType.toLowerCase()) ? "inline" : "attachment";
   const fallback = sanitizeFileName(originalName).replace(/"/g, "_");
   return `${disposition}; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(originalName)}`;
 }

@@ -1,9 +1,15 @@
 import type Database from "better-sqlite3";
 import { createHash } from "node:crypto";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import path from "node:path";
 
 type Migration = {
   version: string;
   sql: string;
+};
+
+type MigrationOptions = {
+  uploadRoot?: string;
 };
 
 const migrations: Migration[] = [
@@ -126,7 +132,7 @@ function checksum(sql: string): string {
   return createHash("sha256").update(sql).digest("hex");
 }
 
-export function runMigrations(database: Database.Database): void {
+export function runMigrations(database: Database.Database, options: MigrationOptions = {}): void {
   database.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version TEXT PRIMARY KEY,
@@ -163,6 +169,8 @@ export function runMigrations(database: Database.Database): void {
 
     apply();
   }
+
+  backfillAssetBlobs(database, options.uploadRoot);
 }
 
 export function getAppliedMigrations(database: Database.Database): string[] {
@@ -176,4 +184,76 @@ export function getAppliedMigrations(database: Database.Database): string[] {
     .prepare("SELECT version FROM schema_migrations ORDER BY version ASC")
     .all()
     .map((row) => (row as { version: string }).version);
+}
+
+function backfillAssetBlobs(database: Database.Database, uploadRoot?: string): void {
+  if (!uploadRoot || !tableExists(database, "assets") || !tableExists(database, "blobs")) return;
+
+  const assets = database.prepare("SELECT id, original_name, relative_path FROM assets").all() as Array<{
+    id: number;
+    original_name: string;
+    relative_path: string;
+  }>;
+  if (!assets.length) return;
+
+  const insertBlob = database.prepare(`
+    INSERT INTO blobs (id, sha256, size, mime_type, storage_key, ref_count)
+    VALUES (@id, @sha256, @size, @mimeType, @storageKey, 0)
+    ON CONFLICT(id) DO UPDATE SET
+      size = excluded.size,
+      storage_key = excluded.storage_key
+  `);
+  const updateAsset = database.prepare("UPDATE assets SET relative_path = ?, size = ? WHERE id = ?");
+
+  const backfill = database.transaction(() => {
+    for (const asset of assets) {
+      const sourcePath = resolveAssetPathForRoot(uploadRoot, asset.relative_path);
+      if (!existsSync(/*turbopackIgnore: true*/ sourcePath)) continue;
+
+      const bytes = readFileSync(/*turbopackIgnore: true*/ sourcePath);
+      const sha256 = createHash("sha256").update(bytes).digest("hex");
+      const storageKey = storageKeyForSha(sha256);
+      const targetPath = resolveAssetPathForRoot(uploadRoot, storageKey);
+      mkdirSync(path.dirname(targetPath), { recursive: true });
+      if (!existsSync(/*turbopackIgnore: true*/ targetPath)) {
+        copyFileSync(/*turbopackIgnore: true*/ sourcePath, /*turbopackIgnore: true*/ targetPath);
+      }
+
+      const size = statSync(/*turbopackIgnore: true*/ targetPath).size;
+      insertBlob.run({
+        id: sha256,
+        sha256,
+        size,
+        mimeType: "",
+        storageKey,
+      });
+      updateAsset.run(storageKey, size, asset.id);
+    }
+
+    database.prepare(`
+      UPDATE blobs
+      SET ref_count = (
+        SELECT COUNT(*)
+        FROM assets
+        WHERE assets.relative_path = blobs.storage_key
+      )
+    `).run();
+  });
+
+  backfill();
+}
+
+function tableExists(database: Database.Database, tableName: string): boolean {
+  return Boolean(database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName));
+}
+
+function storageKeyForSha(sha256: string): string {
+  return path.posix.join("blobs", sha256.slice(0, 2), sha256);
+}
+
+function resolveAssetPathForRoot(uploadRoot: string, relativePath: string): string {
+  const root = path.resolve(/*turbopackIgnore: true*/ uploadRoot);
+  const absolute = path.resolve(/*turbopackIgnore: true*/ root, relativePath);
+  if (absolute !== root && absolute.startsWith(`${root}${path.sep}`)) return absolute;
+  throw new Error("Invalid asset path");
 }
