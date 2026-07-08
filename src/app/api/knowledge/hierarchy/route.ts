@@ -1,0 +1,11 @@
+import { getCaptureHierarchy } from "@/lib/repository";
+import { authErrorResponse, requireSession } from "@/lib/request-auth";
+
+export async function GET() {
+  try {
+    await requireSession();
+    return Response.json(getCaptureHierarchy());
+  } catch (error) {
+    return authErrorResponse(error);
+  }
+}

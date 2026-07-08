@@ -22,7 +22,14 @@ export async function POST(request: Request) {
       day: String(formData.get("day") || ""),
       tags,
       subjectCode: String(formData.get("subjectCode") || ""),
+      chapterId: String(formData.get("chapterId") || ""),
       knowledgePointId: String(formData.get("knowledgePointId") || ""),
+      knowledgeTagNames: String(formData.get("knowledgeTagNames") || "")
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+      folderPath: String(formData.get("folderPath") || ""),
+      category: String(formData.get("category") || ""),
     });
 
     return Response.json(asset);

@@ -1,21 +1,31 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { getSourceRoot } from "@/lib/db";
 import { requirePageSession } from "@/lib/page-auth";
+import { readPlanDocument } from "@/lib/plan";
 
 export const dynamic = "force-dynamic";
 
 export default async function PlanPage() {
   await requirePageSession("/plan");
 
-  const planPath = path.join(getSourceRoot(), "agent沟通", "02_十周做题驱动备考计划.md");
-  const plan = readFileSync(planPath, "utf8").slice(0, 12000);
+  const plan = readPlanDocument(getSourceRoot());
   return (
     <div className="pageStack">
-      <div className="pageHeader"><span className="eyebrow">Plan</span><h1>十周计划</h1><p>读取当前 `zgca/agent沟通/02_十周做题驱动备考计划.md`。</p></div>
-      <article className="card markdownBlock">
-        <pre>{plan}</pre>
-      </article>
+      <div className="pageHeader">
+        <span className="eyebrow">Plan</span>
+        <h1>十周计划</h1>
+        <p>读取当前计划源文件；缺文件时显示空状态，不触发页面级错误。</p>
+      </div>
+      {plan.exists ? (
+        <article className="card markdownBlock">
+          <pre>{plan.content}</pre>
+        </article>
+      ) : (
+        <article className="card emptyState">
+          <h2>计划文件未找到</h2>
+          <p>当前查找路径：{plan.path}</p>
+          <p>把计划 Markdown 放回该路径后刷新本页即可读取。</p>
+        </article>
+      )}
     </div>
   );
 }

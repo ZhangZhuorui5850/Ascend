@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, ClipboardEvent, DragEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, ClipboardEvent, DragEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, FileText, ImageIcon, Loader2, Paperclip, Send, X } from "lucide-react";
 
 type AttachmentStatus = "queued" | "uploading" | "uploaded" | "error";
@@ -15,6 +15,23 @@ type Attachment = {
   previewUrl?: string;
   status: AttachmentStatus;
   error?: string;
+};
+
+type KnowledgeTagOption = {
+  id: string;
+  name: string;
+};
+
+type ChapterOption = {
+  id: string;
+  title: string;
+  knowledgeTags: KnowledgeTagOption[];
+};
+
+type CaptureSubjectOption = {
+  code: string;
+  name: string;
+  chapters: ChapterOption[];
 };
 
 function today() {
@@ -37,8 +54,13 @@ function fileKind(file: File) {
 
 export function CapturePanel({ onClose }: { onClose?: () => void }) {
   const [day, setDay] = useState(today());
-  const [tags, setTags] = useState("待整理");
+  const [category, setCategory] = useState("knowledge");
+  const [folderPath, setFolderPath] = useState("未归档");
   const [subjectCode, setSubjectCode] = useState("");
+  const [chapterId, setChapterId] = useState("");
+  const [selectedKnowledgeTags, setSelectedKnowledgeTags] = useState<string[]>([]);
+  const [newKnowledgeTag, setNewKnowledgeTag] = useState("");
+  const [captureSubjects, setCaptureSubjects] = useState<CaptureSubjectOption[]>([]);
   const [quickNote, setQuickNote] = useState("");
   const [message, setMessage] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -59,6 +81,30 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    fetch("/api/knowledge/hierarchy")
+      .then((response) => (response.ok ? response.json() : []))
+      .then((subjects: CaptureSubjectOption[]) => {
+        if (active) setCaptureSubjects(subjects);
+      })
+      .catch(() => {
+        if (active) setCaptureSubjects([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const selectedSubject = captureSubjects.find((subject) => subject.code === subjectCode);
+  const chapterOptions = selectedSubject?.chapters || [];
+  const selectedChapter = chapterOptions.find((chapter) => chapter.id === chapterId);
+  const selectedKnowledgeTagSet = new Set(selectedKnowledgeTags);
+
+  function defaultFolderFor(subject: string, chapterTitle?: string) {
+    return [subject, chapterTitle].filter(Boolean).join("/") || "未归档";
+  }
+
   function addFiles(files: FileList | File[]) {
     const incoming = Array.from(files);
     if (!incoming.length) return;
@@ -74,10 +120,7 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
     }));
 
     setAttachments((current) => [...current, ...next]);
-    setMessage(`已加入 ${next.length} 个文件，正在上传入库`);
-    for (const attachment of next) {
-      void uploadQueuedAttachment(attachment);
-    }
+    setMessage(`已加入 ${next.length} 个文件，点击发送后入库`);
   }
 
   function removeAttachment(id: string) {
@@ -130,8 +173,12 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
     const formData = new FormData();
     formData.append("file", attachment.file, attachment.name);
     formData.append("day", day);
-    formData.append("tags", tags);
+    formData.append("tags", "待整理");
+    formData.append("category", category);
+    formData.append("folderPath", folderPath);
     formData.append("subjectCode", subjectCode);
+    formData.append("chapterId", chapterId);
+    formData.append("knowledgeTagNames", selectedKnowledgeTags.join(","));
 
     const response = await fetch("/api/assets", {
       method: "POST",
@@ -147,6 +194,7 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
   }
 
   async function uploadQueuedAttachment(attachment: Attachment) {
+    if (attachment.status === "uploaded" || attachment.status === "uploading") return;
     setAttachments((current) =>
       current.map((item) => (item.id === attachment.id ? { ...item, status: "uploading", error: undefined } : item)),
     );
@@ -158,7 +206,7 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
           item.id === attachment.id ? { ...item, status: "uploaded", assetId: Number(asset.id) } : item,
         ),
       );
-      setMessage("文件已上传到当天资料流");
+      setMessage("文件已上传到知识库");
     } catch (error) {
       setAttachments((current) =>
         current.map((item) =>
@@ -173,10 +221,15 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
 
   async function submitQuickNote() {
     if (!quickNote.trim()) return;
-    await fetch("/api/study-sessions", {
+    const endpoint = category === "mistake" ? "/api/mistakes" : "/api/study-sessions";
+    const body =
+      category === "mistake"
+        ? { day, title: quickNote, cause: selectedKnowledgeTags.join(", ") || "收纳登记", subjectCode }
+        : { day, title: quickNote, subjectCode, output: selectedKnowledgeTags.join(", "), durationMinutes: 0 };
+    await fetch(endpoint, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ day, title: quickNote, subjectCode, output: "快速记录", durationMinutes: 0 }),
+      body: JSON.stringify(body),
     });
     setQuickNote("");
   }
@@ -191,7 +244,31 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
       await submitQuickNote();
     }
 
-    setMessage("记录已写入；文件会在上传成功后自动进入资料流");
+    const pendingAttachments = attachmentsRef.current.filter((attachment) => attachment.status === "queued" || attachment.status === "error");
+    await Promise.all(pendingAttachments.map((attachment) => uploadQueuedAttachment(attachment)));
+    setMessage("记录已写入，文件已按当前分类入库");
+  }
+
+  function toggleKnowledgeTag(name: string) {
+    setSelectedKnowledgeTags((current) =>
+      current.includes(name) ? current.filter((item) => item !== name) : [...current, name],
+    );
+  }
+
+  function addKnowledgeTagFromInput() {
+    const values = newKnowledgeTag
+      .split(/[,，]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (!values.length) return;
+    setSelectedKnowledgeTags((current) => Array.from(new Set([...current, ...values])));
+    setNewKnowledgeTag("");
+  }
+
+  function handleKnowledgeTagKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter" && event.key !== ",") return;
+    event.preventDefault();
+    addKnowledgeTagFromInput();
   }
 
   return (
@@ -218,20 +295,93 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
         <input value={day} onChange={(event) => setDay(event.target.value)} type="date" />
       </label>
       <label className="field">
-        标签
-        <input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="线代, PCA, 待整理" />
-      </label>
-      <label className="field">
         科目
-        <select value={subjectCode} onChange={(event) => setSubjectCode(event.target.value)}>
+        <select
+          value={subjectCode}
+          onChange={(event) => {
+            const nextSubjectCode = event.target.value;
+            setSubjectCode(nextSubjectCode);
+            setChapterId("");
+            setSelectedKnowledgeTags([]);
+            setFolderPath(defaultFolderFor(nextSubjectCode));
+          }}
+        >
           <option value="">未分类</option>
-          {["M1", "M2", "M3", "M4", "M5", "M6", "M7"].map((code) => (
-            <option key={code} value={code}>
-              {code}
+          {captureSubjects.map((subject) => (
+            <option key={subject.code} value={subject.code}>
+              {subject.code} · {subject.name}
             </option>
           ))}
         </select>
       </label>
+      <label className="field">
+        章节
+        <select
+          value={chapterId}
+          onChange={(event) => {
+            const nextChapterId = event.target.value;
+            const nextChapter = chapterOptions.find((chapter) => chapter.id === nextChapterId);
+            setChapterId(nextChapterId);
+            setSelectedKnowledgeTags([]);
+            setFolderPath(defaultFolderFor(subjectCode, nextChapter?.title));
+          }}
+          disabled={!subjectCode}
+        >
+          <option value="">未选择章节</option>
+          {chapterOptions.map((chapter) => (
+            <option key={chapter.id} value={chapter.id}>
+              {chapter.title}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="field">
+        知识点
+        <div className="tagPicker">
+          {selectedChapter?.knowledgeTags.map((tag) => (
+            <button
+              className={selectedKnowledgeTagSet.has(tag.name) ? "active" : ""}
+              key={tag.id}
+              onClick={() => toggleKnowledgeTag(tag.name)}
+              type="button"
+            >
+              {tag.name}
+            </button>
+          ))}
+          <input
+            value={newKnowledgeTag}
+            onBlur={addKnowledgeTagFromInput}
+            onChange={(event) => setNewKnowledgeTag(event.target.value)}
+            onKeyDown={handleKnowledgeTagKeyDown}
+            placeholder={chapterId ? "输入后 Enter 新建" : "先选章节"}
+            disabled={!chapterId}
+          />
+        </div>
+        {selectedKnowledgeTags.length ? (
+          <div className="selectedTags">
+            {selectedKnowledgeTags.map((tag) => (
+              <button key={tag} onClick={() => toggleKnowledgeTag(tag)} type="button">
+                {tag}<X size={12} />
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <label className="field">
+        文件夹
+        <input value={folderPath} onChange={(event) => setFolderPath(event.target.value)} placeholder="资料/数学/错题" />
+      </label>
+      <div className="captureTypeRow" aria-label="入库类型">
+        {[
+          ["knowledge", "资料"],
+          ["mistake", "错题"],
+          ["note", "笔记"],
+        ].map(([value, label]) => (
+          <button className={category === value ? "active" : ""} key={value} onClick={() => setCategory(value)} type="button">
+            {label}
+          </button>
+        ))}
+      </div>
 
       <div className={`chatCaptureBox ${isDragging ? "isDragging" : ""}`}>
         <textarea
@@ -260,7 +410,7 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
                   <span>{fileKind(attachment.file)} · {formatSize(attachment.size)}</span>
                 </div>
                 <div className={`attachmentStatus status-${attachment.status}`}>
-                  {attachment.status === "queued" ? "待发" : null}
+                  {attachment.status === "queued" ? "待入库" : null}
                   {attachment.status === "uploading" ? <Loader2 size={15} className="spin" /> : null}
                   {attachment.status === "uploaded" ? <CheckCircle2 size={15} /> : null}
                   {attachment.status === "error" ? <AlertCircle size={15} /> : null}
@@ -296,7 +446,7 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
         <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileInput} />
       </div>
 
-      {message ? <p className="hint">{message}</p> : <p className="hint">文件会即时上传，文字记录点击发送后写入当天。</p>}
+      {message ? <p className="hint">{message}</p> : <p className="hint">文件先排队，点击发送后按当前目录、标签和知识点入库。</p>}
     </aside>
   );
 }

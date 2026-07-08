@@ -330,6 +330,413 @@ export function getAssets() {
   return getDb().prepare("SELECT * FROM assets ORDER BY created_at DESC").all();
 }
 
+export type KnowledgeLibraryFilters = {
+  subjectCode?: string;
+  knowledgePointId?: string;
+  tag?: string;
+  folderPath?: string;
+};
+
+type KnowledgeLibraryAsset = {
+  id: number;
+  day: string;
+  original_name: string;
+  mime_type: string;
+  size: number;
+  category: string;
+  folder_path: string;
+  created_at: string;
+  subject_code: string | null;
+  knowledge_point_id: string | null;
+  knowledge_title: string | null;
+  tags: string;
+};
+
+type SubjectSummary = {
+  code: string;
+  name: string;
+  description: string;
+};
+
+export type SubjectChapter = {
+  id: string;
+  subject_code: string;
+  title: string;
+  sort_order: number;
+};
+
+export type KnowledgeTag = {
+  id: string;
+  chapter_id: string;
+  name: string;
+};
+
+export type CaptureSubject = SubjectSummary & {
+  chapters: Array<{
+    id: string;
+    title: string;
+    knowledgeTags: Array<{ id: string; name: string }>;
+  }>;
+};
+
+export type FileExplorerFolder = {
+  name: string;
+  path: string;
+  assetCount: number;
+};
+
+export type FileExplorerTreeNode = FileExplorerFolder & {
+  children: FileExplorerTreeNode[];
+};
+
+export type FileExplorerFile = {
+  id: number;
+  original_name: string;
+  mime_type: string;
+  size: number;
+  folder_path: string;
+  created_at: string;
+};
+
+export function getKnowledgeLibrary(filters: KnowledgeLibraryFilters = {}) {
+  return getKnowledgeLibraryWithDb(getDb(), filters);
+}
+
+export function getKnowledgeLibraryWithDb(db: Database.Database, filters: KnowledgeLibraryFilters = {}) {
+  const activeFilters = normalizeKnowledgeLibraryFilters(filters);
+  const clauses: string[] = [];
+  const params: Record<string, string> = {};
+
+  if (activeFilters.subjectCode) {
+    clauses.push("l.subject_code = @subjectCode");
+    params.subjectCode = activeFilters.subjectCode;
+  }
+  if (activeFilters.knowledgePointId) {
+    clauses.push("l.knowledge_point_id = @knowledgePointId");
+    params.knowledgePointId = activeFilters.knowledgePointId;
+  }
+  if (activeFilters.folderPath) {
+    clauses.push("a.folder_path = @folderPath");
+    params.folderPath = activeFilters.folderPath;
+  }
+  if (activeFilters.tag) {
+    clauses.push(`
+      EXISTS (
+        SELECT 1
+        FROM asset_tags filter_at
+        JOIN tags filter_t ON filter_t.id = filter_at.tag_id
+        WHERE filter_at.asset_id = a.id AND filter_t.name = @tag
+      )
+    `);
+    params.tag = activeFilters.tag;
+  }
+
+  const whereSql = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const assets = db.prepare(`
+    SELECT
+      a.id,
+      a.day,
+      a.original_name,
+      a.mime_type,
+      a.size,
+      a.category,
+      a.folder_path,
+      a.created_at,
+      l.subject_code,
+      l.knowledge_point_id,
+      k.title AS knowledge_title,
+      COALESCE(GROUP_CONCAT(DISTINCT t.name), '') AS tags
+    FROM assets a
+    LEFT JOIN asset_links l ON l.asset_id = a.id
+    LEFT JOIN knowledge_points k ON k.id = l.knowledge_point_id
+    LEFT JOIN asset_tags at ON at.asset_id = a.id
+    LEFT JOIN tags t ON t.id = at.tag_id
+    ${whereSql}
+    GROUP BY a.id, l.subject_code, l.knowledge_point_id, k.title
+    ORDER BY a.folder_path ASC, a.created_at DESC
+  `).all(params) as KnowledgeLibraryAsset[];
+
+  const folderRows = db.prepare(`
+    SELECT a.folder_path AS path, COUNT(DISTINCT a.id) AS assetCount
+    FROM assets a
+    LEFT JOIN asset_links l ON l.asset_id = a.id
+    ${whereSql}
+    GROUP BY a.folder_path
+    ORDER BY a.folder_path ASC
+  `).all(params) as Array<{ path: string; assetCount: number }>;
+
+  const tagRows = db.prepare(`
+    SELECT t.name, COUNT(DISTINCT at.asset_id) AS assetCount
+    FROM tags t
+    JOIN asset_tags at ON at.tag_id = t.id
+    GROUP BY t.id, t.name
+    ORDER BY t.name ASC
+  `).all() as Array<{ name: string; assetCount: number }>;
+
+  const points = db.prepare(`
+    SELECT
+      k.*,
+      COUNT(DISTINCT a.id) AS asset_count,
+      COUNT(DISTINCT m.id) AS mistake_count
+    FROM knowledge_points k
+    LEFT JOIN asset_links l ON l.knowledge_point_id = k.id
+    LEFT JOIN assets a ON a.id = l.asset_id
+    LEFT JOIN mistakes m ON m.knowledge_point_id = k.id
+    WHERE (@subjectCode = '' OR k.subject_code = @subjectCode)
+    GROUP BY k.id
+    ORDER BY k.subject_code ASC, k.id ASC
+  `).all({ subjectCode: activeFilters.subjectCode }) as DataRow[];
+
+  return {
+    activeFilters,
+    subjects: getSubjectsWithDb(db),
+    points,
+    tags: tagRows,
+    folders: folderRows,
+    assets,
+  };
+}
+
+function getSubjectsWithDb(db: Database.Database): SubjectSummary[] {
+  return db.prepare("SELECT * FROM subjects ORDER BY code ASC").all() as SubjectSummary[];
+}
+
+export function createSubjectWithDb(db: Database.Database, input: { code: string; name: string; description?: string }) {
+  const code = String(input.code || "").trim();
+  const name = String(input.name || "").trim();
+  const description = String(input.description || "").trim();
+  if (!code || !name) throw new Error("Subject code and name are required");
+  db.prepare(`
+    INSERT INTO subjects (code, name, description)
+    VALUES (@code, @name, @description)
+    ON CONFLICT(code) DO UPDATE SET
+      name = excluded.name,
+      description = excluded.description
+  `).run({ code, name, description });
+  return db.prepare("SELECT * FROM subjects WHERE code = ?").get(code) as SubjectSummary;
+}
+
+export function updateSubjectWithDb(db: Database.Database, input: { code: string; name: string; description?: string }) {
+  return createSubjectWithDb(db, input);
+}
+
+export function deleteSubjectWithDb(db: Database.Database, code: string) {
+  const subjectCode = String(code || "").trim();
+  if (!subjectCode) throw new Error("Subject code is required");
+  const chapters = db.prepare("SELECT id FROM subject_chapters WHERE subject_code = ?").all(subjectCode) as Array<{ id: string }>;
+  for (const chapter of chapters) deleteChapterWithDb(db, chapter.id);
+  db.prepare("UPDATE asset_links SET subject_code = NULL WHERE subject_code = ?").run(subjectCode);
+  db.prepare("UPDATE study_sessions SET subject_code = NULL WHERE subject_code = ?").run(subjectCode);
+  db.prepare("UPDATE mistakes SET subject_code = NULL WHERE subject_code = ?").run(subjectCode);
+  return db.prepare("DELETE FROM subjects WHERE code = ?").run(subjectCode).changes;
+}
+
+export function getCaptureHierarchy() {
+  return getCaptureHierarchyWithDb(getDb());
+}
+
+export function getCaptureHierarchyWithDb(db: Database.Database): CaptureSubject[] {
+  const subjects = getSubjectsWithDb(db) as CaptureSubject[];
+  const chapters = db.prepare(`
+    SELECT id, subject_code, title, sort_order
+    FROM subject_chapters
+    ORDER BY subject_code ASC, sort_order ASC, title ASC
+  `).all() as SubjectChapter[];
+  const tags = db.prepare(`
+    SELECT id, chapter_id, name
+    FROM knowledge_tags
+    ORDER BY name ASC
+  `).all() as KnowledgeTag[];
+  const tagsByChapter = new Map<string, Array<{ id: string; name: string }>>();
+  for (const tag of tags) {
+    const group = tagsByChapter.get(tag.chapter_id) || [];
+    group.push({ id: tag.id, name: tag.name });
+    tagsByChapter.set(tag.chapter_id, group);
+  }
+
+  return subjects.map((subject) => ({
+    ...subject,
+    chapters: chapters
+      .filter((chapter) => chapter.subject_code === subject.code)
+      .map((chapter) => ({
+        id: chapter.id,
+        title: chapter.title,
+        knowledgeTags: tagsByChapter.get(chapter.id) || [],
+      })),
+  }));
+}
+
+export function createChapterWithDb(db: Database.Database, input: { subjectCode: string; title: string }) {
+  const subjectCode = String(input.subjectCode || "").trim();
+  const title = String(input.title || "").trim();
+  if (!subjectCode || !title) throw new Error("Subject and chapter title are required");
+  const existing = db.prepare("SELECT * FROM subject_chapters WHERE subject_code = ? AND title = ?").get(subjectCode, title);
+  if (existing) return existing as SubjectChapter;
+
+  const maxOrder = db.prepare("SELECT COALESCE(MAX(sort_order), 0) AS value FROM subject_chapters WHERE subject_code = ?").get(subjectCode) as {
+    value: number;
+  };
+  const id = `chapter:${subjectCode}:${slugFor(title)}`;
+  db.prepare(`
+    INSERT INTO subject_chapters (id, subject_code, title, sort_order)
+    VALUES (@id, @subjectCode, @title, @sortOrder)
+  `).run({ id, subjectCode, title, sortOrder: Number(maxOrder.value || 0) + 1 });
+  return db.prepare("SELECT * FROM subject_chapters WHERE id = ?").get(id) as SubjectChapter;
+}
+
+export function updateChapterWithDb(db: Database.Database, input: { id: string; title: string }) {
+  const id = String(input.id || "").trim();
+  const title = String(input.title || "").trim();
+  if (!id || !title) throw new Error("Chapter id and title are required");
+  db.prepare("UPDATE subject_chapters SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(title, id);
+  const chapter = db.prepare("SELECT * FROM subject_chapters WHERE id = ?").get(id) as SubjectChapter | undefined;
+  if (!chapter) throw new Error("Chapter not found");
+  return chapter;
+}
+
+export function deleteChapterWithDb(db: Database.Database, id: string) {
+  const chapterId = String(id || "").trim();
+  if (!chapterId) throw new Error("Chapter id is required");
+  db.prepare("DELETE FROM asset_knowledge_tags WHERE knowledge_tag_id IN (SELECT id FROM knowledge_tags WHERE chapter_id = ?)").run(chapterId);
+  db.prepare("DELETE FROM knowledge_tags WHERE chapter_id = ?").run(chapterId);
+  db.prepare("UPDATE asset_links SET chapter_id = NULL WHERE chapter_id = ?").run(chapterId);
+  return db.prepare("DELETE FROM subject_chapters WHERE id = ?").run(chapterId).changes;
+}
+
+export function createKnowledgeTagWithDb(db: Database.Database, input: { chapterId: string; name: string }) {
+  const chapterId = String(input.chapterId || "").trim();
+  const name = String(input.name || "").trim();
+  if (!chapterId || !name) throw new Error("Chapter and knowledge tag name are required");
+  const existing = db.prepare("SELECT * FROM knowledge_tags WHERE chapter_id = ? AND name = ?").get(chapterId, name);
+  if (existing) return existing as KnowledgeTag;
+  const id = `kt:${chapterId}:${slugFor(name)}`;
+  db.prepare(`
+    INSERT INTO knowledge_tags (id, chapter_id, name)
+    VALUES (@id, @chapterId, @name)
+  `).run({ id, chapterId, name });
+  return db.prepare("SELECT * FROM knowledge_tags WHERE id = ?").get(id) as KnowledgeTag;
+}
+
+export function deleteKnowledgeTagWithDb(db: Database.Database, id: string) {
+  const tagId = String(id || "").trim();
+  if (!tagId) throw new Error("Knowledge tag id is required");
+  db.prepare("DELETE FROM asset_knowledge_tags WHERE knowledge_tag_id = ?").run(tagId);
+  return db.prepare("DELETE FROM knowledge_tags WHERE id = ?").run(tagId).changes;
+}
+
+export function createFolderWithDb(db: Database.Database, input: { path: string }) {
+  const folderPath = normalizeFolderPath(input.path || "");
+  ensureFolderPathWithDb(db, folderPath);
+  return db.prepare("SELECT path, name, parent_path FROM folders WHERE path = ?").get(folderPath);
+}
+
+export function moveAssetToFolderWithDb(db: Database.Database, input: { assetId: number; folderPath: string }) {
+  const folderPath = normalizeFolderPath(input.folderPath || "");
+  ensureFolderPathWithDb(db, folderPath);
+  db.prepare("UPDATE assets SET folder_path = ? WHERE id = ?").run(folderPath, input.assetId);
+}
+
+export function getFileExplorerWithDb(db: Database.Database, folderPath: string) {
+  const currentPath = normalizeExplorerPath(folderPath);
+  const folders = getChildFoldersWithDb(db, currentPath);
+  const files = db.prepare(`
+    SELECT id, original_name, mime_type, size, folder_path, created_at
+    FROM assets
+    WHERE folder_path = @currentPath
+    ORDER BY original_name ASC
+  `).all({ currentPath: currentPath || "未归档" }) as FileExplorerFile[];
+
+  return {
+    currentPath,
+    breadcrumbs: breadcrumbsFor(currentPath),
+    tree: getFolderTreeWithDb(db),
+    folders,
+    files,
+  };
+}
+
+function getFolderTreeWithDb(db: Database.Database): FileExplorerTreeNode[] {
+  const rows = db.prepare(`
+    SELECT path, name, parent_path
+    FROM folders
+    ORDER BY parent_path ASC, name ASC
+  `).all() as Array<{ path: string; name: string; parent_path: string }>;
+  const nodes = new Map<string, FileExplorerTreeNode>();
+  for (const row of rows) {
+    const count = db.prepare("SELECT COUNT(*) AS count FROM assets WHERE folder_path = ? OR folder_path LIKE ?").get(
+      row.path,
+      `${row.path}/%`,
+    ) as { count: number };
+    nodes.set(row.path, { name: row.name, path: row.path, assetCount: count.count, children: [] });
+  }
+
+  const roots: FileExplorerTreeNode[] = [];
+  for (const row of rows) {
+    const node = nodes.get(row.path);
+    if (!node) continue;
+    const parent = row.parent_path ? nodes.get(row.parent_path) : null;
+    if (parent) parent.children.push(node);
+    else roots.push(node);
+  }
+  return roots;
+}
+
+function getChildFoldersWithDb(db: Database.Database, parentPath: string): FileExplorerFolder[] {
+  const folders = db.prepare(`
+    SELECT path, name
+    FROM folders
+    WHERE parent_path = ?
+    ORDER BY name ASC
+  `).all(parentPath) as Array<{ path: string; name: string }>;
+  return folders.map((folder) => {
+    const count = db.prepare("SELECT COUNT(*) AS count FROM assets WHERE folder_path = ? OR folder_path LIKE ?").get(
+      folder.path,
+      `${folder.path}/%`,
+    ) as { count: number };
+    return { ...folder, assetCount: count.count };
+  });
+}
+
+function ensureFolderPathWithDb(db: Database.Database, pathValue: string) {
+  const normalized = normalizeFolderPath(pathValue);
+  const segments = normalized.split("/").filter(Boolean);
+  let parentPath = "";
+  for (let index = 0; index < segments.length; index += 1) {
+    const pathPart = segments.slice(0, index + 1).join("/");
+    const name = segments[index];
+    db.prepare(`
+      INSERT OR IGNORE INTO folders (path, name, parent_path)
+      VALUES (?, ?, ?)
+    `).run(pathPart, name, parentPath);
+    parentPath = pathPart;
+  }
+}
+
+function normalizeExplorerPath(value: string): string {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  return normalizeFolderPath(trimmed);
+}
+
+function breadcrumbsFor(pathValue: string) {
+  if (!pathValue) return [];
+  const segments = pathValue.split("/");
+  return segments.map((name, index) => ({
+    name,
+    path: segments.slice(0, index + 1).join("/"),
+  }));
+}
+
+function normalizeKnowledgeLibraryFilters(filters: KnowledgeLibraryFilters) {
+  const folderPath = String(filters.folderPath || "").trim();
+  return {
+    folderPath: folderPath ? normalizeFolderPath(folderPath) : "",
+    knowledgePointId: String(filters.knowledgePointId || "").trim(),
+    subjectCode: String(filters.subjectCode || "").trim(),
+    tag: String(filters.tag || "").trim(),
+  };
+}
+
 export function getViews() {
   return DEFAULT_VIEWS;
 }
@@ -389,7 +796,11 @@ export async function createAssetFromUpload(input: {
   day?: string;
   tags?: string[];
   subjectCode?: string;
+  chapterId?: string;
   knowledgePointId?: string;
+  knowledgeTagNames?: string[];
+  folderPath?: string;
+  category?: string;
 }) {
   return createAssetFromUploadWithDb(getDb(), input);
 }
@@ -401,7 +812,11 @@ export async function createAssetFromUploadWithDb(
     day?: string;
     tags?: string[];
     subjectCode?: string;
+    chapterId?: string;
     knowledgePointId?: string;
+    knowledgeTagNames?: string[];
+    folderPath?: string;
+    category?: string;
     uploadRoot?: string;
   },
 ) {
@@ -427,8 +842,8 @@ export async function createAssetFromUploadWithDb(
   });
 
   const result = db.prepare(`
-    INSERT INTO assets (day, original_name, safe_name, relative_path, mime_type, size)
-    VALUES (@day, @originalName, @safeName, @relativePath, @mimeType, @size)
+    INSERT INTO assets (day, original_name, safe_name, relative_path, mime_type, size, category, folder_path)
+    VALUES (@day, @originalName, @safeName, @relativePath, @mimeType, @size, @category, @folderPath)
   `).run({
     day,
     originalName: input.file.name,
@@ -436,24 +851,43 @@ export async function createAssetFromUploadWithDb(
     relativePath: stored.relativePath,
     mimeType,
     size: stored.size,
+    category: normalizeAssetCategory(input.category),
+    folderPath: normalizeFolderPath(input.folderPath || ""),
   });
   const assetId = Number(result.lastInsertRowid);
   db.prepare("UPDATE blobs SET ref_count = ref_count + 1 WHERE id = ?").run(stored.sha256);
-  linkAssetWithDb(db, assetId, input.subjectCode, input.knowledgePointId);
+  ensureFolderPathWithDb(db, normalizeFolderPath(input.folderPath || ""));
+  linkAssetWithDb(db, assetId, input.subjectCode, input.knowledgePointId, input.chapterId);
   setAssetTagsWithDb(db, assetId, input.tags || []);
+  setAssetKnowledgeTagsWithDb(db, assetId, input.chapterId, input.knowledgeTagNames || []);
   return db.prepare("SELECT * FROM assets WHERE id = ?").get(assetId);
 }
 
-export function linkAsset(assetId: number, subjectCode?: string, knowledgePointId?: string) {
-  linkAssetWithDb(getDb(), assetId, subjectCode, knowledgePointId);
+export function normalizeFolderPath(value: string): string {
+  const segments = value
+    .trim()
+    .replaceAll("\\", "/")
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter((segment) => segment && segment !== "." && segment !== "..");
+  return segments.join("/") || "未归档";
 }
 
-function linkAssetWithDb(db: Database.Database, assetId: number, subjectCode?: string, knowledgePointId?: string) {
-  if (!subjectCode && !knowledgePointId) return;
+function normalizeAssetCategory(value?: string): string {
+  const category = String(value || "knowledge").trim();
+  return ["knowledge", "mistake", "note"].includes(category) ? category : "knowledge";
+}
+
+export function linkAsset(assetId: number, subjectCode?: string, knowledgePointId?: string, chapterId?: string) {
+  linkAssetWithDb(getDb(), assetId, subjectCode, knowledgePointId, chapterId);
+}
+
+function linkAssetWithDb(db: Database.Database, assetId: number, subjectCode?: string, knowledgePointId?: string, chapterId?: string) {
+  if (!subjectCode && !knowledgePointId && !chapterId) return;
   db.prepare(`
-    INSERT OR IGNORE INTO asset_links (asset_id, subject_code, knowledge_point_id)
-    VALUES (?, ?, ?)
-  `).run(assetId, subjectCode || null, knowledgePointId || null);
+    INSERT OR IGNORE INTO asset_links (asset_id, subject_code, chapter_id, knowledge_point_id)
+    VALUES (?, ?, ?, ?)
+  `).run(assetId, subjectCode || null, chapterId || null, knowledgePointId || null);
 }
 
 export function setAssetTags(assetId: number, tags: string[]) {
@@ -468,6 +902,15 @@ function setAssetTagsWithDb(db: Database.Database, assetId: number, tags: string
     insertTag.run(tag);
     const row = getTag.get(tag) as { id: number };
     insertLink.run(assetId, row.id);
+  }
+}
+
+function setAssetKnowledgeTagsWithDb(db: Database.Database, assetId: number, chapterId?: string, names: string[] = []) {
+  if (!chapterId) return;
+  const insertLink = db.prepare("INSERT OR IGNORE INTO asset_knowledge_tags (asset_id, knowledge_tag_id) VALUES (?, ?)");
+  for (const name of uniqueTrimmed(names)) {
+    const tag = createKnowledgeTagWithDb(db, { chapterId, name });
+    insertLink.run(assetId, tag.id);
   }
 }
 
@@ -627,4 +1070,12 @@ function reviewMasteryDelta(score: number) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function uniqueTrimmed(values: string[]): string[] {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+function slugFor(value: string): string {
+  return encodeURIComponent(value.trim().toLowerCase()).replaceAll("%", "");
 }

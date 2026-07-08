@@ -30,6 +30,7 @@ export function getSourceRoot(): string {
 export function getDb(): Database.Database {
   const database = getDbHandle();
   seedKnowledgeMap(database);
+  seedChapterHierarchy(database);
   return database;
 }
 
@@ -72,6 +73,25 @@ export function initializeDatabase(database: Database.Database): void {
       next_review TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS subject_chapters (
+      id TEXT PRIMARY KEY,
+      subject_code TEXT NOT NULL,
+      title TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(subject_code, title)
+    );
+
+    CREATE TABLE IF NOT EXISTS knowledge_tags (
+      id TEXT PRIMARY KEY,
+      chapter_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(chapter_id, name)
+    );
+
     CREATE TABLE IF NOT EXISTS daily_entries (
       date TEXT PRIMARY KEY,
       plan TEXT NOT NULL DEFAULT '',
@@ -91,6 +111,8 @@ export function initializeDatabase(database: Database.Database): void {
       relative_path TEXT NOT NULL,
       mime_type TEXT NOT NULL DEFAULT '',
       size INTEGER NOT NULL DEFAULT 0,
+      category TEXT NOT NULL DEFAULT 'knowledge',
+      folder_path TEXT NOT NULL DEFAULT '未归档',
       status TEXT NOT NULL DEFAULT '待整理',
       note TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -107,11 +129,26 @@ export function initializeDatabase(database: Database.Database): void {
       PRIMARY KEY (asset_id, tag_id)
     );
 
+    CREATE TABLE IF NOT EXISTS asset_knowledge_tags (
+      asset_id INTEGER NOT NULL,
+      knowledge_tag_id TEXT NOT NULL,
+      PRIMARY KEY (asset_id, knowledge_tag_id)
+    );
+
     CREATE TABLE IF NOT EXISTS asset_links (
       asset_id INTEGER NOT NULL,
       subject_code TEXT,
+      chapter_id TEXT,
       knowledge_point_id TEXT,
-      PRIMARY KEY (asset_id, subject_code, knowledge_point_id)
+      PRIMARY KEY (asset_id, subject_code, chapter_id, knowledge_point_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS folders (
+      path TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      parent_path TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS study_sessions (
@@ -151,6 +188,17 @@ export function initializeDatabase(database: Database.Database): void {
   if (!columns.some((column) => column.name === "status")) {
     database.exec("ALTER TABLE assets ADD COLUMN status TEXT NOT NULL DEFAULT '待整理'");
   }
+  if (!columns.some((column) => column.name === "category")) {
+    database.exec("ALTER TABLE assets ADD COLUMN category TEXT NOT NULL DEFAULT 'knowledge'");
+  }
+  if (!columns.some((column) => column.name === "folder_path")) {
+    database.exec("ALTER TABLE assets ADD COLUMN folder_path TEXT NOT NULL DEFAULT '未归档'");
+  }
+
+  const assetLinkColumns = database.prepare("PRAGMA table_info(asset_links)").all() as Array<{ name: string }>;
+  if (!assetLinkColumns.some((column) => column.name === "chapter_id")) {
+    database.exec("ALTER TABLE asset_links ADD COLUMN chapter_id TEXT");
+  }
 }
 
 function seedKnowledgeMap(database: Database.Database): void {
@@ -178,4 +226,52 @@ function seedKnowledgeMap(database: Database.Database): void {
     for (const point of seed.points) insertPoint.run({ ...point, exam: point.exam ? 1 : 0 });
   });
   transaction();
+}
+
+function seedChapterHierarchy(database: Database.Database): void {
+  const points = database.prepare(`
+    SELECT subject_code, submodule, title
+    FROM knowledge_points
+    ORDER BY subject_code ASC, submodule ASC, id ASC
+  `).all() as Array<{ subject_code: string; submodule: string; title: string }>;
+  if (!points.length) return;
+
+  const insertChapter = database.prepare(`
+    INSERT OR IGNORE INTO subject_chapters (id, subject_code, title, sort_order)
+    VALUES (@id, @subjectCode, @title, @sortOrder)
+  `);
+  const insertTag = database.prepare(`
+    INSERT OR IGNORE INTO knowledge_tags (id, chapter_id, name)
+    VALUES (@id, @chapterId, @name)
+  `);
+  const seenChapters = new Map<string, number>();
+
+  const transaction = database.transaction(() => {
+    for (const point of points) {
+      const chapterTitle = point.submodule || "未分章";
+      const chapterId = `chapter:${point.subject_code}:${slugForSeed(chapterTitle)}`;
+      const key = `${point.subject_code}:${chapterTitle}`;
+      const sortOrder = seenChapters.get(point.subject_code) || 0;
+      if (!seenChapters.has(key)) {
+        insertChapter.run({
+          id: chapterId,
+          subjectCode: point.subject_code,
+          title: chapterTitle,
+          sortOrder: sortOrder + 1,
+        });
+        seenChapters.set(point.subject_code, sortOrder + 1);
+        seenChapters.set(key, sortOrder + 1);
+      }
+      insertTag.run({
+        id: `kt:${chapterId}:${slugForSeed(point.title)}`,
+        chapterId,
+        name: point.title,
+      });
+    }
+  });
+  transaction();
+}
+
+function slugForSeed(value: string): string {
+  return encodeURIComponent(value.trim().toLowerCase()).replaceAll("%", "");
 }

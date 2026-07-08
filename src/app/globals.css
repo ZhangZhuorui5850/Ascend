@@ -89,7 +89,21 @@ select {
 
 .sidebar nav {
   display: grid;
-  gap: 6px;
+  gap: 18px;
+}
+
+.navGroup {
+  display: grid;
+  gap: 5px;
+}
+
+.navGroup > span {
+  padding: 0 11px;
+  color: var(--quiet);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .sidebar a {
@@ -165,7 +179,7 @@ p {
 h1 {
   font-size: clamp(28px, 4vw, 44px);
   line-height: 1.05;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 h2 {
@@ -280,6 +294,16 @@ h2 {
 
 .card {
   padding: 18px;
+}
+
+.emptyState {
+  display: grid;
+  gap: 8px;
+}
+
+.emptyState p {
+  color: var(--muted);
+  line-height: 1.6;
 }
 
 .grid2 {
@@ -412,6 +436,75 @@ h2 {
 .inlineComposer input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.tagPicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.tagPicker button,
+.selectedTags button,
+.captureTypeRow button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.tagPicker button {
+  padding: 6px 9px;
+}
+
+.tagPicker button.active,
+.captureTypeRow button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.tagPicker input {
+  flex: 1 1 120px;
+  min-width: 0;
+  border: 0;
+  padding: 6px 2px;
+  box-shadow: none;
+}
+
+.tagPicker input:focus {
+  box-shadow: none;
+}
+
+.selectedTags,
+.captureTypeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.selectedTags button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+}
+
+.captureTypeRow {
+  margin-bottom: 12px;
+}
+
+.captureTypeRow button {
+  flex: 1 1 0;
+  padding: 8px 10px;
+  border-radius: 8px;
 }
 
 .syncStatus,
@@ -702,6 +795,894 @@ h2 {
 .knowledgeList {
   display: grid;
   gap: 8px;
+}
+
+.libraryLayout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.libraryRail {
+  position: sticky;
+  top: 24px;
+  display: grid;
+  gap: 18px;
+}
+
+.filterGroup {
+  display: grid;
+  gap: 6px;
+}
+
+.filterGroup > strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.filterGroup a {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.filterGroup a:hover,
+.filterGroup a.active {
+  color: var(--ink);
+  background: var(--surface-soft);
+}
+
+.filterGroup a span {
+  color: var(--quiet);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.libraryMain {
+  display: grid;
+  min-width: 0;
+  gap: 18px;
+}
+
+.librarySummary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 14px;
+  align-items: center;
+}
+
+.summaryMetrics {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.summaryMetrics span {
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-size: 13px;
+}
+
+.summaryMetrics b {
+  color: var(--ink);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+.folderGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.folderTile {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.folderTile:hover {
+  border-color: var(--accent);
+}
+
+.folderTile strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folderTile span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.compactKnowledge .kpRow {
+  grid-template-columns: 46px 56px minmax(0, 1fr) 160px auto;
+}
+
+.libraryAssetRow {
+  grid-template-columns: 180px minmax(0, 1fr) minmax(240px, auto);
+}
+
+.managerPanel,
+.fileExplorer {
+  display: grid;
+  gap: 14px;
+}
+
+.managerComposer,
+.folderComposer {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.managerComposer input,
+.managerComposer select,
+.folderComposer input {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.managerComposer button,
+.folderComposer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+  background: var(--ink);
+  color: white;
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.chapterAdminList {
+  display: grid;
+  gap: 10px;
+}
+
+.subjectAdminRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.subjectAdminRow span {
+  color: var(--accent);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-weight: 750;
+}
+
+.subjectAdminRow input {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 9px;
+  background: var(--surface);
+}
+
+.chapterAdminRow {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.chapterAdminRow > input,
+.chapterTags input {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 9px;
+  background: var(--surface);
+}
+
+.iconDanger {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--danger-soft);
+  border-radius: 8px;
+  color: var(--danger);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.chapterTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.chapterTags button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 9px;
+  color: var(--muted);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.chapterTags button:last-child {
+  border-radius: 8px;
+  color: white;
+  background: var(--ink);
+}
+
+.breadcrumbBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.breadcrumbBar button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 9px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.explorerGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(138px, 1fr));
+  gap: 10px;
+}
+
+.explorerFolder,
+.explorerFile {
+  display: grid;
+  justify-items: start;
+  gap: 7px;
+  min-width: 0;
+  min-height: 116px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 13px;
+  color: var(--ink);
+  background: var(--surface-soft);
+  cursor: pointer;
+  text-align: left;
+}
+
+.explorerFolder:hover,
+.explorerFolder:focus,
+.explorerFile:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.explorerFolder svg {
+  color: var(--warn);
+}
+
+.explorerFile svg {
+  color: var(--accent);
+}
+
+.explorerFolder strong,
+.explorerFile strong {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorerFolder span,
+.explorerFile span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.knowledgeWorkbench {
+  display: grid;
+  gap: 14px;
+}
+
+.knowledgeWorkbenchHeader {
+  margin-bottom: 0;
+}
+
+.structureStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.structureStats span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.knowledgeWorkbenchGrid {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 14px;
+  min-width: 0;
+}
+
+.subjectRail {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.subjectRailHeader,
+.activeSubjectHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.subjectRailHeader span {
+  color: var(--quiet);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.subjectRailList {
+  display: grid;
+  gap: 5px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.subjectRailItem {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 3px 8px;
+  width: 100%;
+  border: 0;
+  border-radius: 7px;
+  padding: 9px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.subjectRailItem:hover,
+.subjectRailItem.active {
+  color: var(--ink);
+  background: var(--accent-soft);
+}
+
+.subjectRailItem span {
+  grid-row: 1 / 3;
+  color: var(--accent);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-weight: 800;
+}
+
+.subjectRailItem strong,
+.subjectRailItem small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subjectRailItem small {
+  color: var(--quiet);
+  font-size: 12px;
+}
+
+.subjectCreate,
+.subjectRename,
+.chapterCreate,
+.tagComposer {
+  display: grid;
+  gap: 7px;
+}
+
+.subjectCreate input,
+.subjectRename input,
+.chapterCreate input,
+.chapterCardHeader input,
+.tagComposer input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 8px 9px;
+  color: var(--ink);
+  background: var(--surface);
+}
+
+.subjectCreate button,
+.chapterCreate button,
+.tagComposer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  border: 1px solid var(--ink);
+  border-radius: 7px;
+  color: white;
+  background: var(--ink);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.structureEditor,
+.activeSubjectPanel {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.activeSubjectHeader {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.activeSubjectHeader h3 {
+  margin: 2px 0 4px;
+  font-size: 18px;
+}
+
+.activeSubjectHeader p {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.subjectRename label {
+  display: grid;
+  gap: 5px;
+}
+
+.subjectRename span {
+  color: var(--quiet);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chapterCreate {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.chapterBoard {
+  display: grid;
+  gap: 10px;
+}
+
+.chapterCard {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.chapterCardHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.knowledgeTagCloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.knowledgeTagCloud button,
+.emptyChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 8px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.knowledgeTagCloud button {
+  cursor: pointer;
+}
+
+.knowledgeTagCloud button:hover {
+  color: var(--danger);
+  border-color: var(--danger-soft);
+  background: var(--danger-soft);
+}
+
+.emptyChip {
+  color: var(--quiet);
+}
+
+.tagComposer {
+  grid-template-columns: minmax(0, 1fr) 38px;
+}
+
+.drivePageHeader p {
+  max-width: 860px;
+}
+
+.driveExplorer {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: min(720px, calc(100vh - 150px));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.driveTree {
+  min-width: 0;
+  padding: 12px;
+  overflow: auto;
+  border-right: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.driveTreeRoot,
+.driveTreeItem {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  border: 0;
+  border-radius: 7px;
+  padding: 7px 8px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.driveTreeRoot {
+  margin-bottom: 8px;
+  color: var(--ink);
+  font-weight: 750;
+}
+
+.driveTreeRoot:hover,
+.driveTreeItem:hover,
+.driveTreeRoot.active,
+.driveTreeItem.active {
+  color: var(--ink);
+  background: var(--accent-soft);
+}
+
+.driveTreeItem span,
+.driveTreeRoot span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.driveTreeItem small {
+  color: var(--quiet);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.driveTreeList,
+.driveTreeBranch {
+  display: grid;
+  gap: 2px;
+}
+
+.driveTreeChildren {
+  display: grid;
+  gap: 2px;
+  margin-left: 13px;
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
+}
+
+.driveMain {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+}
+
+.driveToolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.drivePath {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-soft);
+}
+
+.drivePath button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  border: 0;
+  padding: 8px 10px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.drivePath button:hover {
+  color: var(--ink);
+  background: var(--surface);
+}
+
+.driveActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.driveCreate {
+  display: grid;
+  grid-template-columns: 150px auto;
+  gap: 6px;
+}
+
+.driveCreate input {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 8px 9px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.driveCreate button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: var(--surface);
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.driveContent {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+}
+
+.driveListPanel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.driveListHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.driveListHeader span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.driveTable {
+  min-height: 0;
+  overflow: auto;
+}
+
+.driveTableHead,
+.driveRow {
+  display: grid;
+  grid-template-columns: minmax(145px, 1.4fr) minmax(88px, 0.75fr) minmax(64px, 0.45fr) minmax(88px, 0.8fr);
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-width: 430px;
+  min-height: 38px;
+  padding: 0 14px;
+}
+
+.driveTableHead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  color: var(--quiet);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.driveRow {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+}
+
+.driveRow:hover,
+.driveRow.active {
+  color: var(--ink);
+  background: #eef4ff;
+}
+
+.driveName {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.driveName svg,
+.driveTreeItem svg {
+  color: var(--warn);
+  flex: 0 0 auto;
+}
+
+.driveRow .driveName svg {
+  color: var(--accent);
+}
+
+.driveRow button .driveName svg,
+button.driveRow .driveName svg {
+  color: var(--warn);
+}
+
+.driveName,
+.driveRow span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.driveDetails {
+  display: none;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  overflow: auto;
+  border-left: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+@media (min-width: 1520px) {
+  .driveContent {
+    grid-template-columns: minmax(0, 1fr) 260px;
+  }
+
+  .driveDetails {
+    display: grid;
+  }
+}
+
+@media (max-width: 1320px) {
+  .knowledgeWorkbenchGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .subjectRailList {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    max-height: 220px;
+  }
+
+  .subjectCreate {
+    grid-template-columns: 110px minmax(0, 1fr) auto;
+  }
+}
+
+.driveDetails > svg {
+  color: var(--accent);
+}
+
+.driveDetails h2 {
+  overflow-wrap: anywhere;
+}
+
+.driveDetails dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.driveDetails div {
+  display: grid;
+  gap: 3px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.driveDetails dt {
+  color: var(--quiet);
+  font-size: 12px;
+}
+
+.driveDetails dd {
+  margin: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  font-size: 13px;
 }
 
 .knowledgeList.inset {
@@ -1344,6 +2325,16 @@ h2 {
   .grid3,
   .metricGrid,
   .metricGrid.compact,
+  .libraryLayout,
+  .librarySummary,
+  .knowledgeWorkbenchGrid,
+  .driveExplorer,
+  .driveToolbar,
+  .driveContent,
+  .folderGrid,
+  .managerComposer,
+  .folderComposer,
+  .chapterAdminRow,
   .subjectGrid,
   .subjectGrid.big,
   .viewsLayout,
@@ -1530,6 +2521,66 @@ h2 {
 
   .splitTitle {
     display: grid;
+  }
+
+  .structureStats {
+    justify-content: flex-start;
+  }
+
+  .subjectRailList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: 220px;
+  }
+
+  .subjectCreate {
+    grid-template-columns: 1fr;
+  }
+
+  .chapterCreate,
+  .chapterCardHeader {
+    grid-template-columns: 1fr;
+  }
+
+  .libraryRail {
+    position: static;
+  }
+
+  .driveExplorer {
+    min-height: auto;
+  }
+
+  .driveTree {
+    max-height: 240px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .driveToolbar,
+  .driveActions,
+  .driveCreate {
+    align-items: stretch;
+  }
+
+  .driveActions {
+    display: grid;
+  }
+
+  .driveCreate {
+    grid-template-columns: 1fr auto;
+  }
+
+  .driveContent {
+    min-height: 560px;
+  }
+
+  .driveDetails {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .libraryAssetRow,
+  .compactKnowledge .kpRow {
+    grid-template-columns: 1fr;
   }
 
   .pruneControl {
