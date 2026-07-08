@@ -50,6 +50,26 @@ describe("auth routes", () => {
     expect(cookieSet).not.toHaveBeenCalled();
   });
 
+  it("accepts same-origin login behind a reverse proxy forwarded host", async () => {
+    const { POST } = await import("./login/route");
+    authenticateUser.mockReturnValue({ id: "user-1", email: "user@example.com", displayName: "User" });
+    createSession.mockReturnValue({ token: "session-token", expiresAt: new Date("2026-08-01T00:00:00Z") });
+    const request = new Request("http://localhost:3000/api/auth/login", {
+      method: "POST",
+      headers: {
+        origin: "https://zgca.zhuorui.me",
+        "x-forwarded-host": "zgca.zhuorui.me",
+      },
+      body: JSON.stringify({ email: "user@example.com", password: "secret" }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(authenticateUser).toHaveBeenCalledWith("user@example.com", "secret");
+    expect(cookieSet).toHaveBeenCalled();
+  });
+
   it("returns JSON 403 for cross-origin logout attempts", async () => {
     const { POST } = await import("./logout/route");
     const request = new Request("https://zgca.local/api/auth/logout", {

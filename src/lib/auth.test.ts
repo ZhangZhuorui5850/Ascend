@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hashPassword, verifyPassword } from "./auth";
+import { getDefaultLoginConfig, hashPassword, verifyPassword } from "./auth";
 
 describe("password hashing", () => {
   it("verifies the right password and rejects the wrong password", () => {
@@ -13,5 +13,17 @@ describe("password hashing", () => {
     const stored = hashPassword("secret", "fixed-test-salt");
 
     expect(stored).toMatch(/^scrypt\$fixed-test-salt\$/);
+  });
+});
+
+describe("default login config", () => {
+  it("falls back to legacy basic auth environment variables", () => {
+    expect(getDefaultLoginConfig({
+      APP_BASIC_AUTH_USERNAME: "legacy@example.com",
+      APP_BASIC_AUTH_PASSWORD: "legacy-password",
+    })).toEqual({
+      email: "legacy@example.com",
+      password: "legacy-password",
+    });
   });
 });

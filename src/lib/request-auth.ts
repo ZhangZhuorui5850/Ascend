@@ -39,8 +39,13 @@ export async function assertSameOrigin(request: Request): Promise<void> {
   const origin = request.headers.get("origin");
   if (!origin) return;
 
-  const expectedHost = new URL(request.url).host;
-  if (new URL(origin).host !== expectedHost) {
+  const originHost = new URL(origin).host;
+  const expectedHosts = [
+    new URL(request.url).host,
+    request.headers.get("host"),
+    request.headers.get("x-forwarded-host"),
+  ].filter(Boolean);
+  if (!expectedHosts.includes(originHost)) {
     const error = new Error("Invalid request origin") as Error & { status?: number };
     error.status = 403;
     throw error;

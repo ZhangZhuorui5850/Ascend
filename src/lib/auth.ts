@@ -13,6 +13,8 @@ type UserRow = {
   display_name: string;
 };
 
+type LoginEnv = Record<string, string | undefined>;
+
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -31,13 +33,19 @@ export function verifyPassword(password: string, stored: string): boolean {
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
+export function getDefaultLoginConfig(env: LoginEnv = process.env): { email: string; password: string } | null {
+  const email = env.APP_LOGIN_EMAIL || env.APP_BASIC_AUTH_USERNAME;
+  const password = env.APP_LOGIN_PASSWORD || env.APP_BASIC_AUTH_PASSWORD;
+  if (!email || !password) return null;
+  return { email, password };
+}
+
 export function ensureDefaultUser(): void {
-  const email = process.env.APP_LOGIN_EMAIL;
-  const password = process.env.APP_LOGIN_PASSWORD;
-  if (!email || !password) return;
+  const config = getDefaultLoginConfig();
+  if (!config) return;
 
   const db = getDbHandle();
-  const existing = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+  const existing = db.prepare("SELECT id FROM users WHERE email = ?").get(config.email);
   if (existing) return;
 
   db.prepare(`
@@ -45,8 +53,8 @@ export function ensureDefaultUser(): void {
     VALUES (@id, @email, @passwordHash, @displayName)
   `).run({
     id: randomUUID(),
-    email,
-    passwordHash: hashPassword(password),
+    email: config.email,
+    passwordHash: hashPassword(config.password),
     displayName: "ZGCA",
   });
 }
