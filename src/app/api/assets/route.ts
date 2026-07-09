@@ -1,4 +1,6 @@
-import { createAssetFromUpload } from "@/lib/repository";
+import { revalidatePath } from "next/cache";
+import { getDb } from "@/lib/db";
+import { createAssetFromUpload } from "@/lib/repo/library";
 import { assertSameOrigin, authErrorResponse, requireSession } from "@/lib/request-auth";
 
 export async function POST(request: Request) {
@@ -12,26 +14,21 @@ export async function POST(request: Request) {
       return Response.json({ error: "Missing file field" }, { status: 400 });
     }
 
-    const tags = String(formData.get("tags") || "")
-      .split(",")
-      .map((tag) => tag.trim())
-      .filter(Boolean);
-
-    const asset = await createAssetFromUpload({
+    const asset = await createAssetFromUpload(getDb(), {
       file,
-      day: String(formData.get("day") || ""),
-      tags,
+      day: String(formData.get("day") || "") || undefined,
       subjectCode: String(formData.get("subjectCode") || ""),
       chapterId: String(formData.get("chapterId") || ""),
-      knowledgePointId: String(formData.get("knowledgePointId") || ""),
-      knowledgeTagNames: String(formData.get("knowledgeTagNames") || "")
+      knowledgePointIds: String(formData.get("knowledgePointIds") || "")
         .split(",")
-        .map((tag) => tag.trim())
+        .map((id) => id.trim())
         .filter(Boolean),
       folderPath: String(formData.get("folderPath") || ""),
       category: String(formData.get("category") || ""),
+      note: String(formData.get("note") || ""),
     });
 
+    revalidatePath("/assets");
     return Response.json(asset);
   } catch (error) {
     return authErrorResponse(error);

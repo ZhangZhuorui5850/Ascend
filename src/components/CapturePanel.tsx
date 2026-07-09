@@ -1,7 +1,11 @@
 "use client";
 
-import { ChangeEvent, ClipboardEvent, DragEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, FileText, ImageIcon, Loader2, Paperclip, Send, X } from "lucide-react";
+import { ChangeEvent, ClipboardEvent, DragEvent, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { AlertCircle, Camera, CheckCircle2, FileText, ImageIcon, Loader2, Paperclip, Plus, Send, X } from "lucide-react";
+import { createPointAction } from "@/app/actions/knowledge";
+import { todayKey } from "@/lib/dates";
+import type { CaptureSubject } from "@/lib/repo/knowledge";
 
 type AttachmentStatus = "queued" | "uploading" | "uploaded" | "error";
 
@@ -17,56 +21,23 @@ type Attachment = {
   error?: string;
 };
 
-type KnowledgeTagOption = {
-  id: string;
-  name: string;
-};
-
-type ChapterOption = {
-  id: string;
-  title: string;
-  knowledgeTags: KnowledgeTagOption[];
-};
-
-type CaptureSubjectOption = {
-  code: string;
-  name: string;
-  chapters: ChapterOption[];
-};
-
-function today() {
-  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" });
-}
-
-function formatSize(size: number) {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
-  return `${(size / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function fileKind(file: File) {
-  if (file.type.startsWith("image/")) return "图片";
-  if (file.type.includes("pdf")) return "PDF";
-  if (file.name.endsWith(".md")) return "Markdown";
-  if (file.name.endsWith(".doc") || file.name.endsWith(".docx")) return "Word";
-  return file.type || "文件";
-}
-
-export function CapturePanel({ onClose }: { onClose?: () => void }) {
-  const [day, setDay] = useState(today());
-  const [category, setCategory] = useState("knowledge");
-  const [folderPath, setFolderPath] = useState("未归档");
+export function CapturePanel({ subjects, onClose }: { subjects: CaptureSubject[]; onClose?: () => void }) {
+  const router = useRouter();
+  const [day, setDay] = useState(todayKey());
   const [subjectCode, setSubjectCode] = useState("");
   const [chapterId, setChapterId] = useState("");
-  const [selectedKnowledgeTags, setSelectedKnowledgeTags] = useState<string[]>([]);
-  const [newKnowledgeTag, setNewKnowledgeTag] = useState("");
-  const [captureSubjects, setCaptureSubjects] = useState<CaptureSubjectOption[]>([]);
-  const [quickNote, setQuickNote] = useState("");
+  const [selectedPointIds, setSelectedPointIds] = useState<string[]>([]);
+  const [newPointTitle, setNewPointTitle] = useState("");
+  const [creatingPoint, setCreatingPoint] = useState(false);
+  const [folderPath, setFolderPath] = useState("未归档");
+  const [folderTouched, setFolderTouched] = useState(false);
+  const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const attachmentsRef = useRef<Attachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const dragDepthRef = useRef(0);
 
   useEffect(() => {
@@ -81,28 +52,47 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
     };
   }, []);
 
-  useEffect(() => {
-    let active = true;
-    fetch("/api/knowledge/hierarchy")
-      .then((response) => (response.ok ? response.json() : []))
-      .then((subjects: CaptureSubjectOption[]) => {
-        if (active) setCaptureSubjects(subjects);
-      })
-      .catch(() => {
-        if (active) setCaptureSubjects([]);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+  const selectedSubject = subjects.find((subject) => subject.code === subjectCode);
+  const chapters = selectedSubject?.chapters || [];
+  const selectedChapter = chapters.find((chapter) => chapter.id === chapterId);
+  const selectedPointSet = new Set(selectedPointIds);
 
-  const selectedSubject = captureSubjects.find((subject) => subject.code === subjectCode);
-  const chapterOptions = selectedSubject?.chapters || [];
-  const selectedChapter = chapterOptions.find((chapter) => chapter.id === chapterId);
-  const selectedKnowledgeTagSet = new Set(selectedKnowledgeTags);
-
-  function defaultFolderFor(subject: string, chapterTitle?: string) {
+  function defaultFolderFor(subject?: string, chapterTitle?: string) {
     return [subject, chapterTitle].filter(Boolean).join("/") || "未归档";
+  }
+
+  function selectSubject(code: string) {
+    setSubjectCode(code);
+    setChapterId("");
+    setSelectedPointIds([]);
+    if (!folderTouched) setFolderPath(defaultFolderFor(code));
+  }
+
+  function selectChapter(id: string) {
+    setChapterId(id);
+    setSelectedPointIds([]);
+    const chapter = chapters.find((item) => item.id === id);
+    if (!folderTouched) setFolderPath(defaultFolderFor(subjectCode, chapter?.title));
+  }
+
+  function togglePoint(id: string) {
+    setSelectedPointIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    );
+  }
+
+  async function createPointInline() {
+    const title = newPointTitle.trim();
+    if (!title || !chapterId || !subjectCode || creatingPoint) return;
+    setCreatingPoint(true);
+    const result = await createPointAction({ chapterId, title, subjectCode });
+    setCreatingPoint(false);
+    if (result.ok) {
+      setNewPointTitle("");
+      router.refresh();
+    } else {
+      setMessage(result.error || "新建知识点失败");
+    }
   }
 
   function addFiles(files: FileList | File[]) {
@@ -120,7 +110,7 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
     }));
 
     setAttachments((current) => [...current, ...next]);
-    setMessage(`已加入 ${next.length} 个文件，点击发送后入库`);
+    setMessage(`已加入 ${next.length} 个文件，点击发送入库`);
   }
 
   function removeAttachment(id: string) {
@@ -131,7 +121,7 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
     });
   }
 
-  function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+  function handlePaste(event: ClipboardEvent<HTMLElement>) {
     const files = event.clipboardData.files;
     if (files.length) {
       event.preventDefault();
@@ -173,23 +163,17 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
     const formData = new FormData();
     formData.append("file", attachment.file, attachment.name);
     formData.append("day", day);
-    formData.append("tags", "待整理");
-    formData.append("category", category);
     formData.append("folderPath", folderPath);
     formData.append("subjectCode", subjectCode);
     formData.append("chapterId", chapterId);
-    formData.append("knowledgeTagNames", selectedKnowledgeTags.join(","));
+    formData.append("knowledgePointIds", selectedPointIds.join(","));
+    formData.append("note", note);
 
-    const response = await fetch("/api/assets", {
-      method: "POST",
-      body: formData,
-    });
-
+    const response = await fetch("/api/assets", { method: "POST", body: formData });
     if (!response.ok) {
       const text = await response.text();
       throw new Error(text || "上传失败");
     }
-
     return (await response.json()) as { id: number };
   }
 
@@ -206,7 +190,6 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
           item.id === attachment.id ? { ...item, status: "uploaded", assetId: Number(asset.id) } : item,
         ),
       );
-      setMessage("文件已上传到知识库");
     } catch (error) {
       setAttachments((current) =>
         current.map((item) =>
@@ -215,61 +198,27 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
             : item,
         ),
       );
-      setMessage("有文件上传失败，可以重试");
     }
-  }
-
-  async function submitQuickNote() {
-    if (!quickNote.trim()) return;
-    const endpoint = category === "mistake" ? "/api/mistakes" : "/api/study-sessions";
-    const body =
-      category === "mistake"
-        ? { day, title: quickNote, cause: selectedKnowledgeTags.join(", ") || "收纳登记", subjectCode }
-        : { day, title: quickNote, subjectCode, output: selectedKnowledgeTags.join(", "), durationMinutes: 0 };
-    await fetch(endpoint, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    setQuickNote("");
   }
 
   async function sendCapture() {
-    if (!quickNote.trim() && attachments.length === 0) {
-      setMessage("先输入记录，或拖入/粘贴文件");
+    const pending = attachmentsRef.current.filter(
+      (attachment) => attachment.status === "queued" || attachment.status === "error",
+    );
+    if (!pending.length) {
+      setMessage("先拖入、粘贴或选择文件");
       return;
     }
-
-    if (quickNote.trim()) {
-      await submitQuickNote();
+    await Promise.all(pending.map((attachment) => uploadQueuedAttachment(attachment)));
+    const failed = attachmentsRef.current.filter((attachment) => attachment.status === "error").length;
+    setMessage(failed ? `有 ${failed} 个文件上传失败，可以重试` : "文件已按当前归属入库");
+    if (!failed) {
+      setNote("");
+      router.refresh();
     }
-
-    const pendingAttachments = attachmentsRef.current.filter((attachment) => attachment.status === "queued" || attachment.status === "error");
-    await Promise.all(pendingAttachments.map((attachment) => uploadQueuedAttachment(attachment)));
-    setMessage("记录已写入，文件已按当前分类入库");
   }
 
-  function toggleKnowledgeTag(name: string) {
-    setSelectedKnowledgeTags((current) =>
-      current.includes(name) ? current.filter((item) => item !== name) : [...current, name],
-    );
-  }
-
-  function addKnowledgeTagFromInput() {
-    const values = newKnowledgeTag
-      .split(/[,，]/)
-      .map((item) => item.trim())
-      .filter(Boolean);
-    if (!values.length) return;
-    setSelectedKnowledgeTags((current) => Array.from(new Set([...current, ...values])));
-    setNewKnowledgeTag("");
-  }
-
-  function handleKnowledgeTagKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key !== "Enter" && event.key !== ",") return;
-    event.preventDefault();
-    addKnowledgeTagFromInput();
-  }
+  const queuedCount = attachments.filter((a) => a.status === "queued" || a.status === "error").length;
 
   return (
     <aside
@@ -279,117 +228,24 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      onPaste={handlePaste}
     >
       <div className="panelHeader">
-        <div>
-          <span className="eyebrow">Quick Capture</span>
-          <h2>收纳小窗口</h2>
-        </div>
-        <button className="captureClose" onClick={onClose} type="button" aria-label="关闭收纳小窗口">
+        <h2>收纳面板</h2>
+        <button className="captureClose" onClick={onClose} type="button" aria-label="关闭收纳面板">
           <X size={16} />
         </button>
       </div>
 
-      <label className="field">
-        日期
-        <input value={day} onChange={(event) => setDay(event.target.value)} type="date" />
-      </label>
-      <label className="field">
-        科目
-        <select
-          value={subjectCode}
-          onChange={(event) => {
-            const nextSubjectCode = event.target.value;
-            setSubjectCode(nextSubjectCode);
-            setChapterId("");
-            setSelectedKnowledgeTags([]);
-            setFolderPath(defaultFolderFor(nextSubjectCode));
-          }}
-        >
-          <option value="">未分类</option>
-          {captureSubjects.map((subject) => (
-            <option key={subject.code} value={subject.code}>
-              {subject.code} · {subject.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="field">
-        章节
-        <select
-          value={chapterId}
-          onChange={(event) => {
-            const nextChapterId = event.target.value;
-            const nextChapter = chapterOptions.find((chapter) => chapter.id === nextChapterId);
-            setChapterId(nextChapterId);
-            setSelectedKnowledgeTags([]);
-            setFolderPath(defaultFolderFor(subjectCode, nextChapter?.title));
-          }}
-          disabled={!subjectCode}
-        >
-          <option value="">未选择章节</option>
-          {chapterOptions.map((chapter) => (
-            <option key={chapter.id} value={chapter.id}>
-              {chapter.title}
-            </option>
-          ))}
-        </select>
-      </label>
-      <div className="field">
-        知识点
-        <div className="tagPicker">
-          {selectedChapter?.knowledgeTags.map((tag) => (
-            <button
-              className={selectedKnowledgeTagSet.has(tag.name) ? "active" : ""}
-              key={tag.id}
-              onClick={() => toggleKnowledgeTag(tag.name)}
-              type="button"
-            >
-              {tag.name}
-            </button>
-          ))}
-          <input
-            value={newKnowledgeTag}
-            onBlur={addKnowledgeTagFromInput}
-            onChange={(event) => setNewKnowledgeTag(event.target.value)}
-            onKeyDown={handleKnowledgeTagKeyDown}
-            placeholder={chapterId ? "输入后 Enter 新建" : "先选章节"}
-            disabled={!chapterId}
-          />
-        </div>
-        {selectedKnowledgeTags.length ? (
-          <div className="selectedTags">
-            {selectedKnowledgeTags.map((tag) => (
-              <button key={tag} onClick={() => toggleKnowledgeTag(tag)} type="button">
-                {tag}<X size={12} />
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
-      <label className="field">
-        文件夹
-        <input value={folderPath} onChange={(event) => setFolderPath(event.target.value)} placeholder="资料/数学/错题" />
-      </label>
-      <div className="captureTypeRow" aria-label="入库类型">
-        {[
-          ["knowledge", "资料"],
-          ["mistake", "错题"],
-          ["note", "笔记"],
-        ].map(([value, label]) => (
-          <button className={category === value ? "active" : ""} key={value} onClick={() => setCategory(value)} type="button">
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className={`chatCaptureBox ${isDragging ? "isDragging" : ""}`}>
-        <textarea
-          value={quickNote}
-          onChange={(event) => setQuickNote(event.target.value)}
-          onPaste={handlePaste}
-          placeholder="像 ChatGPT 一样：直接写记录，拖入文件，或 Ctrl+V 粘贴截图..."
-        />
+      <div className={`dropZone ${isDragging ? "isDragging" : ""}`}>
+        <button className="dropZoneInner" onClick={() => fileInputRef.current?.click()} type="button">
+          <Paperclip size={18} />
+          <span>拖拽文件到这里、粘贴截图，或点击选择</span>
+        </button>
+        <button className="cameraButton" onClick={() => cameraInputRef.current?.click()} type="button">
+          <Camera size={16} />
+          拍照入库
+        </button>
 
         {attachments.length ? (
           <div className="attachmentGrid">
@@ -407,7 +263,7 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
                 </div>
                 <div className="attachmentMeta">
                   <strong>{attachment.name}</strong>
-                  <span>{fileKind(attachment.file)} · {formatSize(attachment.size)}</span>
+                  <span>{formatSize(attachment.size)}</span>
                 </div>
                 <div className={`attachmentStatus status-${attachment.status}`}>
                   {attachment.status === "queued" ? "待入库" : null}
@@ -415,13 +271,8 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
                   {attachment.status === "uploaded" ? <CheckCircle2 size={15} /> : null}
                   {attachment.status === "error" ? <AlertCircle size={15} /> : null}
                 </div>
-                {attachment.status === "uploaded" && attachment.assetId ? (
-                  <a className="attachmentLink" href={`/api/assets/${attachment.assetId}/file`} target="_blank">
-                    下载
-                  </a>
-                ) : null}
                 {attachment.status === "error" ? (
-                  <button className="attachmentLink" onClick={() => uploadQueuedAttachment(attachment)} type="button">
+                  <button className="attachmentLink" onClick={() => void uploadQueuedAttachment(attachment)} type="button">
                     重试
                   </button>
                 ) : null}
@@ -432,21 +283,102 @@ export function CapturePanel({ onClose }: { onClose?: () => void }) {
             ))}
           </div>
         ) : null}
-
-        <div className="composerActions">
-          <button className="iconButton" onClick={() => fileInputRef.current?.click()} type="button" title="选择文件">
-            <Paperclip size={17} />
-          </button>
-          <span className="composerHint">拖拽文件到这里，或在输入框内粘贴截图</span>
-          <button className="sendButton" onClick={sendCapture} type="button" title="发送入库">
-            <Send size={16} />
-          </button>
-        </div>
-
-        <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileInput} />
       </div>
 
-      {message ? <p className="hint">{message}</p> : <p className="hint">文件先排队，点击发送后按当前目录、标签和知识点入库。</p>}
+      <label className="field">
+        日期
+        <input value={day} onChange={(event) => setDay(event.target.value)} type="date" />
+      </label>
+      <div className="fieldRow">
+        <label className="field">
+          科目
+          <select value={subjectCode} onChange={(event) => selectSubject(event.target.value)}>
+            <option value="">未分类</option>
+            {subjects.map((subject) => (
+              <option key={subject.code} value={subject.code}>
+                {subject.code} · {subject.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          章节
+          <select value={chapterId} onChange={(event) => selectChapter(event.target.value)} disabled={!subjectCode}>
+            <option value="">未选择</option>
+            {chapters.map((chapter) => (
+              <option key={chapter.id} value={chapter.id}>
+                {chapter.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {selectedChapter ? (
+        <div className="field">
+          知识点
+          <div className="tagPicker">
+            {selectedChapter.points.map((point) => (
+              <button
+                className={selectedPointSet.has(point.id) ? "active" : ""}
+                key={point.id}
+                onClick={() => togglePoint(point.id)}
+                type="button"
+              >
+                {point.title}
+              </button>
+            ))}
+            {!selectedChapter.points.length ? <span className="emptyChip">本章还没有知识点</span> : null}
+          </div>
+          <div className="inlineCreate">
+            <input
+              value={newPointTitle}
+              onChange={(event) => setNewPointTitle(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void createPointInline();
+                }
+              }}
+              placeholder="新建知识点后可选中"
+            />
+            <button disabled={creatingPoint || !newPointTitle.trim()} onClick={() => void createPointInline()} type="button">
+              <Plus size={13} />
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <label className="field">
+        文件夹
+        <input
+          value={folderPath}
+          onChange={(event) => {
+            setFolderPath(event.target.value);
+            setFolderTouched(true);
+          }}
+          placeholder="M1/特征值"
+        />
+      </label>
+      <label className="field">
+        备注
+        <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="可选：这批文件是什么" />
+      </label>
+
+      <button className="primaryButton sendCapture" disabled={!queuedCount} onClick={() => void sendCapture()} type="button">
+        <Send size={15} />
+        {queuedCount ? `入库 ${queuedCount} 个文件` : "入库"}
+      </button>
+      <p className="hint">{message || "文件会按日期落到当天，并按上面的归属挂到科目、知识点和文件夹。"}</p>
+
+      <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileInput} />
+      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={handleFileInput} />
     </aside>
   );
+}
+
+function formatSize(size: number) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }

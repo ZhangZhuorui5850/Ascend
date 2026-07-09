@@ -2,31 +2,41 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AlertTriangle, BarChart3, CalendarDays, ClipboardList, Database, FileText, Home, LayoutGrid, Map, PlusCircle, Tag, Target } from "lucide-react";
+import {
+  BarChart3,
+  BookOpen,
+  CalendarDays,
+  ClipboardList,
+  HardDrive,
+  Home,
+  LogOut,
+  PlusCircle,
+  Settings,
+  Tag,
+} from "lucide-react";
+import { logout } from "@/app/actions/auth";
 import { todayKey } from "@/lib/dates";
 
-export const links = [
-  { href: "/", label: "总控台", icon: Home },
-  { href: `/day/${todayKey()}`, label: "今日", icon: ClipboardList },
-  { href: "/calendar", label: "日历", icon: CalendarDays },
-  { href: "/plan", label: "计划", icon: FileText },
-  { href: "/knowledge", label: "知识库", icon: Map },
-  { href: "/mistakes", label: "错题", icon: Tag },
-  { href: "/subjects", label: "科目", icon: Target },
-  { href: "/assets", label: "资料库", icon: Database },
-  { href: "/analytics", label: "分析", icon: BarChart3 },
-  { href: "/views", label: "视图", icon: LayoutGrid },
-  { href: "/conflicts", label: "冲突", icon: AlertTriangle },
-];
+function navLinks() {
+  return [
+    { href: "/", match: "/", exact: true, label: "主页", icon: Home },
+    { href: `/day/${todayKey()}`, match: "/day", exact: false, label: "今日", icon: ClipboardList },
+    { href: "/calendar", match: "/calendar", exact: false, label: "日历", icon: CalendarDays },
+    { href: "/subjects", match: "/subjects", exact: false, label: "科目", icon: BookOpen },
+    { href: "/assets", match: "/assets", exact: false, label: "资料库", icon: HardDrive },
+    { href: "/mistakes", match: "/mistakes", exact: false, label: "错题本", icon: Tag },
+    { href: "/analytics", match: "/analytics", exact: false, label: "统计", icon: BarChart3 },
+  ];
+}
 
-const navGroups = [
-  { title: "工作台", items: links.slice(0, 4) },
-  { title: "知识", items: links.slice(4, 8) },
-  { title: "复盘", items: links.slice(8) },
-];
+function isLinkActive(pathname: string, item: ReturnType<typeof navLinks>[number]): boolean {
+  if (item.exact) return pathname === item.match;
+  return pathname === item.href || pathname === item.match || pathname.startsWith(`${item.match}/`);
+}
 
-export function Sidebar() {
+export function Sidebar({ displayName }: { displayName: string }) {
   const pathname = usePathname();
+  const links = navLinks();
 
   return (
     <aside className="sidebar">
@@ -38,37 +48,44 @@ export function Sidebar() {
         </div>
       </div>
       <nav>
-        {navGroups.map((group) => (
-          <div className="navGroup" key={group.title}>
-            <span>{group.title}</span>
-            {group.items.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
-              return (
-                <Link className={isActive ? "active" : ""} key={item.href} href={item.href}>
-                  <Icon size={17} />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </div>
-        ))}
+        {links.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Link className={isLinkActive(pathname, item) ? "active" : ""} key={item.href} href={item.href}>
+              <Icon size={17} />
+              {item.label}
+            </Link>
+          );
+        })}
       </nav>
+      <div className="sidebarFooter">
+        <span title={displayName}>{displayName}</span>
+        <div className="sidebarFooterActions">
+          <Link aria-label="设置" className={pathname === "/settings" ? "active" : ""} href="/settings" title="设置">
+            <Settings size={15} />
+          </Link>
+          <form action={logout}>
+            <button type="submit" title="退出登录" aria-label="退出登录">
+              <LogOut size={15} />
+            </button>
+          </form>
+        </div>
+      </div>
     </aside>
   );
 }
 
 export function MobileNav({ onCaptureClick }: { onCaptureClick: () => void }) {
   const pathname = usePathname();
-  const mobileLinks = [links[1], links[2], links[4], links[8]];
+  const links = navLinks();
+  const mobileLinks = [links[0], links[1], links[3], links[4]];
 
   return (
     <nav className="mobileNav" aria-label="移动端主导航" data-testid="mobile-nav">
       {mobileLinks.map((item) => {
         const Icon = item.icon;
-        const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
         return (
-          <Link className={isActive ? "active" : ""} href={item.href} key={item.href}>
+          <Link className={isLinkActive(pathname, item) ? "active" : ""} href={item.href} key={item.href}>
             <Icon size={18} />
             <span>{item.label}</span>
           </Link>

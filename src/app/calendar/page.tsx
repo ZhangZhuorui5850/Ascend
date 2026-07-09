@@ -1,6 +1,7 @@
 import { CalendarView } from "@/components/CalendarView";
+import { getDb } from "@/lib/db";
 import { requirePageSession } from "@/lib/page-auth";
-import { getCalendarSummaries } from "@/lib/repository";
+import { getCalendarSummaries } from "@/lib/repo/stats";
 
 export const dynamic = "force-dynamic";
 
@@ -10,11 +11,10 @@ export default async function CalendarPage() {
   return (
     <div className="pageStack">
       <div className="pageHeader">
-        <span className="eyebrow">Calendar</span>
         <h1>日历</h1>
-        <p>月视图看状态密度，周/日视图看节奏。点击任意日期进入当天工作台。</p>
+        <p>看每天的学习密度，点任意日期进入当天工作台。</p>
       </div>
-      <CalendarView summaries={getCalendarSummaries()} />
+      <CalendarView summaries={getCalendarSummaries(getDb())} />
     </div>
   );
 }

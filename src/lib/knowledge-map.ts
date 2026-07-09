@@ -55,7 +55,7 @@ function buildKnowledgeSeed(data: RawModule[]): KnowledgeSeed {
   return { subjects, points };
 }
 
-function buildFallbackKnowledgeSeed(): KnowledgeSeed {
+export function buildFallbackKnowledgeSeed(): KnowledgeSeed {
   return buildKnowledgeSeed([
     [
       "M1",

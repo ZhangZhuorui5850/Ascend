@@ -1,0 +1,123 @@
+import { describe, expect, it } from "vitest";
+import {
+  createChapter,
+  createPoint,
+  createSubject,
+  deleteChapter,
+  deletePoint,
+  deleteSubject,
+  getCaptureHierarchy,
+  getSubjectDetail,
+  getSubjectOverviews,
+  moveChapter,
+  renameChapter,
+  updatePoint,
+} from "./knowledge";
+import { createTestDb, seedSubjectWithChapter } from "./testing";
+
+describe("knowledge repo", () => {
+  it("creates subject -> chapter -> point hierarchy", () => {
+    const db = createTestDb();
+    createSubject(db, { code: "M9", name: "测试科目" });
+    const chapter = createChapter(db, { subjectCode: "M9", title: "第一章" });
+    createPoint(db, { chapterId: chapter.id, title: "知识点 A", tier: "r" });
+
+    const hierarchy = getCaptureHierarchy(db);
+    const subject = hierarchy.find((item) => item.code === "M9");
+    expect(subject?.chapters).toHaveLength(1);
+    expect(subject?.chapters[0].points.map((point) => point.title)).toEqual(["知识点 A"]);
+  });
+
+  it("deduplicates chapters and points by title", () => {
+    const db = createTestDb();
+    createSubject(db, { code: "M9", name: "测试科目" });
+    const first = createChapter(db, { subjectCode: "M9", title: "第一章" });
+    const second = createChapter(db, { subjectCode: "M9", title: "第一章" });
+    expect(second.id).toBe(first.id);
+
+    const pointA = createPoint(db, { chapterId: first.id, title: "同名" });
+    const pointB = createPoint(db, { chapterId: first.id, title: "同名" });
+    expect(pointB.id).toBe(pointA.id);
+  });
+
+  it("cascades chapter deletion to points but keeps review history", () => {
+    const db = createTestDb();
+    seedSubjectWithChapter(db);
+    db.prepare("INSERT INTO review_events (day, knowledge_point_id, score) VALUES ('2026-07-01', 'kp1', 3)").run();
+    db.prepare("INSERT INTO mistakes (day, knowledge_point_id, title) VALUES ('2026-07-01', 'kp1', '错题')").run();
+
+    deleteChapter(db, "chapter:M1:matrix");
+
+    expect(db.prepare("SELECT COUNT(*) c FROM knowledge_points").get()).toMatchObject({ c: 0 });
+    expect(db.prepare("SELECT knowledge_point_id FROM review_events").get()).toMatchObject({ knowledge_point_id: null });
+    expect(db.prepare("SELECT knowledge_point_id FROM mistakes").get()).toMatchObject({ knowledge_point_id: null });
+  });
+
+  it("cascades subject deletion", () => {
+    const db = createTestDb();
+    seedSubjectWithChapter(db);
+
+    deleteSubject(db, "M1");
+
+    expect(db.prepare("SELECT COUNT(*) c FROM subjects").get()).toMatchObject({ c: 0 });
+    expect(db.prepare("SELECT COUNT(*) c FROM subject_chapters").get()).toMatchObject({ c: 0 });
+    expect(db.prepare("SELECT COUNT(*) c FROM knowledge_points").get()).toMatchObject({ c: 0 });
+  });
+
+  it("updates point tier and title", () => {
+    const db = createTestDb();
+    seedSubjectWithChapter(db);
+
+    updatePoint(db, { id: "kp1", title: "矩阵乘法与逆", tier: "g" });
+
+    const point = db.prepare("SELECT title, tier, tier_name FROM knowledge_points WHERE id = 'kp1'").get();
+    expect(point).toMatchObject({ title: "矩阵乘法与逆", tier: "g", tier_name: "了解" });
+  });
+
+  it("reorders chapters", () => {
+    const db = createTestDb();
+    createSubject(db, { code: "M9", name: "测试" });
+    const a = createChapter(db, { subjectCode: "M9", title: "A" });
+    const b = createChapter(db, { subjectCode: "M9", title: "B" });
+
+    moveChapter(db, { id: b.id, direction: "up" });
+
+    const detail = getSubjectDetail(db, "M9");
+    expect(detail?.chapters.map((chapter) => chapter.title)).toEqual(["B", "A"]);
+    expect(a.id).not.toBe(b.id);
+  });
+
+  it("renames chapters and rejects missing ids", () => {
+    const db = createTestDb();
+    seedSubjectWithChapter(db);
+    renameChapter(db, { id: "chapter:M1:matrix", title: "矩阵与行列式" });
+    expect(db.prepare("SELECT title FROM subject_chapters").get()).toMatchObject({ title: "矩阵与行列式" });
+    expect(() => renameChapter(db, { id: "missing", title: "x" })).toThrow();
+  });
+
+  it("summarizes subject overviews with due and mistake counts", () => {
+    const db = createTestDb();
+    seedSubjectWithChapter(db);
+    db.prepare("UPDATE knowledge_points SET next_review = '2026-07-01' WHERE id = 'kp1'").run();
+    db.prepare("INSERT INTO mistakes (day, subject_code, knowledge_point_id, title) VALUES ('2026-07-01', 'M1', 'kp1', '错题')").run();
+
+    const [overview] = getSubjectOverviews(db, "2026-07-02");
+
+    expect(overview).toMatchObject({ code: "M1", pointCount: 1, dueCount: 1, openMistakes: 1 });
+  });
+
+  it("deletes a single point and detaches asset links", () => {
+    const db = createTestDb();
+    seedSubjectWithChapter(db);
+    db.prepare(`
+      INSERT INTO assets (day, original_name, safe_name, relative_path)
+      VALUES ('2026-07-01', 'a.png', 'a.png', 'blobs/aa/a')
+    `).run();
+    db.prepare("INSERT INTO asset_links (asset_id, subject_code, chapter_id, knowledge_point_id) VALUES (1, 'M1', 'chapter:M1:matrix', 'kp1')").run();
+
+    deletePoint(db, "kp1");
+
+    expect(db.prepare("SELECT COUNT(*) c FROM asset_links WHERE knowledge_point_id = 'kp1'").get()).toMatchObject({ c: 0 });
+    expect(db.prepare("SELECT COUNT(*) c FROM assets").get()).toMatchObject({ c: 1 });
+  });
+});

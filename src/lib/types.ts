@@ -1,5 +1,7 @@
 export type Tier = "r" | "y" | "g";
 
+export type PointStatus = "未学" | "学习中" | "已掌握";
+
 export type Subject = {
   code: string;
   name: string;
@@ -15,7 +17,7 @@ export type KnowledgePoint = {
   tierName: string;
   title: string;
   exam: boolean;
-  status: "未学" | "学习中" | "已掌握";
+  status: PointStatus;
   mastery: number;
 };
 
@@ -32,4 +34,10 @@ export type CalendarSummary = {
   reviewCount: number;
   mistakeCount: number;
   hasSummary: boolean;
+};
+
+export const TIER_NAMES: Record<Tier, string> = {
+  r: "精通",
+  y: "掌握",
+  g: "了解",
 };

@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "responsive:audit": "node scripts/responsive-audit.mjs",
+    "smoke": "node scripts/smoke.mjs",
     "backup": "node scripts/backup.mjs"
   },
   "dependencies": {

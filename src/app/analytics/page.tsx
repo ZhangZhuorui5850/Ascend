@@ -1,94 +1,46 @@
 import Link from "next/link";
+import { todayKey } from "@/lib/dates";
+import { getDb } from "@/lib/db";
 import { requirePageSession } from "@/lib/page-auth";
-import { getLearningAnalytics, type LearningAnalytics } from "@/lib/repository";
+import { getSubjectOverviews } from "@/lib/repo/knowledge";
+import { getLearningAnalytics } from "@/lib/repo/stats";
 
 export const dynamic = "force-dynamic";
 
 export default async function AnalyticsPage() {
   await requirePageSession("/analytics");
 
-  const analytics = getLearningAnalytics() as LearningAnalytics;
+  const db = getDb();
+  const today = todayKey();
+  const analytics = getLearningAnalytics(db, today);
+  const subjects = getSubjectOverviews(db, today);
 
   return (
     <div className="pageStack">
       <div className="pageHeader">
-        <span className="eyebrow">Learning Analytics</span>
-        <h1>学习分析</h1>
-        <p>把最近一周的学习行为、复习动作、错题压力和知识点掌握度汇总成下一步优先级。</p>
+        <h1>统计</h1>
+        <p>最近一周的学习行为，以及现在最值得回炉的知识点。</p>
       </div>
 
-      <section className="metricGrid compact">
-        <div className="metricCard">
-          <strong>{analytics.week.studyMinutes}m</strong>
-          <span>近 7 天学习</span>
+      <section className="metricGrid" aria-label="近七天概览">
+        <div className="metricCard"><strong>{analytics.week.studyMinutes}</strong><span>分钟学习</span></div>
+        <div className="metricCard"><strong>{analytics.week.activeDays}</strong><span>活跃天数</span></div>
+        <div className="metricCard"><strong>{analytics.week.reflectionDays}</strong><span>复盘天数</span></div>
+        <div className="metricCard"><strong>{analytics.week.reviews}</strong><span>复习次数</span></div>
+        <div className={analytics.week.mistakes ? "metricCard danger" : "metricCard"}>
+          <strong>{analytics.week.mistakes}</strong><span>新增错题</span>
         </div>
-        <div className="metricCard">
-          <strong>{analytics.week.activeDays}</strong>
-          <span>活跃天数</span>
-        </div>
-        <div className="metricCard">
-          <strong>{analytics.week.reflectionDays}</strong>
-          <span>复盘天数</span>
-        </div>
-        <div className="metricCard danger">
-          <strong>{analytics.week.mistakes}</strong>
-          <span>新增错题</span>
-        </div>
-        <div className="metricCard">
-          <strong>{analytics.week.reviews}</strong>
-          <span>复习次数</span>
-        </div>
-        <div className="metricCard">
-          <strong>{analytics.week.assets}</strong>
-          <span>沉淀资料</span>
-        </div>
+        <div className="metricCard"><strong>{analytics.week.assets}</strong><span>沉淀资料</span></div>
       </section>
 
-      <section className="grid2 analyticsGrid">
-        <div className="card">
-          <div className="sectionTitle">
-            <span className="eyebrow">Weekly Review</span>
-            <h2>{analytics.week.start} - {analytics.week.end}</h2>
-          </div>
-          <div className="analyticsNarrative">
-            <p>
-              这 7 天累计学习 <strong>{analytics.week.studyMinutes}</strong> 分钟，
-              产生 <strong>{analytics.week.mistakes}</strong> 道错题，
-              完成 <strong>{analytics.week.reviews}</strong> 次复习。
-            </p>
-            <p>
-              复盘覆盖 {analytics.week.reflectionDays}/{analytics.week.activeDays || 1} 个活跃日。
-              如果错题多于复习，今天优先处理右侧最高分弱点。
-            </p>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="sectionTitle">
-            <span className="eyebrow">Next Action</span>
-            <h2>下一步建议</h2>
-          </div>
-          {analytics.weakPoints[0] ? (
-            <div className="nextWeakPoint">
-              <span>{analytics.weakPoints[0].subjectCode}</span>
-              <strong>{analytics.weakPoints[0].title}</strong>
-              <small>{analytics.weakPoints[0].reasons.join(" / ")}</small>
-              <Link className="secondaryButton" href="/knowledge">回到知识地图</Link>
-            </div>
-          ) : (
-            <p className="empty">暂无明显弱点。今天可以推进新知识点或做一次综合回顾。</p>
-          )}
-        </div>
-      </section>
-
-      <section className="card">
+      <section className="card" aria-label="弱点优先级">
         <div className="sectionTitle">
-          <span className="eyebrow">Weak Point Queue</span>
-          <h2>弱点优先级</h2>
+          <h2>现在最该回炉什么</h2>
+          <span className="sectionHint">{analytics.week.start} ~ {analytics.week.end}</span>
         </div>
         <div className="weakPointList">
           {analytics.weakPoints.map((point) => (
-            <div className="weakPointRow" key={point.id}>
+            <Link className="weakPointRow" href={`/subjects/${point.subjectCode}`} key={point.id}>
               <div>
                 <span className="tierBadge">{point.tierName}</span>
                 <strong>{point.title}</strong>
@@ -98,9 +50,29 @@ export default async function AnalyticsPage() {
                 <b>{point.priorityScore}</b>
                 <span>优先级</span>
               </div>
-            </div>
+            </Link>
           ))}
-          {!analytics.weakPoints.length ? <p className="empty">没有待处理弱点。</p> : null}
+          {!analytics.weakPoints.length ? (
+            <p className="empty">没有明显弱点。可以推进新章节，或做一次综合模拟。</p>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="card" aria-label="科目进度">
+        <div className="sectionTitle"><h2>科目进度</h2></div>
+        <div className="subjectProgressList">
+          {subjects.map((subject) => {
+            const progress = subject.pointCount ? Math.round((subject.masteredCount / subject.pointCount) * 100) : 0;
+            return (
+              <Link className="subjectProgressRow" href={`/subjects/${subject.code}`} key={subject.code}>
+                <b>{subject.code}</b>
+                <strong>{subject.name}</strong>
+                <div className="progressTrack"><span style={{ width: `${progress}%` }} /></div>
+                <small>{subject.masteredCount}/{subject.pointCount}</small>
+                {subject.dueCount ? <em className="flag due">{subject.dueCount} 待复习</em> : <em />}
+              </Link>
+            );
+          })}
         </div>
       </section>
     </div>

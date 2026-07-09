@@ -1,8 +1,9 @@
 import Database from "better-sqlite3";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { extractKnowledgeSeed } from "./knowledge-map";
-import { runMigrations } from "./migrations";
+import { buildFallbackKnowledgeSeed, extractKnowledgeSeed } from "./knowledge-map";
+import { backfillKnowledgeHierarchy, runMigrations } from "./migrations";
+import type { KnowledgeSeed } from "./types";
 
 let db: Database.Database | null = null;
 
@@ -14,27 +15,7 @@ export function getUploadRoot(): string {
   return process.env.ZGCA_UPLOAD_ROOT ?? path.join(getDataRoot(), "uploads");
 }
 
-export function getSourceRoot(): string {
-  if (process.env.ZGCA_SOURCE_ROOT) return process.env.ZGCA_SOURCE_ROOT;
-
-  const candidates = [
-    path.resolve(process.cwd(), ".."),
-    path.join(process.env.USERPROFILE || "", "OneDrive", "桌面", "zgca"),
-    path.join(process.env.USERPROFILE || "", "Desktop", "zgca"),
-  ];
-
-  const found = candidates.find((candidate) => existsSync(path.join(candidate, "知识地图页面.html")));
-  return found ?? candidates[0];
-}
-
 export function getDb(): Database.Database {
-  const database = getDbHandle();
-  seedKnowledgeMap(database);
-  seedChapterHierarchy(database);
-  return database;
-}
-
-export function getDbHandle(): Database.Database {
   if (db) return db;
 
   const dataRoot = getDataRoot();
@@ -46,8 +27,12 @@ export function getDbHandle(): Database.Database {
   db.pragma("synchronous = NORMAL");
   initializeDatabase(db);
   runMigrations(db, { uploadRoot: getUploadRoot() });
+  seedKnowledgeMapIfEmpty(db);
   return db;
 }
+
+/** @deprecated 与 getDb 等价，保留兼容旧引用。 */
+export const getDbHandle = getDb;
 
 export function initializeDatabase(database: Database.Database): void {
   database.exec(`
@@ -201,16 +186,26 @@ export function initializeDatabase(database: Database.Database): void {
   }
 }
 
-function seedKnowledgeMap(database: Database.Database): void {
+function loadKnowledgeSeed(): KnowledgeSeed {
+  const sourceRoot = process.env.ZGCA_SOURCE_ROOT;
+  if (sourceRoot) {
+    const htmlPath = path.join(sourceRoot, "知识地图页面.html");
+    if (existsSync(htmlPath)) {
+      try {
+        return extractKnowledgeSeed(readFileSync(htmlPath, "utf8"));
+      } catch {
+        // fall through to the built-in seed
+      }
+    }
+  }
+  return buildFallbackKnowledgeSeed();
+}
+
+function seedKnowledgeMapIfEmpty(database: Database.Database): void {
   const existing = database.prepare("SELECT COUNT(*) AS count FROM knowledge_points").get() as { count: number };
   if (existing.count > 0) return;
 
-  const htmlPath = path.join(getSourceRoot(), "知识地图页面.html");
-  if (!existsSync(htmlPath)) {
-    throw new Error(`Knowledge map HTML not found: ${htmlPath}`);
-  }
-
-  const seed = extractKnowledgeSeed(readFileSync(htmlPath, "utf8"));
+  const seed = loadKnowledgeSeed();
   const insertSubject = database.prepare(
     "INSERT OR REPLACE INTO subjects (code, name, description) VALUES (@code, @name, @description)",
   );
@@ -226,52 +221,5 @@ function seedKnowledgeMap(database: Database.Database): void {
     for (const point of seed.points) insertPoint.run({ ...point, exam: point.exam ? 1 : 0 });
   });
   transaction();
-}
-
-function seedChapterHierarchy(database: Database.Database): void {
-  const points = database.prepare(`
-    SELECT subject_code, submodule, title
-    FROM knowledge_points
-    ORDER BY subject_code ASC, submodule ASC, id ASC
-  `).all() as Array<{ subject_code: string; submodule: string; title: string }>;
-  if (!points.length) return;
-
-  const insertChapter = database.prepare(`
-    INSERT OR IGNORE INTO subject_chapters (id, subject_code, title, sort_order)
-    VALUES (@id, @subjectCode, @title, @sortOrder)
-  `);
-  const insertTag = database.prepare(`
-    INSERT OR IGNORE INTO knowledge_tags (id, chapter_id, name)
-    VALUES (@id, @chapterId, @name)
-  `);
-  const seenChapters = new Map<string, number>();
-
-  const transaction = database.transaction(() => {
-    for (const point of points) {
-      const chapterTitle = point.submodule || "未分章";
-      const chapterId = `chapter:${point.subject_code}:${slugForSeed(chapterTitle)}`;
-      const key = `${point.subject_code}:${chapterTitle}`;
-      const sortOrder = seenChapters.get(point.subject_code) || 0;
-      if (!seenChapters.has(key)) {
-        insertChapter.run({
-          id: chapterId,
-          subjectCode: point.subject_code,
-          title: chapterTitle,
-          sortOrder: sortOrder + 1,
-        });
-        seenChapters.set(point.subject_code, sortOrder + 1);
-        seenChapters.set(key, sortOrder + 1);
-      }
-      insertTag.run({
-        id: `kt:${chapterId}:${slugForSeed(point.title)}`,
-        chapterId,
-        name: point.title,
-      });
-    }
-  });
-  transaction();
-}
-
-function slugForSeed(value: string): string {
-  return encodeURIComponent(value.trim().toLowerCase()).replaceAll("%", "");
+  backfillKnowledgeHierarchy(database);
 }

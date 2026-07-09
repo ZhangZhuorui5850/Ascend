@@ -1,7 +1,7 @@
 import { FileExplorer } from "@/components/FileExplorer";
 import { getDb } from "@/lib/db";
 import { requirePageSession } from "@/lib/page-auth";
-import { getFileExplorerWithDb } from "@/lib/repository";
+import { getExplorer, searchAssets } from "@/lib/repo/library";
 
 export const dynamic = "force-dynamic";
 
@@ -15,16 +15,15 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
   await requirePageSession("/assets");
 
   const query = await searchParams;
-  const explorer = getFileExplorerWithDb(getDb(), first(query.folder));
+  const folder = first(query.folder);
+  const q = first(query.q).trim();
+  const db = getDb();
+  const explorer = getExplorer(db, folder);
+  const searchResults = q ? searchAssets(db, q) : null;
 
   return (
-    <div className="pageStack">
-      <div className="pageHeader drivePageHeader">
-        <span className="eyebrow">Drive</span>
-        <h1>资料库</h1>
-        <p>专门管理文件和目录。左侧是文件夹树，中间按资源管理器方式浏览、上传和移动文件。</p>
-      </div>
-      <FileExplorer initialExplorer={explorer} />
+    <div className="pageStack fullHeight">
+      <FileExplorer explorer={explorer} searchQuery={q} searchResults={searchResults} />
     </div>
   );
 }

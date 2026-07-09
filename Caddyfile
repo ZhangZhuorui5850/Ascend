@@ -1,0 +1,3 @@
+zgca.test {
+  reverse_proxy zgca-workbench:3000
+}

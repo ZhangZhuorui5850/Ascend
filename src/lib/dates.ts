@@ -15,6 +15,12 @@ export function assertDateKey(date: string): string {
   return date;
 }
 
+export function shiftDateKey(date: string, days: number): string {
+  const value = new Date(`${assertDateKey(date)}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
 export function monthRange(centerDate = todayKey()): { start: string; end: string } {
   const date = new Date(`${centerDate}T00:00:00.000Z`);
   const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));

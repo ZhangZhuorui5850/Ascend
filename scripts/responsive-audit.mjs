@@ -28,7 +28,7 @@ try {
   });
   await auditDay("tablet", 1024, 900, {
     sidebar: true,
-    capturePanel: true,
+    capturePanel: false,
     mobileNav: false,
   });
   await auditDay("mobile", 390, 844, {

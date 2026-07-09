@@ -1,5 +1,10 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { SubjectWorkbench } from "@/components/SubjectWorkbench";
+import { todayKey } from "@/lib/dates";
+import { getDb } from "@/lib/db";
 import { requirePageSession } from "@/lib/page-auth";
-import { getSubject } from "@/lib/repository";
+import { getSubjectDetail } from "@/lib/repo/knowledge";
 
 export const dynamic = "force-dynamic";
 
@@ -7,46 +12,72 @@ export default async function SubjectPage({ params }: { params: Promise<{ code: 
   const { code } = await params;
   await requirePageSession(`/subjects/${code}`);
 
-  const data = getSubject(code) as {
-    subject?: { code: string; name: string; description: string };
-    points: Array<{ id: string; title: string; tier: string; tier_name: string; status: string; exam: number }>;
-    assets: Array<{ id: number; original_name: string; day: string }>;
-    sessions: Array<{ id: number; title: string; day: string; duration_minutes: number }>;
-    mistakes: Array<{ id: number; title: string; day: string; cause: string }>;
-  };
-  if (!data.subject) return <div className="pageHeader"><h1>科目不存在</h1></div>;
+  const detail = getSubjectDetail(getDb(), decodeURIComponent(code));
+  if (!detail) notFound();
+
+  const today = todayKey();
+  const allPoints = [...detail.chapters.flatMap((chapter) => chapter.points), ...detail.loosePoints];
+  const mastered = allPoints.filter((point) => point.status === "已掌握").length;
+  const due = allPoints.filter((point) => point.next_review && point.next_review <= today).length;
+  const openMistakes = detail.mistakes.filter((mistake) => !mistake.graduated).length;
 
   return (
     <div className="pageStack">
-      <div className="pageHeader">
-        <span className="eyebrow">{data.subject.code}</span>
-        <h1>{data.subject.name}</h1>
-        <p>{data.subject.description}</p>
+      <div className="pageHeader subjectDetailHeader">
+        <div>
+          <span className="eyebrow"><Link href="/subjects">科目</Link> / {detail.subject.code}</span>
+          <h1>{detail.subject.name}</h1>
+          {detail.subject.description ? <p>{detail.subject.description}</p> : null}
+        </div>
+        <div className="subjectHeaderStats">
+          <div><strong>{mastered}/{allPoints.length}</strong><span>已掌握</span></div>
+          <div className={due ? "due" : ""}><strong>{due}</strong><span>待复习</span></div>
+          <div className={openMistakes ? "due" : ""}><strong>{openMistakes}</strong><span>未毕业错题</span></div>
+        </div>
       </div>
-      <section className="metricGrid compact">
-        <div className="metricCard"><strong>{data.points.length}</strong><span>知识点</span></div>
-        <div className="metricCard"><strong>{data.assets.length}</strong><span>资料</span></div>
-        <div className="metricCard"><strong>{data.sessions.length}</strong><span>学习记录</span></div>
-        <div className="metricCard"><strong>{data.mistakes.length}</strong><span>错题</span></div>
-      </section>
+
+      <SubjectWorkbench
+        subject={detail.subject}
+        chapters={detail.chapters}
+        loosePoints={detail.loosePoints}
+        today={today}
+      />
+
       <section className="grid2">
-        <div className="card">
-          <div className="sectionTitle"><h2>知识点</h2></div>
-          <div className="knowledgeList inset">
-            {data.points.map((point) => (
-              <div className={`kpRow tier-${point.tier}`} key={point.id}>
-                <span className="tierBadge">{point.tier_name}</span>
-                <strong>{point.title}</strong>
-                {point.exam ? <b className="star">真题</b> : null}
-              </div>
+        <div className="card" aria-label="科目资料">
+          <div className="sectionTitle">
+            <h2>关联资料</h2>
+            <Link className="sectionLink" href="/assets">资料库</Link>
+          </div>
+          <div className="assetList">
+            {detail.assets.map((asset) => (
+              <a className="assetRow" href={`/api/assets/${asset.id}/file`} key={asset.id} target="_blank">
+                <strong>{asset.original_name}</strong>
+                <small>
+                  {asset.day}
+                  {asset.knowledge_titles ? ` · ${asset.knowledge_titles}` : ""}
+                </small>
+              </a>
             ))}
+            {!detail.assets.length ? <p className="empty">还没有关联资料。收纳文件时选中这个科目即可。</p> : null}
           </div>
         </div>
-        <div className="card">
-          <div className="sectionTitle"><h2>沉淀资料</h2></div>
+        <div className="card" aria-label="科目错题">
+          <div className="sectionTitle">
+            <h2>错题</h2>
+            <Link className="sectionLink" href="/mistakes">错题本</Link>
+          </div>
           <div className="list">
-            {data.assets.map((asset) => <div className="listRow" key={asset.id}><span>{asset.day}</span><strong>{asset.original_name}</strong></div>)}
-            {!data.assets.length ? <p className="empty">暂无绑定资料。</p> : null}
+            {detail.mistakes.map((mistake) => (
+              <div className="listRow" key={mistake.id}>
+                <span className={mistake.graduated ? "rowBadge" : "rowBadge mistake"}>
+                  {mistake.graduated ? "已毕业" : "回炉中"}
+                </span>
+                <strong>{mistake.title}</strong>
+                <small>{mistake.knowledge_title || mistake.cause || mistake.day}</small>
+              </div>
+            ))}
+            {!detail.mistakes.length ? <p className="empty">这个科目还没有错题。</p> : null}
           </div>
         </div>
       </section>

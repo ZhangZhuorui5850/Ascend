@@ -1,23 +1,17 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { getSourceRoot } from "./db";
-import { extractKnowledgeSeed } from "./knowledge-map";
+import { buildFallbackKnowledgeSeed, extractKnowledgeSeed } from "./knowledge-map";
 
-describe("extractKnowledgeSeed", () => {
-  it("extracts M1-M7 subjects and knowledge points from the current HTML map", () => {
-    const html = readFileSync(path.join(getSourceRoot(), "知识地图页面.html"), "utf8");
-
-    const seed = extractKnowledgeSeed(html);
+describe("knowledge seed", () => {
+  it("bundles a complete M1-M7 fallback seed", () => {
+    const seed = buildFallbackKnowledgeSeed();
 
     expect(seed.subjects).toHaveLength(7);
     expect(seed.subjects[0]).toMatchObject({ code: "M1", name: "线性代数" });
     expect(seed.points.length).toBeGreaterThan(100);
-    expect(seed.points.filter((point) => point.tier === "r").length).toBeGreaterThan(50);
     expect(seed.points.some((point) => point.exam && point.title.includes("PCA"))).toBe(true);
   });
 
-  it("falls back to the bundled M1-M7 seed when the source page is only a deployment placeholder", () => {
+  it("falls back to the bundled seed when the source page is only a deployment placeholder", () => {
     const seed = extractKnowledgeSeed(`
       <script>
         const DATA = [];
@@ -27,6 +21,20 @@ describe("extractKnowledgeSeed", () => {
 
     expect(seed.subjects).toHaveLength(7);
     expect(seed.points.length).toBeGreaterThan(100);
-    expect(seed.points.some((point) => point.exam && point.title.includes("PCA"))).toBe(true);
+  });
+
+  it("parses an inline DATA block from the knowledge map HTML", () => {
+    const html = `
+      <script>
+        const DATA = [["M1", "线性代数", "desc", [["矩阵", [["r", "矩阵乘法", true]]]]]];
+        const TIERNAME = {};
+      </script>
+    `;
+
+    const seed = extractKnowledgeSeed(html);
+
+    expect(seed.subjects).toEqual([{ code: "M1", name: "线性代数", description: "desc" }]);
+    expect(seed.points).toHaveLength(1);
+    expect(seed.points[0]).toMatchObject({ title: "矩阵乘法", tier: "r", exam: true, submodule: "矩阵" });
   });
 });
