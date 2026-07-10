@@ -22,9 +22,9 @@ export default async function AnalyticsPage() {
         <p>最近一周的学习行为，以及现在最值得回炉的知识点。</p>
       </div>
 
-      <section className="metricGrid" aria-label="近七天概览">
-        <div className="metricCard"><strong>{analytics.week.studyMinutes}</strong><span>分钟学习</span></div>
-        <div className="metricCard"><strong>{analytics.week.activeDays}</strong><span>活跃天数</span></div>
+      <section className="metricGrid analyticsMetricGrid" aria-label="近七天概览">
+        <div className="metricCard primaryMetric"><small>过去 7 天</small><strong>{analytics.week.studyMinutes}</strong><span>分钟专注学习</span></div>
+        <div className="metricCard consistencyMetric"><small>学习节奏</small><strong>{analytics.week.activeDays}<em>/7</em></strong><span>活跃天数</span></div>
         <div className="metricCard"><strong>{analytics.week.reflectionDays}</strong><span>复盘天数</span></div>
         <div className="metricCard"><strong>{analytics.week.reviews}</strong><span>复习次数</span></div>
         <div className={analytics.week.mistakes ? "metricCard danger" : "metricCard"}>

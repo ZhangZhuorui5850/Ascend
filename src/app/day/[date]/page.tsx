@@ -38,7 +38,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
     <div className="pageStack">
       <header className="dayHeader">
         <div className="dayHeaderTitle">
-          <span className="eyebrow">{isToday ? "今日工作台" : "当日工作台"}</span>
+          <span className="eyebrow">{isToday ? "TODAY · 今日工作台" : "HISTORY · 当日工作台"}</span>
           <div className="dayNav">
             <Link aria-label="前一天" href={`/day/${shiftDateKey(date, -1)}`}><ChevronLeft size={18} /></Link>
             <h1>{formatDayTitle(date)}</h1>
@@ -51,7 +51,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
         </div>
       </header>
 
-      <section className="dayStats" aria-label="当日概览">
+      <section className="dayStats dayStatusBar" aria-label="当日概览">
         <div><strong>{doneTasks}/{day.tasks.length}</strong><span>任务</span></div>
         <div><strong>{studyMinutes}</strong><span>分钟学习</span></div>
         <div><strong>{day.assets.length}</strong><span>份资料</span></div>
@@ -59,16 +59,15 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
         <div className={queueCount ? "due" : ""}><strong>{queueCount}</strong><span>待处理</span></div>
       </section>
 
-      <ReviewQueue
-        day={date}
-        dueReviews={day.dueReviews}
-        dueReviewsTotal={day.dueReviewsTotal}
-        dueMistakes={day.dueMistakes}
-      />
-
       <div className="dayGrid">
         <div className="dayMainCol">
           <DayTasks day={date} today={today} tasks={day.tasks} subjects={subjects} />
+          <ReviewQueue
+            day={date}
+            dueReviews={day.dueReviews}
+            dueReviewsTotal={day.dueReviewsTotal}
+            dueMistakes={day.dueMistakes}
+          />
           <DayNotes day={date} notes={day.notes} />
           <DayJournal key={date} date={date} entry={day.entry} />
         </div>

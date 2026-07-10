@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { addNoteAction, deleteNoteAction, updateNoteAction } from "@/app/actions/planner";
 import type { DayNote } from "@/lib/repo/planner";
+import { useFeedback } from "@/components/FeedbackProvider";
 
 export function DayNotes({ day, notes }: { day: string; notes: DayNote[] }) {
   const router = useRouter();
@@ -73,6 +74,7 @@ function NoteCard({ note, day, report }: {
   day: string;
   report: (result: { ok: boolean; error?: string }) => void;
 }) {
+  const { confirm, notify } = useFeedback();
   return (
     <div className="noteCard">
       <textarea
@@ -92,9 +94,12 @@ function NoteCard({ note, day, report }: {
         <button
           aria-label="删除随笔"
           onClick={() => {
-            if (window.confirm("删除这条随笔？")) {
-              void deleteNoteAction({ id: note.id, day }).then(report);
-            }
+            void confirm({ title: "删除这条随笔？", description: "删除后无法恢复。", confirmLabel: "删除", danger: true }).then(async (accepted) => {
+              if (!accepted) return;
+              const result = await deleteNoteAction({ id: note.id, day });
+              report(result);
+              if (result.ok) notify("随笔已删除");
+            });
           }}
           type="button"
         >

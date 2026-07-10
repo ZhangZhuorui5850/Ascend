@@ -17,6 +17,7 @@ import {
 } from "@/app/actions/knowledge";
 import type { ChapterWithPoints, PointDetail, PointRow, SubjectRow, SubjectTrack } from "@/lib/repo/knowledge";
 import type { Tier } from "@/lib/types";
+import { useFeedback } from "@/components/FeedbackProvider";
 
 type SubjectWorkbenchProps = {
   subject: SubjectRow;
@@ -33,6 +34,7 @@ const TIER_OPTIONS: Array<{ value: Tier; label: string }> = [
 
 export function SubjectWorkbench({ subject, chapters, loosePoints, today }: SubjectWorkbenchProps) {
   const router = useRouter();
+  const { confirm, notify } = useFeedback();
   const [chapterTitle, setChapterTitle] = useState("");
   const [error, setError] = useState("");
 
@@ -51,12 +53,16 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today }: Subj
 
   async function removeSubject() {
     const pointCount = chapters.reduce((count, chapter) => count + chapter.points.length, 0) + loosePoints.length;
-    const confirmed = window.confirm(
-      `删除科目 ${subject.code} · ${subject.name}？\n将删除 ${chapters.length} 个章节、${pointCount} 个知识点。学习记录和资料会保留但解除关联。`,
-    );
+    const confirmed = await confirm({
+      title: `删除 ${subject.code} · ${subject.name}？`,
+      description: `将删除 ${chapters.length} 个章节、${pointCount} 个知识点。学习记录和资料会保留，但会解除关联。`,
+      confirmLabel: "删除科目",
+      danger: true,
+    });
     if (!confirmed) return;
     const result = await deleteSubjectAction(subject.code);
     if (result.ok) {
+      notify("科目已删除");
       router.push("/subjects");
       router.refresh();
     } else {
@@ -156,6 +162,7 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report }: {
   today: string;
   report: (result: { ok: boolean; error?: string }) => void;
 }) {
+  const { confirm, notify } = useFeedback();
   const [pointTitle, setPointTitle] = useState("");
   const [pointTier, setPointTier] = useState<Tier>("g");
 
@@ -168,11 +175,16 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report }: {
   }
 
   async function removeChapter() {
-    const confirmed = window.confirm(
-      `删除章节「${chapter.title}」？\n其中 ${chapter.points.length} 个知识点会一并删除（学习记录保留）。`,
-    );
+    const confirmed = await confirm({
+      title: `删除章节“${chapter.title}”？`,
+      description: `其中 ${chapter.points.length} 个知识点会一并删除，学习记录会保留。`,
+      confirmLabel: "删除章节",
+      danger: true,
+    });
     if (!confirmed) return;
-    report(await deleteChapterAction({ id: chapter.id, subjectCode }));
+    const result = await deleteChapterAction({ id: chapter.id, subjectCode });
+    report(result);
+    if (result.ok) notify("章节已删除");
   }
 
   return (
@@ -250,15 +262,23 @@ function PointLine({ point, subjectCode, today, report }: {
   today: string;
   report: (result: { ok: boolean; error?: string }) => void;
 }) {
+  const { confirm, notify } = useFeedback();
   const due = Boolean(point.next_review && point.next_review <= today);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [detail, setDetail] = useState<PointDetail | null>(null);
 
   async function removePoint() {
-    const confirmed = window.confirm(`删除知识点「${point.title}」？复习和错题记录会保留但解除关联。`);
+    const confirmed = await confirm({
+      title: `删除知识点“${point.title}”？`,
+      description: "复习和错题记录会保留，但会解除与这个知识点的关联。",
+      confirmLabel: "删除知识点",
+      danger: true,
+    });
     if (!confirmed) return;
-    report(await deletePointAction({ id: point.id, subjectCode }));
+    const result = await deletePointAction({ id: point.id, subjectCode });
+    report(result);
+    if (result.ok) notify("知识点已删除");
   }
 
   async function toggleExpand() {
