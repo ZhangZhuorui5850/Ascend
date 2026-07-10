@@ -34,7 +34,7 @@ export default async function RootLayout({
   return (
     <html lang="zh-CN" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body>
-        <AppShell user={user ? { displayName: user.displayName } : null} hierarchy={hierarchy}>
+        <AppShell user={user ? { displayName: user.displayName, role: user.role } : null} hierarchy={hierarchy}>
           {children}
         </AppShell>
       </body>

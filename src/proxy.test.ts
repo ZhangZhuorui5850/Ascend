@@ -21,6 +21,15 @@ describe("proxy", () => {
     expect(response.status).toBe(200);
   });
 
+  it("allows invitation setup publicly while keeping Admin routes private", async () => {
+    const { proxy } = await import("../proxy");
+
+    expect(proxy(new NextRequest("http://localhost/invite/one-time-token")).status).toBe(200);
+    const adminResponse = proxy(new NextRequest("http://localhost/admin"));
+    expect(adminResponse.status).toBe(307);
+    expect(adminResponse.headers.get("location")).toBe("http://localhost/login?next=%2Fadmin");
+  });
+
   it("returns 401 for private API routes without a session cookie", async () => {
     const { proxy } = await import("../proxy");
 
