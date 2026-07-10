@@ -11,7 +11,7 @@ import {
   renameAsset,
   renameFolder,
 } from "@/lib/repo/library";
-import { requireSession } from "@/lib/request-auth";
+import { requireWorkspace } from "@/lib/request-auth";
 import type { ActionResult } from "./day";
 
 function failure(error: unknown): ActionResult {
@@ -24,8 +24,8 @@ function revalidateLibrary() {
 
 export async function createFolderAction(input: { parentPath: string; name: string }): Promise<ActionResult> {
   try {
-    await requireSession();
-    createFolder(getDb(), input);
+    const access = await requireWorkspace();
+    createFolder(getDb(), access, input);
     revalidateLibrary();
     return { ok: true };
   } catch (error) {
@@ -35,8 +35,8 @@ export async function createFolderAction(input: { parentPath: string; name: stri
 
 export async function renameFolderAction(input: { path: string; name: string }): Promise<ActionResult & { path?: string }> {
   try {
-    await requireSession();
-    const path = renameFolder(getDb(), input);
+    const access = await requireWorkspace();
+    const path = renameFolder(getDb(), access, input);
     revalidateLibrary();
     return { ok: true, path };
   } catch (error) {
@@ -46,8 +46,8 @@ export async function renameFolderAction(input: { path: string; name: string }):
 
 export async function moveFolderAction(input: { path: string; newParentPath: string }): Promise<ActionResult> {
   try {
-    await requireSession();
-    moveFolder(getDb(), input);
+    const access = await requireWorkspace();
+    moveFolder(getDb(), access, input);
     revalidateLibrary();
     return { ok: true };
   } catch (error) {
@@ -57,8 +57,8 @@ export async function moveFolderAction(input: { path: string; newParentPath: str
 
 export async function deleteFolderAction(path: string): Promise<ActionResult> {
   try {
-    await requireSession();
-    deleteFolder(getDb(), path);
+    const access = await requireWorkspace();
+    deleteFolder(getDb(), access, path);
     revalidateLibrary();
     return { ok: true };
   } catch (error) {
@@ -68,8 +68,8 @@ export async function deleteFolderAction(path: string): Promise<ActionResult> {
 
 export async function moveAssetAction(input: { assetId: number; folderPath: string }): Promise<ActionResult> {
   try {
-    await requireSession();
-    moveAsset(getDb(), input);
+    const access = await requireWorkspace();
+    moveAsset(getDb(), access, input);
     revalidateLibrary();
     return { ok: true };
   } catch (error) {
@@ -79,8 +79,8 @@ export async function moveAssetAction(input: { assetId: number; folderPath: stri
 
 export async function renameAssetAction(input: { assetId: number; name: string }): Promise<ActionResult> {
   try {
-    await requireSession();
-    renameAsset(getDb(), input);
+    const access = await requireWorkspace();
+    renameAsset(getDb(), access, input);
     revalidateLibrary();
     return { ok: true };
   } catch (error) {
@@ -90,8 +90,8 @@ export async function renameAssetAction(input: { assetId: number; name: string }
 
 export async function deleteAssetAction(assetId: number): Promise<ActionResult> {
   try {
-    await requireSession();
-    deleteAsset(getDb(), assetId);
+    const access = await requireWorkspace();
+    deleteAsset(getDb(), access, assetId);
     revalidateLibrary();
     return { ok: true };
   } catch (error) {

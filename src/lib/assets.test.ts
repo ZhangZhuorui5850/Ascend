@@ -2,7 +2,14 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { contentDispositionFor, resolveAssetPathForRoot, storageKeyFor } from "./assets";
+import {
+  contentDispositionFor,
+  MAX_UPLOAD_BYTES,
+  resolveAssetPathForRoot,
+  resolveWorkspaceAssetPathForRoot,
+  storageKeyFor,
+  storeUploadedFile,
+} from "./assets";
 
 describe("asset storage safety", () => {
   const roots: string[] = [];
@@ -12,8 +19,8 @@ describe("asset storage safety", () => {
   });
 
   it("uses content-addressed storage keys to dedupe renamed uploads", () => {
-    expect(storageKeyFor("2026-07-07", "abc123", "PCA.png")).toBe("blobs/ab/abc123");
-    expect(storageKeyFor("2026-07-08", "abc123", "renamed.png")).toBe("blobs/ab/abc123");
+    expect(storageKeyFor("workspace-a", "2026-07-07", "abc123", "PCA.png")).toBe("workspace-a/blobs/ab/abc123");
+    expect(storageKeyFor("workspace-a", "2026-07-08", "abc123", "renamed.png")).toBe("workspace-a/blobs/ab/abc123");
   });
 
   it("rejects paths that escape the upload root", () => {
@@ -33,6 +40,21 @@ describe("asset storage safety", () => {
     roots.push(root);
 
     expect(resolveAssetPathForRoot(root, relative)).toBe(absolute);
+  });
+
+  it("rejects another workspace's storage path", () => {
+    const root = path.join(os.tmpdir(), `zgca-assets-${Date.now()}`);
+    roots.push(root);
+    expect(() => resolveWorkspaceAssetPathForRoot(root, "workspace-a", "workspace-b/blobs/ab/file")).toThrow(
+      "Invalid workspace asset path",
+    );
+  });
+
+  it("rejects files larger than 20MB before reading their contents", async () => {
+    const oversized = { size: MAX_UPLOAD_BYTES + 1 } as File;
+    await expect(
+      storeUploadedFile({ workspaceId: "workspace-a", file: oversized, day: "2026-07-07" }),
+    ).rejects.toThrow("File is too large");
   });
 
   it("forces active content to download", () => {

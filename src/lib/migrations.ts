@@ -342,6 +342,57 @@ const migrations: Migration[] = [
       }
     },
   },
+  {
+    version: "0008_workspace_blob_storage",
+    run: (database) => {
+      if (!tableExists(database, "blobs")) return;
+      database.exec("DROP TABLE IF EXISTS upload_sessions");
+      database.exec("ALTER TABLE blobs RENAME TO blobs_before_workspace_storage");
+      database.exec(`
+        CREATE TABLE blobs (
+          workspace_id TEXT NOT NULL,
+          id TEXT PRIMARY KEY,
+          sha256 TEXT NOT NULL,
+          size INTEGER NOT NULL,
+          mime_type TEXT NOT NULL DEFAULT '',
+          storage_key TEXT NOT NULL UNIQUE,
+          ref_count INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(workspace_id, sha256),
+          FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+        );
+
+        INSERT INTO blobs (workspace_id, id, sha256, size, mime_type, storage_key, ref_count, created_at)
+        SELECT
+          '${LEGACY_WORKSPACE_ID}',
+          '${LEGACY_WORKSPACE_ID}:' || sha256,
+          sha256,
+          size,
+          mime_type,
+          storage_key,
+          ref_count,
+          created_at
+        FROM blobs_before_workspace_storage;
+
+        DROP TABLE blobs_before_workspace_storage;
+
+        CREATE TABLE upload_sessions (
+          workspace_id TEXT NOT NULL,
+          id TEXT PRIMARY KEY,
+          blob_id TEXT,
+          status TEXT NOT NULL DEFAULT 'pending',
+          received_bytes INTEGER NOT NULL DEFAULT 0,
+          expires_at TEXT NOT NULL,
+          FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+          FOREIGN KEY (blob_id) REFERENCES blobs(id)
+        );
+
+        CREATE INDEX idx_blobs_workspace_sha ON blobs(workspace_id, sha256);
+        CREATE INDEX idx_upload_sessions_workspace_status
+          ON upload_sessions(workspace_id, status, expires_at);
+      `);
+    },
+  },
 ];
 
 function addColumnIfMissing(database: Database.Database, table: string, column: string, definition: string): void {
@@ -695,7 +746,8 @@ export function getAppliedMigrations(database: Database.Database): string[] {
 function backfillAssetBlobs(database: Database.Database, uploadRoot?: string): void {
   if (!uploadRoot || !tableExists(database, "assets") || !tableExists(database, "blobs")) return;
 
-  const assets = database.prepare("SELECT id, original_name, relative_path FROM assets").all() as Array<{
+  const assets = database.prepare("SELECT workspace_id, id, original_name, relative_path FROM assets").all() as Array<{
+    workspace_id: string;
     id: number;
     original_name: string;
     relative_path: string;
@@ -703,13 +755,15 @@ function backfillAssetBlobs(database: Database.Database, uploadRoot?: string): v
   if (!assets.length) return;
 
   const insertBlob = database.prepare(`
-    INSERT INTO blobs (id, sha256, size, mime_type, storage_key, ref_count)
-    VALUES (@id, @sha256, @size, @mimeType, @storageKey, 0)
+    INSERT INTO blobs (workspace_id, id, sha256, size, mime_type, storage_key, ref_count)
+    VALUES (@workspaceId, @id, @sha256, @size, @mimeType, @storageKey, 0)
     ON CONFLICT(id) DO UPDATE SET
       size = excluded.size,
       storage_key = excluded.storage_key
   `);
-  const updateAsset = database.prepare("UPDATE assets SET relative_path = ?, size = ? WHERE id = ?");
+  const updateAsset = database.prepare(`
+    UPDATE assets SET relative_path = ?, size = ? WHERE workspace_id = ? AND id = ?
+  `);
 
   const backfill = database.transaction(() => {
     for (const asset of assets) {
@@ -718,7 +772,7 @@ function backfillAssetBlobs(database: Database.Database, uploadRoot?: string): v
 
       const bytes = readFileSync(/*turbopackIgnore: true*/ sourcePath);
       const sha256 = createHash("sha256").update(bytes).digest("hex");
-      const storageKey = storageKeyForSha(sha256);
+      const storageKey = storageKeyForSha(asset.workspace_id, sha256);
       const targetPath = resolveAssetPathForRoot(uploadRoot, storageKey);
       mkdirSync(path.dirname(targetPath), { recursive: true });
       if (!existsSync(/*turbopackIgnore: true*/ targetPath)) {
@@ -727,13 +781,14 @@ function backfillAssetBlobs(database: Database.Database, uploadRoot?: string): v
 
       const size = statSync(/*turbopackIgnore: true*/ targetPath).size;
       insertBlob.run({
-        id: sha256,
+        workspaceId: asset.workspace_id,
+        id: `${asset.workspace_id}:${sha256}`,
         sha256,
         size,
         mimeType: "",
         storageKey,
       });
-      updateAsset.run(storageKey, size, asset.id);
+      updateAsset.run(storageKey, size, asset.workspace_id, asset.id);
     }
 
     database.prepare(`
@@ -741,7 +796,8 @@ function backfillAssetBlobs(database: Database.Database, uploadRoot?: string): v
       SET ref_count = (
         SELECT COUNT(*)
         FROM assets
-        WHERE assets.relative_path = blobs.storage_key
+        WHERE assets.workspace_id = blobs.workspace_id
+          AND assets.relative_path = blobs.storage_key
       )
     `).run();
   });
@@ -761,8 +817,8 @@ function tableHasColumns(database: Database.Database, tableName: string, require
   return required.every((column) => columns.has(column));
 }
 
-function storageKeyForSha(sha256: string): string {
-  return path.posix.join("blobs", sha256.slice(0, 2), sha256);
+function storageKeyForSha(workspaceId: string, sha256: string): string {
+  return path.posix.join(encodeURIComponent(workspaceId), "blobs", sha256.slice(0, 2), sha256);
 }
 
 function resolveAssetPathForRoot(uploadRoot: string, relativePath: string): string {

@@ -4,9 +4,9 @@ import { stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { getUploadRoot } from "./db";
-import { sanitizeFileName } from "./storage";
+import { sanitizeFileName, storageNamespaceForWorkspace } from "./storage";
 
-export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
 export type StoredUpload = {
   sha256: string;
@@ -16,19 +16,25 @@ export type StoredUpload = {
   size: number;
 };
 
-export function storageKeyFor(day: string, sha256: string, originalName: string): string {
+export function storageKeyFor(workspaceId: string, day: string, sha256: string, originalName: string): string {
+  const workspaceStorageKey = storageNamespaceForWorkspace(workspaceId);
   const [year, month, date] = day.split("-");
   if (!year || !month || !date) throw new Error(`Invalid day: ${day}`);
   void originalName;
-  return path.posix.join("blobs", sha256.slice(0, 2), sha256);
+  return path.posix.join(workspaceStorageKey, "blobs", sha256.slice(0, 2), sha256);
 }
 
-export async function storeUploadedFile(input: { file: File; day: string; uploadRoot?: string }): Promise<StoredUpload> {
+export async function storeUploadedFile(input: {
+  workspaceId: string;
+  file: File;
+  day: string;
+  uploadRoot?: string;
+}): Promise<StoredUpload> {
   if (input.file.size > MAX_UPLOAD_BYTES) throw new Error("File is too large");
 
   const bytes = Buffer.from(await input.file.arrayBuffer());
   const sha256 = createHash("sha256").update(bytes).digest("hex");
-  const relativePath = storageKeyFor(input.day, sha256, input.file.name);
+  const relativePath = storageKeyFor(input.workspaceId, input.day, sha256, input.file.name);
   const absolutePath = input.uploadRoot ? resolveAssetPathForRoot(input.uploadRoot, relativePath) : resolveAssetPath(relativePath);
 
   mkdirSync(path.dirname(absolutePath), { recursive: true });
@@ -56,6 +62,21 @@ export function resolveAssetPathForRoot(uploadRoot: string, relativePath: string
 
 export function resolveAssetPath(relativePath: string): string {
   return resolveAssetPathForRoot(getUploadRoot(), relativePath);
+}
+
+export function resolveWorkspaceAssetPathForRoot(
+  uploadRoot: string,
+  workspaceId: string,
+  relativePath: string,
+): string {
+  const workspaceStorageKey = storageNamespaceForWorkspace(workspaceId);
+  const normalized = relativePath.replaceAll("\\", "/");
+  if (!normalized.startsWith(`${workspaceStorageKey}/`)) throw new Error("Invalid workspace asset path");
+  return resolveAssetPathForRoot(uploadRoot, normalized);
+}
+
+export function resolveWorkspaceAssetPath(workspaceId: string, relativePath: string): string {
+  return resolveWorkspaceAssetPathForRoot(getUploadRoot(), workspaceId, relativePath);
 }
 
 export function contentDispositionFor(mimeType: string, originalName: string): string {

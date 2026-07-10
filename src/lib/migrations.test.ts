@@ -6,6 +6,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { initializeDatabase } from "./db";
 import { getAppliedMigrations, runMigrations } from "./migrations";
+import { LEGACY_WORKSPACE_ID } from "./repo/workspaces";
 
 describe("runMigrations", () => {
   const dirs: string[] = [];
@@ -229,12 +230,14 @@ describe("runMigrations", () => {
     runMigrations(db, { uploadRoot });
 
     const sha256 = createHash("sha256").update("legacy asset").digest("hex");
-    const storageKey = `blobs/${sha256.slice(0, 2)}/${sha256}`;
+    const storageKey = `${encodeURIComponent(LEGACY_WORKSPACE_ID)}/blobs/${sha256.slice(0, 2)}/${sha256}`;
     const asset = db.prepare("SELECT relative_path, size FROM assets WHERE id = 1").get() as {
       relative_path: string;
       size: number;
     };
-    const blob = db.prepare("SELECT sha256, storage_key, ref_count FROM blobs WHERE id = ?").get(sha256);
+    const blob = db.prepare("SELECT sha256, storage_key, ref_count FROM blobs WHERE id = ?").get(
+      `${LEGACY_WORKSPACE_ID}:${sha256}`,
+    );
 
     expect(asset).toEqual({ relative_path: storageKey, size: "legacy asset".length });
     expect(blob).toMatchObject({ sha256, storage_key: storageKey, ref_count: 1 });
