@@ -3068,11 +3068,15 @@ kbd {
   background: var(--surface-raised);
   box-shadow: var(--shadow-lg);
   transform: translateX(102%);
+  visibility: hidden;
+  pointer-events: none;
   transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .captureOpen .capturePanel {
   transform: translateX(0);
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .captureBackdrop {
