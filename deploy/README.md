@@ -5,7 +5,7 @@ Target: Tencent Lighthouse in Beijing, Docker Compose, Caddy automatic HTTPS, SQ
 ## Before public launch
 
 1. Finish the applicable ICP filing for the domain/website and keep the filing information available for the site footer if required.
-2. In Cloudflare DNS, create `A app -> 82.157.141.186` as **DNS only** for the first certificate and origin test. Keep `ssh.zhuorui.me` DNS-only. The old `zgca.zhuorui.me` Tunnel record belongs to the former Mac mini setup and is not used by this deployment.
+2. In Cloudflare DNS, create `A app -> 82.157.141.186` as **DNS only** for the first certificate and origin test. Keep `ssh.zhuorui.me` DNS-only. The old `zgca.zhuorui.me` Tunnel record belongs to the former Mac mini setup and is not used by this deployment. After direct HTTPS is healthy, you may test switching the web record to **Proxied** for Cloudflare protection; use Full (strict) origin TLS and compare mainland latency before keeping it enabled.
 3. In Tencent's firewall, allow TCP 22 only from trusted source IPs where practical, and allow TCP 80/443 plus UDP 443 publicly. Do not expose port 3000.
 4. Replace password SSH login with an SSH key, then disable password authentication only after key login has been verified in a second terminal.
 
