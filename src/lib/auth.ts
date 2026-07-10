@@ -242,6 +242,41 @@ export function deleteSession(token: string | undefined, database: Database.Data
   database.prepare("DELETE FROM sessions WHERE token_hash = ?").run(hashToken(token));
 }
 
+export type UserSession = {
+  id: string;
+  userAgent: string;
+  ipHint: string;
+  createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+};
+
+export function listUserSessions(
+  userId: string,
+  database: Database.Database = getDbHandle(),
+): UserSession[] {
+  return database.prepare(`
+    SELECT
+      id,
+      user_agent AS userAgent,
+      ip_hint AS ipHint,
+      created_at AS createdAt,
+      last_seen_at AS lastSeenAt,
+      expires_at AS expiresAt
+    FROM sessions
+    WHERE user_id = ? AND datetime(expires_at) > CURRENT_TIMESTAMP
+    ORDER BY last_seen_at DESC
+  `).all(userId) as UserSession[];
+}
+
+export function revokeUserSession(
+  userId: string,
+  sessionId: string,
+  database: Database.Database = getDbHandle(),
+): boolean {
+  return database.prepare("DELETE FROM sessions WHERE id = ? AND user_id = ?").run(sessionId, userId).changes > 0;
+}
+
 function isLoginRateLimited(database: Database.Database, email: string, ipHint: string): boolean {
   const row = database.prepare(`
     SELECT COUNT(*) AS count

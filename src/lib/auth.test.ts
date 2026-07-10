@@ -7,6 +7,8 @@ import {
   getDefaultLoginConfig,
   getSessionContext,
   hashPassword,
+  listUserSessions,
+  revokeUserSession,
   verifyPassword,
 } from "./auth";
 import { assertAdmin, assertWorkspaceAccess } from "./request-auth";
@@ -89,6 +91,21 @@ describe("access context", () => {
     const context = getSessionContext(createSession({ userId }, db).token, db)!;
 
     expect(() => assertAdmin(context)).toThrow("Administrator access required");
+  });
+
+  it("lists and revokes only the current user's device sessions", () => {
+    const db = createTestDb();
+    const alpha = createTestWorkspace(db, { email: "alpha-devices@example.com" });
+    const beta = createTestWorkspace(db, { email: "beta-devices@example.com" });
+    createSession({ userId: alpha.userId, userAgent: "Alpha browser", ipHint: "192.0.2.1" }, db);
+    const betaSession = createSession({ userId: beta.userId, userAgent: "Beta browser" }, db);
+
+    const sessions = listUserSessions(alpha.userId, db);
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toMatchObject({ userAgent: "Alpha browser", ipHint: "192.0.2.1" });
+    expect(revokeUserSession(alpha.userId, sessions[0].id, db)).toBe(true);
+    expect(revokeUserSession(alpha.userId, listUserSessions(beta.userId, db)[0].id, db)).toBe(false);
+    expect(getSessionContext(betaSession.token, db)).not.toBeNull();
   });
 });
 

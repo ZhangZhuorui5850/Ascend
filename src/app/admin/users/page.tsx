@@ -18,7 +18,7 @@ export default function AdminUsersPage() {
             {users.map((user) => (
               <Link className="listRow" href={`/admin/users/${user.id}`} key={user.id}>
                 <div><strong>{user.display_name}</strong><small>{user.email}</small></div>
-                <div className="rowMeta"><span>{statusLabel(user.status)}</span><small>{formatBytes(user.storage_used_bytes)}</small></div>
+                <div className="rowMeta"><span className={`statusBadge status-${user.status}`}>{statusLabel(user.status)}</span><small>{formatBytes(user.storage_used_bytes)}</small></div>
               </Link>
             ))}
             {!users.length ? <p className="emptyState">还没有用户。创建邀请链接后，把它发给朋友即可。</p> : null}

@@ -36,7 +36,7 @@ export default function AdminPage() {
             {ordinaryUsers.slice(0, 6).map((user) => (
               <Link className="listRow" href={`/admin/users/${user.id}`} key={user.id}>
                 <div><strong>{user.display_name}</strong><small>{user.email}</small></div>
-                <span className="rowBadge">{statusLabel(user.status)}</span>
+                <span className={`statusBadge status-${user.status}`}>{statusLabel(user.status)}</span>
               </Link>
             ))}
             {!ordinaryUsers.length ? <p className="emptyState">还没有普通用户，先创建第一份邀请。</p> : null}

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { UserStatusActions } from "@/components/admin/UserStatusActions";
+import { Eye } from "lucide-react";
 import { getDb } from "@/lib/db";
 import { getAdminUser } from "@/lib/repo/admin";
 
@@ -13,7 +14,7 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
     <div className="pageStack">
       <header className="pageHeader">
         <div><span className="eyebrow">ADMIN · USER</span><h1>{user.display_name}</h1><p>{user.email}</p></div>
-        <Link className="secondaryButton" href="/admin/users">返回用户列表</Link>
+        <div className="dayHeaderActions"><Link className="secondaryButton" href={`/admin/users/${user.id}/workspace`}><Eye size={15} />查看学习空间</Link><Link className="secondaryButton" href="/admin/users">返回用户列表</Link></div>
       </header>
       <section className="homeStats" aria-label="用户概览">
         <div className="homeStat"><strong>{statusLabel(user.status)}</strong><span>账号状态</span></div>
