@@ -5,6 +5,8 @@ import { useState } from "react";
 import { Inbox } from "lucide-react";
 import { CapturePanel } from "@/components/CapturePanel";
 import { MobileNav, Sidebar } from "@/components/Sidebar";
+import { CommandPalette } from "@/components/CommandPalette";
+import { TopBar } from "@/components/TopBar";
 import type { CaptureSubject } from "@/lib/repo/knowledge";
 
 type AppShellProps = {
@@ -16,15 +18,20 @@ type AppShellProps = {
 export function AppShell({ user, hierarchy, children }: AppShellProps) {
   const pathname = usePathname();
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   if (pathname === "/login" || pathname === "/change-password" || pathname.startsWith("/invite/") || !user) {
     return <>{children}</>;
   }
 
   return (
-    <div className={`appFrame ${captureOpen ? "captureOpen" : ""}`}>
-      <Sidebar displayName={user.displayName} role={user.role} />
-      <main className="mainPane">{children}</main>
+    <div className={`appFrame ${captureOpen ? "captureOpen" : ""} ${sidebarCollapsed ? "sidebarCollapsed" : ""}`}>
+      <Sidebar collapsed={sidebarCollapsed} displayName={user.displayName} onToggle={() => setSidebarCollapsed((value) => !value)} role={user.role} />
+      <div className="appWorkspace">
+        <TopBar displayName={user.displayName} onCommand={() => setCommandOpen(true)} onMenu={() => setCommandOpen(true)} role={user.role} />
+        <main className="mainPane">{children}</main>
+      </div>
       {user.role === "user" ? (
         <>
           <button
@@ -46,6 +53,7 @@ export function AppShell({ user, hierarchy, children }: AppShellProps) {
         </>
       ) : null}
       <MobileNav onCaptureClick={() => setCaptureOpen(true)} role={user.role} />
+      <CommandPalette onCapture={() => setCaptureOpen(true)} open={commandOpen} role={user.role} setOpen={setCommandOpen} />
     </div>
   );
 }
