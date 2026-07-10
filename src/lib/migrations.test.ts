@@ -44,6 +44,28 @@ describe("runMigrations", () => {
     ).toMatchObject({ name: "upload_sessions" });
   });
 
+  it("adds identity and workspace schema", () => {
+    const db = new Database(":memory:");
+
+    runMigrations(db);
+
+    const userColumns = db.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
+    expect(userColumns.map((column) => column.name)).toEqual(
+      expect.arrayContaining([
+        "role",
+        "status",
+        "must_change_password",
+        "last_login_at",
+        "password_changed_at",
+      ]),
+    );
+    for (const table of ["workspaces", "invitations", "audit_logs", "login_attempts"]) {
+      expect(
+        db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table),
+      ).toMatchObject({ name: table });
+    }
+  });
+
   it("is idempotent", () => {
     const db = new Database(":memory:");
 

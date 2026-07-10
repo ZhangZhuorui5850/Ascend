@@ -203,6 +203,67 @@ const migrations: Migration[] = [
       }
     },
   },
+  {
+    version: "0006_identity_workspaces",
+    run: (database) => {
+      addColumnIfMissing(database, "users", "role", "TEXT NOT NULL DEFAULT 'user'");
+      addColumnIfMissing(database, "users", "status", "TEXT NOT NULL DEFAULT 'active'");
+      addColumnIfMissing(database, "users", "must_change_password", "INTEGER NOT NULL DEFAULT 0");
+      addColumnIfMissing(database, "users", "last_login_at", "TEXT");
+      addColumnIfMissing(database, "users", "password_changed_at", "TEXT");
+
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS workspaces (
+          id TEXT PRIMARY KEY,
+          owner_user_id TEXT UNIQUE,
+          display_name TEXT NOT NULL DEFAULT '',
+          storage_quota_bytes INTEGER NOT NULL DEFAULT 2147483648,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE RESTRICT
+        );
+
+        CREATE TABLE IF NOT EXISTS invitations (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          token_hash TEXT NOT NULL UNIQUE,
+          expires_at TEXT NOT NULL,
+          used_at TEXT,
+          created_by TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+        );
+
+        CREATE TABLE IF NOT EXISTS audit_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          actor_user_id TEXT NOT NULL,
+          target_user_id TEXT,
+          action TEXT NOT NULL,
+          entity_type TEXT NOT NULL,
+          entity_id TEXT,
+          summary_json TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS login_attempts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          email_hint TEXT NOT NULL,
+          ip_hint TEXT NOT NULL,
+          succeeded INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_workspaces_owner ON workspaces(owner_user_id);
+        CREATE INDEX IF NOT EXISTS idx_invitations_user ON invitations(user_id);
+        CREATE INDEX IF NOT EXISTS idx_invitations_expiry ON invitations(expires_at, used_at);
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_user_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_target ON audit_logs(target_user_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_login_attempts_lookup
+          ON login_attempts(email_hint, ip_hint, created_at);
+      `);
+    },
+  },
 ];
 
 function addColumnIfMissing(database: Database.Database, table: string, column: string, definition: string): void {
