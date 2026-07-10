@@ -1,9 +1,12 @@
 import { cookies } from "next/headers";
-import { getSessionUser } from "./auth";
+import type { AccessContext } from "./access-context";
+import { getSessionContext } from "./auth";
 import { SESSION_COOKIE } from "./auth-constants";
 
 export class AuthError extends Error {
-  status = 401;
+  constructor(message: string, public status = 401) {
+    super(message);
+  }
 }
 
 function readCookieValue(header: string | null, name: string): string | undefined {
@@ -19,20 +22,40 @@ function readCookieValue(header: string | null, name: string): string | undefine
   return undefined;
 }
 
-export async function requireSession(request?: Request): Promise<{ id: string; email: string; displayName: string }> {
+export async function requireAccessContext(request?: Request): Promise<AccessContext> {
   const token = request
     ? readCookieValue(request.headers.get("cookie"), SESSION_COOKIE)
     : (await cookies()).get(SESSION_COOKIE)?.value;
-  const user = getSessionUser(token);
+  const user = getSessionContext(token);
   if (!user) throw new AuthError("Authentication required");
   return user;
 }
 
-export async function optionalSession(request?: Request): Promise<{ id: string; email: string; displayName: string } | null> {
+export const requireSession = requireAccessContext;
+
+export async function optionalSession(request?: Request): Promise<AccessContext | null> {
   const token = request
     ? readCookieValue(request.headers.get("cookie"), SESSION_COOKIE)
     : (await cookies()).get(SESSION_COOKIE)?.value;
-  return getSessionUser(token);
+  return getSessionContext(token);
+}
+
+export function assertWorkspaceAccess(context: AccessContext): AccessContext & { workspaceId: string } {
+  if (!context.workspaceId) throw new AuthError("Learning workspace required", 403);
+  return context as AccessContext & { workspaceId: string };
+}
+
+export function assertAdmin(context: AccessContext): AccessContext & { role: "admin" } {
+  if (context.role !== "admin") throw new AuthError("Administrator access required", 403);
+  return context as AccessContext & { role: "admin" };
+}
+
+export async function requireWorkspace(request?: Request): Promise<AccessContext & { workspaceId: string }> {
+  return assertWorkspaceAccess(await requireAccessContext(request));
+}
+
+export async function requireAdmin(request?: Request): Promise<AccessContext & { role: "admin" }> {
+  return assertAdmin(await requireAccessContext(request));
 }
 
 export async function assertSameOrigin(request: Request): Promise<void> {

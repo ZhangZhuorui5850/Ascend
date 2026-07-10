@@ -9,12 +9,14 @@ export type LoginState = { error?: string };
 export async function login(_previous: LoginState, formData: FormData): Promise<LoginState> {
   const email = String(formData.get("email") || "").trim();
   const password = String(formData.get("password") || "");
-  const user = authenticateUser(email, password);
-  if (!user) return { error: "邮箱或密码不正确" };
-
   const requestHeaders = await headers();
+  const user = authenticateUser(email, password, {
+    ipHint: requestHeaders.get("x-forwarded-for") || requestHeaders.get("x-real-ip") || "",
+  });
+  if (!user) return { error: "邮箱或密码不正确，或登录尝试过于频繁" };
+
   const session = createSession({
-    userId: user.id,
+    userId: user.userId,
     userAgent: requestHeaders.get("user-agent") || "",
     ipHint: requestHeaders.get("x-forwarded-for") || "",
   });
