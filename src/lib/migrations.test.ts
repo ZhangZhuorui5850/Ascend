@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { initializeDatabase } from "./db";
 import { getAppliedMigrations, runMigrations } from "./migrations";
 
 describe("runMigrations", () => {
@@ -64,6 +65,63 @@ describe("runMigrations", () => {
         db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table),
       ).toMatchObject({ name: table });
     }
+  });
+
+  it("assigns legacy domain rows to the legacy workspace", () => {
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    db.prepare("INSERT INTO subjects (code, name, description) VALUES ('M1', '线性代数', '')").run();
+    db.prepare("INSERT INTO daily_entries (date) VALUES ('2026-07-10')").run();
+    db.prepare("INSERT INTO folders (path, name) VALUES ('讲义', '讲义')").run();
+
+    runMigrations(db);
+
+    for (const table of ["subjects", "daily_entries", "folders"]) {
+      expect(db.prepare(`SELECT workspace_id FROM ${table} LIMIT 1`).get()).toEqual({
+        workspace_id: "workspace:legacy",
+      });
+    }
+  });
+
+  it("allows formerly global keys in different workspaces", () => {
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    runMigrations(db);
+    for (const suffix of ["1", "2"]) {
+      db.prepare(`
+        INSERT INTO users (id, email, password_hash, display_name)
+        VALUES (?, ?, 'hash', ?)
+      `).run(`u${suffix}`, `u${suffix}@example.com`, `用户${suffix}`);
+      db.prepare(`
+        INSERT INTO workspaces (id, owner_user_id, display_name)
+        VALUES (?, ?, ?)
+      `).run(`w${suffix}`, `u${suffix}`, `空间${suffix}`);
+      db.prepare(`
+        INSERT INTO subjects (workspace_id, code, name, description)
+        VALUES (?, 'M1', ?, '')
+      `).run(`w${suffix}`, `科目${suffix}`);
+      db.prepare(`
+        INSERT INTO daily_entries (workspace_id, date)
+        VALUES (?, '2026-07-10')
+      `).run(`w${suffix}`);
+      db.prepare(`
+        INSERT INTO folders (workspace_id, path, name)
+        VALUES (?, '讲义', '讲义')
+      `).run(`w${suffix}`);
+      db.prepare(`
+        INSERT INTO app_settings (workspace_id, key, value)
+        VALUES (?, 'review_limit', '20')
+      `).run(`w${suffix}`);
+    }
+
+    expect(db.prepare("SELECT COUNT(*) AS count FROM subjects WHERE code = 'M1'").get()).toEqual({ count: 2 });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM daily_entries WHERE date = '2026-07-10'").get()).toEqual({
+      count: 2,
+    });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM folders WHERE path = '讲义'").get()).toEqual({ count: 2 });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM app_settings WHERE key = 'review_limit'").get()).toEqual({
+      count: 2,
+    });
   });
 
   it("is idempotent", () => {

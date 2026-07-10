@@ -242,7 +242,7 @@ export function createSubject(
   db.prepare(`
     INSERT INTO subjects (code, name, description, track)
     VALUES (@code, @name, @description, @track)
-    ON CONFLICT(code) DO UPDATE SET
+    ON CONFLICT(workspace_id, code) DO UPDATE SET
       name = excluded.name,
       description = excluded.description,
       track = excluded.track

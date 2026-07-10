@@ -2,6 +2,7 @@ import type Database from "better-sqlite3";
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { LEGACY_WORKSPACE_ID } from "./repo/workspaces";
 
 type Migration = {
   version: string;
@@ -264,12 +265,236 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: "0007_workspace_scope",
+    run: (database) => {
+      database.prepare(`
+        INSERT OR IGNORE INTO workspaces (id, display_name)
+        VALUES (?, '原有学习空间')
+      `).run(LEGACY_WORKSPACE_ID);
+
+      rebuildWorkspaceKeyedTables(database);
+
+      const scopedTables = [
+        "devices",
+        "entity_changes",
+        "conflicts",
+        "blobs",
+        "upload_sessions",
+        "knowledge_points",
+        "knowledge_tags",
+        "assets",
+        "asset_tags",
+        "asset_knowledge_tags",
+        "asset_links",
+        "study_sessions",
+        "review_events",
+        "mistakes",
+        "day_tasks",
+        "day_notes",
+      ];
+      for (const table of scopedTables) {
+        if (tableExists(database, table)) {
+          addColumnIfMissing(
+            database,
+            table,
+            "workspace_id",
+            `TEXT NOT NULL DEFAULT '${LEGACY_WORKSPACE_ID}'`,
+          );
+        }
+      }
+
+      const scopedIndexes: Array<[string, string[], string]> = [
+        ["subjects", ["workspace_id", "code"], "CREATE INDEX IF NOT EXISTS idx_subjects_workspace ON subjects(workspace_id, code)"],
+        [
+          "subject_chapters",
+          ["workspace_id", "subject_code", "sort_order"],
+          "CREATE INDEX IF NOT EXISTS idx_chapters_workspace ON subject_chapters(workspace_id, subject_code, sort_order)",
+        ],
+        [
+          "knowledge_points",
+          ["workspace_id", "subject_code", "chapter_id"],
+          "CREATE INDEX IF NOT EXISTS idx_points_workspace ON knowledge_points(workspace_id, subject_code, chapter_id)",
+        ],
+        [
+          "daily_entries",
+          ["workspace_id", "date"],
+          "CREATE INDEX IF NOT EXISTS idx_daily_entries_workspace ON daily_entries(workspace_id, date)",
+        ],
+        ["assets", ["workspace_id", "folder_path", "day"], "CREATE INDEX IF NOT EXISTS idx_assets_workspace ON assets(workspace_id, folder_path, day)"],
+        ["folders", ["workspace_id", "parent_path", "path"], "CREATE INDEX IF NOT EXISTS idx_folders_workspace ON folders(workspace_id, parent_path, path)"],
+        ["day_tasks", ["workspace_id", "day", "sort_order"], "CREATE INDEX IF NOT EXISTS idx_tasks_workspace ON day_tasks(workspace_id, day, sort_order)"],
+        ["day_notes", ["workspace_id", "day"], "CREATE INDEX IF NOT EXISTS idx_notes_workspace ON day_notes(workspace_id, day)"],
+        [
+          "study_sessions",
+          ["workspace_id", "day"],
+          "CREATE INDEX IF NOT EXISTS idx_sessions_workspace ON study_sessions(workspace_id, day)",
+        ],
+        ["review_events", ["workspace_id", "day"], "CREATE INDEX IF NOT EXISTS idx_reviews_workspace ON review_events(workspace_id, day)"],
+        [
+          "mistakes",
+          ["workspace_id", "next_review", "graduated"],
+          "CREATE INDEX IF NOT EXISTS idx_mistakes_workspace ON mistakes(workspace_id, next_review, graduated)",
+        ],
+      ];
+      for (const [table, columns, sql] of scopedIndexes) {
+        if (tableHasColumns(database, table, columns)) database.exec(sql);
+      }
+    },
+  },
 ];
 
 function addColumnIfMissing(database: Database.Database, table: string, column: string, definition: string): void {
   const columns = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
   if (columns.some((existing) => existing.name === column)) return;
   database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+
+function rebuildWorkspaceKeyedTables(database: Database.Database): void {
+  rebuildTableWithWorkspace(database, {
+    table: "subjects",
+    create: `
+      CREATE TABLE subjects (
+        workspace_id TEXT NOT NULL DEFAULT 'workspace:legacy',
+        code TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        track TEXT NOT NULL DEFAULT 'written',
+        PRIMARY KEY (workspace_id, code),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+      )
+    `,
+    columns: ["code", "name", "description", "track"],
+  });
+  rebuildTableWithWorkspace(database, {
+    table: "subject_chapters",
+    create: `
+      CREATE TABLE subject_chapters (
+        workspace_id TEXT NOT NULL DEFAULT 'workspace:legacy',
+        id TEXT PRIMARY KEY,
+        subject_code TEXT NOT NULL,
+        title TEXT NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(workspace_id, subject_code, title),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+      )
+    `,
+    columns: ["id", "subject_code", "title", "sort_order", "created_at", "updated_at"],
+  });
+  rebuildTableWithWorkspace(database, {
+    table: "daily_entries",
+    create: `
+      CREATE TABLE daily_entries (
+        workspace_id TEXT NOT NULL DEFAULT 'workspace:legacy',
+        date TEXT NOT NULL,
+        plan TEXT NOT NULL DEFAULT '',
+        diary TEXT NOT NULL DEFAULT '',
+        summary TEXT NOT NULL DEFAULT '',
+        blockers TEXT NOT NULL DEFAULT '',
+        tomorrow TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, date),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+      )
+    `,
+    columns: ["date", "plan", "diary", "summary", "blockers", "tomorrow", "created_at", "updated_at"],
+  });
+  rebuildTableWithWorkspace(database, {
+    table: "folders",
+    create: `
+      CREATE TABLE folders (
+        workspace_id TEXT NOT NULL DEFAULT 'workspace:legacy',
+        path TEXT NOT NULL,
+        name TEXT NOT NULL,
+        parent_path TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, path),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+      )
+    `,
+    columns: ["path", "name", "parent_path", "created_at", "updated_at"],
+  });
+  rebuildTableWithWorkspace(database, {
+    table: "app_settings",
+    create: `
+      CREATE TABLE app_settings (
+        workspace_id TEXT NOT NULL DEFAULT 'workspace:legacy',
+        key TEXT NOT NULL,
+        value TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (workspace_id, key),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+      )
+    `,
+    columns: ["key", "value"],
+  });
+  rebuildTableWithWorkspace(database, {
+    table: "drafts",
+    create: `
+      CREATE TABLE drafts (
+        workspace_id TEXT NOT NULL DEFAULT 'workspace:legacy',
+        id TEXT PRIMARY KEY,
+        scope_type TEXT NOT NULL,
+        scope_id TEXT NOT NULL,
+        field TEXT NOT NULL,
+        content TEXT NOT NULL DEFAULT '',
+        base_version INTEGER NOT NULL DEFAULT 0,
+        version INTEGER NOT NULL DEFAULT 1,
+        status TEXT NOT NULL DEFAULT 'active',
+        device_id TEXT,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(workspace_id, scope_type, scope_id, field),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+      )
+    `,
+    columns: [
+      "id",
+      "scope_type",
+      "scope_id",
+      "field",
+      "content",
+      "base_version",
+      "version",
+      "status",
+      "device_id",
+      "updated_at",
+    ],
+  });
+  rebuildTableWithWorkspace(database, {
+    table: "tags",
+    create: `
+      CREATE TABLE tags (
+        workspace_id TEXT NOT NULL DEFAULT 'workspace:legacy',
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        UNIQUE(workspace_id, name),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+      )
+    `,
+    columns: ["id", "name"],
+  });
+}
+
+function rebuildTableWithWorkspace(
+  database: Database.Database,
+  input: { table: string; create: string; columns: string[] },
+): void {
+  if (!tableExists(database, input.table)) return;
+  const columns = database.prepare(`PRAGMA table_info(${input.table})`).all() as Array<{ name: string }>;
+  if (columns.some((column) => column.name === "workspace_id")) return;
+
+  const legacyTable = `${input.table}__pre_workspace`;
+  database.exec(`ALTER TABLE ${input.table} RENAME TO ${legacyTable}`);
+  database.exec(input.create);
+  const names = input.columns.join(", ");
+  database.prepare(`
+    INSERT INTO ${input.table} (workspace_id, ${names})
+    SELECT ?, ${names} FROM ${legacyTable}
+  `).run(LEGACY_WORKSPACE_ID);
+  database.exec(`DROP TABLE ${legacyTable}`);
 }
 
 function checksum(sql: string): string {
@@ -341,35 +566,44 @@ export function backfillKnowledgeHierarchy(database: Database.Database): void {
   const run = database.transaction(() => {
     // 1. Attach orphan knowledge points to chapters derived from their submodule text.
     const orphanPoints = database.prepare(`
-      SELECT id, subject_code, submodule FROM knowledge_points WHERE chapter_id IS NULL
-    `).all() as Array<{ id: string; subject_code: string; submodule: string }>;
+      SELECT workspace_id, id, subject_code, submodule FROM knowledge_points WHERE chapter_id IS NULL
+    `).all() as Array<{ workspace_id: string; id: string; subject_code: string; submodule: string }>;
     if (orphanPoints.length) {
       const insertChapter = database.prepare(`
-        INSERT OR IGNORE INTO subject_chapters (id, subject_code, title, sort_order)
-        VALUES (@id, @subjectCode, @title,
-          COALESCE((SELECT MAX(sort_order) FROM subject_chapters WHERE subject_code = @subjectCode), 0) + 1)
+        INSERT OR IGNORE INTO subject_chapters (workspace_id, id, subject_code, title, sort_order)
+        VALUES (@workspaceId, @id, @subjectCode, @title,
+          COALESCE((SELECT MAX(sort_order) FROM subject_chapters
+                    WHERE workspace_id = @workspaceId AND subject_code = @subjectCode), 0) + 1)
       `);
-      const findChapter = database.prepare("SELECT id FROM subject_chapters WHERE subject_code = ? AND title = ?");
+      const findChapter = database.prepare(`
+        SELECT id FROM subject_chapters
+        WHERE workspace_id = ? AND subject_code = ? AND title = ?
+      `);
       const attach = database.prepare("UPDATE knowledge_points SET chapter_id = ? WHERE id = ?");
       for (const point of orphanPoints) {
         const title = point.submodule?.trim() || "未分章";
         insertChapter.run({
-          id: `chapter:${point.subject_code}:${migrationSlug(title)}`,
+          workspaceId: point.workspace_id,
+          id: point.workspace_id === LEGACY_WORKSPACE_ID
+            ? `chapter:${point.subject_code}:${migrationSlug(title)}`
+            : `${point.workspace_id}:chapter:${point.subject_code}:${migrationSlug(title)}`,
           subjectCode: point.subject_code,
           title,
         });
-        const chapter = findChapter.get(point.subject_code, title) as { id: string };
+        const chapter = findChapter.get(point.workspace_id, point.subject_code, title) as { id: string };
         attach.run(chapter.id, point.id);
       }
     }
 
     // 2. Promote legacy knowledge_tags to knowledge_points (skip names that already exist in the chapter).
     const tags = database.prepare(`
-      SELECT t.id AS tag_id, t.chapter_id, t.name, c.subject_code, c.title AS chapter_title, s.name AS subject_name
+      SELECT t.workspace_id, t.id AS tag_id, t.chapter_id, t.name,
+             c.subject_code, c.title AS chapter_title, s.name AS subject_name
       FROM knowledge_tags t
-      JOIN subject_chapters c ON c.id = t.chapter_id
-      JOIN subjects s ON s.code = c.subject_code
+      JOIN subject_chapters c ON c.id = t.chapter_id AND c.workspace_id = t.workspace_id
+      JOIN subjects s ON s.code = c.subject_code AND s.workspace_id = c.workspace_id
     `).all() as Array<{
+      workspace_id: string;
       tag_id: string;
       chapter_id: string;
       name: string;
@@ -378,23 +612,30 @@ export function backfillKnowledgeHierarchy(database: Database.Database): void {
       subject_name: string;
     }>;
     const pointByChapterTitle = database.prepare(
-      "SELECT id FROM knowledge_points WHERE chapter_id = ? AND title = ?",
+      "SELECT id FROM knowledge_points WHERE workspace_id = ? AND chapter_id = ? AND title = ?",
     );
     const insertPoint = database.prepare(`
       INSERT INTO knowledge_points
-        (id, subject_code, subject_name, submodule, tier, tier_name, title, exam, status, mastery, reviews, chapter_id)
+        (workspace_id, id, subject_code, subject_name, submodule, tier, tier_name, title,
+         exam, status, mastery, reviews, chapter_id)
       VALUES
-        (@id, @subjectCode, @subjectName, @submodule, 'g', '了解', @title, 0, '未学', 0, 0, @chapterId)
+        (@workspaceId, @id, @subjectCode, @subjectName, @submodule, 'g', '了解',
+         @title, 0, '未学', 0, 0, @chapterId)
     `);
     const tagToPoint = new Map<string, string>();
     for (const tag of tags) {
-      const existing = pointByChapterTitle.get(tag.chapter_id, tag.name) as { id: string } | undefined;
+      const existing = pointByChapterTitle.get(tag.workspace_id, tag.chapter_id, tag.name) as
+        | { id: string }
+        | undefined;
       if (existing) {
         tagToPoint.set(tag.tag_id, existing.id);
         continue;
       }
-      const id = `kp:${tag.chapter_id}:${migrationSlug(tag.name)}`;
+      const id = tag.workspace_id === LEGACY_WORKSPACE_ID
+        ? `kp:${tag.chapter_id}:${migrationSlug(tag.name)}`
+        : `${tag.workspace_id}:kp:${tag.chapter_id}:${migrationSlug(tag.name)}`;
       insertPoint.run({
+        workspaceId: tag.workspace_id,
         id,
         subjectCode: tag.subject_code,
         subjectName: tag.subject_name,
@@ -408,18 +649,26 @@ export function backfillKnowledgeHierarchy(database: Database.Database): void {
     // 3. Migrate asset_knowledge_tags links into asset_links.
     if (tableExists(database, "asset_knowledge_tags")) {
       const links = database.prepare(`
-        SELECT akt.asset_id, akt.knowledge_tag_id, c.subject_code, c.id AS chapter_id
+        SELECT akt.workspace_id, akt.asset_id, akt.knowledge_tag_id, c.subject_code, c.id AS chapter_id
         FROM asset_knowledge_tags akt
-        JOIN knowledge_tags t ON t.id = akt.knowledge_tag_id
-        JOIN subject_chapters c ON c.id = t.chapter_id
-      `).all() as Array<{ asset_id: number; knowledge_tag_id: string; subject_code: string; chapter_id: string }>;
+        JOIN knowledge_tags t ON t.id = akt.knowledge_tag_id AND t.workspace_id = akt.workspace_id
+        JOIN subject_chapters c ON c.id = t.chapter_id AND c.workspace_id = t.workspace_id
+      `).all() as Array<{
+        workspace_id: string;
+        asset_id: number;
+        knowledge_tag_id: string;
+        subject_code: string;
+        chapter_id: string;
+      }>;
       const insertLink = database.prepare(`
-        INSERT OR IGNORE INTO asset_links (asset_id, subject_code, chapter_id, knowledge_point_id)
-        VALUES (?, ?, ?, ?)
+        INSERT OR IGNORE INTO asset_links (workspace_id, asset_id, subject_code, chapter_id, knowledge_point_id)
+        VALUES (?, ?, ?, ?, ?)
       `);
       for (const link of links) {
         const pointId = tagToPoint.get(link.knowledge_tag_id);
-        if (pointId) insertLink.run(link.asset_id, link.subject_code, link.chapter_id, pointId);
+        if (pointId) {
+          insertLink.run(link.workspace_id, link.asset_id, link.subject_code, link.chapter_id, pointId);
+        }
       }
     }
   });
@@ -502,6 +751,14 @@ function backfillAssetBlobs(database: Database.Database, uploadRoot?: string): v
 
 function tableExists(database: Database.Database, tableName: string): boolean {
   return Boolean(database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName));
+}
+
+function tableHasColumns(database: Database.Database, tableName: string, required: string[]): boolean {
+  if (!tableExists(database, tableName)) return false;
+  const columns = new Set(
+    (database.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>).map((column) => column.name),
+  );
+  return required.every((column) => columns.has(column));
 }
 
 function storageKeyForSha(sha256: string): string {

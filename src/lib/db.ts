@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { buildFallbackKnowledgeSeed, extractKnowledgeSeed } from "./knowledge-map";
 import { backfillKnowledgeHierarchy, runMigrations } from "./migrations";
+import { LEGACY_WORKSPACE_ID } from "./repo/workspaces";
 import type { KnowledgeSeed } from "./types";
 
 let db: Database.Database | null = null;
@@ -201,24 +202,29 @@ function loadKnowledgeSeed(): KnowledgeSeed {
   return buildFallbackKnowledgeSeed();
 }
 
-function seedKnowledgeMapIfEmpty(database: Database.Database): void {
-  const existing = database.prepare("SELECT COUNT(*) AS count FROM knowledge_points").get() as { count: number };
+export function seedKnowledgeMapIfEmpty(database: Database.Database): void {
+  const existing = database
+    .prepare("SELECT COUNT(*) AS count FROM knowledge_points WHERE workspace_id = ?")
+    .get(LEGACY_WORKSPACE_ID) as { count: number };
   if (existing.count > 0) return;
 
   const seed = loadKnowledgeSeed();
   const insertSubject = database.prepare(
-    "INSERT OR REPLACE INTO subjects (code, name, description) VALUES (@code, @name, @description)",
+    `INSERT OR REPLACE INTO subjects (workspace_id, code, name, description)
+     VALUES (@workspaceId, @code, @name, @description)`,
   );
   const insertPoint = database.prepare(`
     INSERT OR REPLACE INTO knowledge_points
-      (id, subject_code, subject_name, submodule, tier, tier_name, title, exam, status, mastery)
+      (workspace_id, id, subject_code, subject_name, submodule, tier, tier_name, title, exam, status, mastery)
     VALUES
-      (@id, @subjectCode, @subjectName, @submodule, @tier, @tierName, @title, @exam, @status, @mastery)
+      (@workspaceId, @id, @subjectCode, @subjectName, @submodule, @tier, @tierName, @title, @exam, @status, @mastery)
   `);
 
   const transaction = database.transaction(() => {
-    for (const subject of seed.subjects) insertSubject.run(subject);
-    for (const point of seed.points) insertPoint.run({ ...point, exam: point.exam ? 1 : 0 });
+    for (const subject of seed.subjects) insertSubject.run({ workspaceId: LEGACY_WORKSPACE_ID, ...subject });
+    for (const point of seed.points) {
+      insertPoint.run({ workspaceId: LEGACY_WORKSPACE_ID, ...point, exam: point.exam ? 1 : 0 });
+    }
   });
   transaction();
   backfillKnowledgeHierarchy(database);

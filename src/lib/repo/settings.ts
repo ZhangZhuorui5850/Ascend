@@ -54,6 +54,6 @@ export function saveDailyReviewLimit(db: Database.Database, limit: number): void
 function setSetting(db: Database.Database, key: string, value: string): void {
   db.prepare(`
     INSERT INTO app_settings (key, value) VALUES (?, ?)
-    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    ON CONFLICT(workspace_id, key) DO UPDATE SET value = excluded.value
   `).run(key, value);
 }
