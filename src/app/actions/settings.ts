@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db";
 import { saveDailyReviewLimit, saveExamCountdowns, type ExamCountdown } from "@/lib/repo/settings";
-import { requireSession } from "@/lib/request-auth";
+import { requireWorkspace } from "@/lib/request-auth";
 import type { ActionResult } from "./day";
 
 export async function saveSettingsAction(input: {
@@ -11,10 +11,10 @@ export async function saveSettingsAction(input: {
   dailyReviewLimit: number;
 }): Promise<ActionResult> {
   try {
-    await requireSession();
+    const access = await requireWorkspace();
     const db = getDb();
-    saveExamCountdowns(db, input.examCountdowns);
-    saveDailyReviewLimit(db, input.dailyReviewLimit);
+    saveExamCountdowns(db, access, input.examCountdowns);
+    saveDailyReviewLimit(db, access, input.dailyReviewLimit);
     revalidatePath("/");
     revalidatePath("/settings");
     return { ok: true };

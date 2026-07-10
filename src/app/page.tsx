@@ -3,7 +3,7 @@ import { ArrowRight, CalendarDays, Flame, Settings } from "lucide-react";
 import { HomeClock } from "@/components/HomeClock";
 import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
-import { requirePageSession } from "@/lib/page-auth";
+import { requirePageWorkspace } from "@/lib/page-auth";
 import { getSubjectOverviews, TRACK_NAMES } from "@/lib/repo/knowledge";
 import { listTasks } from "@/lib/repo/planner";
 import { getSettings } from "@/lib/repo/settings";
@@ -12,14 +12,14 @@ import { getHomeSnapshot } from "@/lib/repo/stats";
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  await requirePageSession("/");
+  const access = await requirePageWorkspace("/");
 
   const db = getDb();
   const today = todayKey();
-  const snapshot = getHomeSnapshot(db, today);
-  const settings = getSettings(db);
+  const snapshot = getHomeSnapshot(db, access, today);
+  const settings = getSettings(db, access);
   const subjects = getSubjectOverviews(db, today);
-  const tasks = listTasks(db, today).filter((task) => !task.done).slice(0, 5);
+  const tasks = listTasks(db, access, today).filter((task) => !task.done).slice(0, 5);
   const pendingCount = snapshot.dueReviews + snapshot.dueMistakes;
 
   return (

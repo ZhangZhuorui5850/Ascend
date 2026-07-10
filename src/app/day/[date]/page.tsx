@@ -8,7 +8,7 @@ import { QuickLog } from "@/components/QuickLog";
 import { ReviewQueue } from "@/components/ReviewQueue";
 import { assertDateKey, shiftDateKey, todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
-import { requirePageSession } from "@/lib/page-auth";
+import { requirePageWorkspace } from "@/lib/page-auth";
 import { getDay } from "@/lib/repo/days";
 import { getSubjects } from "@/lib/repo/knowledge";
 import { getSettings } from "@/lib/repo/settings";
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DayPage({ params }: { params: Promise<{ date: string }> }) {
   const { date } = await params;
-  await requirePageSession(`/day/${date}`);
+  const access = await requirePageWorkspace(`/day/${date}`);
   try {
     assertDateKey(date);
   } catch {
@@ -25,8 +25,8 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
   }
 
   const db = getDb();
-  const settings = getSettings(db);
-  const day = getDay(db, date, { reviewLimit: settings.dailyReviewLimit });
+  const settings = getSettings(db, access);
+  const day = getDay(db, access, date, { reviewLimit: settings.dailyReviewLimit });
   const subjects = getSubjects(db);
   const today = todayKey();
   const isToday = date === today;

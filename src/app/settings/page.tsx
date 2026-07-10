@@ -1,14 +1,14 @@
 import { SettingsForm } from "@/components/SettingsForm";
 import { getDb } from "@/lib/db";
-import { requirePageSession } from "@/lib/page-auth";
+import { requirePageWorkspace } from "@/lib/page-auth";
 import { getSettings } from "@/lib/repo/settings";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  await requirePageSession("/settings");
+  const access = await requirePageWorkspace("/settings");
 
-  const settings = getSettings(getDb());
+  const settings = getSettings(getDb(), access);
 
   return (
     <div className="pageStack">

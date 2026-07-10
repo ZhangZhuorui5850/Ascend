@@ -2,6 +2,9 @@ import type Database from "better-sqlite3";
 import { assertDateKey } from "../dates";
 import { nextReviewDate } from "../review-schedule";
 import { ensureDay } from "./days";
+import { LEGACY_WORKSPACE_ID } from "./workspaces";
+
+const legacyScope = { workspaceId: LEGACY_WORKSPACE_ID };
 
 export type MistakeListItem = {
   id: number;
@@ -28,7 +31,7 @@ export function createStudySession(
   const day = assertDateKey(input.day);
   const title = input.title.trim();
   if (!title) throw new Error("学习记录标题必填");
-  ensureDay(db, day);
+  ensureDay(db, legacyScope, day);
   db.prepare(`
     INSERT INTO study_sessions (day, subject_code, knowledge_point_id, title, duration_minutes, output)
     VALUES (@day, @subjectCode, @knowledgePointId, @title, @durationMinutes, @output)
@@ -50,7 +53,7 @@ export function createMistake(
   const title = input.title.trim();
   if (!title) throw new Error("错题标题必填");
   const knowledgePointId = input.knowledgePointId?.trim() || null;
-  ensureDay(db, day);
+  ensureDay(db, legacyScope, day);
   db.prepare(`
     INSERT INTO mistakes (day, subject_code, knowledge_point_id, title, cause, next_review)
     VALUES (@day, @subjectCode, @knowledgePointId, @title, @cause, @nextReview)
@@ -72,7 +75,7 @@ export function createReviewEvent(
   const day = assertDateKey(input.day);
   const knowledgePointId = input.knowledgePointId?.trim() || null;
   const score = clamp(Math.round(Number(input.score) || 0), 0, 3);
-  ensureDay(db, day);
+  ensureDay(db, legacyScope, day);
   db.prepare(`
     INSERT INTO review_events (day, knowledge_point_id, score, note)
     VALUES (@day, @knowledgePointId, @score, @note)
@@ -100,7 +103,7 @@ export function reattemptMistake(
   });
 
   if (mistake.knowledge_point_id) {
-    ensureDay(db, day);
+    ensureDay(db, legacyScope, day);
     db.prepare(`
       INSERT INTO review_events (day, knowledge_point_id, score, note)
       VALUES (@day, @knowledgePointId, @score, '错题回炉')

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { AuthError, requireSession } from "./request-auth";
+import { assertWorkspaceAccess, AuthError, requireSession } from "./request-auth";
 
 export async function requirePageSession(nextPath: string) {
   try {
@@ -10,4 +10,8 @@ export async function requirePageSession(nextPath: string) {
     }
     throw error;
   }
+}
+
+export async function requirePageWorkspace(nextPath: string) {
+  return assertWorkspaceAccess(await requirePageSession(nextPath));
 }

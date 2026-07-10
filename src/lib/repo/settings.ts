@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import type { WorkspaceScope } from "../access-context";
 import { assertDateKey } from "../dates";
 
 export type ExamCountdown = {
@@ -13,8 +14,11 @@ export type AppSettings = {
 
 export const DEFAULT_DAILY_REVIEW_LIMIT = 12;
 
-export function getSettings(db: Database.Database): AppSettings {
-  const rows = db.prepare("SELECT key, value FROM app_settings").all() as Array<{ key: string; value: string }>;
+export function getSettings(db: Database.Database, scope: WorkspaceScope): AppSettings {
+  const rows = db.prepare("SELECT key, value FROM app_settings WHERE workspace_id = ?").all(scope.workspaceId) as Array<{
+    key: string;
+    value: string;
+  }>;
   const map = new Map(rows.map((row) => [row.key, row.value]));
 
   let examCountdowns: ExamCountdown[] = [];
@@ -36,24 +40,28 @@ export function getSettings(db: Database.Database): AppSettings {
   };
 }
 
-export function saveExamCountdowns(db: Database.Database, countdowns: ExamCountdown[]): void {
+export function saveExamCountdowns(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  countdowns: ExamCountdown[],
+): void {
   const cleaned = countdowns
     .map((item) => ({ name: item.name.trim(), date: item.date.trim() }))
     .filter((item) => item.name && item.date)
     .slice(0, 5);
   for (const item of cleaned) assertDateKey(item.date);
-  setSetting(db, "exam_countdowns", JSON.stringify(cleaned));
+  setSetting(db, scope, "exam_countdowns", JSON.stringify(cleaned));
 }
 
-export function saveDailyReviewLimit(db: Database.Database, limit: number): void {
+export function saveDailyReviewLimit(db: Database.Database, scope: WorkspaceScope, limit: number): void {
   const value = Math.round(Number(limit));
   if (!Number.isInteger(value) || value < 1 || value > 100) throw new Error("每日复习上限需在 1-100 之间");
-  setSetting(db, "daily_review_limit", String(value));
+  setSetting(db, scope, "daily_review_limit", String(value));
 }
 
-function setSetting(db: Database.Database, key: string, value: string): void {
+function setSetting(db: Database.Database, scope: WorkspaceScope, key: string, value: string): void {
   db.prepare(`
-    INSERT INTO app_settings (key, value) VALUES (?, ?)
+    INSERT INTO app_settings (workspace_id, key, value) VALUES (?, ?, ?)
     ON CONFLICT(workspace_id, key) DO UPDATE SET value = excluded.value
-  `).run(key, value);
+  `).run(scope.workspaceId, key, value);
 }

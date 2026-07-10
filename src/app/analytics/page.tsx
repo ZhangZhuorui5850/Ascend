@@ -1,18 +1,18 @@
 import Link from "next/link";
 import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
-import { requirePageSession } from "@/lib/page-auth";
+import { requirePageWorkspace } from "@/lib/page-auth";
 import { getSubjectOverviews } from "@/lib/repo/knowledge";
 import { getLearningAnalytics } from "@/lib/repo/stats";
 
 export const dynamic = "force-dynamic";
 
 export default async function AnalyticsPage() {
-  await requirePageSession("/analytics");
+  const access = await requirePageWorkspace("/analytics");
 
   const db = getDb();
   const today = todayKey();
-  const analytics = getLearningAnalytics(db, today);
+  const analytics = getLearningAnalytics(db, access, today);
   const subjects = getSubjectOverviews(db, today);
 
   return (

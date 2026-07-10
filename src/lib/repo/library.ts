@@ -2,6 +2,9 @@ import type Database from "better-sqlite3";
 import { storeUploadedFile } from "../assets";
 import { assertDateKey } from "../dates";
 import { ensureDay } from "./days";
+import { LEGACY_WORKSPACE_ID } from "./workspaces";
+
+const legacyScope = { workspaceId: LEGACY_WORKSPACE_ID };
 
 export type ExplorerFolder = {
   name: string;
@@ -301,7 +304,7 @@ export async function createAssetFromUpload(
   },
 ): Promise<{ id: number }> {
   const day = assertDateKey(input.day || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" }));
-  ensureDay(db, day);
+  ensureDay(db, legacyScope, day);
   const stored = await storeUploadedFile({ file: input.file, day, uploadRoot: input.uploadRoot });
   const folderPath = normalizeFolderPath(input.folderPath || "");
 

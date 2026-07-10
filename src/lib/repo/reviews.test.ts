@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { getDay, updateDayEntry } from "./days";
 import { createMistake, createReviewEvent, createStudySession, getMistakeBook, reattemptMistake } from "./reviews";
 import { createTestDb, seedSubjectWithChapter } from "./testing";
+import { LEGACY_WORKSPACE_ID } from "./workspaces";
+
+const legacyScope = { workspaceId: LEGACY_WORKSPACE_ID };
 
 describe("reviews repo", () => {
   it("raises mastery and schedules the next review on success", () => {
@@ -82,9 +85,9 @@ describe("reviews repo", () => {
     db.prepare("UPDATE knowledge_points SET next_review = '2026-07-01' WHERE id = 'kp1'").run();
     createMistake(db, { day: "2026-06-30", title: "回炉我" });
     createStudySession(db, { day: "2026-07-01", title: "推导", durationMinutes: 45 });
-    updateDayEntry(db, "2026-07-01", { plan: "上午特征值" });
+    updateDayEntry(db, legacyScope, "2026-07-01", { plan: "上午特征值" });
 
-    const day = getDay(db, "2026-07-01");
+    const day = getDay(db, legacyScope, "2026-07-01");
 
     expect(day.entry.plan).toBe("上午特征值");
     expect(day.dueReviews.map((review) => review.id)).toEqual(["kp1"]);
@@ -94,8 +97,8 @@ describe("reviews repo", () => {
 
   it("partially updates day entries without clobbering other fields", () => {
     const db = createTestDb();
-    updateDayEntry(db, "2026-07-01", { plan: "计划", summary: "总结" });
-    updateDayEntry(db, "2026-07-01", { diary: "过程" });
+    updateDayEntry(db, legacyScope, "2026-07-01", { plan: "计划", summary: "总结" });
+    updateDayEntry(db, legacyScope, "2026-07-01", { diary: "过程" });
 
     const entry = db.prepare("SELECT plan, diary, summary FROM daily_entries WHERE date = '2026-07-01'").get();
     expect(entry).toMatchObject({ plan: "计划", diary: "过程", summary: "总结" });
