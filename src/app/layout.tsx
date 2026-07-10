@@ -27,7 +27,9 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const user = await optionalSession();
-  const hierarchy: CaptureSubject[] = user ? getCaptureHierarchy(getDb()) : [];
+  const hierarchy: CaptureSubject[] = user?.workspaceId
+    ? getCaptureHierarchy(getDb(), { workspaceId: user.workspaceId })
+    : [];
 
   return (
     <html lang="zh-CN" className={`${geistSans.variable} ${geistMono.variable}`}>

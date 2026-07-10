@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db";
 import { DAY_FIELDS, updateDayEntry, type DayField } from "@/lib/repo/days";
 import { createMistake, createReviewEvent, createStudySession, reattemptMistake } from "@/lib/repo/reviews";
-import { requireSession, requireWorkspace } from "@/lib/request-auth";
+import { requireWorkspace } from "@/lib/request-auth";
 
 export type ActionResult = { ok: boolean; error?: string };
 
@@ -37,8 +37,8 @@ export async function addStudySession(input: {
   output?: string;
 }): Promise<ActionResult> {
   try {
-    await requireSession();
-    createStudySession(getDb(), input);
+    const access = await requireWorkspace();
+    createStudySession(getDb(), access, input);
     revalidatePath(`/day/${input.day}`);
     return { ok: true };
   } catch (error) {
@@ -54,8 +54,8 @@ export async function addMistake(input: {
   knowledgePointId?: string;
 }): Promise<ActionResult> {
   try {
-    await requireSession();
-    createMistake(getDb(), input);
+    const access = await requireWorkspace();
+    createMistake(getDb(), access, input);
     revalidatePath(`/day/${input.day}`);
     revalidatePath("/mistakes");
     return { ok: true };
@@ -71,8 +71,8 @@ export async function scoreReview(input: {
   note?: string;
 }): Promise<ActionResult> {
   try {
-    await requireSession();
-    createReviewEvent(getDb(), input);
+    const access = await requireWorkspace();
+    createReviewEvent(getDb(), access, input);
     revalidatePath(`/day/${input.day}`);
     return { ok: true };
   } catch (error) {
@@ -82,8 +82,8 @@ export async function scoreReview(input: {
 
 export async function reattemptMistakeAction(input: { id: number; day: string; score: number }): Promise<ActionResult> {
   try {
-    await requireSession();
-    reattemptMistake(getDb(), input);
+    const access = await requireWorkspace();
+    reattemptMistake(getDb(), access, input);
     revalidatePath(`/day/${input.day}`);
     revalidatePath("/mistakes");
     return { ok: true };

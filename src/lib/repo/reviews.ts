@@ -1,10 +1,8 @@
 import type Database from "better-sqlite3";
+import type { WorkspaceScope } from "../access-context";
 import { assertDateKey } from "../dates";
 import { nextReviewDate } from "../review-schedule";
 import { ensureDay } from "./days";
-import { LEGACY_WORKSPACE_ID } from "./workspaces";
-
-const legacyScope = { workspaceId: LEGACY_WORKSPACE_ID };
 
 export type MistakeListItem = {
   id: number;
@@ -26,16 +24,19 @@ export type MistakeBook = {
 
 export function createStudySession(
   db: Database.Database,
+  scope: WorkspaceScope,
   input: { day: string; title: string; durationMinutes?: number; subjectCode?: string; knowledgePointId?: string; output?: string },
 ): void {
   const day = assertDateKey(input.day);
   const title = input.title.trim();
   if (!title) throw new Error("学习记录标题必填");
-  ensureDay(db, legacyScope, day);
+  ensureDay(db, scope, day);
   db.prepare(`
-    INSERT INTO study_sessions (day, subject_code, knowledge_point_id, title, duration_minutes, output)
-    VALUES (@day, @subjectCode, @knowledgePointId, @title, @durationMinutes, @output)
+    INSERT INTO study_sessions
+      (workspace_id, day, subject_code, knowledge_point_id, title, duration_minutes, output)
+    VALUES (@workspaceId, @day, @subjectCode, @knowledgePointId, @title, @durationMinutes, @output)
   `).run({
+    workspaceId: scope.workspaceId,
     day,
     subjectCode: input.subjectCode?.trim() || null,
     knowledgePointId: input.knowledgePointId?.trim() || null,
@@ -47,17 +48,19 @@ export function createStudySession(
 
 export function createMistake(
   db: Database.Database,
+  scope: WorkspaceScope,
   input: { day: string; title: string; cause?: string; subjectCode?: string; knowledgePointId?: string },
-): void {
+): { id: number } {
   const day = assertDateKey(input.day);
   const title = input.title.trim();
   if (!title) throw new Error("错题标题必填");
   const knowledgePointId = input.knowledgePointId?.trim() || null;
-  ensureDay(db, legacyScope, day);
-  db.prepare(`
-    INSERT INTO mistakes (day, subject_code, knowledge_point_id, title, cause, next_review)
-    VALUES (@day, @subjectCode, @knowledgePointId, @title, @cause, @nextReview)
+  ensureDay(db, scope, day);
+  const result = db.prepare(`
+    INSERT INTO mistakes (workspace_id, day, subject_code, knowledge_point_id, title, cause, next_review)
+    VALUES (@workspaceId, @day, @subjectCode, @knowledgePointId, @title, @cause, @nextReview)
   `).run({
+    workspaceId: scope.workspaceId,
     day,
     subjectCode: input.subjectCode?.trim() || null,
     knowledgePointId,
@@ -65,30 +68,35 @@ export function createMistake(
     cause: (input.cause || "").trim(),
     nextReview: nextReviewDate(day, 0),
   });
-  if (knowledgePointId) applyMistakeOutcome(db, { knowledgePointId, day });
+  if (knowledgePointId) applyMistakeOutcome(db, scope, { knowledgePointId, day });
+  return { id: Number(result.lastInsertRowid) };
 }
 
 export function createReviewEvent(
   db: Database.Database,
+  scope: WorkspaceScope,
   input: { day: string; knowledgePointId?: string; score: number; note?: string },
 ): void {
   const day = assertDateKey(input.day);
   const knowledgePointId = input.knowledgePointId?.trim() || null;
   const score = clamp(Math.round(Number(input.score) || 0), 0, 3);
-  ensureDay(db, legacyScope, day);
+  ensureDay(db, scope, day);
   db.prepare(`
-    INSERT INTO review_events (day, knowledge_point_id, score, note)
-    VALUES (@day, @knowledgePointId, @score, @note)
-  `).run({ day, knowledgePointId, score, note: (input.note || "").trim() });
-  if (knowledgePointId) applyReviewOutcome(db, { knowledgePointId, day, score });
+    INSERT INTO review_events (workspace_id, day, knowledge_point_id, score, note)
+    VALUES (@workspaceId, @day, @knowledgePointId, @score, @note)
+  `).run({ workspaceId: scope.workspaceId, day, knowledgePointId, score, note: (input.note || "").trim() });
+  if (knowledgePointId) applyReviewOutcome(db, scope, { knowledgePointId, day, score });
 }
 
 export function reattemptMistake(
   db: Database.Database,
+  scope: WorkspaceScope,
   input: { id: number; day: string; score: number },
 ): { id: number; graduated: number; nextReview: string | null } {
   const day = assertDateKey(input.day);
-  const mistake = db.prepare("SELECT id, knowledge_point_id FROM mistakes WHERE id = ?").get(input.id) as
+  const mistake = db.prepare(`
+    SELECT id, knowledge_point_id FROM mistakes WHERE workspace_id = ? AND id = ?
+  `).get(scope.workspaceId, input.id) as
     | { id: number; knowledge_point_id: string | null }
     | undefined;
   if (!mistake) throw new Error("错题不存在");
@@ -96,33 +104,38 @@ export function reattemptMistake(
   const score = clamp(Math.round(Number(input.score) || 0), 0, 3);
   const graduated = score >= 2 ? 1 : 0;
   const nextReview = graduated ? null : nextReviewDate(day, 0);
-  db.prepare("UPDATE mistakes SET graduated = @graduated, next_review = @nextReview WHERE id = @id").run({
+  db.prepare(`
+    UPDATE mistakes SET graduated = @graduated, next_review = @nextReview
+    WHERE workspace_id = @workspaceId AND id = @id
+  `).run({
+    workspaceId: scope.workspaceId,
     id: input.id,
     graduated,
     nextReview,
   });
 
   if (mistake.knowledge_point_id) {
-    ensureDay(db, legacyScope, day);
+    ensureDay(db, scope, day);
     db.prepare(`
-      INSERT INTO review_events (day, knowledge_point_id, score, note)
-      VALUES (@day, @knowledgePointId, @score, '错题回炉')
-    `).run({ day, knowledgePointId: mistake.knowledge_point_id, score });
-    applyReviewOutcome(db, { knowledgePointId: mistake.knowledge_point_id, day, score });
+      INSERT INTO review_events (workspace_id, day, knowledge_point_id, score, note)
+      VALUES (@workspaceId, @day, @knowledgePointId, @score, '错题回炉')
+    `).run({ workspaceId: scope.workspaceId, day, knowledgePointId: mistake.knowledge_point_id, score });
+    applyReviewOutcome(db, scope, { knowledgePointId: mistake.knowledge_point_id, day, score });
   }
 
   return { id: input.id, graduated, nextReview };
 }
 
-export function getMistakeBook(db: Database.Database, today: string): MistakeBook {
+export function getMistakeBook(db: Database.Database, scope: WorkspaceScope, today: string): MistakeBook {
   assertDateKey(today);
   const rows = db.prepare(`
     SELECT m.id, m.day, m.title, m.cause, m.next_review, m.graduated, m.subject_code,
            m.knowledge_point_id, k.title AS knowledge_title
     FROM mistakes m
-    LEFT JOIN knowledge_points k ON k.id = m.knowledge_point_id
+    LEFT JOIN knowledge_points k ON k.id = m.knowledge_point_id AND k.workspace_id = m.workspace_id
+    WHERE m.workspace_id = ?
     ORDER BY m.created_at DESC
-  `).all() as MistakeListItem[];
+  `).all(scope.workspaceId) as MistakeListItem[];
 
   const due: MistakeListItem[] = [];
   const open: MistakeListItem[] = [];
@@ -138,9 +151,12 @@ export function getMistakeBook(db: Database.Database, today: string): MistakeBoo
 
 export function applyReviewOutcome(
   db: Database.Database,
+  scope: WorkspaceScope,
   input: { knowledgePointId: string; day: string; score: number },
 ): void {
-  const point = db.prepare("SELECT reviews, mastery FROM knowledge_points WHERE id = ?").get(input.knowledgePointId) as
+  const point = db.prepare(`
+    SELECT reviews, mastery FROM knowledge_points WHERE workspace_id = ? AND id = ?
+  `).get(scope.workspaceId, input.knowledgePointId) as
     | { reviews: number; mastery: number }
     | undefined;
   if (!point) return;
@@ -157,15 +173,19 @@ export function applyReviewOutcome(
         last_review = @day,
         next_review = @nextReview,
         status = @status
-    WHERE id = @knowledgePointId
-  `).run({ ...input, reviews, mastery, status, nextReview });
+    WHERE workspace_id = @workspaceId AND id = @knowledgePointId
+  `).run({ workspaceId: scope.workspaceId, ...input, reviews, mastery, status, nextReview });
 }
 
 export function applyMistakeOutcome(
   db: Database.Database,
+  scope: WorkspaceScope,
   input: { knowledgePointId: string; day: string },
 ): void {
-  const point = db.prepare("SELECT mastery FROM knowledge_points WHERE id = ?").get(input.knowledgePointId) as
+  const point = db.prepare("SELECT mastery FROM knowledge_points WHERE workspace_id = ? AND id = ?").get(
+    scope.workspaceId,
+    input.knowledgePointId,
+  ) as
     | { mastery: number }
     | undefined;
   if (!point) return;
@@ -176,8 +196,9 @@ export function applyMistakeOutcome(
     SET mastery = @mastery,
         status = @status,
         next_review = @nextReview
-    WHERE id = @knowledgePointId
+    WHERE workspace_id = @workspaceId AND id = @knowledgePointId
   `).run({
+    workspaceId: scope.workspaceId,
     knowledgePointId: input.knowledgePointId,
     mastery,
     status: mastery >= 80 ? "已掌握" : "学习中",

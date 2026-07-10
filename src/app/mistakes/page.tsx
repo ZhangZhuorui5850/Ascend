@@ -2,16 +2,16 @@ import Link from "next/link";
 import { MistakeReattempt } from "@/components/MistakeReattempt";
 import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
-import { requirePageSession } from "@/lib/page-auth";
+import { requirePageWorkspace } from "@/lib/page-auth";
 import { getMistakeBook } from "@/lib/repo/reviews";
 
 export const dynamic = "force-dynamic";
 
 export default async function MistakesPage() {
-  await requirePageSession("/mistakes");
+  const access = await requirePageWorkspace("/mistakes");
 
   const today = todayKey();
-  const book = getMistakeBook(getDb(), today);
+  const book = getMistakeBook(getDb(), access, today);
 
   return (
     <div className="pageStack">

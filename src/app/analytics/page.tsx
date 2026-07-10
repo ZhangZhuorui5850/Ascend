@@ -13,7 +13,7 @@ export default async function AnalyticsPage() {
   const db = getDb();
   const today = todayKey();
   const analytics = getLearningAnalytics(db, access, today);
-  const subjects = getSubjectOverviews(db, today);
+  const subjects = getSubjectOverviews(db, access, today);
 
   return (
     <div className="pageStack">

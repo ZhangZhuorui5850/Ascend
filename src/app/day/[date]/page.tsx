@@ -27,7 +27,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
   const db = getDb();
   const settings = getSettings(db, access);
   const day = getDay(db, access, date, { reviewLimit: settings.dailyReviewLimit });
-  const subjects = getSubjects(db);
+  const subjects = getSubjects(db, access);
   const today = todayKey();
   const isToday = date === today;
   const studyMinutes = day.sessions.reduce((total, session) => total + session.duration_minutes, 0);

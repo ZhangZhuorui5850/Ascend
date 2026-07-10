@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import type { WorkspaceScope } from "../access-context";
 import { TIER_NAMES, type Tier } from "../types";
 
 export type SubjectTrack = "written" | "machine";
@@ -82,11 +83,17 @@ export type CaptureSubject = {
   }>;
 };
 
-export function getSubjects(db: Database.Database): SubjectRow[] {
-  return db.prepare("SELECT * FROM subjects ORDER BY code ASC").all() as SubjectRow[];
+export function getSubjects(db: Database.Database, scope: WorkspaceScope): SubjectRow[] {
+  return db.prepare("SELECT * FROM subjects WHERE workspace_id = ? ORDER BY code ASC").all(
+    scope.workspaceId,
+  ) as SubjectRow[];
 }
 
-export function getSubjectOverviews(db: Database.Database, today: string): SubjectOverview[] {
+export function getSubjectOverviews(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  today: string,
+): SubjectOverview[] {
   return db.prepare(`
     SELECT
       s.code,
@@ -100,12 +107,13 @@ export function getSubjectOverviews(db: Database.Database, today: string): Subje
       COUNT(DISTINCT CASE WHEN m.graduated = 0 THEN m.id END) AS openMistakes,
       COALESCE(ROUND(AVG(k.mastery)), 0) AS avgMastery
     FROM subjects s
-    LEFT JOIN knowledge_points k ON k.subject_code = s.code
-    LEFT JOIN asset_links l ON l.subject_code = s.code
-    LEFT JOIN mistakes m ON m.subject_code = s.code
+    LEFT JOIN knowledge_points k ON k.subject_code = s.code AND k.workspace_id = s.workspace_id
+    LEFT JOIN asset_links l ON l.subject_code = s.code AND l.workspace_id = s.workspace_id
+    LEFT JOIN mistakes m ON m.subject_code = s.code AND m.workspace_id = s.workspace_id
+    WHERE s.workspace_id = @workspaceId
     GROUP BY s.code, s.name, s.description, s.track
     ORDER BY s.track ASC, s.code ASC
-  `).all({ today }) as SubjectOverview[];
+  `).all({ workspaceId: scope.workspaceId, today }) as SubjectOverview[];
 }
 
 const POINT_SELECT = `
@@ -125,27 +133,30 @@ const POINT_SELECT = `
     COUNT(DISTINCT l.asset_id) AS asset_count,
     COUNT(DISTINCT CASE WHEN m.graduated = 0 THEN m.id END) AS mistake_count
   FROM knowledge_points k
-  LEFT JOIN asset_links l ON l.knowledge_point_id = k.id
-  LEFT JOIN mistakes m ON m.knowledge_point_id = k.id
+  LEFT JOIN asset_links l ON l.knowledge_point_id = k.id AND l.workspace_id = k.workspace_id
+  LEFT JOIN mistakes m ON m.knowledge_point_id = k.id AND m.workspace_id = k.workspace_id
 `;
 
-export function getSubjectDetail(db: Database.Database, code: string): SubjectDetail | null {
-  const subject = db.prepare("SELECT * FROM subjects WHERE code = ?").get(code) as SubjectRow | undefined;
+export function getSubjectDetail(db: Database.Database, scope: WorkspaceScope, code: string): SubjectDetail | null {
+  const subject = db.prepare("SELECT * FROM subjects WHERE workspace_id = ? AND code = ?").get(
+    scope.workspaceId,
+    code,
+  ) as SubjectRow | undefined;
   if (!subject) return null;
 
   const chapters = db.prepare(`
     SELECT id, title, sort_order
     FROM subject_chapters
-    WHERE subject_code = ?
+    WHERE workspace_id = @workspaceId AND subject_code = @code
     ORDER BY sort_order ASC, title ASC
-  `).all(code) as Array<{ id: string; title: string; sort_order: number }>;
+  `).all({ workspaceId: scope.workspaceId, code }) as Array<{ id: string; title: string; sort_order: number }>;
 
   const points = db.prepare(`
     ${POINT_SELECT}
-    WHERE k.subject_code = ?
+    WHERE k.workspace_id = @workspaceId AND k.subject_code = @code
     GROUP BY k.id
     ORDER BY k.sort_order ASC, k.id ASC
-  `).all(code) as PointRow[];
+  `).all({ workspaceId: scope.workspaceId, code }) as PointRow[];
 
   const pointsByChapter = new Map<string, PointRow[]>();
   const loosePoints: PointRow[] = [];
@@ -169,22 +180,22 @@ export function getSubjectDetail(db: Database.Database, code: string): SubjectDe
       a.folder_path,
       COALESCE(GROUP_CONCAT(DISTINCT k.title), '') AS knowledge_titles
     FROM assets a
-    JOIN asset_links l ON l.asset_id = a.id
-    LEFT JOIN knowledge_points k ON k.id = l.knowledge_point_id
-    WHERE l.subject_code = ?
+    JOIN asset_links l ON l.asset_id = a.id AND l.workspace_id = a.workspace_id
+    LEFT JOIN knowledge_points k ON k.id = l.knowledge_point_id AND k.workspace_id = l.workspace_id
+    WHERE a.workspace_id = @workspaceId AND l.subject_code = @code
     GROUP BY a.id
     ORDER BY a.created_at DESC
     LIMIT 50
-  `).all(code) as SubjectDetail["assets"];
+  `).all({ workspaceId: scope.workspaceId, code }) as SubjectDetail["assets"];
 
   const mistakes = db.prepare(`
     SELECT m.id, m.day, m.title, m.cause, m.graduated, m.next_review, k.title AS knowledge_title
     FROM mistakes m
-    LEFT JOIN knowledge_points k ON k.id = m.knowledge_point_id
-    WHERE m.subject_code = ?
+    LEFT JOIN knowledge_points k ON k.id = m.knowledge_point_id AND k.workspace_id = m.workspace_id
+    WHERE m.workspace_id = @workspaceId AND m.subject_code = @code
     ORDER BY m.graduated ASC, m.created_at DESC
     LIMIT 50
-  `).all(code) as SubjectDetail["mistakes"];
+  `).all({ workspaceId: scope.workspaceId, code }) as SubjectDetail["mistakes"];
 
   return {
     subject,
@@ -196,19 +207,20 @@ export function getSubjectDetail(db: Database.Database, code: string): SubjectDe
 }
 
 /** 科目 → 章节 → 知识点的轻量层级，用于收纳面板和选择器。 */
-export function getCaptureHierarchy(db: Database.Database): CaptureSubject[] {
-  const subjects = getSubjects(db);
+export function getCaptureHierarchy(db: Database.Database, scope: WorkspaceScope): CaptureSubject[] {
+  const subjects = getSubjects(db, scope);
   const chapters = db.prepare(`
     SELECT id, subject_code, title
     FROM subject_chapters
+    WHERE workspace_id = @workspaceId
     ORDER BY subject_code ASC, sort_order ASC, title ASC
-  `).all() as Array<{ id: string; subject_code: string; title: string }>;
+  `).all({ workspaceId: scope.workspaceId }) as Array<{ id: string; subject_code: string; title: string }>;
   const points = db.prepare(`
     SELECT id, chapter_id, title
     FROM knowledge_points
-    WHERE chapter_id IS NOT NULL
+    WHERE workspace_id = @workspaceId AND chapter_id IS NOT NULL
     ORDER BY sort_order ASC, id ASC
-  `).all() as Array<{ id: string; chapter_id: string; title: string }>;
+  `).all({ workspaceId: scope.workspaceId }) as Array<{ id: string; chapter_id: string; title: string }>;
 
   const pointsByChapter = new Map<string, Array<{ id: string; title: string }>>();
   for (const point of points) {
@@ -232,6 +244,7 @@ export function getCaptureHierarchy(db: Database.Database): CaptureSubject[] {
 
 export function createSubject(
   db: Database.Database,
+  scope: WorkspaceScope,
   input: { code: string; name: string; description?: string; track?: SubjectTrack },
 ) {
   const code = input.code.trim();
@@ -240,14 +253,17 @@ export function createSubject(
   const track: SubjectTrack = input.track === "machine" ? "machine" : "written";
   if (!code || !name) throw new Error("科目编号和名称必填");
   db.prepare(`
-    INSERT INTO subjects (code, name, description, track)
-    VALUES (@code, @name, @description, @track)
+    INSERT INTO subjects (workspace_id, code, name, description, track)
+    VALUES (@workspaceId, @code, @name, @description, @track)
     ON CONFLICT(workspace_id, code) DO UPDATE SET
       name = excluded.name,
       description = excluded.description,
       track = excluded.track
-  `).run({ code, name, description, track });
-  return db.prepare("SELECT * FROM subjects WHERE code = ?").get(code) as SubjectRow;
+  `).run({ workspaceId: scope.workspaceId, code, name, description, track });
+  return db.prepare("SELECT * FROM subjects WHERE workspace_id = ? AND code = ?").get(
+    scope.workspaceId,
+    code,
+  ) as SubjectRow;
 }
 
 export type PointDetail = {
@@ -257,138 +273,173 @@ export type PointDetail = {
 };
 
 /** 单个知识点的关联明细，用于科目页行内展开。 */
-export function getPointDetail(db: Database.Database, pointId: string): PointDetail {
+export function getPointDetail(db: Database.Database, scope: WorkspaceScope, pointId: string): PointDetail {
   const assets = db.prepare(`
     SELECT DISTINCT a.id, a.day, a.original_name, a.mime_type, a.folder_path
     FROM assets a
-    JOIN asset_links l ON l.asset_id = a.id
-    WHERE l.knowledge_point_id = ?
+    JOIN asset_links l ON l.asset_id = a.id AND l.workspace_id = a.workspace_id
+    WHERE a.workspace_id = @workspaceId AND l.knowledge_point_id = @pointId
     ORDER BY a.created_at DESC
     LIMIT 20
-  `).all(pointId) as PointDetail["assets"];
+  `).all({ workspaceId: scope.workspaceId, pointId }) as PointDetail["assets"];
   const mistakes = db.prepare(`
     SELECT id, day, title, cause, graduated, next_review
     FROM mistakes
-    WHERE knowledge_point_id = ?
+    WHERE workspace_id = @workspaceId AND knowledge_point_id = @pointId
     ORDER BY created_at DESC
     LIMIT 20
-  `).all(pointId) as PointDetail["mistakes"];
+  `).all({ workspaceId: scope.workspaceId, pointId }) as PointDetail["mistakes"];
   const reviews = db.prepare(`
     SELECT id, day, score, note
     FROM review_events
-    WHERE knowledge_point_id = ?
+    WHERE workspace_id = @workspaceId AND knowledge_point_id = @pointId
     ORDER BY created_at DESC
     LIMIT 10
-  `).all(pointId) as PointDetail["reviews"];
+  `).all({ workspaceId: scope.workspaceId, pointId }) as PointDetail["reviews"];
   return { assets, mistakes, reviews };
 }
 
 export function renameSubject(
   db: Database.Database,
+  scope: WorkspaceScope,
   input: { code: string; name: string; description?: string; track?: SubjectTrack },
 ) {
   const code = input.code.trim();
   const name = input.name.trim();
   if (!code || !name) throw new Error("科目编号和名称必填");
-  const existing = db.prepare("SELECT description, track FROM subjects WHERE code = ?").get(code) as
+  const existing = db.prepare(`
+    SELECT description, track FROM subjects WHERE workspace_id = ? AND code = ?
+  `).get(scope.workspaceId, code) as
     | { description: string; track: SubjectTrack }
     | undefined;
   if (!existing) throw new Error("科目不存在");
-  db.prepare("UPDATE subjects SET name = ?, description = ?, track = ? WHERE code = ?").run(
+  db.prepare(`
+    UPDATE subjects SET name = ?, description = ?, track = ? WHERE workspace_id = ? AND code = ?
+  `).run(
     name,
     input.description === undefined ? existing.description : input.description.trim(),
     input.track === undefined ? existing.track : input.track === "machine" ? "machine" : "written",
+    scope.workspaceId,
     code,
   );
 }
 
 /** 级联删除科目：其下章节、知识点一并删除，学习记录/错题/资料只解除关联。 */
-export function deleteSubject(db: Database.Database, code: string) {
+export function deleteSubject(db: Database.Database, scope: WorkspaceScope, code: string) {
   const subjectCode = code.trim();
   if (!subjectCode) throw new Error("科目编号必填");
   const remove = db.transaction(() => {
-    const points = db.prepare("SELECT id FROM knowledge_points WHERE subject_code = ?").all(subjectCode) as Array<{ id: string }>;
-    for (const point of points) detachPointReferences(db, point.id);
-    db.prepare("DELETE FROM knowledge_points WHERE subject_code = ?").run(subjectCode);
+    const points = db.prepare(`
+      SELECT id FROM knowledge_points WHERE workspace_id = ? AND subject_code = ?
+    `).all(scope.workspaceId, subjectCode) as Array<{ id: string }>;
+    for (const point of points) detachPointReferences(db, scope, point.id);
+    db.prepare("DELETE FROM knowledge_points WHERE workspace_id = ? AND subject_code = ?").run(
+      scope.workspaceId,
+      subjectCode,
+    );
     db.prepare(
-      "DELETE FROM knowledge_tags WHERE chapter_id IN (SELECT id FROM subject_chapters WHERE subject_code = ?)",
-    ).run(subjectCode);
-    db.prepare("DELETE FROM subject_chapters WHERE subject_code = ?").run(subjectCode);
-    db.prepare("DELETE FROM asset_links WHERE subject_code = ?").run(subjectCode);
-    db.prepare("UPDATE study_sessions SET subject_code = NULL WHERE subject_code = ?").run(subjectCode);
-    db.prepare("UPDATE mistakes SET subject_code = NULL WHERE subject_code = ?").run(subjectCode);
-    db.prepare("DELETE FROM subjects WHERE code = ?").run(subjectCode);
+      `DELETE FROM knowledge_tags WHERE workspace_id = ? AND chapter_id IN
+       (SELECT id FROM subject_chapters WHERE workspace_id = ? AND subject_code = ?)`,
+    ).run(scope.workspaceId, scope.workspaceId, subjectCode);
+    db.prepare("DELETE FROM subject_chapters WHERE workspace_id = ? AND subject_code = ?").run(scope.workspaceId, subjectCode);
+    db.prepare("DELETE FROM asset_links WHERE workspace_id = ? AND subject_code = ?").run(scope.workspaceId, subjectCode);
+    db.prepare("UPDATE study_sessions SET subject_code = NULL WHERE workspace_id = ? AND subject_code = ?").run(scope.workspaceId, subjectCode);
+    db.prepare("UPDATE mistakes SET subject_code = NULL WHERE workspace_id = ? AND subject_code = ?").run(scope.workspaceId, subjectCode);
+    db.prepare("DELETE FROM subjects WHERE workspace_id = ? AND code = ?").run(scope.workspaceId, subjectCode);
   });
   remove();
 }
 
-export function createChapter(db: Database.Database, input: { subjectCode: string; title: string }) {
+export function createChapter(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: { subjectCode: string; title: string },
+) {
   const subjectCode = input.subjectCode.trim();
   const title = input.title.trim();
   if (!subjectCode || !title) throw new Error("科目和章节标题必填");
-  const existing = db.prepare("SELECT id FROM subject_chapters WHERE subject_code = ? AND title = ?").get(subjectCode, title);
+  const existing = db.prepare(`
+    SELECT id FROM subject_chapters WHERE workspace_id = ? AND subject_code = ? AND title = ?
+  `).get(scope.workspaceId, subjectCode, title);
   if (existing) return existing as { id: string };
 
   const maxOrder = db.prepare(
-    "SELECT COALESCE(MAX(sort_order), 0) AS value FROM subject_chapters WHERE subject_code = ?",
-  ).get(subjectCode) as { value: number };
-  const id = `chapter:${subjectCode}:${slugFor(title)}-${Date.now().toString(36)}`;
+    `SELECT COALESCE(MAX(sort_order), 0) AS value FROM subject_chapters
+     WHERE workspace_id = ? AND subject_code = ?`,
+  ).get(scope.workspaceId, subjectCode) as { value: number };
+  const id = `${scope.workspaceId}:chapter:${subjectCode}:${slugFor(title)}-${Date.now().toString(36)}`;
   db.prepare(`
-    INSERT INTO subject_chapters (id, subject_code, title, sort_order)
-    VALUES (@id, @subjectCode, @title, @sortOrder)
-  `).run({ id, subjectCode, title, sortOrder: maxOrder.value + 1 });
+    INSERT INTO subject_chapters (workspace_id, id, subject_code, title, sort_order)
+    VALUES (@workspaceId, @id, @subjectCode, @title, @sortOrder)
+  `).run({ workspaceId: scope.workspaceId, id, subjectCode, title, sortOrder: maxOrder.value + 1 });
   return { id };
 }
 
-export function renameChapter(db: Database.Database, input: { id: string; title: string }) {
+export function renameChapter(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: { id: string; title: string },
+) {
   const id = input.id.trim();
   const title = input.title.trim();
   if (!id || !title) throw new Error("章节和标题必填");
   const result = db.prepare(
-    "UPDATE subject_chapters SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-  ).run(title, id);
+    `UPDATE subject_chapters SET title = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE workspace_id = ? AND id = ?`,
+  ).run(title, scope.workspaceId, id);
   if (!result.changes) throw new Error("章节不存在");
 }
 
-export function moveChapter(db: Database.Database, input: { id: string; direction: "up" | "down" }) {
-  const chapter = db.prepare("SELECT id, subject_code, sort_order FROM subject_chapters WHERE id = ?").get(input.id) as
+export function moveChapter(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: { id: string; direction: "up" | "down" },
+) {
+  const chapter = db.prepare(`
+    SELECT id, subject_code, sort_order FROM subject_chapters WHERE workspace_id = ? AND id = ?
+  `).get(scope.workspaceId, input.id) as
     | { id: string; subject_code: string; sort_order: number }
     | undefined;
   if (!chapter) throw new Error("章节不存在");
   const siblings = db.prepare(
-    "SELECT id FROM subject_chapters WHERE subject_code = ? ORDER BY sort_order ASC, title ASC",
-  ).all(chapter.subject_code) as Array<{ id: string }>;
+    `SELECT id FROM subject_chapters WHERE workspace_id = ? AND subject_code = ?
+     ORDER BY sort_order ASC, title ASC`,
+  ).all(scope.workspaceId, chapter.subject_code) as Array<{ id: string }>;
   const index = siblings.findIndex((sibling) => sibling.id === chapter.id);
   const targetIndex = input.direction === "up" ? index - 1 : index + 1;
   if (targetIndex < 0 || targetIndex >= siblings.length) return;
   [siblings[index], siblings[targetIndex]] = [siblings[targetIndex], siblings[index]];
-  const update = db.prepare("UPDATE subject_chapters SET sort_order = ? WHERE id = ?");
+  const update = db.prepare("UPDATE subject_chapters SET sort_order = ? WHERE workspace_id = ? AND id = ?");
   const reorder = db.transaction(() => {
-    siblings.forEach((sibling, order) => update.run(order + 1, sibling.id));
+    siblings.forEach((sibling, order) => update.run(order + 1, scope.workspaceId, sibling.id));
   });
   reorder();
 }
 
 /** 级联删除章节及其知识点；学习记录/错题/资料只解除关联。 */
-export function deleteChapter(db: Database.Database, id: string) {
+export function deleteChapter(db: Database.Database, scope: WorkspaceScope, id: string) {
   const chapterId = id.trim();
   if (!chapterId) throw new Error("章节必填");
   const remove = db.transaction(() => {
-    const points = db.prepare("SELECT id FROM knowledge_points WHERE chapter_id = ?").all(chapterId) as Array<{ id: string }>;
-    for (const point of points) detachPointReferences(db, point.id);
-    db.prepare("DELETE FROM knowledge_points WHERE chapter_id = ?").run(chapterId);
+    const points = db.prepare(`
+      SELECT id FROM knowledge_points WHERE workspace_id = ? AND chapter_id = ?
+    `).all(scope.workspaceId, chapterId) as Array<{ id: string }>;
+    for (const point of points) detachPointReferences(db, scope, point.id);
+    db.prepare("DELETE FROM knowledge_points WHERE workspace_id = ? AND chapter_id = ?").run(scope.workspaceId, chapterId);
     db.prepare(
-      "DELETE FROM asset_knowledge_tags WHERE knowledge_tag_id IN (SELECT id FROM knowledge_tags WHERE chapter_id = ?)",
-    ).run(chapterId);
-    db.prepare("DELETE FROM knowledge_tags WHERE chapter_id = ?").run(chapterId);
-    db.prepare("UPDATE asset_links SET chapter_id = NULL WHERE chapter_id = ?").run(chapterId);
-    db.prepare("DELETE FROM subject_chapters WHERE id = ?").run(chapterId);
+      `DELETE FROM asset_knowledge_tags WHERE workspace_id = ? AND knowledge_tag_id IN
+       (SELECT id FROM knowledge_tags WHERE workspace_id = ? AND chapter_id = ?)`,
+    ).run(scope.workspaceId, scope.workspaceId, chapterId);
+    db.prepare("DELETE FROM knowledge_tags WHERE workspace_id = ? AND chapter_id = ?").run(scope.workspaceId, chapterId);
+    db.prepare("UPDATE asset_links SET chapter_id = NULL WHERE workspace_id = ? AND chapter_id = ?").run(scope.workspaceId, chapterId);
+    db.prepare("DELETE FROM subject_chapters WHERE workspace_id = ? AND id = ?").run(scope.workspaceId, chapterId);
   });
   remove();
 }
 
 export function createPoint(
   db: Database.Database,
+  scope: WorkspaceScope,
   input: { chapterId: string; title: string; tier?: Tier; exam?: boolean },
 ) {
   const chapterId = input.chapterId.trim();
@@ -397,25 +448,33 @@ export function createPoint(
   const chapter = db.prepare(`
     SELECT c.id, c.title, c.subject_code, s.name AS subject_name
     FROM subject_chapters c
-    JOIN subjects s ON s.code = c.subject_code
-    WHERE c.id = ?
-  `).get(chapterId) as { id: string; title: string; subject_code: string; subject_name: string } | undefined;
+    JOIN subjects s ON s.code = c.subject_code AND s.workspace_id = c.workspace_id
+    WHERE c.workspace_id = ? AND c.id = ?
+  `).get(scope.workspaceId, chapterId) as
+    | { id: string; title: string; subject_code: string; subject_name: string }
+    | undefined;
   if (!chapter) throw new Error("章节不存在");
 
-  const existing = db.prepare("SELECT id FROM knowledge_points WHERE chapter_id = ? AND title = ?").get(chapterId, title);
+  const existing = db.prepare(`
+    SELECT id FROM knowledge_points WHERE workspace_id = ? AND chapter_id = ? AND title = ?
+  `).get(scope.workspaceId, chapterId, title);
   if (existing) return existing as { id: string };
 
   const tier: Tier = input.tier && ["r", "y", "g"].includes(input.tier) ? input.tier : "g";
   const maxOrder = db.prepare(
-    "SELECT COALESCE(MAX(sort_order), 0) AS value FROM knowledge_points WHERE chapter_id = ?",
-  ).get(chapterId) as { value: number };
-  const id = `kp:${chapterId}:${slugFor(title)}-${Date.now().toString(36)}`;
+    `SELECT COALESCE(MAX(sort_order), 0) AS value FROM knowledge_points
+     WHERE workspace_id = ? AND chapter_id = ?`,
+  ).get(scope.workspaceId, chapterId) as { value: number };
+  const id = `${scope.workspaceId}:kp:${chapterId}:${slugFor(title)}-${Date.now().toString(36)}`;
   db.prepare(`
     INSERT INTO knowledge_points
-      (id, subject_code, subject_name, submodule, tier, tier_name, title, exam, status, mastery, reviews, chapter_id, sort_order)
+      (workspace_id, id, subject_code, subject_name, submodule, tier, tier_name, title,
+       exam, status, mastery, reviews, chapter_id, sort_order)
     VALUES
-      (@id, @subjectCode, @subjectName, @submodule, @tier, @tierName, @title, @exam, '未学', 0, 0, @chapterId, @sortOrder)
+      (@workspaceId, @id, @subjectCode, @subjectName, @submodule, @tier, @tierName,
+       @title, @exam, '未学', 0, 0, @chapterId, @sortOrder)
   `).run({
+    workspaceId: scope.workspaceId,
     id,
     subjectCode: chapter.subject_code,
     subjectName: chapter.subject_name,
@@ -432,9 +491,13 @@ export function createPoint(
 
 export function updatePoint(
   db: Database.Database,
+  scope: WorkspaceScope,
   input: { id: string; title?: string; tier?: Tier; exam?: boolean },
 ) {
-  const point = db.prepare("SELECT * FROM knowledge_points WHERE id = ?").get(input.id) as
+  const point = db.prepare("SELECT * FROM knowledge_points WHERE workspace_id = ? AND id = ?").get(
+    scope.workspaceId,
+    input.id,
+  ) as
     | { id: string; title: string; tier: Tier; exam: number }
     | undefined;
   if (!point) throw new Error("知识点不存在");
@@ -445,25 +508,25 @@ export function updatePoint(
   db.prepare(`
     UPDATE knowledge_points
     SET title = @title, tier = @tier, tier_name = @tierName, exam = @exam
-    WHERE id = @id
-  `).run({ id: input.id, title, tier, tierName: TIER_NAMES[tier], exam });
+    WHERE workspace_id = @workspaceId AND id = @id
+  `).run({ workspaceId: scope.workspaceId, id: input.id, title, tier, tierName: TIER_NAMES[tier], exam });
 }
 
-export function deletePoint(db: Database.Database, id: string) {
+export function deletePoint(db: Database.Database, scope: WorkspaceScope, id: string) {
   const pointId = id.trim();
   if (!pointId) throw new Error("知识点必填");
   const remove = db.transaction(() => {
-    detachPointReferences(db, pointId);
-    db.prepare("DELETE FROM knowledge_points WHERE id = ?").run(pointId);
+    detachPointReferences(db, scope, pointId);
+    db.prepare("DELETE FROM knowledge_points WHERE workspace_id = ? AND id = ?").run(scope.workspaceId, pointId);
   });
   remove();
 }
 
-function detachPointReferences(db: Database.Database, pointId: string) {
-  db.prepare("DELETE FROM asset_links WHERE knowledge_point_id = ?").run(pointId);
-  db.prepare("UPDATE mistakes SET knowledge_point_id = NULL WHERE knowledge_point_id = ?").run(pointId);
-  db.prepare("UPDATE review_events SET knowledge_point_id = NULL WHERE knowledge_point_id = ?").run(pointId);
-  db.prepare("UPDATE study_sessions SET knowledge_point_id = NULL WHERE knowledge_point_id = ?").run(pointId);
+function detachPointReferences(db: Database.Database, scope: WorkspaceScope, pointId: string) {
+  db.prepare("DELETE FROM asset_links WHERE workspace_id = ? AND knowledge_point_id = ?").run(scope.workspaceId, pointId);
+  db.prepare("UPDATE mistakes SET knowledge_point_id = NULL WHERE workspace_id = ? AND knowledge_point_id = ?").run(scope.workspaceId, pointId);
+  db.prepare("UPDATE review_events SET knowledge_point_id = NULL WHERE workspace_id = ? AND knowledge_point_id = ?").run(scope.workspaceId, pointId);
+  db.prepare("UPDATE study_sessions SET knowledge_point_id = NULL WHERE workspace_id = ? AND knowledge_point_id = ?").run(scope.workspaceId, pointId);
 }
 
 function slugFor(value: string): string {

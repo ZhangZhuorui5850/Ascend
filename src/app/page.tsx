@@ -18,7 +18,7 @@ export default async function HomePage() {
   const today = todayKey();
   const snapshot = getHomeSnapshot(db, access, today);
   const settings = getSettings(db, access);
-  const subjects = getSubjectOverviews(db, today);
+  const subjects = getSubjectOverviews(db, access, today);
   const tasks = listTasks(db, access, today).filter((task) => !task.done).slice(0, 5);
   const pendingCount = snapshot.dueReviews + snapshot.dueMistakes;
 

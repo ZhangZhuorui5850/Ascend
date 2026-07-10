@@ -17,7 +17,7 @@ import {
   type PointDetail,
   type SubjectTrack,
 } from "@/lib/repo/knowledge";
-import { requireSession } from "@/lib/request-auth";
+import { requireWorkspace } from "@/lib/request-auth";
 import type { Tier } from "@/lib/types";
 import type { ActionResult } from "./day";
 
@@ -39,8 +39,8 @@ export async function createSubjectAction(input: {
   track?: SubjectTrack;
 }): Promise<ActionResult> {
   try {
-    await requireSession();
-    createSubject(getDb(), input);
+    const access = await requireWorkspace();
+    createSubject(getDb(), access, input);
     revalidateKnowledge(input.code);
     return { ok: true };
   } catch (error) {
@@ -55,8 +55,8 @@ export async function renameSubjectAction(input: {
   track?: SubjectTrack;
 }): Promise<ActionResult> {
   try {
-    await requireSession();
-    renameSubject(getDb(), input);
+    const access = await requireWorkspace();
+    renameSubject(getDb(), access, input);
     revalidateKnowledge(input.code);
     return { ok: true };
   } catch (error) {
@@ -66,8 +66,8 @@ export async function renameSubjectAction(input: {
 
 export async function deleteSubjectAction(code: string): Promise<ActionResult> {
   try {
-    await requireSession();
-    deleteSubject(getDb(), code);
+    const access = await requireWorkspace();
+    deleteSubject(getDb(), access, code);
     revalidateKnowledge(code);
     return { ok: true };
   } catch (error) {
@@ -77,8 +77,8 @@ export async function deleteSubjectAction(code: string): Promise<ActionResult> {
 
 export async function createChapterAction(input: { subjectCode: string; title: string }): Promise<ActionResult> {
   try {
-    await requireSession();
-    createChapter(getDb(), input);
+    const access = await requireWorkspace();
+    createChapter(getDb(), access, input);
     revalidateKnowledge(input.subjectCode);
     return { ok: true };
   } catch (error) {
@@ -88,8 +88,8 @@ export async function createChapterAction(input: { subjectCode: string; title: s
 
 export async function renameChapterAction(input: { id: string; title: string; subjectCode: string }): Promise<ActionResult> {
   try {
-    await requireSession();
-    renameChapter(getDb(), input);
+    const access = await requireWorkspace();
+    renameChapter(getDb(), access, input);
     revalidateKnowledge(input.subjectCode);
     return { ok: true };
   } catch (error) {
@@ -99,8 +99,8 @@ export async function renameChapterAction(input: { id: string; title: string; su
 
 export async function moveChapterAction(input: { id: string; direction: "up" | "down"; subjectCode: string }): Promise<ActionResult> {
   try {
-    await requireSession();
-    moveChapter(getDb(), input);
+    const access = await requireWorkspace();
+    moveChapter(getDb(), access, input);
     revalidateKnowledge(input.subjectCode);
     return { ok: true };
   } catch (error) {
@@ -110,8 +110,8 @@ export async function moveChapterAction(input: { id: string; direction: "up" | "
 
 export async function deleteChapterAction(input: { id: string; subjectCode: string }): Promise<ActionResult> {
   try {
-    await requireSession();
-    deleteChapter(getDb(), input.id);
+    const access = await requireWorkspace();
+    deleteChapter(getDb(), access, input.id);
     revalidateKnowledge(input.subjectCode);
     return { ok: true };
   } catch (error) {
@@ -127,8 +127,8 @@ export async function createPointAction(input: {
   subjectCode: string;
 }): Promise<ActionResult> {
   try {
-    await requireSession();
-    createPoint(getDb(), input);
+    const access = await requireWorkspace();
+    createPoint(getDb(), access, input);
     revalidateKnowledge(input.subjectCode);
     return { ok: true };
   } catch (error) {
@@ -144,8 +144,8 @@ export async function updatePointAction(input: {
   subjectCode: string;
 }): Promise<ActionResult> {
   try {
-    await requireSession();
-    updatePoint(getDb(), input);
+    const access = await requireWorkspace();
+    updatePoint(getDb(), access, input);
     revalidateKnowledge(input.subjectCode);
     return { ok: true };
   } catch (error) {
@@ -155,8 +155,8 @@ export async function updatePointAction(input: {
 
 export async function deletePointAction(input: { id: string; subjectCode: string }): Promise<ActionResult> {
   try {
-    await requireSession();
-    deletePoint(getDb(), input.id);
+    const access = await requireWorkspace();
+    deletePoint(getDb(), access, input.id);
     revalidateKnowledge(input.subjectCode);
     return { ok: true };
   } catch (error) {
@@ -166,8 +166,8 @@ export async function deletePointAction(input: { id: string; subjectCode: string
 
 export async function getPointDetailAction(pointId: string): Promise<(ActionResult & { detail?: PointDetail })> {
   try {
-    await requireSession();
-    return { ok: true, detail: getPointDetail(getDb(), pointId) };
+    const access = await requireWorkspace();
+    return { ok: true, detail: getPointDetail(getDb(), access, pointId) };
   } catch (error) {
     return failure(error);
   }
