@@ -16,6 +16,7 @@ type UserRow = {
   display_name: string;
   role: UserRole;
   status: UserStatus;
+  must_change_password: number;
 };
 
 type LoginEnv = Record<string, string | undefined>;
@@ -93,6 +94,17 @@ export function ensureBootstrapUsers(
         `).run({ id: randomUUID(), email, passwordHash: hashPassword(admin.password) });
       }
     }
+
+    const usersWithoutWorkspaces = database.prepare(`
+      SELECT u.id, u.display_name AS displayName
+      FROM users u
+      LEFT JOIN workspaces w ON w.owner_user_id = u.id
+      WHERE u.role = 'user' AND u.status IN ('active', 'suspended') AND w.id IS NULL
+      ORDER BY u.created_at ASC, u.id ASC
+    `).all() as Array<{ id: string; displayName: string }>;
+    for (const user of usersWithoutWorkspaces) {
+      ensureWorkspaceForUser(database, { id: user.id, displayName: user.displayName || "学习空间" });
+    }
   })();
 }
 
@@ -131,6 +143,7 @@ export function authenticateUser(
     role: user.role,
     status: user.status,
     workspaceId: workspace?.id ?? null,
+    mustChangePassword: Boolean(user.must_change_password),
   };
 }
 
@@ -169,6 +182,7 @@ export function getSessionContext(
       u.display_name AS displayName,
       u.role,
       u.status,
+      u.must_change_password AS mustChangePassword,
       w.id AS workspaceId,
       s.expires_at AS expiresAt
     FROM sessions s
@@ -187,7 +201,30 @@ export function getSessionContext(
     role: row.role,
     status: row.status,
     workspaceId: row.workspaceId,
+    mustChangePassword: Boolean(row.mustChangePassword),
   };
+}
+
+export function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+  database: Database.Database = getDbHandle(),
+): void {
+  if (newPassword.length < 12) throw new Error("新密码至少需要 12 个字符");
+  const user = database.prepare("SELECT password_hash FROM users WHERE id = ?").get(userId) as
+    | { password_hash: string }
+    | undefined;
+  if (!user || !verifyPassword(currentPassword, user.password_hash)) throw new Error("当前密码不正确");
+  database.transaction(() => {
+    database.prepare(`
+      UPDATE users
+      SET password_hash = ?, must_change_password = 0,
+          password_changed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(hashPassword(newPassword), userId);
+    database.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
+  })();
 }
 
 /** @deprecated Use getSessionContext. */

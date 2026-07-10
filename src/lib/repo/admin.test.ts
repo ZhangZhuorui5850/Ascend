@@ -24,6 +24,7 @@ function createAdmin(db: ReturnType<typeof createTestDb>): AccessContext & { rol
     role: "admin",
     status: "active",
     workspaceId: null,
+    mustChangePassword: false,
   };
 }
 
@@ -63,6 +64,7 @@ describe("Admin invitation lifecycle", () => {
       role: "user",
       status: "active",
       workspaceId: ordinary.workspaceId,
+      mustChangePassword: false,
     };
     const invitation = createInvitation(db, admin, { email: "new@example.com", displayName: "新用户" });
 

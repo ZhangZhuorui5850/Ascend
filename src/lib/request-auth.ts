@@ -41,13 +41,19 @@ export async function optionalSession(request?: Request): Promise<AccessContext 
 }
 
 export function assertWorkspaceAccess(context: AccessContext): AccessContext & { workspaceId: string } {
+  assertPasswordChangeComplete(context);
   if (!context.workspaceId) throw new AuthError("Learning workspace required", 403);
   return context as AccessContext & { workspaceId: string };
 }
 
 export function assertAdmin(context: AccessContext): AccessContext & { role: "admin" } {
+  assertPasswordChangeComplete(context);
   if (context.role !== "admin") throw new AuthError("Administrator access required", 403);
   return context as AccessContext & { role: "admin" };
+}
+
+export function assertPasswordChangeComplete(context: AccessContext): void {
+  if (context.mustChangePassword) throw new AuthError("Password change required", 403);
 }
 
 export async function requireWorkspace(request?: Request): Promise<AccessContext & { workspaceId: string }> {

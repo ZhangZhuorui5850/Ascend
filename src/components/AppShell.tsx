@@ -17,7 +17,7 @@ export function AppShell({ user, hierarchy, children }: AppShellProps) {
   const pathname = usePathname();
   const [captureOpen, setCaptureOpen] = useState(false);
 
-  if (pathname === "/login" || pathname.startsWith("/invite/") || !user) {
+  if (pathname === "/login" || pathname === "/change-password" || pathname.startsWith("/invite/") || !user) {
     return <>{children}</>;
   }
 

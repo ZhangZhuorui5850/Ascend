@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createSession,
+  changePassword,
   authenticateUser,
   ensureBootstrapUsers,
   getDefaultLoginConfig,
@@ -55,6 +56,7 @@ describe("access context", () => {
       role: "user",
       status: "active",
       workspaceId,
+      mustChangePassword: false,
     });
   });
 
@@ -126,6 +128,42 @@ describe("bootstrap users", () => {
         APP_ADMIN_PASSWORD: "admin-password",
       }),
     ).toThrow("Admin email must differ from ordinary user email");
+  });
+
+  it("repairs workspaces for active historical ordinary users", () => {
+    const db = createTestDb();
+    db.prepare(`
+      INSERT INTO users (id, email, password_hash, display_name, role, status)
+      VALUES ('historical-user', 'history@example.com', 'hash', '历史用户', 'user', 'active')
+    `).run();
+
+    ensureBootstrapUsers(db, {
+      APP_LOGIN_EMAIL: "owner@example.com",
+      APP_LOGIN_PASSWORD: "owner-password",
+    });
+
+    expect(db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM users u JOIN workspaces w ON w.owner_user_id = u.id
+      WHERE u.role = 'user' AND u.status = 'active'
+    `).get()).toEqual({ count: 2 });
+  });
+
+  it("forces a bootstrap password change and revokes existing sessions when it is completed", () => {
+    const db = createTestDb();
+    ensureBootstrapUsers(db, {
+      APP_ADMIN_EMAIL: "admin@example.com",
+      APP_ADMIN_PASSWORD: "bootstrap-password",
+    });
+    const admin = authenticateUser("admin@example.com", "bootstrap-password", {}, db)!;
+    const oldSession = createSession({ userId: admin.userId }, db);
+
+    expect(admin.mustChangePassword).toBe(true);
+    changePassword(admin.userId, "bootstrap-password", "replacement-password", db);
+    expect(getSessionContext(oldSession.token, db)).toBeNull();
+    expect(authenticateUser("admin@example.com", "replacement-password", {}, db)).toMatchObject({
+      mustChangePassword: false,
+    });
   });
 });
 

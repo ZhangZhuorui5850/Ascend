@@ -12,4 +12,5 @@ export type AccessContext = {
   role: UserRole;
   status: UserStatus;
   workspaceId: string | null;
+  mustChangePassword: boolean;
 };
