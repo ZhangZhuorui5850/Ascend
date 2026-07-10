@@ -30,6 +30,11 @@ describe("proxy", () => {
     expect(adminResponse.headers.get("location")).toBe("http://localhost/login?next=%2Fadmin");
   });
 
+  it("allows the container health check without a session", async () => {
+    const { proxy } = await import("../proxy");
+    expect(proxy(new NextRequest("http://localhost/api/health")).status).toBe(200);
+  });
+
   it("returns 401 for private API routes without a session cookie", async () => {
     const { proxy } = await import("../proxy");
 
