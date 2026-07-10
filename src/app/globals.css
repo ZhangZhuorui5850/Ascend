@@ -39,6 +39,8 @@
   --shadow: 0 1px 2px rgba(21, 32, 43, 0.05), 0 8px 24px rgba(21, 32, 43, 0.06);
   --sidebar-width: 216px;
   --capture-width: 340px;
+  --font-sans: "Inter", "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
 * {
@@ -52,7 +54,7 @@ body {
   margin: 0;
   color: var(--ink);
   background: var(--bg);
-  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 

@@ -1,20 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import { AppShell } from "@/components/AppShell";
 import { getDb } from "@/lib/db";
 import { getCaptureHierarchy, type CaptureSubject } from "@/lib/repo/knowledge";
 import { optionalSession } from "@/lib/request-auth";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "ZGCA 学习工作台",
@@ -32,7 +21,7 @@ export default async function RootLayout({
     : [];
 
   return (
-    <html lang="zh-CN" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="zh-CN">
       <body>
         <AppShell user={user ? { displayName: user.displayName, role: user.role } : null} hierarchy={hierarchy}>
           {children}
