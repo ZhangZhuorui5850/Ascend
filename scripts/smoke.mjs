@@ -1,14 +1,15 @@
 import { chromium } from "playwright";
 import { readFileSync } from "node:fs";
 
-const env = Object.fromEntries(
+const fileEnv = Object.fromEntries(
   readFileSync(new URL("../.env.local", import.meta.url), "utf8")
     .split(/\r?\n/)
     .filter((line) => line.includes("="))
     .map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]),
 );
+const env = { ...fileEnv, ...process.env };
 
-const BASE = "http://localhost:3105";
+const BASE = process.env.SMOKE_URL || "http://localhost:3105";
 const results = [];
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
@@ -192,7 +193,7 @@ try {
 } catch (error) {
   results.push(["ERROR", error.message.slice(0, 300)]);
   try {
-    await page.screenshot({ path: "C:/Users/13110/AppData/Local/Temp/claude/e--Programing-zgca-workbench/5b850bb5-f51f-4804-8475-7e7aa8480ce6/scratchpad/smoke-fail.png" });
+    await page.screenshot({ path: "smoke-fail.png", fullPage: true });
     results.push(["INFO", `url=${page.url()}`]);
   } catch {}
 }
