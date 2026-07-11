@@ -25,6 +25,11 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+function emailLocalPart(email: string): string {
+  const at = email.indexOf("@");
+  return at > 0 ? email.slice(0, at) : email;
+}
+
 export function hashPassword(password: string, salt = randomBytes(16).toString("hex")): string {
   const hash = scryptSync(password, salt, 64).toString("hex");
   return `scrypt$${salt}$${hash}`;
@@ -68,7 +73,7 @@ export function ensureBootstrapUsers(
         | { id: string; displayName: string }
         | undefined;
       if (!user) {
-        user = { id: randomUUID(), displayName: "ZGCA" };
+        user = { id: randomUUID(), displayName: emailLocalPart(email) || "学习空间" };
         database.prepare(`
           INSERT INTO users (id, email, password_hash, display_name, role, status)
           VALUES (@id, @email, @passwordHash, @displayName, 'user', 'active')
@@ -79,7 +84,7 @@ export function ensureBootstrapUsers(
           displayName: user.displayName,
         });
       }
-      ensureWorkspaceForUser(database, { id: user.id, displayName: user.displayName || "ZGCA" });
+      ensureWorkspaceForUser(database, { id: user.id, displayName: user.displayName || emailLocalPart(email) || "学习空间" });
     }
 
     if (admin) {

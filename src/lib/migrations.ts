@@ -393,6 +393,21 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: "0009_user_profile",
+    run: (database) => {
+      addColumnIfMissing(database, "users", "avatar_kind", "TEXT NOT NULL DEFAULT 'seal'");
+      addColumnIfMissing(database, "users", "avatar_char", "TEXT NOT NULL DEFAULT ''");
+      addColumnIfMissing(database, "users", "avatar_color", "TEXT NOT NULL DEFAULT 'cinnabar'");
+      addColumnIfMissing(database, "users", "avatar_image", "BLOB");
+      addColumnIfMissing(database, "users", "avatar_mime", "TEXT NOT NULL DEFAULT ''");
+      // 历史引导账号的占位昵称改为邮箱 local-part（品牌已更名登峰，ZGCA 不再作为默认昵称）
+      database.exec(`
+        UPDATE users SET display_name = substr(email, 1, instr(email, '@') - 1)
+        WHERE display_name = 'ZGCA' AND instr(email, '@') > 1
+      `);
+    },
+  },
 ];
 
 function addColumnIfMissing(database: Database.Database, table: string, column: string, definition: string): void {

@@ -125,6 +125,33 @@ describe("runMigrations", () => {
     });
   });
 
+  it("adds user profile avatar columns and renames legacy ZGCA display names", () => {
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    // 先跑到 0008，再插入一个旧的 ZGCA 占位昵称用户，验证 0009 的改名逻辑
+    db.exec(`
+      CREATE TABLE users (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        display_name TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    db.prepare("INSERT INTO users (id, email, password_hash, display_name) VALUES ('u1', 'zhuorui@example.com', 'hash', 'ZGCA')").run();
+    db.prepare("INSERT INTO users (id, email, password_hash, display_name) VALUES ('u2', 'kept@example.com', 'hash', '自定义昵称')").run();
+
+    runMigrations(db);
+
+    const columns = (db.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>).map((c) => c.name);
+    expect(columns).toEqual(
+      expect.arrayContaining(["avatar_kind", "avatar_char", "avatar_color", "avatar_image", "avatar_mime"]),
+    );
+    expect(db.prepare("SELECT display_name FROM users WHERE id = 'u1'").get()).toEqual({ display_name: "zhuorui" });
+    expect(db.prepare("SELECT display_name FROM users WHERE id = 'u2'").get()).toEqual({ display_name: "自定义昵称" });
+  });
+
   it("is idempotent", () => {
     const db = new Database(":memory:");
 

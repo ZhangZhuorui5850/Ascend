@@ -134,6 +134,19 @@ describe("bootstrap users", () => {
     });
   });
 
+  it("uses the email local-part as the bootstrap ordinary user's display name", () => {
+    const db = createTestDb();
+
+    ensureBootstrapUsers(db, {
+      APP_LOGIN_EMAIL: "Zhuorui@Example.com",
+      APP_LOGIN_PASSWORD: "owner-password",
+    });
+
+    expect(db.prepare("SELECT display_name FROM users WHERE email = 'zhuorui@example.com'").get()).toEqual({
+      display_name: "zhuorui",
+    });
+  });
+
   it("rejects using the same email for Admin and the ordinary user", () => {
     const db = createTestDb();
 
