@@ -21,6 +21,7 @@ export function AppShell({ user, hierarchy, children }: AppShellProps) {
   const [captureOpen, setCaptureOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     function openCapture() {
@@ -30,15 +31,45 @@ export function AppShell({ user, hierarchy, children }: AppShellProps) {
     return () => window.removeEventListener("zgca:open-capture", openCapture);
   }, []);
 
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setMobileNavOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileNavOpen]);
+
+  // 顶栏汉堡按钮：手机宽度弹出导航抽屉，桌面宽度切换侧栏折叠（断点与 CSS 的 820px 一致）
+  function handleMenu() {
+    if (window.matchMedia("(max-width: 820px)").matches) {
+      setMobileNavOpen((open) => !open);
+    } else {
+      setSidebarCollapsed((value) => !value);
+    }
+  }
+
   if (pathname === "/login" || pathname === "/change-password" || pathname.startsWith("/invite/") || !user) {
     return <>{children}</>;
   }
 
   return (
     <div className={`appFrame ${captureOpen ? "captureOpen" : ""} ${sidebarCollapsed ? "sidebarCollapsed" : ""}`}>
-      <Sidebar account={user.account} collapsed={sidebarCollapsed} displayName={user.displayName} onToggle={() => setSidebarCollapsed((value) => !value)} role={user.role} />
+      <Sidebar
+        account={user.account}
+        accounts={user.accounts}
+        collapsed={sidebarCollapsed && !mobileNavOpen}
+        displayName={user.displayName}
+        mobileOpen={mobileNavOpen}
+        onNavigate={() => setMobileNavOpen(false)}
+        onToggle={() => setSidebarCollapsed((value) => !value)}
+        role={user.role}
+      />
+      {mobileNavOpen ? (
+        <button aria-label="关闭导航" className="mobileNavBackdrop" onClick={() => setMobileNavOpen(false)} type="button" />
+      ) : null}
       <div className="appWorkspace">
-        <TopBar account={user.account} accounts={user.accounts} onCommand={() => setCommandOpen(true)} onMenu={() => setCommandOpen(true)} role={user.role} />
+        <TopBar account={user.account} accounts={user.accounts} onCommand={() => setCommandOpen(true)} onMenu={handleMenu} role={user.role} />
         <main className="mainPane">{children}</main>
       </div>
       {user.role === "user" ? (

@@ -8,7 +8,19 @@ import { useFeedback } from "@/components/FeedbackProvider";
 import { UserAvatar } from "@/components/UserAvatar";
 import type { DeviceAccount } from "@/lib/auth";
 
-export function AccountMenu({ current, accounts }: { current: DeviceAccount; accounts: DeviceAccount[] }) {
+export function AccountMenu({
+  current,
+  accounts,
+  direction = "down",
+  label,
+}: {
+  current: DeviceAccount;
+  accounts: DeviceAccount[];
+  /** down：顶栏向下弹出；up：侧栏底部向上弹出 */
+  direction?: "down" | "up";
+  /** 传入时触发器显示头像+名字（侧栏底部形态） */
+  label?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const { notify } = useFeedback();
@@ -50,10 +62,15 @@ export function AccountMenu({ current, accounts }: { current: DeviceAccount; acc
         onClick={() => setOpen((value) => !value)}
         type="button"
       >
-        <UserAvatar avatar={current} size={36} />
+        <UserAvatar avatar={current} size={label ? 28 : 36} />
+        {label ? (
+          <span className="userName" title={label}>
+            {label}
+          </span>
+        ) : null}
       </button>
       {open ? (
-        <div className="accountMenuSheet" role="menu">
+        <div className={direction === "up" ? "accountMenuSheet up" : "accountMenuSheet"} role="menu">
           <div className="accountMenuCurrent">
             <UserAvatar avatar={current} size={40} />
             <div className="accountMenuIdentity">

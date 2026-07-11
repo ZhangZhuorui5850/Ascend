@@ -21,7 +21,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
-import { UserAvatar } from "@/components/UserAvatar";
+import { AccountMenu } from "@/components/AccountMenu";
 import type { DeviceAccount } from "@/lib/auth";
 import { todayKey } from "@/lib/dates";
 
@@ -53,22 +53,29 @@ function isLinkActive(pathname: string, item: NavItem): boolean {
 
 export function Sidebar({
   account,
+  accounts,
   collapsed,
   displayName,
+  mobileOpen = false,
+  onNavigate,
   onToggle,
   role,
 }: {
   account: DeviceAccount;
+  accounts: DeviceAccount[];
   collapsed: boolean;
   displayName: string;
+  mobileOpen?: boolean;
+  onNavigate?: () => void;
   onToggle: () => void;
   role: "admin" | "user";
 }) {
   const pathname = usePathname();
   const links = getNavigation(role);
+  const className = ["sidebar", collapsed ? "isCollapsed" : "", mobileOpen ? "mobileOpen" : ""].filter(Boolean).join(" ");
 
   return (
-    <aside className={collapsed ? "sidebar isCollapsed" : "sidebar"}>
+    <aside className={className}>
       <div className="brand">
         <span className="brandMark">{role === "admin" ? "管" : "登"}</span>
         <div className="brandCopy">
@@ -83,7 +90,7 @@ export function Sidebar({
         {links.map((item) => {
           const Icon = item.icon;
           return (
-            <Link className={isLinkActive(pathname, item) ? "active" : ""} key={item.href} href={item.href} prefetch={true}>
+            <Link className={isLinkActive(pathname, item) ? "active" : ""} key={item.href} href={item.href} onClick={onNavigate} prefetch={true}>
               <Icon size={17} />
               <span className="navLabel">{item.label}</span>
             </Link>
@@ -91,10 +98,9 @@ export function Sidebar({
         })}
       </nav>
       <div className="sidebarFooter">
-        <UserAvatar avatar={account} size={28} />
-        <span className="userName" title={displayName}>{displayName}</span>
+        <AccountMenu accounts={accounts} current={account} direction="up" label={displayName} />
         <div className="sidebarFooterActions">
-          <Link aria-label="设置" className={pathname === "/settings" ? "active" : ""} href="/settings" prefetch={true} title="设置">
+          <Link aria-label="设置" className={pathname === "/settings" ? "active" : ""} href="/settings" onClick={onNavigate} prefetch={true} title="设置">
             <Settings size={15} />
           </Link>
           <form action={logout}>
