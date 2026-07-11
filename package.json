@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "up": "next build && next start",
     "lint": "eslint",
     "test": "vitest run",
     "responsive:audit": "node scripts/responsive-audit.mjs",

@@ -180,7 +180,7 @@ try {
   await page.waitForSelector(".capturePanel", { state: "attached" });
   await page.click(".captureFab");
   await page.waitForSelector(".captureOpen .capturePanel");
-  const panelInput = page.locator('.capturePanel input[type="file"]:not([capture])');
+  const panelInput = page.locator('.capturePanel input[type="file"]:not([capture]):not([accept])');
   await panelInput.setInputFiles({ name: "capture-smoke.png", mimeType: "image/png", buffer: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]) });
   await page.selectOption(".capturePanel select >> nth=0", { index: 1 });
   await page.click(".sendCapture");
@@ -191,7 +191,7 @@ try {
 
   // 15. logout
   await page.click(".capturePanel .captureClose");
-  await page.click(".sidebarFooter button");
+  await page.click(".sidebarFooterActions form button");
   await page.waitForURL("**/login", { timeout: 10000 });
   ok("logout returns to login", true);
 } catch (error) {
