@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Inbox } from "lucide-react";
 import { CapturePanel } from "@/components/CapturePanel";
 import { MobileNav, Sidebar } from "@/components/Sidebar";
@@ -20,6 +20,14 @@ export function AppShell({ user, hierarchy, children }: AppShellProps) {
   const [captureOpen, setCaptureOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    function openCapture() {
+      setCaptureOpen(true);
+    }
+    window.addEventListener("zgca:open-capture", openCapture);
+    return () => window.removeEventListener("zgca:open-capture", openCapture);
+  }, []);
 
   if (pathname === "/login" || pathname === "/change-password" || pathname.startsWith("/invite/") || !user) {
     return <>{children}</>;

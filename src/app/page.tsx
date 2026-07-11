@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, Clock3, Flame, FolderUp, Settings, Target } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 import { HomeClock } from "@/components/HomeClock";
-import { todayKey } from "@/lib/dates";
+import { shiftDateKey, todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { requirePageWorkspace } from "@/lib/page-auth";
+import { getTomorrowPlan } from "@/lib/repo/days";
 import { getSubjectOverviews, TRACK_NAMES } from "@/lib/repo/knowledge";
 import { listTasks } from "@/lib/repo/planner";
 import { getSettings } from "@/lib/repo/settings";
@@ -21,22 +23,45 @@ export default async function HomePage() {
   const subjects = getSubjectOverviews(db, access, today);
   const tasks = listTasks(db, access, today).filter((task) => !task.done).slice(0, 5);
   const pendingCount = snapshot.dueReviews + snapshot.dueMistakes;
-  const nextLabel = pendingCount
-    ? `先处理 ${pendingCount} 个复习项`
-    : snapshot.openTasks
-      ? `继续今天的 ${snapshot.openTasks} 个任务`
-      : "规划今天的第一件事";
+  const yesterdayPlan = getTomorrowPlan(db, access, shiftDateKey(today, -1));
+  const firstTask = tasks[0];
+  const heroTitle = pendingCount
+    ? `先清掉 ${pendingCount} 个到期复习。`
+    : firstTask
+      ? `接着做：「${truncate(firstTask.title, 18)}」`
+      : "今天，从最重要的一件事开始。";
+  const heroSub = pendingCount
+    ? `复习 ${snapshot.dueReviews} 个 · 错题 ${snapshot.dueMistakes} 道，已按优先级排好，处理完再进新任务。`
+    : firstTask
+      ? `清单上还有 ${snapshot.openTasks} 个任务等着今天完成。`
+      : "工作台已经准备好，给今天一个清晰、可完成的起点。";
+  const nextLabel = pendingCount ? "去处理" : snapshot.openTasks ? "进入今日工作台" : "规划今天的第一件事";
   const focusSubjects = [...subjects].sort(
     (a, b) => b.dueCount + b.openMistakes - (a.dueCount + a.openMistakes),
   );
 
   return (
     <div className="pageStack homePage">
+      <section className="homeContext" aria-label="时间与目标">
+        <HomeClock />
+        <div className="homeCountdowns compact">
+          {settings.examCountdowns.map((exam) => {
+            const days = daysUntil(today, exam.date);
+            return <div className={days !== null && days <= 14 ? "countdownChip urgent" : "countdownChip"} key={`${exam.name}-${exam.date}`}><Target size={14} /><span>{exam.name}</span><strong>{days === null ? "—" : days > 0 ? `${days} 天` : days === 0 ? "今天" : "已结束"}</strong></div>;
+          })}
+          <Link className="countdownChip add" href="/settings"><Settings size={14} /><span>{settings.examCountdowns.length ? "管理目标" : "设置考试目标"}</span></Link>
+        </div>
+        <span className="homeAssetMetric"><FolderUp size={15} />今日入库 {snapshot.today.assets}</span>
+      </section>
+
       <section className="homeFocus">
         <div className="homeFocusMain">
           <span className="eyebrow">TODAY · {today}</span>
-          <h1>今天，从最重要的一件事开始。</h1>
-          <p>{pendingCount ? "到期内容已经排好优先级，先复习再进入新任务。" : "工作台已经准备好，给今天一个清晰、可完成的起点。"}</p>
+          <h1>{heroTitle}</h1>
+          <p>{heroSub}</p>
+          {yesterdayPlan ? (
+            <p className="homePlanEcho">昨晚你说：「{yesterdayPlan}」</p>
+          ) : null}
           <div className="homeFocusActions">
             <Link className="primaryButton big" href={`/day/${today}`}>{nextLabel}<ArrowRight size={17} /></Link>
             <Link className="secondaryButton" href="/calendar"><CalendarDays size={15} />查看节奏</Link>
@@ -50,18 +75,6 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="homeContext" aria-label="时间与目标">
-        <HomeClock />
-        <div className="homeCountdowns compact">
-          {settings.examCountdowns.slice(0, 3).map((exam) => {
-            const days = daysUntil(today, exam.date);
-            return <div className={days !== null && days <= 14 ? "countdownChip urgent" : "countdownChip"} key={`${exam.name}-${exam.date}`}><Target size={14} /><span>{exam.name}</span><strong>{days === null ? "—" : days > 0 ? `${days} 天` : days === 0 ? "今天" : "已结束"}</strong></div>;
-          })}
-          <Link className="countdownChip add" href="/settings"><Settings size={14} /><span>{settings.examCountdowns.length ? "管理目标" : "设置考试目标"}</span></Link>
-        </div>
-        <span className="homeAssetMetric"><FolderUp size={15} />今日入库 {snapshot.today.assets}</span>
-      </section>
-
       <div className="homeContentGrid">
         <section className="card homeTasksCard" aria-label="今日未完成任务">
           <div className="sectionTitle">
@@ -70,15 +83,21 @@ export default async function HomePage() {
           </div>
           <div className="list">
             {tasks.map((task) => (
-              <div className="listRow" key={task.id}>
+              <Link className="listRow" href={`/day/${today}`} key={task.id}>
                 {task.subject_code ? <span className="rowBadge">{task.subject_code}</span> : null}
                 <strong>{task.title}</strong><ArrowRight size={14} />
-              </div>
+              </Link>
             ))}
             {!tasks.length && snapshot.openTasks === 0 ? (
-              <p className="empty">
-                {snapshot.doneTasks ? "今天的任务全部完成了，做得很好。" : "今天还没安排任务，先写下一个 25 分钟内能完成的动作。"}
-              </p>
+              snapshot.doneTasks ? (
+                <EmptyState seal="毕" text="今天的任务全部完成了，做得很好。" />
+              ) : (
+                <EmptyState
+                  action={{ href: `/day/${today}`, label: "写下第一条" }}
+                  seal="空"
+                  text="今天还没安排任务，先写下一个 25 分钟内能完成的动作。"
+                />
+              )
             ) : null}
             {snapshot.openTasks > tasks.length ? (
               <p className="hint">还有 {snapshot.openTasks - tasks.length} 条未显示。</p>
@@ -109,6 +128,10 @@ export default async function HomePage() {
       </div>
     </div>
   );
+}
+
+function truncate(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
 function daysUntil(today: string, target: string): number | null {

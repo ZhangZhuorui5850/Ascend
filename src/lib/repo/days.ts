@@ -47,6 +47,14 @@ export type DayData = {
   mistakes: Array<{ id: number; title: string; cause: string; next_review: string | null; graduated: number }>;
 };
 
+export function getTomorrowPlan(db: Database.Database, scope: WorkspaceScope, date: string): string {
+  assertDateKey(date);
+  const row = db
+    .prepare("SELECT tomorrow FROM daily_entries WHERE workspace_id = ? AND date = ?")
+    .get(scope.workspaceId, date) as { tomorrow: string } | undefined;
+  return row?.tomorrow?.trim() ?? "";
+}
+
 export function ensureDay(db: Database.Database, scope: WorkspaceScope, date: string): void {
   assertDateKey(date);
   db.prepare("INSERT OR IGNORE INTO daily_entries (workspace_id, date) VALUES (?, ?)").run(scope.workspaceId, date);

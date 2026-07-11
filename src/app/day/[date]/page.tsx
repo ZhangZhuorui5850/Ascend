@@ -4,13 +4,16 @@ import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { DayJournal } from "@/components/DayJournal";
 import { DayNotes } from "@/components/DayNotes";
 import { DayTasks } from "@/components/DayTasks";
+import { OpenCaptureButton } from "@/components/OpenCaptureButton";
 import { QuickLog } from "@/components/QuickLog";
 import { ReviewQueue } from "@/components/ReviewQueue";
 import { assertDateKey, shiftDateKey, todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { requirePageWorkspace } from "@/lib/page-auth";
-import { getDay } from "@/lib/repo/days";
+import { getDay, getTomorrowPlan } from "@/lib/repo/days";
 import { getSubjects } from "@/lib/repo/knowledge";
+import { listTasks } from "@/lib/repo/planner";
+import { listRecentMistakeCauses } from "@/lib/repo/reviews";
 import { getSettings } from "@/lib/repo/settings";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +36,9 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
   const studyMinutes = day.sessions.reduce((total, session) => total + session.duration_minutes, 0);
   const doneTasks = day.tasks.filter((task) => task.done).length;
   const queueCount = day.dueReviews.length + day.dueMistakes.length;
+  const yesterday = shiftDateKey(date, -1);
+  const carryCount = isToday ? listTasks(db, access, yesterday).filter((task) => !task.done).length : 0;
+  const yesterdayPlan = isToday ? getTomorrowPlan(db, access, yesterday) : "";
 
   return (
     <div className="pageStack">
@@ -61,24 +67,37 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
 
       <div className="dayGrid">
         <div className="dayMainCol">
-          <DayTasks day={date} today={today} tasks={day.tasks} subjects={subjects} />
+          <DayTasks
+            carryCount={carryCount}
+            carryFrom={yesterday}
+            day={date}
+            subjects={subjects}
+            tasks={day.tasks}
+            today={today}
+            yesterdayPlan={yesterdayPlan}
+          />
           <ReviewQueue
             day={date}
+            doneToday={day.reviews.length}
             dueReviews={day.dueReviews}
             dueReviewsTotal={day.dueReviewsTotal}
             dueMistakes={day.dueMistakes}
+            readOnly={!isToday}
           />
           <DayNotes day={date} notes={day.notes} />
           <DayJournal key={date} date={date} entry={day.entry} />
         </div>
 
         <div className="dayAside">
-          <QuickLog day={date} subjects={subjects} />
+          <QuickLog day={date} recentCauses={listRecentMistakeCauses(db, access)} subjects={subjects} />
 
           <section className="card" aria-label="当日资料">
             <div className="sectionTitle">
               <h2>当日资料</h2>
-              <Link className="sectionLink" href="/assets">资料库</Link>
+              <span className="sectionLinkGroup">
+                <OpenCaptureButton />
+                <Link className="sectionLink" href="/assets">资料库</Link>
+              </span>
             </div>
             <div className="assetList">
               {day.assets.map((asset) => (

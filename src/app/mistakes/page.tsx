@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EmptyState } from "@/components/EmptyState";
 import { MistakeReattempt } from "@/components/MistakeReattempt";
 import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
@@ -28,7 +29,11 @@ export default async function MistakesPage() {
         {book.due.length ? (
           <MistakeReattempt day={today} mistakes={book.due} />
         ) : (
-          <p className="empty">没有到期错题。继续推进今天的计划吧。</p>
+          <EmptyState
+            action={{ href: `/day/${today}`, label: "去今日工作台" }}
+            seal="清"
+            text="没有到期错题。继续推进今天的计划吧。"
+          />
         )}
       </section>
 
@@ -50,7 +55,12 @@ export default async function MistakesPage() {
           </div>
         </div>
         <div className="card" aria-label="已毕业的错题">
-          <div className="sectionTitle"><h2>已毕业</h2><span className="sectionHint">{book.graduated.length} 道</span></div>
+          <div className="sectionTitle">
+            <h2>已毕业</h2>
+            <span className="sectionHint">
+              {book.graduated.length} 道{book.graduated.length > 30 ? " · 显示最近 30 条" : ""}
+            </span>
+          </div>
           <div className="list">
             {book.graduated.slice(0, 30).map((mistake) => (
               <div className="listRow graduated" key={mistake.id}>

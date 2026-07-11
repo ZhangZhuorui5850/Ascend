@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertCircle, Camera, CheckCircle2, FileText, ImageIcon, Loader2, Paperclip, Plus, Send, X } from "lucide-react";
 import { createPointAction } from "@/app/actions/knowledge";
 import { todayKey } from "@/lib/dates";
+import { MAX_UPLOAD_BYTES } from "@/lib/limits";
 import type { CaptureSubject } from "@/lib/repo/knowledge";
 
 type AttachmentStatus = "queued" | "uploading" | "uploaded" | "error";
@@ -50,6 +51,30 @@ export function CapturePanel({ subjects, onClose }: { subjects: CaptureSubject[]
         if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
       });
     };
+  }, []);
+
+  // 全局粘贴：焦点不在输入框时 Ctrl+V 图片/文件 → 自动加入队列并唤起收纳抽屉
+  useEffect(() => {
+    function onWindowPaste(event: Event) {
+      const paste = event as unknown as { clipboardData: DataTransfer | null; target: EventTarget | null; preventDefault(): void };
+      const target = paste.target as Element | null;
+      if (
+        target &&
+        typeof target.closest === "function" &&
+        (target.closest("input, textarea, select, [contenteditable=true]") || target.closest(".capturePanel"))
+      ) {
+        return;
+      }
+      const files = paste.clipboardData?.files;
+      if (files && files.length) {
+        paste.preventDefault();
+        addFiles(files);
+        window.dispatchEvent(new CustomEvent("zgca:open-capture"));
+      }
+    }
+    window.addEventListener("paste", onWindowPaste);
+    return () => window.removeEventListener("paste", onWindowPaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const selectedSubject = subjects.find((subject) => subject.code === subjectCode);
@@ -99,18 +124,27 @@ export function CapturePanel({ subjects, onClose }: { subjects: CaptureSubject[]
     const incoming = Array.from(files);
     if (!incoming.length) return;
 
-    const next = incoming.map((file) => ({
-      id: crypto.randomUUID(),
-      file,
-      name: file.name || `截图-${Date.now()}.png`,
-      size: file.size,
-      type: file.type,
-      previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
-      status: "queued" as const,
-    }));
+    const next: Attachment[] = incoming.map((file) => {
+      const oversized = file.size > MAX_UPLOAD_BYTES;
+      return {
+        id: crypto.randomUUID(),
+        file,
+        name: file.name || `截图-${Date.now()}.png`,
+        size: file.size,
+        type: file.type,
+        previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
+        status: oversized ? ("error" as const) : ("queued" as const),
+        error: oversized ? "超过 20MB 上限" : undefined,
+      };
+    });
 
     setAttachments((current) => [...current, ...next]);
-    setMessage(`已加入 ${next.length} 个文件，点击发送入库`);
+    const oversizedCount = next.filter((item) => item.status === "error").length;
+    setMessage(
+      oversizedCount
+        ? `已加入 ${next.length - oversizedCount} 个文件，${oversizedCount} 个超过 20MB 无法入库`
+        : `已加入 ${next.length} 个文件，点击发送入库`,
+    );
   }
 
   function removeAttachment(id: string) {
@@ -179,6 +213,7 @@ export function CapturePanel({ subjects, onClose }: { subjects: CaptureSubject[]
 
   async function uploadQueuedAttachment(attachment: Attachment) {
     if (attachment.status === "uploaded" || attachment.status === "uploading") return;
+    if (attachment.size > MAX_UPLOAD_BYTES) return;
     setAttachments((current) =>
       current.map((item) => (item.id === attachment.id ? { ...item, status: "uploading", error: undefined } : item)),
     );
@@ -215,6 +250,17 @@ export function CapturePanel({ subjects, onClose }: { subjects: CaptureSubject[]
     if (!failed) {
       setNote("");
       router.refresh();
+      // 入库成功后短暂展示对勾，然后清场，方便连续收纳下一批
+      setTimeout(() => {
+        setAttachments((current) => {
+          current
+            .filter((item) => item.status === "uploaded")
+            .forEach((item) => {
+              if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+            });
+          return current.filter((item) => item.status !== "uploaded");
+        });
+      }, 1500);
     }
   }
 

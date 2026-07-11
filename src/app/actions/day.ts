@@ -3,10 +3,21 @@
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db";
 import { DAY_FIELDS, updateDayEntry, type DayField } from "@/lib/repo/days";
-import { createMistake, createReviewEvent, createStudySession, reattemptMistake } from "@/lib/repo/reviews";
+import {
+  createMistake,
+  createReviewEvent,
+  createStudySession,
+  reattemptMistake,
+  undoReattempt,
+  undoReviewEvent,
+  type MistakeUndo,
+  type ReviewUndo,
+} from "@/lib/repo/reviews";
 import { requireWorkspace } from "@/lib/request-auth";
 
 export type ActionResult = { ok: boolean; error?: string };
+export type ScoreResult = ActionResult & { undo?: ReviewUndo };
+export type ReattemptResult = ActionResult & { undo?: MistakeUndo };
 
 function failure(error: unknown): ActionResult {
   return { ok: false, error: error instanceof Error ? error.message : "操作失败" };
@@ -69,10 +80,21 @@ export async function scoreReview(input: {
   knowledgePointId: string;
   score: number;
   note?: string;
-}): Promise<ActionResult> {
+}): Promise<ScoreResult> {
   try {
     const access = await requireWorkspace();
-    createReviewEvent(getDb(), access, input);
+    const undo = createReviewEvent(getDb(), access, input);
+    revalidatePath(`/day/${input.day}`);
+    return { ok: true, undo };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function undoReviewAction(input: { day: string; undo: ReviewUndo }): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    undoReviewEvent(getDb(), access, input.undo);
     revalidatePath(`/day/${input.day}`);
     return { ok: true };
   } catch (error) {
@@ -80,10 +102,22 @@ export async function scoreReview(input: {
   }
 }
 
-export async function reattemptMistakeAction(input: { id: number; day: string; score: number }): Promise<ActionResult> {
+export async function reattemptMistakeAction(input: { id: number; day: string; score: number }): Promise<ReattemptResult> {
   try {
     const access = await requireWorkspace();
-    reattemptMistake(getDb(), access, input);
+    const result = reattemptMistake(getDb(), access, input);
+    revalidatePath(`/day/${input.day}`);
+    revalidatePath("/mistakes");
+    return { ok: true, undo: result.undo };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function undoReattemptAction(input: { day: string; undo: MistakeUndo }): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    undoReattempt(getDb(), access, input.undo);
     revalidatePath(`/day/${input.day}`);
     revalidatePath("/mistakes");
     return { ok: true };
