@@ -13,8 +13,8 @@ export function LoginForm({ nextPath }: { nextPath?: string }) {
       <p>计划、资料、错题和复盘，都在一个私有工作台里继续。</p>
       <input name="next" type="hidden" value={nextPath || "/"} />
       <label className="field">
-        邮箱
-        <input autoComplete="email" name="email" required type="email" />
+        账号
+        <input autoComplete="username" name="email" required type="text" />
       </label>
       <label className="field">
         密码
