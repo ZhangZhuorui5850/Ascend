@@ -4,13 +4,17 @@ import {
   changePassword,
   authenticateUser,
   ensureBootstrapUsers,
+  findTokenForUser,
   getDefaultLoginConfig,
   getSessionContext,
   hashPassword,
+  listAccountSummaries,
   listUserSessions,
+  mergeAccountTokens,
   revokeUserSession,
   verifyPassword,
 } from "./auth";
+import { MAX_DEVICE_ACCOUNTS } from "./auth-constants";
 import { assertAdmin, assertWorkspaceAccess } from "./request-auth";
 import { createTestDb, createTestWorkspace } from "./repo/testing";
 
@@ -106,6 +110,59 @@ describe("access context", () => {
     expect(revokeUserSession(alpha.userId, sessions[0].id, db)).toBe(true);
     expect(revokeUserSession(alpha.userId, listUserSessions(beta.userId, db)[0].id, db)).toBe(false);
     expect(getSessionContext(betaSession.token, db)).not.toBeNull();
+  });
+});
+
+describe("device accounts (multi-session quick switch)", () => {
+  it("puts the active token first, dedupes by user keeping the newest, and drops invalid tokens", () => {
+    const db = createTestDb();
+    const alpha = createTestWorkspace(db, { email: "alpha@example.com" });
+    const beta = createTestWorkspace(db, { email: "beta@example.com" });
+    const alphaOld = createSession({ userId: alpha.userId }, db);
+    const alphaNew = createSession({ userId: alpha.userId }, db);
+    const betaSession = createSession({ userId: beta.userId }, db);
+
+    const merged = mergeAccountTokens(alphaNew.token, ["broken-token", betaSession.token, alphaOld.token], db);
+
+    expect(merged).toEqual([alphaNew.token, betaSession.token]);
+  });
+
+  it("caps the device account list", () => {
+    const db = createTestDb();
+    const tokens = Array.from({ length: MAX_DEVICE_ACCOUNTS + 2 }, (_, index) => {
+      const { userId } = createTestWorkspace(db, { email: `user-${index}@example.com` });
+      return createSession({ userId }, db).token;
+    });
+
+    expect(mergeAccountTokens(tokens[0], tokens.slice(1), db)).toHaveLength(MAX_DEVICE_ACCOUNTS);
+  });
+
+  it("summarises accounts in token order with avatar fields", () => {
+    const db = createTestDb();
+    const alpha = createTestWorkspace(db, { email: "alpha@example.com", displayName: "甲" });
+    const beta = createTestWorkspace(db, { email: "beta@example.com", displayName: "乙" });
+    const tokens = [createSession({ userId: alpha.userId }, db).token, createSession({ userId: beta.userId }, db).token];
+
+    const summaries = listAccountSummaries(tokens, db);
+
+    expect(summaries.map((account) => account.email)).toEqual(["alpha@example.com", "beta@example.com"]);
+    expect(summaries[0]).toMatchObject({
+      userId: alpha.userId,
+      displayName: "甲",
+      role: "user",
+      avatarKind: "seal",
+      avatarColor: "cinnabar",
+    });
+  });
+
+  it("finds the token for a target user and rejects unknown users", () => {
+    const db = createTestDb();
+    const alpha = createTestWorkspace(db, { email: "alpha@example.com" });
+    const beta = createTestWorkspace(db, { email: "beta@example.com" });
+    const tokens = [createSession({ userId: alpha.userId }, db).token, createSession({ userId: beta.userId }, db).token];
+
+    expect(findTokenForUser(tokens, beta.userId, db)).toBe(tokens[1]);
+    expect(findTokenForUser(tokens, "missing-user", db)).toBeNull();
   });
 });
 
