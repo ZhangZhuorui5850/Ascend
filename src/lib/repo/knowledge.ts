@@ -94,24 +94,29 @@ export function getSubjectOverviews(
   scope: WorkspaceScope,
   today: string,
 ): SubjectOverview[] {
+  // 标量子查询替代三表 LEFT JOIN：避免 点×资料×错题 的笛卡尔扇出
+  //（扇出还会让 AVG(mastery) 被连接行数加权而失真）。
   return db.prepare(`
     SELECT
       s.code,
       s.name,
       s.description,
       s.track,
-      COUNT(DISTINCT k.id) AS pointCount,
-      COUNT(DISTINCT CASE WHEN k.status = '已掌握' THEN k.id END) AS masteredCount,
-      COUNT(DISTINCT CASE WHEN k.next_review IS NOT NULL AND k.next_review <= @today THEN k.id END) AS dueCount,
-      COUNT(DISTINCT l.asset_id) AS assetCount,
-      COUNT(DISTINCT CASE WHEN m.graduated = 0 THEN m.id END) AS openMistakes,
-      COALESCE(ROUND(AVG(k.mastery)), 0) AS avgMastery
+      (SELECT COUNT(*) FROM knowledge_points k
+       WHERE k.workspace_id = s.workspace_id AND k.subject_code = s.code) AS pointCount,
+      (SELECT COUNT(*) FROM knowledge_points k
+       WHERE k.workspace_id = s.workspace_id AND k.subject_code = s.code AND k.status = '已掌握') AS masteredCount,
+      (SELECT COUNT(*) FROM knowledge_points k
+       WHERE k.workspace_id = s.workspace_id AND k.subject_code = s.code
+         AND k.next_review IS NOT NULL AND k.next_review <= @today) AS dueCount,
+      (SELECT COUNT(DISTINCT l.asset_id) FROM asset_links l
+       WHERE l.workspace_id = s.workspace_id AND l.subject_code = s.code) AS assetCount,
+      (SELECT COUNT(*) FROM mistakes m
+       WHERE m.workspace_id = s.workspace_id AND m.subject_code = s.code AND m.graduated = 0) AS openMistakes,
+      COALESCE((SELECT ROUND(AVG(k.mastery)) FROM knowledge_points k
+       WHERE k.workspace_id = s.workspace_id AND k.subject_code = s.code), 0) AS avgMastery
     FROM subjects s
-    LEFT JOIN knowledge_points k ON k.subject_code = s.code AND k.workspace_id = s.workspace_id
-    LEFT JOIN asset_links l ON l.subject_code = s.code AND l.workspace_id = s.workspace_id
-    LEFT JOIN mistakes m ON m.subject_code = s.code AND m.workspace_id = s.workspace_id
     WHERE s.workspace_id = @workspaceId
-    GROUP BY s.code, s.name, s.description, s.track
     ORDER BY s.track ASC, s.code ASC
   `).all({ workspaceId: scope.workspaceId, today }) as SubjectOverview[];
 }
@@ -130,11 +135,11 @@ const POINT_SELECT = `
     k.reviews,
     k.last_review,
     k.next_review,
-    COUNT(DISTINCT l.asset_id) AS asset_count,
-    COUNT(DISTINCT CASE WHEN m.graduated = 0 THEN m.id END) AS mistake_count
+    (SELECT COUNT(DISTINCT l.asset_id) FROM asset_links l
+     WHERE l.workspace_id = k.workspace_id AND l.knowledge_point_id = k.id) AS asset_count,
+    (SELECT COUNT(*) FROM mistakes m
+     WHERE m.workspace_id = k.workspace_id AND m.knowledge_point_id = k.id AND m.graduated = 0) AS mistake_count
   FROM knowledge_points k
-  LEFT JOIN asset_links l ON l.knowledge_point_id = k.id AND l.workspace_id = k.workspace_id
-  LEFT JOIN mistakes m ON m.knowledge_point_id = k.id AND m.workspace_id = k.workspace_id
 `;
 
 export function getSubjectDetail(db: Database.Database, scope: WorkspaceScope, code: string): SubjectDetail | null {
@@ -154,7 +159,6 @@ export function getSubjectDetail(db: Database.Database, scope: WorkspaceScope, c
   const points = db.prepare(`
     ${POINT_SELECT}
     WHERE k.workspace_id = @workspaceId AND k.subject_code = @code
-    GROUP BY k.id
     ORDER BY k.sort_order ASC, k.id ASC
   `).all({ workspaceId: scope.workspaceId, code }) as PointRow[];
 
