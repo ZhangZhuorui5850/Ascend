@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { AuthError, requireSession } from "./request-auth";
+import type { AccessContext } from "./access-context";
+import { assertWorkspaceAccess, AuthError, requireSession } from "./request-auth";
 
 export async function requirePageSession(nextPath: string) {
   try {
@@ -10,4 +11,18 @@ export async function requirePageSession(nextPath: string) {
     }
     throw error;
   }
+}
+
+export function workspaceRedirectTarget(context: AccessContext, nextPath: string): string | null {
+  if (context.mustChangePassword) return "/change-password";
+  if (context.role === "admin") return "/admin";
+  if (!context.workspaceId) return `/login?next=${encodeURIComponent(nextPath)}`;
+  return null;
+}
+
+export async function requirePageWorkspace(nextPath: string) {
+  const context = await requirePageSession(nextPath);
+  const target = workspaceRedirectTarget(context, nextPath);
+  if (target) redirect(target);
+  return assertWorkspaceAccess(context);
 }

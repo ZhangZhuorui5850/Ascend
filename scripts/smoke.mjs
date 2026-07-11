@@ -1,14 +1,15 @@
 import { chromium } from "playwright";
 import { readFileSync } from "node:fs";
 
-const env = Object.fromEntries(
+const fileEnv = Object.fromEntries(
   readFileSync(new URL("../.env.local", import.meta.url), "utf8")
     .split(/\r?\n/)
     .filter((line) => line.includes("="))
     .map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]),
 );
+const env = { ...fileEnv, ...process.env };
 
-const BASE = "http://localhost:3105";
+const BASE = process.env.SMOKE_URL || "http://localhost:3105";
 const results = [];
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
@@ -21,6 +22,7 @@ function ok(name, condition, extra = "") {
 try {
   // 1. unauthenticated redirect
   await page.goto(`${BASE}/calendar`);
+  await page.waitForURL("**/login**", { timeout: 10000 });
   ok("redirects to login", page.url().includes("/login"), page.url());
 
   // 2. login via server action form
@@ -32,7 +34,7 @@ try {
 
   // 3. home renders clock + settings countdown flow
   await page.goto(BASE);
-  await page.waitForSelector(".homeHero");
+  await page.waitForSelector(".homeFocus");
   await page.waitForFunction(() => /\d{2}:\d{2}:\d{2}/.test(document.querySelector(".homeClock strong")?.textContent || ""));
   ok("home renders live clock", true);
 
@@ -43,10 +45,10 @@ try {
   await page.waitForSelector(".saveStatus.save-saved", { timeout: 10000 });
   ok("settings save countdown", true);
   await page.goto(BASE);
-  await page.waitForSelector('.countdownCard:has-text("冒烟考试")', { timeout: 10000 });
+  await page.waitForSelector('.countdownChip:has-text("冒烟考试")', { timeout: 10000 });
   ok("home shows exam countdown", true);
 
-  await page.click('.homeActions .primaryButton');
+  await page.click('.homeFocusActions .primaryButton');
   await page.waitForURL("**/day/**");
   ok("home CTA enters today workspace", /\/day\/\d{4}-\d{2}-\d{2}/.test(page.url()), page.url());
   const dayUrl = page.url();
@@ -106,8 +108,8 @@ try {
   ok("point created", true);
 
   // 9. delete the chapter again (cascade)
-  page.once("dialog", (dialog) => dialog.accept());
   await block.locator(".chapterTools .iconDanger").click();
+  await page.locator(".confirmDialog .dangerButton").click();
   await page.waitForSelector(`.chapterHead input[value="${chapterName}"]`, { state: "detached", timeout: 10000 });
   ok("chapter cascade delete", true);
 
@@ -144,16 +146,16 @@ try {
   // delete file
   const fileRow = page.locator('.driveRow:has-text("smoke-upload.txt")');
   await fileRow.hover();
-  page.once("dialog", (dialog) => dialog.accept());
   await fileRow.locator('button[aria-label="删除文件"]').click();
+  await page.locator(".confirmDialog .dangerButton").click();
   await page.waitForSelector('.driveRow:has-text("smoke-upload.txt")', { state: "detached", timeout: 10000 });
   ok("file deleted", true);
 
   // delete folder
   const folderRow = page.locator(`.driveRow:has(.driveName:has-text("${folderName}"))`);
   await folderRow.hover();
-  page.once("dialog", (dialog) => dialog.accept());
   await folderRow.locator('button[aria-label="删除文件夹"]').click();
+  await page.locator(".confirmDialog .dangerButton").click();
   await page.waitForSelector(`.driveName:has-text("${folderName}")`, { state: "detached", timeout: 10000 });
   ok("empty folder deleted", true);
 
@@ -175,7 +177,9 @@ try {
 
   // 14. capture panel: upload via panel with subject binding
   await page.goto(dayUrl);
-  await page.waitForSelector(".capturePanel");
+  await page.waitForSelector(".capturePanel", { state: "attached" });
+  await page.click(".captureFab");
+  await page.waitForSelector(".captureOpen .capturePanel");
   const panelInput = page.locator('.capturePanel input[type="file"]:not([capture])');
   await panelInput.setInputFiles({ name: "capture-smoke.png", mimeType: "image/png", buffer: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]) });
   await page.selectOption(".capturePanel select >> nth=0", { index: 1 });
@@ -186,13 +190,14 @@ try {
   ok("day page shows captured asset", true);
 
   // 15. logout
+  await page.click(".capturePanel .captureClose");
   await page.click(".sidebarFooter button");
   await page.waitForURL("**/login", { timeout: 10000 });
   ok("logout returns to login", true);
 } catch (error) {
   results.push(["ERROR", error.message.slice(0, 300)]);
   try {
-    await page.screenshot({ path: "C:/Users/13110/AppData/Local/Temp/claude/e--Programing-zgca-workbench/5b850bb5-f51f-4804-8475-7e7aa8480ce6/scratchpad/smoke-fail.png" });
+    await page.screenshot({ path: "smoke-fail.png", fullPage: true });
     results.push(["INFO", `url=${page.url()}`]);
   } catch {}
 }

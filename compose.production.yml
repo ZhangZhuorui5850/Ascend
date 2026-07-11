@@ -1,0 +1,58 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: zgca-workbench:production
+    restart: unless-stopped
+    init: true
+    user: "1001:1001"
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      # 限制 V8 老生代堆，让内存压力表现为可观测的 GC 而不是被 OOM killer 直接杀掉。
+      NODE_OPTIONS: "--max-old-space-size=1024"
+      ZGCA_DATA_ROOT: /app/data
+      ZGCA_UPLOAD_ROOT: /app/data/uploads
+      ZGCA_BACKUP_ROOT: /app/backups
+    expose:
+      - "3000"
+    volumes:
+      - ./data:/app/data
+      - ./backups:/app/backups
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    # 堆上限 1GiB 之外给原生模块/缓冲留余量，超限由容器兜底。
+    mem_limit: 1536m
+    stop_grace_period: 30s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    env_file:
+      - .env.production
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+
+volumes:
+  caddy_data:
+  caddy_config:

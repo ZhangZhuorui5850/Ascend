@@ -9,8 +9,11 @@
     "lint": "eslint",
     "test": "vitest run",
     "responsive:audit": "node scripts/responsive-audit.mjs",
+    "audit:multi-user": "node scripts/multi-user-audit.mjs",
+    "verify:migration": "node scripts/verify-workspace-migration.mjs",
     "smoke": "node scripts/smoke.mjs",
-    "backup": "node scripts/backup.mjs"
+    "backup": "node scripts/backup.mjs",
+    "gc:blobs": "node scripts/gc-blobs.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.21",

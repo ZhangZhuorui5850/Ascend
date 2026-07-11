@@ -1,0 +1,772 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZGCA 前端重设计 · 四个方向</title>
+<style>
+/* ============ Shell (theme-aware) ============ */
+:root{
+  --sh-bg:#f4f4f2; --sh-card:#ffffff; --sh-ink:#1c1c1a; --sh-muted:#6e6e66;
+  --sh-line:#e0e0da; --sh-accent:#1c1c1a; --sh-chipline:#d4d4cc;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --sh-bg:#141416; --sh-card:#1d1d20; --sh-ink:#ececea; --sh-muted:#9a9a94;
+    --sh-line:#2c2c30; --sh-accent:#ececea; --sh-chipline:#3a3a3e; }
+}
+:root[data-theme="dark"]{ --sh-bg:#141416; --sh-card:#1d1d20; --sh-ink:#ececea; --sh-muted:#9a9a94;
+  --sh-line:#2c2c30; --sh-accent:#ececea; --sh-chipline:#3a3a3e; }
+:root[data-theme="light"]{ --sh-bg:#f4f4f2; --sh-card:#ffffff; --sh-ink:#1c1c1a; --sh-muted:#6e6e66;
+  --sh-line:#e0e0da; --sh-accent:#1c1c1a; --sh-chipline:#d4d4cc; }
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--sh-bg); color:var(--sh-ink);
+  font-family:"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;
+  line-height:1.6; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1280px;margin:0 auto;padding:40px 28px 80px}
+header.hd{margin-bottom:28px}
+.hd .eyebrow{font-size:12px;letter-spacing:.22em;color:var(--sh-muted);text-transform:uppercase;margin-bottom:10px}
+.hd h1{font-size:clamp(24px,3.4vw,34px);margin:0 0 10px;letter-spacing:-.01em;text-wrap:balance}
+.hd p{max-width:62ch;color:var(--sh-muted);margin:0;font-size:14.5px}
+
+/* tabs */
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:26px 0 22px;position:sticky;top:0;z-index:30;
+  background:var(--sh-bg);padding:12px 0;border-bottom:1px solid var(--sh-line)}
+.tab{appearance:none;border:1px solid var(--sh-line);background:var(--sh-card);color:var(--sh-ink);
+  padding:9px 16px;border-radius:999px;font-size:13.5px;cursor:pointer;font-family:inherit;
+  display:flex;align-items:center;gap:8px;transition:border-color .15s, transform .15s}
+.tab:hover{border-color:var(--sh-muted)}
+.tab:focus-visible{outline:2px solid var(--sh-accent);outline-offset:2px}
+.tab .dot{width:10px;height:10px;border-radius:3px;flex:none}
+.tab.on{border-color:var(--sh-ink);box-shadow:inset 0 0 0 1px var(--sh-ink)}
+.tab .no{font-size:11px;color:var(--sh-muted);letter-spacing:.08em}
+
+.panel{display:none}
+.panel.on{display:block;animation:fade .35s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){ .panel.on{animation:none} }
+
+/* brief card */
+.brief{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:22px;
+  background:var(--sh-card);border:1px solid var(--sh-line);border-radius:14px;padding:22px 24px;margin-bottom:18px}
+@media (max-width:900px){ .brief{grid-template-columns:1fr} }
+.brief h2{margin:0 0 6px;font-size:19px;display:flex;align-items:baseline;gap:10px}
+.brief h2 .tag{font-size:11px;letter-spacing:.18em;color:var(--sh-muted)}
+.brief .thesis{font-size:14px;color:var(--sh-muted);margin:0 0 12px;max-width:52ch}
+.brief dl{margin:0;font-size:13px}
+.brief dt{font-size:11px;letter-spacing:.14em;color:var(--sh-muted);text-transform:uppercase;margin:10px 0 3px}
+.brief dd{margin:0}
+.chips{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap}
+.chip{width:34px;height:34px;border-radius:8px;border:1px solid var(--sh-chipline);position:relative}
+.chip span{position:absolute;top:38px;left:0;font-size:10px;color:var(--sh-muted);white-space:nowrap}
+.chips{margin-bottom:22px}
+.fitline{font-size:13px}
+.fitline b{font-weight:600}
+
+.stage{border:1px solid var(--sh-line);border-radius:14px;overflow-x:auto;background:var(--sh-card)}
+.stage-inner{min-width:1120px}
+.stage-note{font-size:12px;color:var(--sh-muted);margin:10px 2px 46px}
+
+footer.ft{margin-top:20px;border-top:1px solid var(--sh-line);padding-top:24px;font-size:14px;color:var(--sh-muted)}
+footer.ft h3{color:var(--sh-ink);font-size:15px;margin:0 0 8px}
+footer.ft ol{margin:0;padding-left:20px;max-width:70ch}
+footer.ft li{margin-bottom:6px}
+
+/* ============================================================
+   方案 A · 朱砂手帐  (paper / ink / cinnabar)
+   ============================================================ */
+.m-a{
+  --a-paper:#f5f1e8; --a-ink:#241d12; --a-red:#b13a20; --a-red-deep:#8f2d18;
+  --a-muted:#8c8171; --a-hair:#d9d1bd; --a-card:#fbf8f1; --a-redsoft:#f3e2da;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 27px, rgba(140,125,95,.07) 27px 28px),
+    repeating-linear-gradient(90deg, transparent 0 27px, rgba(140,125,95,.05) 27px 28px),
+    var(--a-paper);
+  color:var(--a-ink);
+  font-family:"PingFang SC","Microsoft YaHei",sans-serif;
+  display:grid;grid-template-columns:208px 1fr;min-height:760px;
+}
+.m-a .serif{font-family:"Noto Serif SC","Source Han Serif SC","SimSun",serif}
+.m-a .num{font-family:Georgia,"Times New Roman",serif;font-variant-numeric:tabular-nums}
+
+.a-side{border-right:1px solid var(--a-hair);padding:30px 22px;display:flex;flex-direction:column}
+.a-brand{display:flex;align-items:center;gap:10px;margin-bottom:38px}
+.a-seal{width:34px;height:34px;background:var(--a-red);color:#fdf6ec;display:grid;place-items:center;
+  font-family:"Noto Serif SC","SimSun",serif;font-size:18px;border-radius:4px;box-shadow:0 1px 0 var(--a-red-deep)}
+.a-brand b{font-family:"Noto Serif SC","SimSun",serif;font-size:16px;letter-spacing:.06em}
+.a-brand i{display:block;font-style:normal;font-size:10px;letter-spacing:.3em;color:var(--a-muted)}
+.a-nav{list-style:none;margin:0;padding:0;font-size:14px}
+.a-nav li{padding:9px 2px;border-bottom:1px solid transparent;color:var(--a-ink);display:flex;align-items:center;gap:10px}
+.a-nav li::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--a-hair)}
+.a-nav li.on{font-weight:600;color:var(--a-red)}
+.a-nav li.on::before{background:var(--a-red)}
+.a-user{margin-top:auto;padding-top:18px;border-top:1px solid var(--a-hair);font-size:12.5px;color:var(--a-muted)}
+.a-user b{color:var(--a-ink);font-weight:600}
+
+.a-main{padding:34px 42px 44px}
+.a-mast{display:flex;align-items:flex-end;justify-content:space-between;
+  border-bottom:3px double var(--a-hair);padding-bottom:18px;margin-bottom:26px}
+.a-mast .kicker{font-size:11px;letter-spacing:.34em;color:var(--a-red);margin-bottom:6px}
+.a-mast h1{font-size:30px;margin:0;font-weight:600;letter-spacing:.02em}
+.a-mast .sub{font-size:13px;color:var(--a-muted);margin-top:6px}
+.a-stamp{width:58px;height:58px;border:2px solid var(--a-red);color:var(--a-red);border-radius:6px;
+  display:grid;place-items:center;font-size:24px;transform:rotate(4deg);
+  font-family:"Noto Serif SC","SimSun",serif;opacity:.9}
+
+.a-grid{display:grid;grid-template-columns:1.7fr 1fr;gap:34px}
+.a-sec{margin-bottom:30px}
+.a-sec-h{display:flex;align-items:baseline;gap:12px;margin-bottom:12px}
+.a-sec-h h3{margin:0;font-size:16px;font-weight:600;letter-spacing:.04em}
+.a-sec-h .cn-no{color:var(--a-red);font-family:"Noto Serif SC","SimSun",serif;font-size:13px}
+.a-sec-h .rule{flex:1;border-top:1px solid var(--a-hair)}
+.a-task{display:flex;gap:12px;align-items:center;padding:10px 2px;border-bottom:1px solid var(--a-hair);font-size:14px}
+.a-box{width:16px;height:16px;border:1.5px solid var(--a-muted);flex:none;position:relative;background:var(--a-card)}
+.a-task.done .a-box{border-color:var(--a-red)}
+.a-task.done .a-box::after{content:"✓";position:absolute;inset:-4px 0 0 1px;color:var(--a-red);font-size:15px;font-weight:700}
+.a-task.done span{color:var(--a-muted);text-decoration:line-through;text-decoration-color:var(--a-red)}
+.a-task .meta{margin-left:auto;font-size:12px;color:var(--a-muted)}
+.a-row{display:flex;align-items:baseline;gap:12px;padding:11px 2px;border-bottom:1px solid var(--a-hair);font-size:14px}
+.a-row .idx{font-family:"Noto Serif SC","SimSun",serif;color:var(--a-red);font-size:13px;width:20px}
+.a-row .cnt{margin-left:auto;font-size:12.5px;color:var(--a-muted)}
+.a-card{background:var(--a-card);border:1px solid var(--a-hair);padding:20px 22px;margin-bottom:18px;
+  box-shadow:2px 2px 0 rgba(140,120,90,.12)}
+.a-card .lbl{font-size:11px;letter-spacing:.28em;color:var(--a-muted);margin-bottom:8px}
+.a-count{display:flex;align-items:baseline;gap:8px}
+.a-count .big{font-size:56px;line-height:1;color:var(--a-red)}
+.a-count .unit{font-size:14px;color:var(--a-muted)}
+.a-count-sub{font-size:12.5px;color:var(--a-muted);margin-top:8px;border-top:1px dashed var(--a-hair);padding-top:8px}
+.a-stat{display:flex;justify-content:space-between;font-size:13.5px;padding:8px 0;border-bottom:1px dashed var(--a-hair)}
+.a-stat:last-child{border-bottom:none}
+.a-stat b{font-size:16px}
+.a-quote{font-family:"Noto Serif SC","SimSun",serif;color:var(--a-muted);font-size:13px;
+  border-left:3px solid var(--a-red);padding-left:12px;margin-top:26px;letter-spacing:.05em}
+
+/* ============================================================
+   方案 B · 夜航仪表  (dark instrument cockpit)
+   ============================================================ */
+.m-b{
+  --b-bg:#0a0e14; --b-panel:#10151d; --b-panel2:#0d1219; --b-line:#1e2836;
+  --b-ink:#dbe4ee; --b-muted:#66788c; --b-amber:#ffb454; --b-amber-dim:#8a6b3a;
+  --b-ok:#57c08a; --b-bad:#e05c44; --b-cyan:#59b7cc;
+  background:var(--b-bg);color:var(--b-ink);min-height:760px;
+  font-family:"Bahnschrift","Segoe UI","Microsoft YaHei",sans-serif;
+  display:flex;flex-direction:column;
+}
+.m-b .mono{font-family:"Cascadia Mono",Consolas,monospace;font-variant-numeric:tabular-nums}
+.b-top{display:flex;align-items:center;gap:26px;padding:14px 26px;border-bottom:1px solid var(--b-line);
+  background:var(--b-panel2);font-size:12px;letter-spacing:.14em}
+.b-top .brand{color:var(--b-amber);font-weight:700;letter-spacing:.2em}
+.b-top .brand small{color:var(--b-muted);font-weight:400;margin-left:8px;letter-spacing:.14em}
+.b-top .clock{margin-left:auto;color:var(--b-ink);font-size:14px}
+.b-led{display:flex;align-items:center;gap:7px;color:var(--b-muted)}
+.b-led i{width:7px;height:7px;border-radius:50%;background:var(--b-ok);box-shadow:0 0 6px var(--b-ok)}
+.b-body{display:grid;grid-template-columns:190px 1fr;flex:1}
+.b-rail{border-right:1px solid var(--b-line);padding:20px 0}
+.b-rail a{display:flex;gap:12px;align-items:center;padding:10px 22px;font-size:13px;color:var(--b-muted);
+  text-decoration:none;border-left:2px solid transparent;letter-spacing:.06em}
+.b-rail a::before{content:"▹";color:var(--b-line)}
+.b-rail a.on{color:var(--b-amber);border-left-color:var(--b-amber);background:rgba(255,180,84,.06)}
+.b-rail a.on::before{content:"▸";color:var(--b-amber)}
+.b-rail .grp{font-size:10px;letter-spacing:.3em;color:var(--b-muted);opacity:.6;padding:18px 22px 6px}
+.b-main{padding:24px 26px;display:grid;grid-template-columns:repeat(12,1fr);gap:14px;align-content:start}
+.b-panel{background:var(--b-panel);border:1px solid var(--b-line);border-radius:3px;padding:16px 18px;position:relative}
+.b-panel::before{content:"";position:absolute;top:0;left:0;width:14px;height:14px;
+  border-top:1px solid var(--b-amber-dim);border-left:1px solid var(--b-amber-dim)}
+.b-lbl{font-size:10.5px;letter-spacing:.26em;color:var(--b-muted);margin-bottom:12px;display:flex;gap:8px;align-items:center}
+.b-lbl::after{content:"";flex:1;border-top:1px dashed var(--b-line)}
+.b-cd{grid-column:span 4}
+.b-cd .huge{font-size:64px;line-height:.95;color:var(--b-amber);font-weight:700}
+.b-cd .huge small{font-size:20px;color:var(--b-muted);font-weight:400}
+.b-cd .cap{font-size:12.5px;color:var(--b-muted);margin-top:10px}
+.b-cd .cap b{color:var(--b-ink);font-weight:600}
+.b-ticks{display:flex;gap:3px;margin-top:14px}
+.b-ticks i{width:8px;height:14px;background:var(--b-line)}
+.b-ticks i.f{background:var(--b-amber)}
+.b-stats{grid-column:span 8;display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.b-stat{background:var(--b-panel);border:1px solid var(--b-line);border-radius:3px;padding:14px 16px}
+.b-stat .v{font-size:30px;color:var(--b-ink);font-weight:600}
+.b-stat .v em{font-style:normal;font-size:13px;color:var(--b-muted);margin-left:4px}
+.b-stat .k{font-size:10.5px;letter-spacing:.22em;color:var(--b-muted);margin-bottom:8px}
+.b-stat .d{font-size:11.5px;margin-top:6px}
+.b-stat .d.up{color:var(--b-ok)} .b-stat .d.warn{color:var(--b-amber)}
+.b-focus{grid-column:span 8}
+.b-bars{display:flex;align-items:flex-end;gap:10px;height:96px;margin-top:6px}
+.b-bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px;height:100%}
+.b-bar i{width:100%;background:#26313f;border-radius:2px 2px 0 0;min-height:4px}
+.b-bar.hot i{background:var(--b-amber)}
+.b-bar span{font-size:10px;color:var(--b-muted);letter-spacing:.08em}
+.b-bar .val{font-size:10px;color:var(--b-muted)}
+.b-bar.hot .val{color:var(--b-amber)}
+.b-queue{grid-column:span 4;grid-row:span 2}
+.b-qrow{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--b-line);font-size:13px}
+.b-qrow:last-child{border-bottom:none}
+.b-qrow .id{color:var(--b-cyan);font-size:11px;width:34px}
+.b-qrow .n{color:var(--b-muted);margin-left:auto;font-size:11px}
+.b-qrow.due .n{color:var(--b-bad)}
+.b-tasks{grid-column:span 8}
+.b-trow{display:flex;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--b-line);font-size:13px}
+.b-trow:last-child{border-bottom:none}
+.b-trow .st{font-size:10px;letter-spacing:.14em;padding:2px 8px;border:1px solid var(--b-line);border-radius:2px;color:var(--b-muted)}
+.b-trow.ok .st{color:var(--b-ok);border-color:rgba(87,192,138,.4)}
+.b-trow .eta{margin-left:auto;font-size:11px;color:var(--b-muted)}
+.b-prog{height:4px;background:var(--b-line);border-radius:2px;margin-top:12px;overflow:hidden}
+.b-prog i{display:block;height:100%;width:25%;background:var(--b-amber)}
+
+/* ============================================================
+   方案 C · 晨间日课  (calm morning practice)
+   ============================================================ */
+.m-c{
+  --c-bg1:#f2f6ef; --c-bg2:#eaf1ea; --c-card:#ffffff; --c-ink:#2b382e; --c-muted:#7c8a7e;
+  --c-moss:#4d7c57; --c-moss-soft:#e3efe3; --c-apricot:#dd9a4e; --c-line:#e2e9e0;
+  background:linear-gradient(160deg,var(--c-bg1),var(--c-bg2));color:var(--c-ink);
+  min-height:760px;display:grid;grid-template-columns:228px 1fr;gap:0;
+  font-family:"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;
+}
+.m-c .kai{font-family:"KaiTi","STKaiti","DFKai-SB",serif}
+.c-side{padding:26px 18px}
+.c-side-in{background:rgba(255,255,255,.72);backdrop-filter:blur(6px);border-radius:24px;padding:22px 14px;
+  height:100%;display:flex;flex-direction:column;box-shadow:0 10px 30px rgba(70,100,80,.08)}
+.c-brand{display:flex;align-items:center;gap:10px;padding:0 10px;margin-bottom:26px}
+.c-logo{width:36px;height:36px;border-radius:12px;background:var(--c-moss);color:#fff;display:grid;place-items:center;font-weight:700;font-size:16px}
+.c-brand b{font-size:15px}
+.c-brand i{display:block;font-style:normal;font-size:10.5px;color:var(--c-muted)}
+.c-nav{list-style:none;margin:0;padding:0;font-size:13.5px}
+.c-nav li{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:14px;color:var(--c-muted);margin-bottom:2px}
+.c-nav li::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.4}
+.c-nav li.on{background:var(--c-moss-soft);color:var(--c-moss);font-weight:600}
+.c-nav li.on::before{opacity:1}
+.c-user{margin-top:auto;display:flex;align-items:center;gap:10px;padding:10px 12px;font-size:12.5px;color:var(--c-muted)}
+.c-ava{width:30px;height:30px;border-radius:50%;background:var(--c-apricot);color:#fff;display:grid;place-items:center;font-size:13px}
+.c-main{padding:30px 34px 40px 16px}
+.c-hero{background:var(--c-card);border-radius:26px;padding:28px 32px;display:flex;align-items:center;gap:30px;
+  box-shadow:0 12px 34px rgba(70,100,80,.09);margin-bottom:20px;position:relative;overflow:hidden}
+.c-hero::after{content:"";position:absolute;right:-60px;top:-70px;width:230px;height:230px;border-radius:50%;
+  background:radial-gradient(circle,var(--c-moss-soft),transparent 70%)}
+.c-hero h1{margin:0 0 6px;font-size:34px;font-weight:400}
+.c-hero .sub{font-size:14px;color:var(--c-muted)}
+.c-hero .sub b{color:var(--c-moss);font-weight:600}
+.c-ring{margin-left:auto;position:relative;width:104px;height:104px;flex:none;z-index:1}
+.c-ring svg{transform:rotate(-90deg)}
+.c-ring .t{position:absolute;inset:0;display:grid;place-items:center;text-align:center;font-size:11px;color:var(--c-muted)}
+.c-ring .t b{display:block;font-size:22px;color:var(--c-ink);font-variant-numeric:tabular-nums}
+.c-row{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px}
+.c-pill{background:var(--c-card);border-radius:22px;padding:18px 22px;box-shadow:0 8px 24px rgba(70,100,80,.07);display:flex;gap:14px;align-items:center}
+.c-pill .ic{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;font-size:18px;flex:none}
+.c-pill .ic.g{background:var(--c-moss-soft);color:var(--c-moss)}
+.c-pill .ic.o{background:#f7e9d7;color:var(--c-apricot)}
+.c-pill b{font-size:22px;font-variant-numeric:tabular-nums}
+.c-pill b em{font-style:normal;font-size:12px;color:var(--c-muted);font-weight:400;margin-left:3px}
+.c-pill .k{font-size:12px;color:var(--c-muted)}
+.c-cols{display:grid;grid-template-columns:1.5fr 1fr;gap:16px}
+.c-card{background:var(--c-card);border-radius:22px;padding:22px 24px;box-shadow:0 8px 24px rgba(70,100,80,.07)}
+.c-card h3{margin:0 0 14px;font-size:15px;display:flex;align-items:center;gap:8px}
+.c-card h3 .cnt{margin-left:auto;font-size:11.5px;color:var(--c-muted);font-weight:400}
+.c-task{display:flex;gap:12px;align-items:center;padding:10px 0;font-size:14px;border-bottom:1px solid var(--c-line)}
+.c-task:last-child{border-bottom:none}
+.c-ck{width:20px;height:20px;border-radius:8px;border:2px solid var(--c-line);flex:none;position:relative}
+.c-task.done .c-ck{background:var(--c-moss);border-color:var(--c-moss)}
+.c-task.done .c-ck::after{content:"✓";position:absolute;inset:-2px 0 0 3px;color:#fff;font-size:12px;font-weight:700}
+.c-task.done span{color:var(--c-muted)}
+.c-task .tag{margin-left:auto;font-size:11px;background:var(--c-moss-soft);color:var(--c-moss);border-radius:999px;padding:2px 10px;flex:none}
+.c-task .tag.warm{background:#f7e9d7;color:#b57a35}
+.c-qitem{display:flex;align-items:center;gap:10px;padding:9px 0;font-size:13.5px;border-bottom:1px solid var(--c-line)}
+.c-qitem:last-child{border-bottom:none}
+.c-qitem .n{margin-left:auto;font-size:11.5px;color:var(--c-muted)}
+.c-dots{display:grid;grid-template-columns:repeat(14,1fr);gap:6px;margin-top:6px}
+.c-dots i{aspect-ratio:1;border-radius:50%;background:var(--c-line)}
+.c-dots i.f{background:var(--c-moss)}
+.c-dots i.today{background:var(--c-apricot);box-shadow:0 0 0 3px #f7e9d7}
+.c-streak-cap{font-size:12px;color:var(--c-muted);margin-top:12px}
+.c-streak-cap b{color:var(--c-apricot)}
+
+/* ============================================================
+   方案 D · 荧光标注  (Swiss textbook + highlighter)
+   ============================================================ */
+.m-d{
+  --d-bg:#ffffff; --d-ink:#151515; --d-grey:#828282; --d-hair:#151515;
+  --d-hl:#f7e84b; --d-red:#d63a28; --d-soft:#f4f4f2;
+  background:var(--d-bg);color:var(--d-ink);min-height:760px;
+  font-family:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  display:grid;grid-template-columns:220px 1fr;border-top:3px solid var(--d-ink);
+}
+.m-d .hl{background:linear-gradient(100deg,transparent 1%,var(--d-hl) 4%,var(--d-hl) 96%,transparent 99%);padding:0 6px}
+.d-side{border-right:1px solid var(--d-ink);display:flex;flex-direction:column}
+.d-brand{padding:24px 22px;border-bottom:1px solid var(--d-ink)}
+.d-brand b{font-size:20px;font-weight:900;letter-spacing:-.02em}
+.d-brand i{display:block;font-style:normal;font-size:10px;letter-spacing:.3em;color:var(--d-grey);margin-top:2px}
+.d-nav{list-style:none;margin:0;padding:10px 0;font-size:13.5px;flex:1}
+.d-nav li{padding:10px 22px;display:flex;justify-content:space-between;align-items:center;color:var(--d-ink)}
+.d-nav li .no{font-size:10px;color:var(--d-grey);letter-spacing:.1em}
+.d-nav li.on{font-weight:800}
+.d-nav li.on span:first-child{background:linear-gradient(100deg,transparent 1%,var(--d-hl) 4%,var(--d-hl) 96%,transparent 99%);padding:0 6px;margin-left:-6px}
+.d-user{border-top:1px solid var(--d-ink);padding:16px 22px;font-size:12px;color:var(--d-grey)}
+.d-user b{color:var(--d-ink)}
+.d-main{display:flex;flex-direction:column}
+.d-head{display:flex;align-items:baseline;gap:18px;padding:22px 30px;border-bottom:1px solid var(--d-ink)}
+.d-head h1{margin:0;font-size:22px;font-weight:900;letter-spacing:-.01em}
+.d-head .date{font-size:12px;color:var(--d-grey);letter-spacing:.14em}
+.d-head .quick{margin-left:auto;font-size:12px;border:1px solid var(--d-ink);padding:6px 14px;letter-spacing:.08em}
+.d-grid{display:grid;grid-template-columns:1.15fr 1fr 1fr;flex:1}
+.d-cell{padding:24px 28px;border-right:1px solid var(--d-ink);border-bottom:1px solid var(--d-ink)}
+.d-cell:nth-child(3n){border-right:none}
+.d-eyebrow{font-size:10px;letter-spacing:.3em;color:var(--d-grey);margin-bottom:14px;text-transform:uppercase}
+.d-cd{grid-row:span 2;display:flex;flex-direction:column}
+.d-cd .huge{font-size:96px;font-weight:900;line-height:.95;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.d-cd .cap{font-size:13px;margin-top:16px}
+.d-cd .cap b{font-weight:800}
+.d-cd .second{margin-top:auto;padding-top:18px;border-top:1px dashed #bbb;font-size:13px;color:var(--d-grey)}
+.d-cd .second b{color:var(--d-ink);font-size:26px;font-weight:900;font-variant-numeric:tabular-nums}
+.d-stat .v{font-size:40px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.d-stat .v em{font-style:normal;font-size:13px;font-weight:400;color:var(--d-grey)}
+.d-stat .k{font-size:12px;color:var(--d-grey);margin-top:4px}
+.d-red-circle{position:relative;display:inline-block}
+.d-red-circle::after{content:"";position:absolute;inset:-8px -14px;border:2.5px solid var(--d-red);border-radius:50%;transform:rotate(-6deg)}
+.d-list{grid-column:span 2}
+.d-trow{display:flex;gap:14px;align-items:baseline;padding:9px 0;border-bottom:1px solid #e2e2e0;font-size:14px}
+.d-trow:last-child{border-bottom:none}
+.d-trow .no{font-size:11px;color:var(--d-grey);width:26px;letter-spacing:.06em}
+.d-trow.done span.tx{background:linear-gradient(100deg,transparent 1%,var(--d-hl) 4%,var(--d-hl) 96%,transparent 99%);padding:0 5px;color:var(--d-grey);text-decoration:line-through}
+.d-trow .meta{margin-left:auto;font-size:11.5px;color:var(--d-grey)}
+.d-trow .meta.red{color:var(--d-red);font-weight:700}
+.d-bars{display:flex;flex-direction:column;gap:14px}
+.d-bar .t{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px}
+.d-bar .t b{font-weight:700}
+.d-track{height:10px;background:var(--d-soft);border:1px solid var(--d-ink)}
+.d-track i{display:block;height:100%;background:var(--d-ink)}
+.d-track i.low{background:var(--d-red)}
+.d-note{font-size:12px;color:var(--d-red);margin-top:14px;font-style:italic}
+</style>
+
+<div class="wrap">
+  <header class="hd">
+    <div class="eyebrow">ZGCA WORKBENCH · REDESIGN PROPOSALS</div>
+    <h1>整站前端重设计 · 四个方向</h1>
+    <p>基于对系统 21 个页面、25 个组件的完整梳理，以下是四套彼此差异极大的视觉方向，每套都用「主页仪表盘」的真实内容做了高保真设计稿。全部方向都源自「备考」这件事本身：手帐、驾驶舱、晨课、荧光笔——不是通用模板。选定其一后，我会以它重写整套设计令牌与全局样式。</p>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="设计方案">
+    <button class="tab on" role="tab" aria-selected="true" data-p="a"><span class="dot" style="background:#b13a20"></span><span class="no">方案 A</span>朱砂手帐</button>
+    <button class="tab" role="tab" aria-selected="false" data-p="b"><span class="dot" style="background:#ffb454"></span><span class="no">方案 B</span>夜航仪表</button>
+    <button class="tab" role="tab" aria-selected="false" data-p="c"><span class="dot" style="background:#4d7c57"></span><span class="no">方案 C</span>晨间日课</button>
+    <button class="tab" role="tab" aria-selected="false" data-p="d"><span class="dot" style="background:#f7e84b"></span><span class="no">方案 D</span>荧光标注</button>
+  </nav>
+
+  <!-- ================= 方案 A ================= -->
+  <section class="panel on" id="p-a" role="tabpanel">
+    <div class="brief">
+      <div>
+        <h2>朱砂手帐 <span class="tag">PAPER · INK · CINNABAR</span></h2>
+        <p class="thesis">把工作台做成一本考究的纸质备考手帐：宣纸底、方格稿纸纹理、墨色正文、朱砂红印章作为唯一强调色。宋体标题 + 「壹贰叁」章节序号，安静、克制、有书卷气。</p>
+        <div class="chips">
+          <div class="chip" style="background:#f5f1e8"></div>
+          <div class="chip" style="background:#241d12"></div>
+          <div class="chip" style="background:#b13a20"></div>
+          <div class="chip" style="background:#8c8171"></div>
+          <div class="chip" style="background:#d9d1bd"></div>
+        </div>
+        <p class="fitline"><b>适合你如果：</b>你想要独一无二的东方文人气质，让每天打开工作台像翻开一本手账，而不是打开一个 SaaS。</p>
+      </div>
+      <dl>
+        <dt>字体</dt><dd>思源宋体（标题/序号）+ 苹方/雅黑（正文）+ Georgia（数字）</dd>
+        <dt>标志性元素</dt><dd>朱砂印章、双线 masthead、稿纸格底纹、汉字序号、勾选即朱笔划掉</dd>
+        <dt>暗色策略</dt><dd>「夜灯下的手帐」——深褐墨色纸面，朱砂提亮，非简单反色</dd>
+      </dl>
+      <dl>
+        <dt>动效基调</dt><dd>极少而precise：朱笔勾选划线动画、页面载入如翻页淡入</dd>
+        <dt>实施工作量</dt><dd>中。令牌全换 + 引入 next/font 思源宋体；结构基本复用</dd>
+        <dt>风险</dt><dd>数据密集页（资料库/管理台）需要小心保持可读密度</dd>
+      </dl>
+    </div>
+    <div class="stage"><div class="stage-inner">
+
+      <div class="m-a">
+        <aside class="a-side">
+          <div class="a-brand"><div class="a-seal serif">知</div><div><b>ZGCA 工作台</b><i>学习手帐</i></div></div>
+          <ul class="a-nav">
+            <li class="on">主页</li><li>今日工作台</li><li>日历</li><li>科目</li>
+            <li>资料库</li><li>错题本</li><li>统计</li><li>设置</li>
+          </ul>
+          <div class="a-user">今日在读 · <b>卓瑞</b><br>连续第 21 天</div>
+        </aside>
+        <main class="a-main">
+          <div class="a-mast">
+            <div>
+              <div class="kicker serif">丙午年 · 六月初八</div>
+              <h1 class="serif">七月十一日 · 星期五</h1>
+              <div class="sub">今日待处理：复习 12 · 错题 3 · 任务 5</div>
+            </div>
+            <div class="a-stamp serif">今</div>
+          </div>
+          <div class="a-grid">
+            <div>
+              <section class="a-sec">
+                <div class="a-sec-h"><span class="cn-no">壹</span><h3 class="serif">今日待办</h3><span class="rule"></span></div>
+                <div class="a-task done"><div class="a-box"></div><span>完成 M3 第 4 章知识点整理</span><span class="meta">已完成</span></div>
+                <div class="a-task"><div class="a-box"></div><span>回炉错题：子网划分计算 × 3</span><span class="meta">错题本</span></div>
+                <div class="a-task"><div class="a-box"></div><span>机试真题一套（限时 120 分钟）</span><span class="meta">机试</span></div>
+                <div class="a-task"><div class="a-box"></div><span>整理今日资料入库</span><span class="meta">资料库</span></div>
+              </section>
+              <section class="a-sec">
+                <div class="a-sec-h"><span class="cn-no">贰</span><h3 class="serif">复习队列</h3><span class="rule"></span></div>
+                <div class="a-row"><span class="idx">一</span><span>M3 · 网络规划与设计</span><span class="cnt">12 张卡片</span></div>
+                <div class="a-row"><span class="idx">二</span><span>M5 · 系统安全「访问控制模型」</span><span class="cnt">知识点复盘</span></div>
+                <div class="a-row"><span class="idx">三</span><span>M1 · 数据通信基础</span><span class="cnt">真题错题 3 道</span></div>
+              </section>
+              <p class="a-quote">「温故而知新，可以为师矣。」—— 今日复习完成后自动解锁明日排期</p>
+            </div>
+            <div>
+              <div class="a-card">
+                <div class="lbl">距笔试</div>
+                <div class="a-count"><span class="big num">45</span><span class="unit">天 · 8月25日</span></div>
+                <div class="a-count-sub">机试还有 <b class="num">73</b> 天（9月22日）</div>
+              </div>
+              <div class="a-card">
+                <div class="lbl">今日记账</div>
+                <div class="a-stat"><span>专注时长</span><b class="num">142<small> 分</small></b></div>
+                <div class="a-stat"><span>连续天数</span><b>廿一日</b></div>
+                <div class="a-stat"><span>任务完成</span><b class="num">1 / 4</b></div>
+              </div>
+              <div class="a-card">
+                <div class="lbl">需关注科目</div>
+                <div class="a-stat"><span>M5 系统安全</span><b style="color:var(--a-red)" class="num">42%</b></div>
+                <div class="a-stat"><span>机试 · 算法</span><b class="num">55%</b></div>
+                <div class="a-stat"><span>M3 网络规划</span><b class="num">68%</b></div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+
+    </div></div>
+    <p class="stage-note">设计稿为主页仪表盘。实际实现将用 next/font 加载思源宋体，此处以系统宋体近似呈现。</p>
+  </section>
+
+  <!-- ================= 方案 B ================= -->
+  <section class="panel" id="p-b" role="tabpanel" hidden>
+    <div class="brief">
+      <div>
+        <h2>夜航仪表 <span class="tag">DARK · INSTRUMENT · MISSION</span></h2>
+        <p class="thesis">把备考当成一次夜间飞行任务：深蓝黑机舱底色、琥珀色磷光仪表、等宽数字、锐利的 2px 圆角与工程刻度线。倒计时是驾驶舱正中央的主仪表，一切数据密度拉满。</p>
+        <div class="chips">
+          <div class="chip" style="background:#0a0e14"></div>
+          <div class="chip" style="background:#10151d"></div>
+          <div class="chip" style="background:#ffb454"></div>
+          <div class="chip" style="background:#59b7cc"></div>
+          <div class="chip" style="background:#66788c"></div>
+        </div>
+        <p class="fitline"><b>适合你如果：</b>你在深夜刷题，想要肾上腺素和掌控感——每天登录像进入战备状态，数据一眼全景。</p>
+      </div>
+      <dl>
+        <dt>字体</dt><dd>Bahnschrift/DIN 风（标题）+ 苹方/雅黑（正文）+ Cascadia Mono（全部数字）</dd>
+        <dt>标志性元素</dt><dd>顶部状态条、面板角标线、刻度进度、LED 状态灯、琥珀主仪表</dd>
+        <dt>暗色策略</dt><dd>暗色即本体。亮色模式做成「白昼座舱」：浅灰蓝面板 + 深琥珀</dd>
+      </dl>
+      <dl>
+        <dt>动效基调</dt><dd>仪表通电感：数字滚动、面板逐块点亮、扫描线微光</dd>
+        <dt>实施工作量</dt><dd>中偏高。密度和层级重排，表格类页面反而最讨好</dd>
+        <dt>风险</dt><dd>长时间阅读密度高；需要严格控制琥珀色使用面积</dd>
+      </dl>
+    </div>
+    <div class="stage"><div class="stage-inner">
+
+      <div class="m-b">
+        <div class="b-top">
+          <span class="brand">ZGCA<small>WORKBENCH · v2</small></span>
+          <span class="b-led"><i></i>SESSION ACTIVE</span>
+          <span style="color:var(--b-muted)">卓瑞 · 备考模式</span>
+          <span class="clock mono">21:47:09</span>
+        </div>
+        <div class="b-body">
+          <nav class="b-rail">
+            <div class="grp">OPERATIONS</div>
+            <a class="on" href="#" onclick="return false">主页</a>
+            <a href="#" onclick="return false">今日工作台</a>
+            <a href="#" onclick="return false">日历</a>
+            <div class="grp">KNOWLEDGE</div>
+            <a href="#" onclick="return false">科目</a>
+            <a href="#" onclick="return false">资料库</a>
+            <a href="#" onclick="return false">错题本</a>
+            <div class="grp">SYSTEM</div>
+            <a href="#" onclick="return false">统计</a>
+            <a href="#" onclick="return false">设置</a>
+          </nav>
+          <main class="b-main">
+            <div class="b-panel b-cd">
+              <div class="b-lbl">T-MINUS · 笔试倒计时</div>
+              <div class="huge mono">45<small> 天</small></div>
+              <div class="cap">目标日 <b class="mono">2026-08-25</b> · 机试 <b class="mono">D-73</b></div>
+              <div class="b-ticks">
+                <i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              </div>
+            </div>
+            <div class="b-stats">
+              <div class="b-stat"><div class="k">待复习</div><div class="v mono">12<em>卡片</em></div><div class="d warn">3 张已到期</div></div>
+              <div class="b-stat"><div class="k">错题回炉</div><div class="v mono">3<em>道</em></div><div class="d">今日到期</div></div>
+              <div class="b-stat"><div class="k">专注时长</div><div class="v mono">142<em>min</em></div><div class="d up">▲ 较昨日 +28</div></div>
+              <div class="b-stat"><div class="k">连续天数</div><div class="v mono">21<em>天</em></div><div class="d up">STREAK 保持中</div></div>
+            </div>
+            <div class="b-panel b-queue">
+              <div class="b-lbl">REVIEW QUEUE · 复习队列</div>
+              <div class="b-qrow due"><span class="id mono">M3</span><span>网络规划与设计</span><span class="n mono">12 · DUE</span></div>
+              <div class="b-qrow"><span class="id mono">M5</span><span>访问控制模型</span><span class="n mono">复盘</span></div>
+              <div class="b-qrow"><span class="id mono">M1</span><span>数据通信基础</span><span class="n mono">错题 ×3</span></div>
+              <div class="b-qrow"><span class="id mono">M7</span><span>项目管理</span><span class="n mono">明日</span></div>
+              <div class="b-lbl" style="margin-top:20px">SUBJECT STATUS</div>
+              <div class="b-qrow"><span>M5 系统安全</span><span class="n mono" style="color:var(--b-bad)">42%</span></div>
+              <div class="b-qrow"><span>机试 · 算法</span><span class="n mono" style="color:var(--b-amber)">55%</span></div>
+              <div class="b-qrow"><span>M3 网络规划</span><span class="n mono" style="color:var(--b-ok)">68%</span></div>
+            </div>
+            <div class="b-panel b-tasks">
+              <div class="b-lbl">TASKS · 今日任务 1/4</div>
+              <div class="b-trow ok"><span class="st">DONE</span><span>完成 M3 第 4 章知识点整理</span><span class="eta mono">14:20</span></div>
+              <div class="b-trow"><span class="st">OPEN</span><span>回炉错题：子网划分计算 ×3</span><span class="eta mono">~30 min</span></div>
+              <div class="b-trow"><span class="st">OPEN</span><span>机试真题一套（限时）</span><span class="eta mono">120 min</span></div>
+              <div class="b-trow"><span class="st">OPEN</span><span>整理今日资料入库</span><span class="eta mono">~15 min</span></div>
+              <div class="b-prog"><i></i></div>
+            </div>
+            <div class="b-panel b-focus">
+              <div class="b-lbl">FOCUS · 近 7 日专注（分钟）</div>
+              <div class="b-bars">
+                <div class="b-bar"><span class="val mono">95</span><i style="height:40%"></i><span>六</span></div>
+                <div class="b-bar"><span class="val mono">130</span><i style="height:56%"></i><span>日</span></div>
+                <div class="b-bar"><span class="val mono">88</span><i style="height:38%"></i><span>一</span></div>
+                <div class="b-bar"><span class="val mono">156</span><i style="height:68%"></i><span>二</span></div>
+                <div class="b-bar"><span class="val mono">120</span><i style="height:52%"></i><span>三</span></div>
+                <div class="b-bar"><span class="val mono">114</span><i style="height:49%"></i><span>四</span></div>
+                <div class="b-bar hot"><span class="val mono">142</span><i style="height:62%"></i><span>今</span></div>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+
+    </div></div>
+    <p class="stage-note">设计稿为主页仪表盘。实现时数字滚动与面板点亮动效遵循 prefers-reduced-motion。</p>
+  </section>
+
+  <!-- ================= 方案 C ================= -->
+  <section class="panel" id="p-c" role="tabpanel" hidden>
+    <div class="brief">
+      <div>
+        <h2>晨间日课 <span class="tag">CALM · MOSS · BREATHING</span></h2>
+        <p class="thesis">反焦虑的备考陪伴者：雾绿渐变底、纯白大圆角卡片、苔藓绿 + 杏色的温和配色、楷体问候语。信息不逼迫你，进度环和连续打卡点阵像一株慢慢生长的植物。</p>
+        <div class="chips">
+          <div class="chip" style="background:#f2f6ef"></div>
+          <div class="chip" style="background:#ffffff"></div>
+          <div class="chip" style="background:#4d7c57"></div>
+          <div class="chip" style="background:#dd9a4e"></div>
+          <div class="chip" style="background:#2b382e"></div>
+        </div>
+        <p class="fitline"><b>适合你如果：</b>备考战线长、容易焦虑，你需要的是每天愿意回来的温柔仪式感，而不是压迫感。</p>
+      </div>
+      <dl>
+        <dt>字体</dt><dd>楷体（问候/点睛）+ 苹方/雅黑（正文）+ 系统数字 tabular-nums</dd>
+        <dt>标志性元素</dt><dd>楷体问候、进度环、悬浮胶囊侧栏、打卡点阵、呼吸感留白</dd>
+        <dt>暗色策略</dt><dd>「熄灯晚自习」：墨绿深底 + 月光白卡片描边，杏色变暖橘</dd>
+      </dl>
+      <dl>
+        <dt>动效基调</dt><dd>柔和呼吸：进度环生长、卡片依次浮现、勾选时的小弹跳</dd>
+        <dt>实施工作量</dt><dd>中低。与现有结构最接近，主要是令牌 + 圆角/阴影体系重做</dd>
+        <dt>风险</dt><dd>四个方案里个性最「安全」；要靠细节执行避免平庸</dd>
+      </dl>
+    </div>
+    <div class="stage"><div class="stage-inner">
+
+      <div class="m-c">
+        <aside class="c-side"><div class="c-side-in">
+          <div class="c-brand"><div class="c-logo">Z</div><div><b>ZGCA 工作台</b><i>今天也慢慢来</i></div></div>
+          <ul class="c-nav">
+            <li class="on">主页</li><li>今日工作台</li><li>日历</li><li>科目</li>
+            <li>资料库</li><li>错题本</li><li>统计</li><li>设置</li>
+          </ul>
+          <div class="c-user"><div class="c-ava">卓</div><div><b style="color:var(--c-ink)">卓瑞</b><br>晚间模式 · 21:47</div></div>
+        </div></aside>
+        <main class="c-main">
+          <div class="c-hero">
+            <div>
+              <h1 class="kai">晚上好，卓瑞。</h1>
+              <div class="sub">距笔试还有 <b>45 天</b>，今晚只剩 <b>3 件事</b>。一件一件来。</div>
+            </div>
+            <div class="c-ring">
+              <svg width="104" height="104" viewBox="0 0 104 104" aria-hidden="true">
+                <circle cx="52" cy="52" r="44" fill="none" stroke="var(--c-line)" stroke-width="9"/>
+                <circle cx="52" cy="52" r="44" fill="none" stroke="var(--c-moss)" stroke-width="9"
+                  stroke-linecap="round" stroke-dasharray="69 276"/>
+              </svg>
+              <div class="t"><div><b>1/4</b>今日任务</div></div>
+            </div>
+          </div>
+          <div class="c-row">
+            <div class="c-pill"><div class="ic g">☘</div><div><b>12<em>张</em></b><div class="k">待复习卡片</div></div></div>
+            <div class="c-pill"><div class="ic g">◷</div><div><b>142<em>分钟</em></b><div class="k">今日专注</div></div></div>
+            <div class="c-pill"><div class="ic o">☀</div><div><b>21<em>天</em></b><div class="k">连续学习</div></div></div>
+          </div>
+          <div class="c-cols">
+            <div class="c-card">
+              <h3>今晚的三件事 <span class="cnt">按优先级排好了</span></h3>
+              <div class="c-task done"><div class="c-ck"></div><span>完成 M3 第 4 章知识点整理</span><span class="tag">已完成</span></div>
+              <div class="c-task"><div class="c-ck"></div><span>回炉错题：子网划分计算 × 3</span><span class="tag warm">错题</span></div>
+              <div class="c-task"><div class="c-ck"></div><span>机试真题一套（120 分钟）</span><span class="tag">机试</span></div>
+              <div class="c-task"><div class="c-ck"></div><span>整理今日资料入库</span><span class="tag">收纳</span></div>
+              <h3 style="margin-top:22px">复习队列 <span class="cnt">今天 12 张，别贪多</span></h3>
+              <div class="c-qitem"><span>M3 · 网络规划与设计</span><span class="n">12 张卡片</span></div>
+              <div class="c-qitem"><span>M5 · 访问控制模型</span><span class="n">知识点复盘</span></div>
+              <div class="c-qitem"><span>M1 · 数据通信基础</span><span class="n">错题 3 道</span></div>
+            </div>
+            <div>
+              <div class="c-card" style="margin-bottom:16px">
+                <h3>连续 21 天 <span class="cnt">最近两周</span></h3>
+                <div class="c-dots">
+                  <i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i>
+                  <i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="today"></i>
+                </div>
+                <div class="c-streak-cap">再坚持 <b>9 天</b> 就是你最长纪录 🌱</div>
+              </div>
+              <div class="c-card">
+                <h3>需要多陪陪的科目</h3>
+                <div class="c-qitem"><span>M5 · 系统安全</span><span class="n" style="color:var(--c-apricot);font-weight:600">42%</span></div>
+                <div class="c-qitem"><span>机试 · 算法</span><span class="n">55%</span></div>
+                <div class="c-qitem"><span>M3 · 网络规划</span><span class="n" style="color:var(--c-moss);font-weight:600">68%</span></div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+
+    </div></div>
+    <p class="stage-note">设计稿为主页仪表盘。问候语随时段变化（早安/午后/晚上好），文案整体改为陪伴式语气。</p>
+  </section>
+
+  <!-- ================= 方案 D ================= -->
+  <section class="panel" id="p-d" role="tabpanel" hidden>
+    <div class="brief">
+      <div>
+        <h2>荧光标注 <span class="tag">SWISS · TEXTBOOK · MARKER</span></h2>
+        <p class="thesis">把整个系统排成一本被认真划过重点的教科书：纯白纸面、黑色细线暴露网格、超大黑体数字，荧光黄记号笔扫过所有「重点」，红笔圈出所有「错处」。零阴影、零圆角、全靠版式。</p>
+        <div class="chips">
+          <div class="chip" style="background:#ffffff"></div>
+          <div class="chip" style="background:#151515"></div>
+          <div class="chip" style="background:#f7e84b"></div>
+          <div class="chip" style="background:#d63a28"></div>
+          <div class="chip" style="background:#828282"></div>
+        </div>
+        <p class="fitline"><b>适合你如果：</b>你要最强的视觉冲击力和记忆点——「重点用荧光笔、错题用红笔」正是学习本身的隐喻。</p>
+      </div>
+      <dl>
+        <dt>字体</dt><dd>黑体 900 重量（标题/巨型数字）+ 苹方/雅黑（正文）+ tabular-nums</dd>
+        <dt>标志性元素</dt><dd>荧光黄划重点、红笔圈注、暴露的 1px 网格线、编号目录式导航</dd>
+        <dt>暗色策略</dt><dd>「黑板模式」：近黑底 + 粉笔白线 + 荧光黄保持不变（黑底上更亮）</dd>
+      </dl>
+      <dl>
+        <dt>动效基调</dt><dd>记号笔划过的 scaleX 动画、红圈手绘感描边动画，其余静止</dd>
+        <dt>实施工作量</dt><dd>中偏高。所有组件的边框/密度体系重构，但规则最明确</dd>
+        <dt>风险</dt><dd>风格最激进；荧光黄必须严格限量，否则会吵</dd>
+      </dl>
+    </div>
+    <div class="stage"><div class="stage-inner">
+
+      <div class="m-d">
+        <aside class="d-side">
+          <div class="d-brand"><b>ZGCA<span style="color:var(--d-red)">.</span></b><i>STUDY WORKBENCH</i></div>
+          <ul class="d-nav">
+            <li class="on"><span>主页</span><span class="no">01</span></li>
+            <li><span>今日工作台</span><span class="no">02</span></li>
+            <li><span>日历</span><span class="no">03</span></li>
+            <li><span>科目</span><span class="no">04</span></li>
+            <li><span>资料库</span><span class="no">05</span></li>
+            <li><span>错题本</span><span class="no">06</span></li>
+            <li><span>统计</span><span class="no">07</span></li>
+            <li><span>设置</span><span class="no">08</span></li>
+          </ul>
+          <div class="d-user">当前用户<br><b>卓瑞</b> · 连续 21 天</div>
+        </aside>
+        <div class="d-main">
+          <div class="d-head">
+            <h1>主页</h1>
+            <span class="date">2026.07.11 / 星期五 / 丙午年</span>
+            <span class="quick">⌘K 快速收纳</span>
+          </div>
+          <div class="d-grid">
+            <div class="d-cell d-cd">
+              <div class="d-eyebrow">Countdown / 笔试</div>
+              <div class="huge"><span class="hl">D-45</span></div>
+              <div class="cap">距 <b>8 月 25 日</b> 笔试还有 45 天。<br>今日重点：<span class="hl">M5 系统安全</span></div>
+              <div class="second">机试倒计时 <b>D-73</b> · 9 月 22 日</div>
+            </div>
+            <div class="d-cell d-stat">
+              <div class="d-eyebrow">Review / 待复习</div>
+              <div class="v">12<em> 张</em></div>
+              <div class="k">其中 3 张已到期</div>
+            </div>
+            <div class="d-cell d-stat">
+              <div class="d-eyebrow">Mistakes / 错题回炉</div>
+              <div class="v"><span class="d-red-circle">3</span><em> 道</em></div>
+              <div class="k" style="margin-top:10px;color:var(--d-red)">红笔标记 · 今日必须处理</div>
+            </div>
+            <div class="d-cell d-stat">
+              <div class="d-eyebrow">Focus / 今日专注</div>
+              <div class="v">142<em> min</em></div>
+              <div class="k">较昨日 +28 分钟</div>
+            </div>
+            <div class="d-cell d-stat">
+              <div class="d-eyebrow">Streak / 连续</div>
+              <div class="v">21<em> 天</em></div>
+              <div class="k">距最长纪录还差 9 天</div>
+            </div>
+            <div class="d-cell d-list">
+              <div class="d-eyebrow">Tasks / 今日任务 · 1 of 4</div>
+              <div class="d-trow done"><span class="no">T-01</span><span class="tx">完成 M3 第 4 章知识点整理</span><span class="meta">14:20 完成</span></div>
+              <div class="d-trow"><span class="no">T-02</span><span>回炉错题：子网划分计算 × 3</span><span class="meta red">今日到期</span></div>
+              <div class="d-trow"><span class="no">T-03</span><span>机试真题一套（限时 120 分钟）</span><span class="meta">120 min</span></div>
+              <div class="d-trow"><span class="no">T-04</span><span>整理今日资料入库</span><span class="meta">15 min</span></div>
+              <div class="d-eyebrow" style="margin-top:22px">Queue / 复习队列</div>
+              <div class="d-trow"><span class="no">Q-01</span><span>M3 · 网络规划与设计</span><span class="meta">12 张卡片</span></div>
+              <div class="d-trow"><span class="no">Q-02</span><span>M5 · 访问控制模型</span><span class="meta">知识点复盘</span></div>
+              <div class="d-trow"><span class="no">Q-03</span><span>M1 · 数据通信基础</span><span class="meta red">错题 3 道</span></div>
+            </div>
+            <div class="d-cell">
+              <div class="d-eyebrow">Subjects / 掌握度</div>
+              <div class="d-bars">
+                <div class="d-bar"><div class="t"><span>M5 系统安全</span><b>42%</b></div><div class="d-track"><i class="low" style="width:42%"></i></div></div>
+                <div class="d-bar"><div class="t"><span>机试 · 算法</span><b>55%</b></div><div class="d-track"><i style="width:55%"></i></div></div>
+                <div class="d-bar"><div class="t"><span>M3 网络规划</span><b>68%</b></div><div class="d-track"><i style="width:68%"></i></div></div>
+              </div>
+              <div class="d-note">※ 红色进度 = 低于 50%，优先安排。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div></div>
+    <p class="stage-note">设计稿为主页仪表盘。荧光黄只用于「重点」语义（活跃导航、关键数字、已完成划线），全站限量使用。</p>
+  </section>
+
+  <footer class="ft">
+    <h3>选定之后会发生什么</h3>
+    <ol>
+      <li><b>令牌层重写</b>：以选定方案重写 <code>src/styles/tokens.css</code>（颜色/圆角/阴影/字体/间距）与 <code>globals.css</code>（4266 行）的全部视觉层。</li>
+      <li><b>外壳重构</b>：AppShell / Sidebar / TopBar 按新方案的布局语言重排（含移动端与命令面板）。</li>
+      <li><b>全部 21 页 + 25 组件逐一过风格</b>：含登录页、管理后台、亮暗双主题、响应式与无障碍等价能力。</li>
+      <li><b>字体落地</b>：用 next/font 自托管所选字体（思源宋体/楷体等），设计稿中的系统字体仅为近似预览。</li>
+      <li>也可以<b>混搭</b>：比如「C 的布局 + A 的字体气质」，告诉我你的组合即可。</li>
+    </ol>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var tabs = document.querySelectorAll('.tab');
+  tabs.forEach(function(t){
+    t.addEventListener('click', function(){
+      tabs.forEach(function(x){ x.classList.remove('on'); x.setAttribute('aria-selected','false'); });
+      t.classList.add('on'); t.setAttribute('aria-selected','true');
+      document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('on'); p.hidden = true; });
+      var p = document.getElementById('p-' + t.dataset.p);
+      p.hidden = false; p.classList.add('on');
+    });
+  });
+})();
+</script>
+
+</html>

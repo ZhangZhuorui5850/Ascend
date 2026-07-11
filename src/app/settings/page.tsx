@@ -1,14 +1,18 @@
 import { SettingsForm } from "@/components/SettingsForm";
+import { DeviceSessions } from "@/components/DeviceSessions";
+import { listUserSessions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { requirePageSession } from "@/lib/page-auth";
+import { requirePageWorkspace } from "@/lib/page-auth";
 import { getSettings } from "@/lib/repo/settings";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  await requirePageSession("/settings");
+  const access = await requirePageWorkspace("/settings");
 
-  const settings = getSettings(getDb());
+  const db = getDb();
+  const settings = getSettings(db, access);
+  const sessions = listUserSessions(access.userId, db);
 
   return (
     <div className="pageStack">
@@ -17,6 +21,7 @@ export default async function SettingsPage() {
         <p>考试倒计时会显示在主页；每日复习上限控制今日队列一次安排多少个知识点。</p>
       </div>
       <SettingsForm initial={settings} />
+      <DeviceSessions sessions={sessions} />
     </div>
   );
 }

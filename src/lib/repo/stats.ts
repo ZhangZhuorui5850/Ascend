@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import type { WorkspaceScope } from "../access-context";
 import { buildCalendarSummaries } from "../calendar-summary";
 import { assertDateKey, shiftDateKey } from "../dates";
 import type { CalendarSummary } from "../types";
@@ -10,32 +11,33 @@ export type DaySnapshot = {
   mistakes: number;
 };
 
-export function getDaySnapshot(db: Database.Database, date: string): DaySnapshot {
+export function getDaySnapshot(db: Database.Database, scope: WorkspaceScope, date: string): DaySnapshot {
   assertDateKey(date);
   return db.prepare(`
     SELECT
-      (SELECT COUNT(*) FROM assets WHERE day = @date) AS assets,
-      (SELECT COALESCE(SUM(duration_minutes), 0) FROM study_sessions WHERE day = @date) AS studyMinutes,
-      (SELECT COUNT(*) FROM review_events WHERE day = @date) AS reviews,
-      (SELECT COUNT(*) FROM mistakes WHERE day = @date) AS mistakes
-  `).get({ date }) as DaySnapshot;
+      (SELECT COUNT(*) FROM assets WHERE workspace_id = @workspaceId AND day = @date) AS assets,
+      (SELECT COALESCE(SUM(duration_minutes), 0) FROM study_sessions
+       WHERE workspace_id = @workspaceId AND day = @date) AS studyMinutes,
+      (SELECT COUNT(*) FROM review_events WHERE workspace_id = @workspaceId AND day = @date) AS reviews,
+      (SELECT COUNT(*) FROM mistakes WHERE workspace_id = @workspaceId AND day = @date) AS mistakes
+  `).get({ workspaceId: scope.workspaceId, date }) as DaySnapshot;
 }
 
 /** 连续学习天数：从今天（或昨天）往回数，有任意学习行为的连续天数。 */
-export function getStudyStreak(db: Database.Database, today: string): number {
+export function getStudyStreak(db: Database.Database, scope: WorkspaceScope, today: string): number {
   assertDateKey(today);
   const rows = db.prepare(`
     SELECT DISTINCT day FROM (
-      SELECT day FROM study_sessions
-      UNION SELECT day FROM review_events
-      UNION SELECT day FROM mistakes
-      UNION SELECT day FROM assets
-      UNION SELECT day FROM day_tasks WHERE done = 1
+      SELECT day FROM study_sessions WHERE workspace_id = @workspaceId
+      UNION SELECT day FROM review_events WHERE workspace_id = @workspaceId
+      UNION SELECT day FROM mistakes WHERE workspace_id = @workspaceId
+      UNION SELECT day FROM assets WHERE workspace_id = @workspaceId
+      UNION SELECT day FROM day_tasks WHERE workspace_id = @workspaceId AND done = 1
     )
-    WHERE day <= ?
+    WHERE day <= @today
     ORDER BY day DESC
     LIMIT 400
-  `).all(today) as Array<{ day: string }>;
+  `).all({ workspaceId: scope.workspaceId, today }) as Array<{ day: string }>;
   const active = new Set(rows.map((row) => row.day));
 
   let streak = 0;
@@ -58,40 +60,64 @@ export type HomeSnapshot = {
   streak: number;
 };
 
-export function getHomeSnapshot(db: Database.Database, today: string): HomeSnapshot {
+export function getHomeSnapshot(db: Database.Database, scope: WorkspaceScope, today: string): HomeSnapshot {
   assertDateKey(today);
   const counts = db.prepare(`
     SELECT
-      (SELECT COUNT(*) FROM knowledge_points WHERE next_review IS NOT NULL AND next_review <= @today) AS dueReviews,
-      (SELECT COUNT(*) FROM mistakes WHERE graduated = 0 AND next_review IS NOT NULL AND next_review <= @today) AS dueMistakes,
-      (SELECT COUNT(*) FROM day_tasks WHERE day = @today AND done = 0) AS openTasks,
-      (SELECT COUNT(*) FROM day_tasks WHERE day = @today AND done = 1) AS doneTasks
-  `).get({ today }) as { dueReviews: number; dueMistakes: number; openTasks: number; doneTasks: number };
+      (SELECT COUNT(*) FROM knowledge_points
+       WHERE workspace_id = @workspaceId AND next_review IS NOT NULL AND next_review <= @today) AS dueReviews,
+      (SELECT COUNT(*) FROM mistakes
+       WHERE workspace_id = @workspaceId AND graduated = 0
+         AND next_review IS NOT NULL AND next_review <= @today) AS dueMistakes,
+      (SELECT COUNT(*) FROM day_tasks
+       WHERE workspace_id = @workspaceId AND day = @today AND done = 0) AS openTasks,
+      (SELECT COUNT(*) FROM day_tasks
+       WHERE workspace_id = @workspaceId AND day = @today AND done = 1) AS doneTasks
+  `).get({ workspaceId: scope.workspaceId, today }) as {
+    dueReviews: number;
+    dueMistakes: number;
+    openTasks: number;
+    doneTasks: number;
+  };
 
   return {
-    today: getDaySnapshot(db, today),
+    today: getDaySnapshot(db, scope, today),
     dueReviews: counts.dueReviews,
     dueMistakes: counts.dueMistakes,
     openTasks: counts.openTasks,
     doneTasks: counts.doneTasks,
-    streak: getStudyStreak(db, today),
+    streak: getStudyStreak(db, scope, today),
   };
 }
 
-export function getCalendarSummaries(db: Database.Database): CalendarSummary[] {
-  const days = db.prepare("SELECT date, plan, summary FROM daily_entries").all() as Array<{
+export function getCalendarSummaries(db: Database.Database, scope: WorkspaceScope): CalendarSummary[] {
+  const days = db.prepare(`
+    SELECT date, plan, summary FROM daily_entries WHERE workspace_id = ?
+  `).all(scope.workspaceId) as Array<{
     date: string;
     plan: string;
     summary: string;
   }>;
-  const assets = db.prepare("SELECT id, day FROM assets").all() as Array<{ id: number; day: string }>;
-  const studySessions = db.prepare(
-    "SELECT id, day, duration_minutes AS durationMinutes FROM study_sessions",
-  ).all() as Array<{ id: number; day: string; durationMinutes: number }>;
-  const reviewEvents = db.prepare("SELECT id, day FROM review_events").all() as Array<{ id: number; day: string }>;
-  const mistakes = db.prepare("SELECT id, day FROM mistakes").all() as Array<{ id: number; day: string }>;
-  return buildCalendarSummaries({ days, assets, studySessions, reviewEvents, mistakes });
+  const assetCounts = db.prepare(`
+    SELECT day, COUNT(*) AS count FROM assets WHERE workspace_id = ? GROUP BY day
+  `).all(scope.workspaceId) as Array<{ day: string; count: number }>;
+  const studyMinutes = db.prepare(`
+    SELECT day, COALESCE(SUM(duration_minutes), 0) AS minutes
+    FROM study_sessions WHERE workspace_id = ? GROUP BY day
+  `).all(scope.workspaceId) as Array<{ day: string; minutes: number }>;
+  const reviewCounts = db.prepare(`
+    SELECT day, COUNT(*) AS count FROM review_events WHERE workspace_id = ? GROUP BY day
+  `).all(scope.workspaceId) as Array<{ day: string; count: number }>;
+  const mistakeCounts = db.prepare(`
+    SELECT day, COUNT(*) AS count FROM mistakes WHERE workspace_id = ? GROUP BY day
+  `).all(scope.workspaceId) as Array<{ day: string; count: number }>;
+  return buildCalendarSummaries({ days, assetCounts, studyMinutes, reviewCounts, mistakeCounts });
 }
+
+/** 弱点优先级分桶阈值：达到即「急」。 */
+export const WEAK_POINT_URGENT_SCORE = 120;
+/** 弱点优先级分桶阈值：达到即「高」。 */
+export const WEAK_POINT_HIGH_SCORE = 90;
 
 export type LearningAnalytics = {
   week: {
@@ -104,6 +130,16 @@ export type LearningAnalytics = {
     activeDays: number;
     reflectionDays: number;
   };
+  prevWeek: {
+    studyMinutes: number;
+    activeDays: number;
+    reviews: number;
+  };
+  dailyMinutes: Array<{ day: string; minutes: number }>;
+  subjectMinutes: Array<{ code: string | null; name: string; minutes: number }>;
+  /** 本周复习评分分布：[记不清, 模糊, 基本会, 熟练]。 */
+  scoreDist: [number, number, number, number];
+  backlog: { dueReviews: number; dueMistakes: number };
   weakPoints: Array<{
     id: string;
     subjectCode: string;
@@ -117,29 +153,37 @@ export type LearningAnalytics = {
   }>;
 };
 
-export function getLearningAnalytics(db: Database.Database, today: string): LearningAnalytics {
+export function getLearningAnalytics(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  today: string,
+): LearningAnalytics {
   const end = assertDateKey(today);
   const start = shiftDateKey(end, -6);
   const weekRows = db.prepare(`
     SELECT
-      (SELECT COALESCE(SUM(duration_minutes), 0) FROM study_sessions WHERE day BETWEEN @start AND @end) AS studyMinutes,
-      (SELECT COUNT(*) FROM review_events WHERE day BETWEEN @start AND @end) AS reviews,
-      (SELECT COUNT(*) FROM mistakes WHERE day BETWEEN @start AND @end) AS mistakes,
-      (SELECT COUNT(*) FROM assets WHERE day BETWEEN @start AND @end) AS assets,
+      (SELECT COALESCE(SUM(duration_minutes), 0) FROM study_sessions
+       WHERE workspace_id = @workspaceId AND day BETWEEN @start AND @end) AS studyMinutes,
+      (SELECT COUNT(*) FROM review_events
+       WHERE workspace_id = @workspaceId AND day BETWEEN @start AND @end) AS reviews,
+      (SELECT COUNT(*) FROM mistakes
+       WHERE workspace_id = @workspaceId AND day BETWEEN @start AND @end) AS mistakes,
+      (SELECT COUNT(*) FROM assets
+       WHERE workspace_id = @workspaceId AND day BETWEEN @start AND @end) AS assets,
       (
         SELECT COUNT(DISTINCT day) FROM (
-          SELECT day FROM study_sessions WHERE day BETWEEN @start AND @end
-          UNION ALL SELECT day FROM review_events WHERE day BETWEEN @start AND @end
-          UNION ALL SELECT day FROM mistakes WHERE day BETWEEN @start AND @end
-          UNION ALL SELECT day FROM assets WHERE day BETWEEN @start AND @end
+          SELECT day FROM study_sessions WHERE workspace_id = @workspaceId AND day BETWEEN @start AND @end
+          UNION ALL SELECT day FROM review_events WHERE workspace_id = @workspaceId AND day BETWEEN @start AND @end
+          UNION ALL SELECT day FROM mistakes WHERE workspace_id = @workspaceId AND day BETWEEN @start AND @end
+          UNION ALL SELECT day FROM assets WHERE workspace_id = @workspaceId AND day BETWEEN @start AND @end
         )
       ) AS activeDays,
       (
         SELECT COUNT(*) FROM daily_entries
-        WHERE date BETWEEN @start AND @end
+        WHERE workspace_id = @workspaceId AND date BETWEEN @start AND @end
           AND (TRIM(diary) != '' OR TRIM(summary) != '')
       ) AS reflectionDays
-  `).get({ start, end }) as {
+  `).get({ workspaceId: scope.workspaceId, start, end }) as {
     studyMinutes: number | null;
     reviews: number;
     mistakes: number;
@@ -147,6 +191,39 @@ export function getLearningAnalytics(db: Database.Database, today: string): Lear
     activeDays: number;
     reflectionDays: number;
   };
+
+  // 周环比：上一个 7 天窗口（end-13 .. end-7）。
+  const prevStart = shiftDateKey(end, -13);
+  const prevEnd = shiftDateKey(end, -7);
+  const prevWeekRows = db.prepare(`
+    SELECT
+      (SELECT COALESCE(SUM(duration_minutes), 0) FROM study_sessions
+       WHERE workspace_id = @workspaceId AND day BETWEEN @start AND @end) AS studyMinutes,
+      (SELECT COUNT(*) FROM review_events
+       WHERE workspace_id = @workspaceId AND day BETWEEN @start AND @end) AS reviews,
+      (
+        SELECT COUNT(DISTINCT day) FROM (
+          SELECT day FROM study_sessions WHERE workspace_id = @workspaceId AND day BETWEEN @start AND @end
+          UNION ALL SELECT day FROM review_events WHERE workspace_id = @workspaceId AND day BETWEEN @start AND @end
+          UNION ALL SELECT day FROM mistakes WHERE workspace_id = @workspaceId AND day BETWEEN @start AND @end
+          UNION ALL SELECT day FROM assets WHERE workspace_id = @workspaceId AND day BETWEEN @start AND @end
+        )
+      ) AS activeDays
+  `).get({ workspaceId: scope.workspaceId, start: prevStart, end: prevEnd }) as {
+    studyMinutes: number | null;
+    reviews: number;
+    activeDays: number;
+  };
+
+  // 待复习积压：与首页快照相同的两个到期口径（截至 today）。
+  const backlog = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM knowledge_points
+       WHERE workspace_id = @workspaceId AND next_review IS NOT NULL AND next_review <= @end) AS dueReviews,
+      (SELECT COUNT(*) FROM mistakes
+       WHERE workspace_id = @workspaceId AND graduated = 0
+         AND next_review IS NOT NULL AND next_review <= @end) AS dueMistakes
+  `).get({ workspaceId: scope.workspaceId, end }) as { dueReviews: number; dueMistakes: number };
 
   const candidates = db.prepare(`
     SELECT
@@ -160,11 +237,11 @@ export function getLearningAnalytics(db: Database.Database, today: string): Lear
       k.exam,
       COUNT(DISTINCT CASE WHEN m.graduated = 0 THEN m.id END) AS openMistakes
     FROM knowledge_points k
-    LEFT JOIN mistakes m ON m.knowledge_point_id = k.id
-    WHERE k.status != '已掌握'
+    LEFT JOIN mistakes m ON m.knowledge_point_id = k.id AND m.workspace_id = k.workspace_id
+    WHERE k.workspace_id = @workspaceId AND k.status != '已掌握'
     GROUP BY k.id
     HAVING k.mastery < 70 OR (k.next_review IS NOT NULL AND k.next_review <= @end) OR openMistakes > 0
-  `).all({ end }) as Array<{
+  `).all({ workspaceId: scope.workspaceId, end }) as Array<{
     id: string;
     subjectCode: string;
     title: string;
@@ -209,6 +286,46 @@ export function getLearningAnalytics(db: Database.Database, today: string): Lear
     )
     .slice(0, 10);
 
+  const minuteRows = db.prepare(`
+    SELECT day, COALESCE(SUM(duration_minutes), 0) AS minutes
+    FROM study_sessions
+    WHERE workspace_id = @workspaceId AND day BETWEEN @start AND @end
+    GROUP BY day
+  `).all({ workspaceId: scope.workspaceId, start, end }) as Array<{ day: string; minutes: number }>;
+  const minutesByDay = new Map(minuteRows.map((row) => [row.day, Number(row.minutes)]));
+  const dailyMinutes = Array.from({ length: 7 }, (_, index) => {
+    const day = shiftDateKey(start, index);
+    return { day, minutes: minutesByDay.get(day) ?? 0 };
+  });
+
+  const subjectMinutes = db.prepare(`
+    SELECT
+      s.subject_code AS code,
+      COALESCE(subj.name, s.subject_code, '未分科') AS name,
+      COALESCE(SUM(s.duration_minutes), 0) AS minutes
+    FROM study_sessions s
+    LEFT JOIN subjects subj
+      ON subj.workspace_id = s.workspace_id AND subj.code = s.subject_code
+    WHERE s.workspace_id = @workspaceId AND s.day BETWEEN @start AND @end
+    GROUP BY s.subject_code
+    ORDER BY minutes DESC, name ASC
+  `).all({ workspaceId: scope.workspaceId, start, end }) as Array<{
+    code: string | null;
+    name: string;
+    minutes: number;
+  }>;
+
+  const scoreRows = db.prepare(`
+    SELECT score, COUNT(*) AS count
+    FROM review_events
+    WHERE workspace_id = @workspaceId AND day BETWEEN @start AND @end
+    GROUP BY score
+  `).all({ workspaceId: scope.workspaceId, start, end }) as Array<{ score: number; count: number }>;
+  const scoreDist: [number, number, number, number] = [0, 0, 0, 0];
+  for (const row of scoreRows) {
+    if (row.score >= 0 && row.score <= 3) scoreDist[row.score] = row.count;
+  }
+
   return {
     week: {
       start,
@@ -220,6 +337,15 @@ export function getLearningAnalytics(db: Database.Database, today: string): Lear
       activeDays: weekRows.activeDays,
       reflectionDays: weekRows.reflectionDays,
     },
+    prevWeek: {
+      studyMinutes: Number(prevWeekRows.studyMinutes || 0),
+      activeDays: prevWeekRows.activeDays,
+      reviews: prevWeekRows.reviews,
+    },
+    dailyMinutes,
+    subjectMinutes,
+    scoreDist,
+    backlog,
     weakPoints,
   };
 }

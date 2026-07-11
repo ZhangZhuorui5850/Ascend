@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
-import { storeUploadedFile } from "../assets";
+import type { WorkspaceScope } from "../access-context";
+import { MAX_UPLOAD_BYTES, mimeTypeForUpload, storeUploadedFile } from "../assets";
 import { assertDateKey } from "../dates";
 import { ensureDay } from "./days";
 
@@ -52,161 +53,199 @@ function assertFolderName(name: string): string {
   return cleaned;
 }
 
-export function ensureFolderPath(db: Database.Database, pathValue: string): void {
+export function ensureFolderPath(db: Database.Database, scope: WorkspaceScope, pathValue: string): void {
   const normalized = normalizeFolderPath(pathValue);
   if (!normalized) return;
   const segments = normalized.split("/");
-  const insert = db.prepare("INSERT OR IGNORE INTO folders (path, name, parent_path) VALUES (?, ?, ?)");
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO folders (workspace_id, path, name, parent_path) VALUES (?, ?, ?, ?)
+  `);
   let parentPath = "";
   for (const segment of segments) {
     const currentPath = parentPath ? `${parentPath}/${segment}` : segment;
-    insert.run(currentPath, segment, parentPath);
+    insert.run(scope.workspaceId, currentPath, segment, parentPath);
     parentPath = currentPath;
   }
 }
 
-export function createFolder(db: Database.Database, input: { parentPath: string; name: string }): string {
+export function createFolder(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: { parentPath: string; name: string },
+): string {
   const parentPath = normalizeFolderPath(input.parentPath);
   const name = assertFolderName(input.name);
   if (parentPath) {
-    const parent = db.prepare("SELECT path FROM folders WHERE path = ?").get(parentPath);
+    const parent = db.prepare("SELECT path FROM folders WHERE workspace_id = ? AND path = ?").get(scope.workspaceId, parentPath);
     if (!parent) throw new Error("父文件夹不存在");
   }
   const fullPath = parentPath ? `${parentPath}/${name}` : name;
-  ensureFolderPath(db, fullPath);
+  ensureFolderPath(db, scope, fullPath);
   return fullPath;
 }
 
-export function renameFolder(db: Database.Database, input: { path: string; name: string }): string {
+export function renameFolder(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: { path: string; name: string },
+): string {
   const oldPath = normalizeFolderPath(input.path);
   if (!oldPath) throw new Error("不能重命名根目录");
-  const folder = db.prepare("SELECT path, parent_path FROM folders WHERE path = ?").get(oldPath) as
+  const folder = db.prepare("SELECT path, parent_path FROM folders WHERE workspace_id = ? AND path = ?").get(scope.workspaceId, oldPath) as
     | { path: string; parent_path: string }
     | undefined;
   if (!folder) throw new Error("文件夹不存在");
   const name = assertFolderName(input.name);
   const newPath = folder.parent_path ? `${folder.parent_path}/${name}` : name;
   if (newPath === oldPath) return oldPath;
-  const conflict = db.prepare("SELECT path FROM folders WHERE path = ?").get(newPath);
+  const conflict = db.prepare("SELECT path FROM folders WHERE workspace_id = ? AND path = ?").get(scope.workspaceId, newPath);
   if (conflict) throw new Error("同名文件夹已存在");
 
-  rewriteFolderPaths(db, oldPath, newPath, name);
+  rewriteFolderPaths(db, scope, oldPath, newPath, name);
   return newPath;
 }
 
-export function moveFolder(db: Database.Database, input: { path: string; newParentPath: string }): string {
+export function moveFolder(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: { path: string; newParentPath: string },
+): string {
   const oldPath = normalizeFolderPath(input.path);
   const newParent = normalizeFolderPath(input.newParentPath);
   if (!oldPath) throw new Error("不能移动根目录");
-  const folder = db.prepare("SELECT path, name, parent_path FROM folders WHERE path = ?").get(oldPath) as
+  const folder = db.prepare("SELECT path, name, parent_path FROM folders WHERE workspace_id = ? AND path = ?").get(scope.workspaceId, oldPath) as
     | { path: string; name: string; parent_path: string }
     | undefined;
   if (!folder) throw new Error("文件夹不存在");
   if (newParent === folder.parent_path) return oldPath;
   if (newParent === oldPath || newParent.startsWith(`${oldPath}/`)) throw new Error("不能移动到自己的子目录");
   if (newParent) {
-    const parent = db.prepare("SELECT path FROM folders WHERE path = ?").get(newParent);
+    const parent = db.prepare("SELECT path FROM folders WHERE workspace_id = ? AND path = ?").get(scope.workspaceId, newParent);
     if (!parent) throw new Error("目标文件夹不存在");
   }
   const newPath = newParent ? `${newParent}/${folder.name}` : folder.name;
-  const conflict = db.prepare("SELECT path FROM folders WHERE path = ?").get(newPath);
+  const conflict = db.prepare("SELECT path FROM folders WHERE workspace_id = ? AND path = ?").get(scope.workspaceId, newPath);
   if (conflict) throw new Error("目标位置已有同名文件夹");
 
-  rewriteFolderPaths(db, oldPath, newPath, folder.name);
+  rewriteFolderPaths(db, scope, oldPath, newPath, folder.name);
   return newPath;
 }
 
-function rewriteFolderPaths(db: Database.Database, oldPath: string, newPath: string, newName: string): void {
+function rewriteFolderPaths(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  oldPath: string,
+  newPath: string,
+  newName: string,
+): void {
   const prefix = `${oldPath}/`;
   const rewrite = db.transaction(() => {
     const parentPath = newPath.includes("/") ? newPath.slice(0, newPath.lastIndexOf("/")) : "";
-    db.prepare("UPDATE folders SET path = ?, name = ?, parent_path = ?, updated_at = CURRENT_TIMESTAMP WHERE path = ?").run(
+    db.prepare(`
+      UPDATE folders SET path = ?, name = ?, parent_path = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE workspace_id = ? AND path = ?
+    `).run(
       newPath,
       newName,
       parentPath,
+      scope.workspaceId,
       oldPath,
     );
-    const descendants = db.prepare("SELECT path, parent_path FROM folders WHERE path LIKE ?").all(`${prefix}%`) as Array<{
+    const descendants = db.prepare(`
+      SELECT path, parent_path FROM folders WHERE workspace_id = ? AND path LIKE ?
+    `).all(scope.workspaceId, `${prefix}%`) as Array<{
       path: string;
       parent_path: string;
     }>;
-    const updateDescendant = db.prepare("UPDATE folders SET path = ?, parent_path = ? WHERE path = ?");
+    const updateDescendant = db.prepare(`
+      UPDATE folders SET path = ?, parent_path = ? WHERE workspace_id = ? AND path = ?
+    `);
     for (const descendant of descendants) {
       updateDescendant.run(
         newPath + descendant.path.slice(oldPath.length),
         newPath + descendant.parent_path.slice(oldPath.length),
+        scope.workspaceId,
         descendant.path,
       );
     }
-    db.prepare("UPDATE assets SET folder_path = ? WHERE folder_path = ?").run(newPath, oldPath);
-    const files = db.prepare("SELECT id, folder_path FROM assets WHERE folder_path LIKE ?").all(`${prefix}%`) as Array<{
+    db.prepare("UPDATE assets SET folder_path = ? WHERE workspace_id = ? AND folder_path = ?").run(newPath, scope.workspaceId, oldPath);
+    const files = db.prepare(`
+      SELECT id, folder_path FROM assets WHERE workspace_id = ? AND folder_path LIKE ?
+    `).all(scope.workspaceId, `${prefix}%`) as Array<{
       id: number;
       folder_path: string;
     }>;
-    const updateFile = db.prepare("UPDATE assets SET folder_path = ? WHERE id = ?");
+    const updateFile = db.prepare("UPDATE assets SET folder_path = ? WHERE workspace_id = ? AND id = ?");
     for (const file of files) {
-      updateFile.run(newPath + file.folder_path.slice(oldPath.length), file.id);
+      updateFile.run(newPath + file.folder_path.slice(oldPath.length), scope.workspaceId, file.id);
     }
   });
   rewrite();
 }
 
 /** 删除空文件夹；含文件或子文件夹时拒绝删除。 */
-export function deleteFolder(db: Database.Database, pathValue: string): void {
+export function deleteFolder(db: Database.Database, scope: WorkspaceScope, pathValue: string): void {
   const folderPath = normalizeFolderPath(pathValue);
   if (!folderPath) throw new Error("不能删除根目录");
-  const folder = db.prepare("SELECT path FROM folders WHERE path = ?").get(folderPath);
+  const folder = db.prepare("SELECT path FROM folders WHERE workspace_id = ? AND path = ?").get(scope.workspaceId, folderPath);
   if (!folder) throw new Error("文件夹不存在");
-  const childFolder = db.prepare("SELECT path FROM folders WHERE parent_path = ? LIMIT 1").get(folderPath);
+  const childFolder = db.prepare("SELECT path FROM folders WHERE workspace_id = ? AND parent_path = ? LIMIT 1").get(scope.workspaceId, folderPath);
   if (childFolder) throw new Error("文件夹内还有子文件夹，先移动或删除它们");
-  const file = db.prepare("SELECT id FROM assets WHERE folder_path = ? LIMIT 1").get(folderPath);
+  const file = db.prepare("SELECT id FROM assets WHERE workspace_id = ? AND folder_path = ? LIMIT 1").get(scope.workspaceId, folderPath);
   if (file) throw new Error("文件夹内还有文件，先移动或删除它们");
-  db.prepare("DELETE FROM folders WHERE path = ?").run(folderPath);
+  db.prepare("DELETE FROM folders WHERE workspace_id = ? AND path = ?").run(scope.workspaceId, folderPath);
 }
 
-export function moveAsset(db: Database.Database, input: { assetId: number; folderPath: string }): void {
+export function moveAsset(db: Database.Database, scope: WorkspaceScope, input: { assetId: number; folderPath: string }): void {
   const folderPath = normalizeFolderPath(input.folderPath);
   if (folderPath) {
-    const folder = db.prepare("SELECT path FROM folders WHERE path = ?").get(folderPath);
+    const folder = db.prepare("SELECT path FROM folders WHERE workspace_id = ? AND path = ?").get(scope.workspaceId, folderPath);
     if (!folder) throw new Error("目标文件夹不存在");
   }
-  const result = db.prepare("UPDATE assets SET folder_path = ? WHERE id = ?").run(folderPath, input.assetId);
+  const result = db.prepare("UPDATE assets SET folder_path = ? WHERE workspace_id = ? AND id = ?").run(folderPath, scope.workspaceId, input.assetId);
   if (!result.changes) throw new Error("文件不存在");
 }
 
-export function renameAsset(db: Database.Database, input: { assetId: number; name: string }): void {
+export function renameAsset(db: Database.Database, scope: WorkspaceScope, input: { assetId: number; name: string }): void {
   const name = input.name.trim();
   if (!name) throw new Error("文件名必填");
-  const result = db.prepare("UPDATE assets SET original_name = ? WHERE id = ?").run(name, input.assetId);
+  const result = db.prepare("UPDATE assets SET original_name = ? WHERE workspace_id = ? AND id = ?").run(name, scope.workspaceId, input.assetId);
   if (!result.changes) throw new Error("文件不存在");
 }
 
 /** 删除文件记录并解除全部关联；磁盘上的内容寻址 blob 保留（可被去重复用）。 */
-export function deleteAsset(db: Database.Database, assetId: number): void {
-  const asset = db.prepare("SELECT id, relative_path FROM assets WHERE id = ?").get(assetId) as
+export function deleteAsset(db: Database.Database, scope: WorkspaceScope, assetId: number): void {
+  const asset = db.prepare("SELECT id, relative_path FROM assets WHERE workspace_id = ? AND id = ?").get(scope.workspaceId, assetId) as
     | { id: number; relative_path: string }
     | undefined;
   if (!asset) throw new Error("文件不存在");
   const remove = db.transaction(() => {
-    db.prepare("DELETE FROM asset_links WHERE asset_id = ?").run(assetId);
-    db.prepare("DELETE FROM asset_tags WHERE asset_id = ?").run(assetId);
-    db.prepare("DELETE FROM asset_knowledge_tags WHERE asset_id = ?").run(assetId);
-    db.prepare("DELETE FROM assets WHERE id = ?").run(assetId);
-    db.prepare("UPDATE blobs SET ref_count = MAX(0, ref_count - 1) WHERE storage_key = ?").run(asset.relative_path);
+    db.prepare("DELETE FROM asset_links WHERE workspace_id = ? AND asset_id = ?").run(scope.workspaceId, assetId);
+    db.prepare("DELETE FROM asset_tags WHERE workspace_id = ? AND asset_id = ?").run(scope.workspaceId, assetId);
+    db.prepare("DELETE FROM asset_knowledge_tags WHERE workspace_id = ? AND asset_id = ?").run(scope.workspaceId, assetId);
+    db.prepare("DELETE FROM assets WHERE workspace_id = ? AND id = ?").run(scope.workspaceId, assetId);
+    db.prepare("UPDATE blobs SET ref_count = MAX(0, ref_count - 1) WHERE workspace_id = ? AND storage_key = ?").run(
+      scope.workspaceId,
+      asset.relative_path,
+    );
   });
   remove();
 }
 
-export function getExplorer(db: Database.Database, pathValue: string): ExplorerState {
+export function getExplorer(db: Database.Database, scope: WorkspaceScope, pathValue: string): ExplorerState {
   const currentPath = normalizeFolderPath(pathValue);
-  const exists = !currentPath || Boolean(db.prepare("SELECT path FROM folders WHERE path = ?").get(currentPath));
+  const exists = !currentPath || Boolean(db.prepare("SELECT path FROM folders WHERE workspace_id = ? AND path = ?").get(scope.workspaceId, currentPath));
 
-  const folderRows = db.prepare("SELECT path, name, parent_path FROM folders ORDER BY name ASC").all() as Array<{
+  const folderRows = db.prepare(`
+    SELECT path, name, parent_path FROM folders WHERE workspace_id = ? ORDER BY name ASC
+  `).all(scope.workspaceId) as Array<{
     path: string;
     name: string;
     parent_path: string;
   }>;
-  const fileCounts = db.prepare("SELECT folder_path AS path, COUNT(*) AS count FROM assets GROUP BY folder_path").all() as Array<{
+  const fileCounts = db.prepare(`
+    SELECT folder_path AS path, COUNT(*) AS count FROM assets WHERE workspace_id = ? GROUP BY folder_path
+  `).all(scope.workspaceId) as Array<{
     path: string;
     count: number;
   }>;
@@ -252,12 +291,12 @@ export function getExplorer(db: Database.Database, pathValue: string): ExplorerS
       MAX(l.subject_code) AS subject_code,
       COALESCE(GROUP_CONCAT(DISTINCT k.title), '') AS knowledge_titles
     FROM assets a
-    LEFT JOIN asset_links l ON l.asset_id = a.id
-    LEFT JOIN knowledge_points k ON k.id = l.knowledge_point_id
-    WHERE a.folder_path = ?
+    LEFT JOIN asset_links l ON l.asset_id = a.id AND l.workspace_id = a.workspace_id
+    LEFT JOIN knowledge_points k ON k.id = l.knowledge_point_id AND k.workspace_id = a.workspace_id
+    WHERE a.workspace_id = ? AND a.folder_path = ?
     GROUP BY a.id
     ORDER BY a.original_name COLLATE NOCASE ASC
-  `).all(currentPath) as ExplorerFile[];
+  `).all(scope.workspaceId, currentPath) as ExplorerFile[];
 
   const segments = currentPath ? currentPath.split("/") : [];
   const breadcrumbs = segments.map((name, index) => ({
@@ -268,7 +307,7 @@ export function getExplorer(db: Database.Database, pathValue: string): ExplorerS
   return { currentPath, exists, breadcrumbs, tree, folders, files, totalFiles };
 }
 
-export function searchAssets(db: Database.Database, query: string): ExplorerFile[] {
+export function searchAssets(db: Database.Database, scope: WorkspaceScope, query: string): ExplorerFile[] {
   const term = query.trim();
   if (!term) return [];
   return db.prepare(`
@@ -277,17 +316,35 @@ export function searchAssets(db: Database.Database, query: string): ExplorerFile
       MAX(l.subject_code) AS subject_code,
       COALESCE(GROUP_CONCAT(DISTINCT k.title), '') AS knowledge_titles
     FROM assets a
-    LEFT JOIN asset_links l ON l.asset_id = a.id
-    LEFT JOIN knowledge_points k ON k.id = l.knowledge_point_id
-    WHERE a.original_name LIKE ? ESCAPE '\\'
+    LEFT JOIN asset_links l ON l.asset_id = a.id AND l.workspace_id = a.workspace_id
+    LEFT JOIN knowledge_points k ON k.id = l.knowledge_point_id AND k.workspace_id = a.workspace_id
+    WHERE a.workspace_id = ? AND a.original_name LIKE ? ESCAPE '\\'
     GROUP BY a.id
     ORDER BY a.created_at DESC
     LIMIT 100
-  `).all(`%${term.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`) as ExplorerFile[];
+  `).all(scope.workspaceId, `%${term.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`) as ExplorerFile[];
+}
+
+/**
+ * 空间用量与配额：按 blob 去重统计（ref_count > 0 的内容寻址块），同一文件多次上传只算一份。
+ */
+export function getStorageUsage(
+  db: Database.Database,
+  scope: WorkspaceScope,
+): { usedBytes: number; quotaBytes: number } {
+  const workspace = db.prepare("SELECT storage_quota_bytes FROM workspaces WHERE id = ?").get(scope.workspaceId) as
+    | { storage_quota_bytes: number }
+    | undefined;
+  if (!workspace) throw new Error("学习空间不存在");
+  const usage = db.prepare(
+    "SELECT COALESCE(SUM(size), 0) AS bytes FROM blobs WHERE workspace_id = ? AND ref_count > 0",
+  ).get(scope.workspaceId) as { bytes: number };
+  return { usedBytes: usage.bytes, quotaBytes: workspace.storage_quota_bytes };
 }
 
 export async function createAssetFromUpload(
   db: Database.Database,
+  scope: WorkspaceScope,
   input: {
     file: File;
     day?: string;
@@ -300,18 +357,28 @@ export async function createAssetFromUpload(
     uploadRoot?: string;
   },
 ): Promise<{ id: number }> {
+  if (input.file.size > MAX_UPLOAD_BYTES) throw new Error("单个文件不能超过 20MB");
+  const { usedBytes, quotaBytes } = getStorageUsage(db, scope);
+  if (usedBytes + input.file.size > quotaBytes) throw new Error("存储空间已满");
   const day = assertDateKey(input.day || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" }));
-  ensureDay(db, day);
-  const stored = await storeUploadedFile({ file: input.file, day, uploadRoot: input.uploadRoot });
+  ensureDay(db, scope, day);
+  const stored = await storeUploadedFile({
+    workspaceId: scope.workspaceId,
+    file: input.file,
+    day,
+    uploadRoot: input.uploadRoot,
+  });
   const folderPath = normalizeFolderPath(input.folderPath || "");
 
-  const mimeType = input.file.type || "application/octet-stream";
+  // 服务端按扩展名纠正 MIME，客户端 type 只作候补，防止代码/文本文件被浏览器标错。
+  const mimeType = mimeTypeForUpload(input.file.name, input.file.type);
   db.prepare(`
-    INSERT INTO blobs (id, sha256, size, mime_type, storage_key, ref_count)
-    VALUES (@id, @sha256, @size, @mimeType, @storageKey, 0)
+    INSERT INTO blobs (workspace_id, id, sha256, size, mime_type, storage_key, ref_count)
+    VALUES (@workspaceId, @id, @sha256, @size, @mimeType, @storageKey, 0)
     ON CONFLICT(id) DO UPDATE SET ref_count = ref_count
   `).run({
-    id: stored.sha256,
+    workspaceId: scope.workspaceId,
+    id: `${scope.workspaceId}:${stored.sha256}`,
     sha256: stored.sha256,
     size: stored.size,
     mimeType,
@@ -319,9 +386,10 @@ export async function createAssetFromUpload(
   });
 
   const result = db.prepare(`
-    INSERT INTO assets (day, original_name, safe_name, relative_path, mime_type, size, category, folder_path, note)
-    VALUES (@day, @originalName, @safeName, @relativePath, @mimeType, @size, @category, @folderPath, @note)
+    INSERT INTO assets (workspace_id, day, original_name, safe_name, relative_path, mime_type, size, category, folder_path, note)
+    VALUES (@workspaceId, @day, @originalName, @safeName, @relativePath, @mimeType, @size, @category, @folderPath, @note)
   `).run({
+    workspaceId: scope.workspaceId,
     day,
     originalName: input.file.name,
     safeName: stored.safeName,
@@ -333,9 +401,12 @@ export async function createAssetFromUpload(
     note: (input.note || "").trim(),
   });
   const assetId = Number(result.lastInsertRowid);
-  db.prepare("UPDATE blobs SET ref_count = ref_count + 1 WHERE id = ?").run(stored.sha256);
-  ensureFolderPath(db, folderPath);
-  linkAsset(db, {
+  db.prepare("UPDATE blobs SET ref_count = ref_count + 1 WHERE workspace_id = ? AND id = ?").run(
+    scope.workspaceId,
+    `${scope.workspaceId}:${stored.sha256}`,
+  );
+  ensureFolderPath(db, scope, folderPath);
+  linkAsset(db, scope, {
     assetId,
     subjectCode: input.subjectCode,
     chapterId: input.chapterId,
@@ -346,6 +417,7 @@ export async function createAssetFromUpload(
 
 export function linkAsset(
   db: Database.Database,
+  scope: WorkspaceScope,
   input: { assetId: number; subjectCode?: string; chapterId?: string; knowledgePointIds?: string[] },
 ): void {
   const subjectCode = input.subjectCode?.trim() || null;
@@ -354,18 +426,22 @@ export function linkAsset(
   if (!subjectCode && !chapterId && !pointIds.length) return;
 
   const insert = db.prepare(`
-    INSERT OR IGNORE INTO asset_links (asset_id, subject_code, chapter_id, knowledge_point_id)
-    VALUES (?, ?, ?, ?)
+    INSERT OR IGNORE INTO asset_links (workspace_id, asset_id, subject_code, chapter_id, knowledge_point_id)
+    VALUES (?, ?, ?, ?, ?)
   `);
   if (!pointIds.length) {
-    insert.run(input.assetId, subjectCode, chapterId, null);
+    const asset = db.prepare("SELECT id FROM assets WHERE workspace_id = ? AND id = ?").get(scope.workspaceId, input.assetId);
+    if (!asset) throw new Error("文件不存在");
+    insert.run(scope.workspaceId, input.assetId, subjectCode, chapterId, null);
     return;
   }
-  const lookupPoint = db.prepare("SELECT subject_code, chapter_id FROM knowledge_points WHERE id = ?");
+  const lookupPoint = db.prepare(`
+    SELECT subject_code, chapter_id FROM knowledge_points WHERE workspace_id = ? AND id = ?
+  `);
   for (const pointId of pointIds) {
-    const point = lookupPoint.get(pointId) as { subject_code: string; chapter_id: string | null } | undefined;
+    const point = lookupPoint.get(scope.workspaceId, pointId) as { subject_code: string; chapter_id: string | null } | undefined;
     if (!point) continue;
-    insert.run(input.assetId, point.subject_code, point.chapter_id, pointId);
+    insert.run(scope.workspaceId, input.assetId, point.subject_code, point.chapter_id, pointId);
   }
 }
 

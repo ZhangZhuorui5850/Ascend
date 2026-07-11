@@ -2,15 +2,15 @@ import Link from "next/link";
 import { SubjectCreate } from "@/components/SubjectCreate";
 import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
-import { requirePageSession } from "@/lib/page-auth";
+import { requirePageWorkspace } from "@/lib/page-auth";
 import { getSubjectOverviews, TRACK_NAMES, type SubjectOverview, type SubjectTrack } from "@/lib/repo/knowledge";
 
 export const dynamic = "force-dynamic";
 
 export default async function SubjectsPage() {
-  await requirePageSession("/subjects");
+  const access = await requirePageWorkspace("/subjects");
 
-  const subjects = getSubjectOverviews(getDb(), todayKey());
+  const subjects = getSubjectOverviews(getDb(), access, todayKey());
   const groups: Array<{ track: SubjectTrack; items: SubjectOverview[] }> = (["written", "machine"] as const)
     .map((track) => ({ track, items: subjects.filter((subject) => subject.track === track) }))
     .filter((group) => group.items.length > 0);

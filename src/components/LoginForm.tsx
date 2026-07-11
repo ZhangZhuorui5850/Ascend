@@ -8,7 +8,7 @@ export function LoginForm({ nextPath }: { nextPath?: string }) {
 
   return (
     <form action={formAction} className="loginCard">
-      <span className="eyebrow">ZGCA 学习工作台</span>
+      <span className="eyebrow">登峰 · ASCEND</span>
       <h1>回到今天的学习现场</h1>
       <p>计划、资料、错题和复盘，都在一个私有工作台里继续。</p>
       <input name="next" type="hidden" value={nextPath || "/"} />

@@ -21,21 +21,35 @@ try {
   await auditLogin("login-desktop", 1440, 900);
   await auditLogin("login-mobile", 390, 844);
   await login();
-  await auditDay("desktop", 1440, 900, {
-    sidebar: true,
-    capturePanel: true,
-    mobileNav: false,
-  });
-  await auditDay("tablet", 1024, 900, {
-    sidebar: true,
-    capturePanel: false,
-    mobileNav: false,
-  });
-  await auditDay("mobile", 390, 844, {
-    sidebar: false,
-    capturePanel: false,
-    mobileNav: true,
-  });
+  await auditPage("home-desktop", "/", 1440, 900, ".homeFocus");
+  await auditDay("desktop", 1440, 900, { sidebar: true, capturePanel: false, mobileNav: false });
+  await auditPage("files-desktop", "/assets", 1440, 900, ".driveExplorer");
+  await auditPage("subjects-tablet", "/subjects", 1024, 900, ".subjectCards");
+  await auditPage("home-mobile", "/", 390, 844, ".homeFocus");
+  await auditDay("mobile", 390, 844, { sidebar: false, capturePanel: false, mobileNav: true });
+  await auditPage("files-mobile", "/assets", 390, 844, ".driveExplorer");
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
+  await page.keyboard.press("Control+K");
+  await expectVisible(".commandPalette", "keyboard command palette opens");
+  await page.getByLabel("搜索功能").fill("资料库");
+  await page.keyboard.press("Enter");
+  await page.waitForURL(`${baseUrl}/assets`, { timeout: 10_000 });
+  console.log("command palette keyboard navigation passed");
+  await page.locator("button.topbarIconButton").first().click();
+  const explicitTheme = await page.evaluate(() => document.documentElement.dataset.theme);
+  if (explicitTheme !== "light" && explicitTheme !== "dark") throw new Error(`theme switch did not set an explicit theme: ${explicitTheme}`);
+  await assertNoHorizontalOverflow("explicit theme");
+  console.log(`theme switch passed (${explicitTheme})`);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "更多" }).click();
+  await expectVisible(".mobileMoreSheet", "mobile More sheet opens");
+  await page.getByRole("button", { name: "关闭更多菜单" }).click();
+
+  await page.goto(`${baseUrl}/day/${day}`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "收纳" }).click();
   await expectVisible('[data-testid="capture-panel"]', "mobile capture panel opens");
   await expectVisible('[data-testid="capture-backdrop"]', "mobile capture backdrop opens");
@@ -68,6 +82,13 @@ async function auditDay(name, width, height, expected) {
   await expectVisibility(".sidebar", expected.sidebar, `${name} sidebar`);
   await expectVisibility('[data-testid="capture-panel"]', expected.capturePanel, `${name} capture panel`);
   await expectVisibility('[data-testid="mobile-nav"]', expected.mobileNav, `${name} mobile nav`);
+  await assertNoHorizontalOverflow(name);
+}
+
+async function auditPage(name, pathname, width, height, selector) {
+  await page.setViewportSize({ width, height });
+  await page.goto(`${baseUrl}${pathname}`, { waitUntil: "networkidle" });
+  await expectVisible(selector, `${name} key content`);
   await assertNoHorizontalOverflow(name);
 }
 

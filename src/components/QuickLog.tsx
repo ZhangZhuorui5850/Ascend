@@ -1,12 +1,19 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { addMistake, addStudySession } from "@/app/actions/day";
 import type { SubjectRow } from "@/lib/repo/knowledge";
 
-export function QuickLog({ day, subjects }: { day: string; subjects: SubjectRow[] }) {
+const MINUTE_PRESETS = [25, 50, 90];
+
+export function QuickLog({ day, subjects, recentCauses = [] }: {
+  day: string;
+  subjects: SubjectRow[];
+  recentCauses?: string[];
+}) {
   const router = useRouter();
+  const titleRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<"session" | "mistake">("session");
   const [title, setTitle] = useState("");
   const [minutes, setMinutes] = useState(50);
@@ -28,6 +35,7 @@ export function QuickLog({ day, subjects }: { day: string; subjects: SubjectRow[
       setTitle("");
       setCause("");
       router.refresh();
+      titleRef.current?.focus();
     } else {
       setError(result.error || "操作失败");
     }
@@ -49,6 +57,7 @@ export function QuickLog({ day, subjects }: { day: string; subjects: SubjectRow[
       </div>
       <div className="quickLogForm">
         <input
+          ref={titleRef}
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           onKeyDown={(event) => {
@@ -57,21 +66,50 @@ export function QuickLog({ day, subjects }: { day: string; subjects: SubjectRow[
           placeholder={mode === "session" ? "做了什么：如 PCA 推导重写" : "错在哪：如 CNN 参数量漏 bias"}
         />
         {mode === "session" ? (
-          <label className="inlineField">
+          <div className="inlineField minutePresets">
             分钟
+            <div className="tagPicker" role="group" aria-label="常用时长">
+              {MINUTE_PRESETS.map((preset) => (
+                <button
+                  className={minutes === preset ? "active" : ""}
+                  key={preset}
+                  onClick={() => setMinutes(preset)}
+                  type="button"
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
             <input
+              aria-label="自定义分钟数"
               min="0"
               onChange={(event) => setMinutes(Math.max(0, Number(event.target.value) || 0))}
               type="number"
               value={minutes}
             />
-          </label>
+          </div>
         ) : (
-          <input
-            value={cause}
-            onChange={(event) => setCause(event.target.value)}
-            placeholder="原因：概念混淆 / 审题漏条件 / 公式不熟…"
-          />
+          <>
+            <input
+              value={cause}
+              onChange={(event) => setCause(event.target.value)}
+              placeholder="原因：概念混淆 / 审题漏条件 / 公式不熟…"
+            />
+            {recentCauses.length ? (
+              <div className="tagPicker" role="group" aria-label="最近用过的原因">
+                {recentCauses.map((item) => (
+                  <button
+                    className={cause === item ? "active" : ""}
+                    key={item}
+                    onClick={() => setCause(item)}
+                    type="button"
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </>
         )}
         <div className="quickLogRow">
           <select onChange={(event) => setSubjectCode(event.target.value)} value={subjectCode}>

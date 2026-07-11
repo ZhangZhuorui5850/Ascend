@@ -4,7 +4,9 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { initializeDatabase } from "./db";
 import { getAppliedMigrations, runMigrations } from "./migrations";
+import { LEGACY_WORKSPACE_ID } from "./repo/workspaces";
 
 describe("runMigrations", () => {
   const dirs: string[] = [];
@@ -42,6 +44,85 @@ describe("runMigrations", () => {
     expect(
       db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'upload_sessions'").get(),
     ).toMatchObject({ name: "upload_sessions" });
+  });
+
+  it("adds identity and workspace schema", () => {
+    const db = new Database(":memory:");
+
+    runMigrations(db);
+
+    const userColumns = db.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
+    expect(userColumns.map((column) => column.name)).toEqual(
+      expect.arrayContaining([
+        "role",
+        "status",
+        "must_change_password",
+        "last_login_at",
+        "password_changed_at",
+      ]),
+    );
+    for (const table of ["workspaces", "invitations", "audit_logs", "login_attempts"]) {
+      expect(
+        db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table),
+      ).toMatchObject({ name: table });
+    }
+  });
+
+  it("assigns legacy domain rows to the legacy workspace", () => {
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    db.prepare("INSERT INTO subjects (code, name, description) VALUES ('M1', '线性代数', '')").run();
+    db.prepare("INSERT INTO daily_entries (date) VALUES ('2026-07-10')").run();
+    db.prepare("INSERT INTO folders (path, name) VALUES ('讲义', '讲义')").run();
+
+    runMigrations(db);
+
+    for (const table of ["subjects", "daily_entries", "folders"]) {
+      expect(db.prepare(`SELECT workspace_id FROM ${table} LIMIT 1`).get()).toEqual({
+        workspace_id: "workspace:legacy",
+      });
+    }
+  });
+
+  it("allows formerly global keys in different workspaces", () => {
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    runMigrations(db);
+    for (const suffix of ["1", "2"]) {
+      db.prepare(`
+        INSERT INTO users (id, email, password_hash, display_name)
+        VALUES (?, ?, 'hash', ?)
+      `).run(`u${suffix}`, `u${suffix}@example.com`, `用户${suffix}`);
+      db.prepare(`
+        INSERT INTO workspaces (id, owner_user_id, display_name)
+        VALUES (?, ?, ?)
+      `).run(`w${suffix}`, `u${suffix}`, `空间${suffix}`);
+      db.prepare(`
+        INSERT INTO subjects (workspace_id, code, name, description)
+        VALUES (?, 'M1', ?, '')
+      `).run(`w${suffix}`, `科目${suffix}`);
+      db.prepare(`
+        INSERT INTO daily_entries (workspace_id, date)
+        VALUES (?, '2026-07-10')
+      `).run(`w${suffix}`);
+      db.prepare(`
+        INSERT INTO folders (workspace_id, path, name)
+        VALUES (?, '讲义', '讲义')
+      `).run(`w${suffix}`);
+      db.prepare(`
+        INSERT INTO app_settings (workspace_id, key, value)
+        VALUES (?, 'review_limit', '20')
+      `).run(`w${suffix}`);
+    }
+
+    expect(db.prepare("SELECT COUNT(*) AS count FROM subjects WHERE code = 'M1'").get()).toEqual({ count: 2 });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM daily_entries WHERE date = '2026-07-10'").get()).toEqual({
+      count: 2,
+    });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM folders WHERE path = '讲义'").get()).toEqual({ count: 2 });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM app_settings WHERE key = 'review_limit'").get()).toEqual({
+      count: 2,
+    });
   });
 
   it("is idempotent", () => {
@@ -149,12 +230,14 @@ describe("runMigrations", () => {
     runMigrations(db, { uploadRoot });
 
     const sha256 = createHash("sha256").update("legacy asset").digest("hex");
-    const storageKey = `blobs/${sha256.slice(0, 2)}/${sha256}`;
+    const storageKey = `${encodeURIComponent(LEGACY_WORKSPACE_ID)}/blobs/${sha256.slice(0, 2)}/${sha256}`;
     const asset = db.prepare("SELECT relative_path, size FROM assets WHERE id = 1").get() as {
       relative_path: string;
       size: number;
     };
-    const blob = db.prepare("SELECT sha256, storage_key, ref_count FROM blobs WHERE id = ?").get(sha256);
+    const blob = db.prepare("SELECT sha256, storage_key, ref_count FROM blobs WHERE id = ?").get(
+      `${LEGACY_WORKSPACE_ID}:${sha256}`,
+    );
 
     expect(asset).toEqual({ relative_path: storageKey, size: "legacy asset".length });
     expect(blob).toMatchObject({ sha256, storage_key: storageKey, ref_count: 1 });

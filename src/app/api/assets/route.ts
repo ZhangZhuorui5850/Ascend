@@ -1,11 +1,11 @@
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db";
 import { createAssetFromUpload } from "@/lib/repo/library";
-import { assertSameOrigin, authErrorResponse, requireSession } from "@/lib/request-auth";
+import { assertSameOrigin, authErrorResponse, requireWorkspace } from "@/lib/request-auth";
 
 export async function POST(request: Request) {
   try {
-    await requireSession(request);
+    const access = await requireWorkspace(request);
     await assertSameOrigin(request);
 
     const formData = await request.formData();
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Missing file field" }, { status: 400 });
     }
 
-    const asset = await createAssetFromUpload(getDb(), {
+    const asset = await createAssetFromUpload(getDb(), access, {
       file,
       day: String(formData.get("day") || "") || undefined,
       subjectCode: String(formData.get("subjectCode") || ""),

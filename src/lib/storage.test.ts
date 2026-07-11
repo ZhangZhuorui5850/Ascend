@@ -23,10 +23,11 @@ describe("copyAssetIntoLibrary", () => {
       sourcePath: source,
       originalName: "../PCA 笔记.md",
       day: "2026-07-06",
+      workspaceId: "workspace-a",
       uploadRoot: path.join(tempRoot, "uploads"),
     });
 
-    expect(stored.relativePath).toBe("2026/07/06/original/PCA 笔记.md");
+    expect(stored.relativePath).toBe("workspace-a/2026/07/06/original/PCA 笔记.md");
     expect(readFileSync(stored.absolutePath, "utf8")).toBe("# PCA\n");
   });
 });

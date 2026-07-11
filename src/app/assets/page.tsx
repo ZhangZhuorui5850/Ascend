@@ -1,7 +1,7 @@
 import { FileExplorer } from "@/components/FileExplorer";
 import { getDb } from "@/lib/db";
-import { requirePageSession } from "@/lib/page-auth";
-import { getExplorer, searchAssets } from "@/lib/repo/library";
+import { requirePageWorkspace } from "@/lib/page-auth";
+import { getExplorer, getStorageUsage, searchAssets } from "@/lib/repo/library";
 
 export const dynamic = "force-dynamic";
 
@@ -12,18 +12,19 @@ function first(value: string | string[] | undefined): string {
 }
 
 export default async function AssetsPage({ searchParams }: { searchParams: Promise<Query> }) {
-  await requirePageSession("/assets");
+  const access = await requirePageWorkspace("/assets");
 
   const query = await searchParams;
   const folder = first(query.folder);
   const q = first(query.q).trim();
   const db = getDb();
-  const explorer = getExplorer(db, folder);
-  const searchResults = q ? searchAssets(db, q) : null;
+  const explorer = getExplorer(db, access, folder);
+  const searchResults = q ? searchAssets(db, access, q) : null;
+  const usage = getStorageUsage(db, access);
 
   return (
     <div className="pageStack fullHeight">
-      <FileExplorer explorer={explorer} searchQuery={q} searchResults={searchResults} />
+      <FileExplorer explorer={explorer} searchQuery={q} searchResults={searchResults} usage={usage} />
     </div>
   );
 }

@@ -3,16 +3,16 @@ import { notFound } from "next/navigation";
 import { SubjectWorkbench } from "@/components/SubjectWorkbench";
 import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
-import { requirePageSession } from "@/lib/page-auth";
+import { requirePageWorkspace } from "@/lib/page-auth";
 import { getSubjectDetail } from "@/lib/repo/knowledge";
 
 export const dynamic = "force-dynamic";
 
 export default async function SubjectPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
-  await requirePageSession(`/subjects/${code}`);
+  const access = await requirePageWorkspace(`/subjects/${code}`);
 
-  const detail = getSubjectDetail(getDb(), decodeURIComponent(code));
+  const detail = getSubjectDetail(getDb(), access, decodeURIComponent(code));
   if (!detail) notFound();
 
   const today = todayKey();

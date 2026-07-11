@@ -1,0 +1,130 @@
+/* ============================================================
+   ZGCA 学习工作台 — 设计令牌 · 朱砂手帐（Cinnabar Ledger）
+   亮色：宣纸 + 墨 + 朱砂印章红
+   暗色：夜灯下的手帐（暖褐墨面，非冷灰反色）
+   ============================================================ */
+
+:root {
+  color-scheme: light;
+  --bg: #f2eee3;
+  --bg-subtle: #ece7d8;
+  --surface: #faf7ef;
+  --surface-soft: #f3efe2;
+  --surface-raised: #fdfbf4;
+  --surface-inverse: #2a2318;
+  --line: #ddd5c1;
+  --line-strong: #c8bda2;
+  --ink: #262015;
+  --ink-soft: #4a4232;
+  --muted: #85795f;
+  --quiet: #a89c80;
+  --accent: #b13a20;
+  --accent-hover: #96301a;
+  --accent-ink: #fdf6ec;
+  --accent-soft: #f3e2d6;
+  --accent-line: #e2c3ae;
+  --danger: #b02818;
+  --danger-soft: #f7ded7;
+  --warn: #9a6716;
+  --warn-soft: #f3e8cd;
+  --ok: #47714f;
+  --ok-soft: #e3ecdf;
+  --info: #39608a;
+  --info-soft: #e1e9f1;
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --shadow-xs: 0 1px 0 rgba(92, 76, 50, 0.09);
+  --shadow: 2px 2px 0 rgba(122, 102, 70, 0.13);
+  --shadow-lg: 4px 4px 0 rgba(122, 102, 70, 0.13), 0 18px 44px rgba(92, 76, 50, 0.14);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --sidebar-width: 240px;
+  --sidebar-collapsed: 76px;
+  --topbar-height: 68px;
+  --capture-width: min(420px, calc(100vw - 24px));
+  --content-max: 1120px;
+  --card-pad: 20px;
+  --card-pad-lg: 24px;
+  --font-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+  --font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", serif;
+  --font-num: Georgia, "Times New Roman", "Noto Serif SC", "SimSun", serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --paper-grid: color-mix(in srgb, var(--line) 42%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #1c1710;
+    --bg-subtle: #211b13;
+    --surface: #251f16;
+    --surface-soft: #2b241a;
+    --surface-raised: #2d261c;
+    --surface-inverse: #f0e7d3;
+    --line: #3b3222;
+    --line-strong: #50442e;
+    --ink: #ece2cc;
+    --ink-soft: #cec19f;
+    --muted: #9b8d6d;
+    --quiet: #6e6249;
+    --accent: #de6743;
+    --accent-hover: #e97f5e;
+    --accent-ink: #201409;
+    --accent-soft: #40251a;
+    --accent-line: #5f3524;
+    --danger: #e0604a;
+    --danger-soft: #3c2019;
+    --warn: #d3a04b;
+    --warn-soft: #372b15;
+    --ok: #85ac8b;
+    --ok-soft: #232f23;
+    --info: #82a6c8;
+    --info-soft: #1d2936;
+    --shadow-xs: 0 1px 0 rgba(0, 0, 0, 0.35);
+    --shadow: 2px 2px 0 rgba(0, 0, 0, 0.4);
+    --shadow-lg: 4px 4px 0 rgba(0, 0, 0, 0.4), 0 18px 44px rgba(0, 0, 0, 0.5);
+    --paper-grid: color-mix(in srgb, var(--line) 30%, transparent);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1c1710;
+  --bg-subtle: #211b13;
+  --surface: #251f16;
+  --surface-soft: #2b241a;
+  --surface-raised: #2d261c;
+  --surface-inverse: #f0e7d3;
+  --line: #3b3222;
+  --line-strong: #50442e;
+  --ink: #ece2cc;
+  --ink-soft: #cec19f;
+  --muted: #9b8d6d;
+  --quiet: #6e6249;
+  --accent: #de6743;
+  --accent-hover: #e97f5e;
+  --accent-ink: #201409;
+  --accent-soft: #40251a;
+  --accent-line: #5f3524;
+  --danger: #e0604a;
+  --danger-soft: #3c2019;
+  --warn: #d3a04b;
+  --warn-soft: #372b15;
+  --ok: #85ac8b;
+  --ok-soft: #232f23;
+  --info: #82a6c8;
+  --info-soft: #1d2936;
+  --shadow-xs: 0 1px 0 rgba(0, 0, 0, 0.35);
+  --shadow: 2px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-lg: 4px 4px 0 rgba(0, 0, 0, 0.4), 0 18px 44px rgba(0, 0, 0, 0.5);
+  --paper-grid: color-mix(in srgb, var(--line) 30%, transparent);
+}

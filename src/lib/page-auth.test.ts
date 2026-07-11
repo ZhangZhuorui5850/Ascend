@@ -1,0 +1,40 @@
+import { describe, expect, it } from "vitest";
+import type { AccessContext } from "./access-context";
+import { workspaceRedirectTarget } from "./page-auth";
+
+function makeContext(overrides: Partial<AccessContext> = {}): AccessContext {
+  return {
+    userId: "user-1",
+    email: "user@example.com",
+    displayName: "用户",
+    role: "user",
+    status: "active",
+    workspaceId: "workspace:legacy",
+    mustChangePassword: false,
+    ...overrides,
+  };
+}
+
+describe("workspaceRedirectTarget", () => {
+  it("sends an authenticated user without a workspace back to login instead of crashing", () => {
+    expect(workspaceRedirectTarget(makeContext({ workspaceId: null }), "/")).toBe("/login?next=%2F");
+  });
+
+  it("preserves the requested path in the login redirect", () => {
+    expect(workspaceRedirectTarget(makeContext({ workspaceId: null }), "/day/2026-07-10")).toBe(
+      "/login?next=%2Fday%2F2026-07-10",
+    );
+  });
+
+  it("sends a user with a pending forced password change to the change-password page", () => {
+    expect(workspaceRedirectTarget(makeContext({ mustChangePassword: true }), "/")).toBe("/change-password");
+  });
+
+  it("sends an admin to the admin console instead of a learning workspace", () => {
+    expect(workspaceRedirectTarget(makeContext({ role: "admin", workspaceId: null }), "/")).toBe("/admin");
+  });
+
+  it("returns null for an active user with a workspace", () => {
+    expect(workspaceRedirectTarget(makeContext(), "/")).toBeNull();
+  });
+});

@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import type { WorkspaceScope } from "../access-context";
 import { assertDateKey } from "../dates";
 import { listNotes, listTasks, type DayNote, type DayTask } from "./planner";
 
@@ -46,59 +47,76 @@ export type DayData = {
   mistakes: Array<{ id: number; title: string; cause: string; next_review: string | null; graduated: number }>;
 };
 
-export function ensureDay(db: Database.Database, date: string): void {
+export function getTomorrowPlan(db: Database.Database, scope: WorkspaceScope, date: string): string {
   assertDateKey(date);
-  db.prepare("INSERT OR IGNORE INTO daily_entries (date) VALUES (?)").run(date);
+  const row = db
+    .prepare("SELECT tomorrow FROM daily_entries WHERE workspace_id = ? AND date = ?")
+    .get(scope.workspaceId, date) as { tomorrow: string } | undefined;
+  return row?.tomorrow?.trim() ?? "";
 }
 
-export function getDay(db: Database.Database, date: string, options: { reviewLimit?: number } = {}): DayData {
+export function ensureDay(db: Database.Database, scope: WorkspaceScope, date: string): void {
   assertDateKey(date);
-  ensureDay(db, date);
+  db.prepare("INSERT OR IGNORE INTO daily_entries (workspace_id, date) VALUES (?, ?)").run(scope.workspaceId, date);
+}
+
+export function getDay(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  date: string,
+  options: { reviewLimit?: number } = {},
+): DayData {
+  assertDateKey(date);
+  ensureDay(db, scope, date);
   const reviewLimit = Math.max(1, options.reviewLimit ?? 12);
-  const entry = db.prepare("SELECT * FROM daily_entries WHERE date = ?").get(date) as DayEntry;
+  const params = { workspaceId: scope.workspaceId, date, limit: reviewLimit };
+  const entry = db.prepare(`
+    SELECT * FROM daily_entries WHERE workspace_id = @workspaceId AND date = @date
+  `).get(params) as DayEntry;
   const assets = db.prepare(`
     SELECT id, original_name, mime_type, size, folder_path
-    FROM assets WHERE day = ? ORDER BY created_at DESC
-  `).all(date) as DayData["assets"];
+    FROM assets WHERE workspace_id = @workspaceId AND day = @date ORDER BY created_at DESC
+  `).all(params) as DayData["assets"];
   const sessions = db.prepare(`
     SELECT id, title, subject_code, duration_minutes, output
-    FROM study_sessions WHERE day = ? ORDER BY created_at DESC
-  `).all(date) as DayData["sessions"];
+    FROM study_sessions WHERE workspace_id = @workspaceId AND day = @date ORDER BY created_at DESC
+  `).all(params) as DayData["sessions"];
   const reviews = db.prepare(`
     SELECT r.id, r.score, r.note, k.title AS knowledge_title, k.subject_code
     FROM review_events r
-    LEFT JOIN knowledge_points k ON k.id = r.knowledge_point_id
-    WHERE r.day = ?
+    LEFT JOIN knowledge_points k ON k.id = r.knowledge_point_id AND k.workspace_id = r.workspace_id
+    WHERE r.workspace_id = @workspaceId AND r.day = @date
     ORDER BY r.created_at DESC
-  `).all(date) as DayData["reviews"];
+  `).all(params) as DayData["reviews"];
   const mistakes = db.prepare(`
     SELECT id, title, cause, next_review, graduated
-    FROM mistakes WHERE day = ? ORDER BY created_at DESC
-  `).all(date) as DayData["mistakes"];
+    FROM mistakes WHERE workspace_id = @workspaceId AND day = @date ORDER BY created_at DESC
+  `).all(params) as DayData["mistakes"];
   const dueReviews = db.prepare(`
     SELECT id, title, subject_code, tier_name, mastery, next_review
     FROM knowledge_points
-    WHERE next_review IS NOT NULL AND next_review <= @date
+    WHERE workspace_id = @workspaceId AND next_review IS NOT NULL AND next_review <= @date
     ORDER BY tier ASC, next_review ASC
     LIMIT @limit
-  `).all({ date, limit: reviewLimit }) as DueReview[];
+  `).all(params) as DueReview[];
   const dueReviewsTotal = (db.prepare(`
     SELECT COUNT(*) AS count FROM knowledge_points
-    WHERE next_review IS NOT NULL AND next_review <= ?
-  `).get(date) as { count: number }).count;
+    WHERE workspace_id = @workspaceId AND next_review IS NOT NULL AND next_review <= @date
+  `).get(params) as { count: number }).count;
   const dueMistakes = db.prepare(`
     SELECT m.id, m.title, m.cause, m.knowledge_point_id, m.next_review, k.title AS knowledge_title
     FROM mistakes m
-    LEFT JOIN knowledge_points k ON k.id = m.knowledge_point_id
-    WHERE m.graduated = 0 AND m.next_review IS NOT NULL AND m.next_review <= ?
+    LEFT JOIN knowledge_points k ON k.id = m.knowledge_point_id AND k.workspace_id = m.workspace_id
+    WHERE m.workspace_id = @workspaceId
+      AND m.graduated = 0 AND m.next_review IS NOT NULL AND m.next_review <= @date
     ORDER BY m.next_review ASC, m.created_at ASC
     LIMIT 12
-  `).all(date) as DueMistake[];
+  `).all(params) as DueMistake[];
 
   return {
     entry,
-    tasks: listTasks(db, date),
-    notes: listNotes(db, date),
+    tasks: listTasks(db, scope, date),
+    notes: listNotes(db, scope, date),
     dueReviews,
     dueReviewsTotal,
     dueMistakes,
@@ -109,11 +127,18 @@ export function getDay(db: Database.Database, date: string, options: { reviewLim
   };
 }
 
-export function updateDayEntry(db: Database.Database, date: string, input: Partial<Record<DayField, string>>): void {
+export function updateDayEntry(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  date: string,
+  input: Partial<Record<DayField, string>>,
+): void {
   assertDateKey(date);
-  ensureDay(db, date);
-  const current = db.prepare("SELECT * FROM daily_entries WHERE date = ?").get(date) as DayEntry;
-  const next: Record<string, string> = { date };
+  ensureDay(db, scope, date);
+  const current = db.prepare(`
+    SELECT * FROM daily_entries WHERE workspace_id = ? AND date = ?
+  `).get(scope.workspaceId, date) as DayEntry;
+  const next: Record<string, string> = { workspaceId: scope.workspaceId, date };
   for (const field of DAY_FIELDS) {
     next[field] = input[field] === undefined ? current[field] : String(input[field]);
   }
@@ -125,6 +150,6 @@ export function updateDayEntry(db: Database.Database, date: string, input: Parti
         blockers = @blockers,
         tomorrow = @tomorrow,
         updated_at = CURRENT_TIMESTAMP
-    WHERE date = @date
+    WHERE workspace_id = @workspaceId AND date = @date
   `).run(next);
 }
