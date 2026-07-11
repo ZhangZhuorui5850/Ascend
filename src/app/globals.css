@@ -3241,6 +3241,158 @@ kbd {
   min-width: 0;
 }
 
+/* ---- 设置页分类 ---- */
+
+.settingsTabs {
+  display: flex;
+  gap: 8px;
+}
+
+.settingsTabs a {
+  padding: 7px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13.5px;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.settingsTabs a:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.settingsGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  scroll-margin-top: calc(var(--topbar-height) + 16px);
+}
+
+.settingsGroupTitle {
+  margin-top: 8px;
+  color: var(--quiet);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.avatarEditor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 22px;
+  padding-bottom: 16px;
+  border-bottom: 1px dashed var(--line);
+  margin-bottom: 16px;
+}
+
+.avatarEditorPreview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.avatarEditorUpload {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.avatarEditorUpload small {
+  color: var(--quiet);
+  font-size: 11.5px;
+}
+
+.avatarEditorSeal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatarSealChar input {
+  width: 64px;
+  text-align: center;
+}
+
+.sealPalette {
+  display: flex;
+  gap: 8px;
+}
+
+.sealSwatch {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.sealSwatch:hover {
+  transform: scale(1.08);
+}
+
+.sealSwatch.isActive {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.profileFields,
+.passwordFields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.themeOptions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.themeOption {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--muted);
+  text-align: left;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.themeOption:hover {
+  border-color: var(--accent);
+}
+
+.themeOption.isActive {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.themeOptionCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.themeOptionCopy strong {
+  font-size: 13.5px;
+}
+
+.themeOptionCopy small {
+  color: var(--quiet);
+  font-size: 11.5px;
+}
+
 .capturePanel {
   position: fixed;
   top: 0;

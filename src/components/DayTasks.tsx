@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ArrowRight, Check, Plus, Trash2 } from "lucide-react";
 import { addTaskAction, carryOverTasksAction, deleteTaskAction, toggleTaskAction, updateTaskAction } from "@/app/actions/planner";
 import { EmptyState } from "@/components/EmptyState";
@@ -147,11 +147,13 @@ function TaskLine({ task, day, subjects, report }: {
 }) {
   const [pending, setPending] = useState(false);
   const [optimisticDone, setOptimisticDone] = useState<boolean | null>(null);
-  const done = optimisticDone ?? Boolean(task.done);
-
-  useEffect(() => {
+  // 服务端状态跟上乐观值后清掉本地覆盖（渲染期间调整 state，避免 effect 级联渲染）
+  const [confirmedDone, setConfirmedDone] = useState(task.done);
+  if (confirmedDone !== task.done) {
+    setConfirmedDone(task.done);
     setOptimisticDone(null);
-  }, [task.done]);
+  }
+  const done = optimisticDone ?? Boolean(task.done);
 
   async function toggle() {
     if (pending) return;
