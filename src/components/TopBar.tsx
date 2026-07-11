@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, Search, Settings, Users } from "lucide-react";
+import { AccountMenu } from "@/components/AccountMenu";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import type { DeviceAccount } from "@/lib/auth";
 
 const routeTitles: Array<[RegExp, string, string]> = [
   [/^\/$/, "主页", "学习概览"],
@@ -22,12 +24,14 @@ const routeTitles: Array<[RegExp, string, string]> = [
 ];
 
 export function TopBar({
-  displayName,
+  account,
+  accounts,
   onCommand,
   onMenu,
   role,
 }: {
-  displayName: string;
+  account: DeviceAccount;
+  accounts: DeviceAccount[];
   onCommand: () => void;
   onMenu: () => void;
   role: "admin" | "user";
@@ -48,7 +52,7 @@ export function TopBar({
         <Link aria-label={role === "admin" ? "用户管理" : "设置"} className="topbarIconButton" href={role === "admin" ? "/admin/users" : "/settings"} title={role === "admin" ? "用户管理" : "设置"}>
           {role === "admin" ? <Users size={17} /> : <Settings size={17} />}
         </Link>
-        <span aria-label={`当前用户 ${displayName}`} className="topbarAvatar" title={displayName}>{displayName.trim().slice(0, 1).toUpperCase()}</span>
+        <AccountMenu accounts={accounts} current={account} />
       </div>
     </header>
   );

@@ -3073,17 +3073,172 @@ kbd {
   display: grid;
 }
 
-.topbarAvatar {
+/* ---- 用户头像（印章 / 图片双轨） ---- */
+
+.userAvatar {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  flex: 0 0 auto;
   border-radius: var(--radius-sm);
-  background: var(--surface-inverse);
-  color: var(--surface);
   font-family: var(--font-serif);
-  font-size: 14px;
   font-weight: 600;
+  line-height: 1;
+  user-select: none;
+}
+
+.userAvatar.isImage {
+  object-fit: cover;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+/* 印章底色：朱砂 / 墨黑 / 黛蓝 / 竹青 / 藤黄 */
+.seal-cinnabar { background: var(--accent); color: var(--accent-ink); }
+.seal-ink { background: #33312e; color: #f3ede1; }
+.seal-indigo { background: #3a5570; color: #edf3f9; }
+.seal-bamboo { background: #4f7a5b; color: #eef6ef; }
+.seal-rattan { background: #b3872e; color: #fdf6e2; }
+
+/* ---- 右上角账户菜单 ---- */
+
+.accountMenu {
+  position: relative;
+}
+
+.accountMenuTrigger {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.accountMenuTrigger:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-xs);
+}
+
+.accountMenuSheet {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 60;
+  width: min(300px, calc(100vw - 28px));
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-lg);
+}
+
+.accountMenuCurrent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.accountMenuIdentity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  text-align: left;
+}
+
+.accountMenuIdentity strong {
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accountMenuIdentity small {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accountMenuCheck {
+  margin-left: auto;
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.accountMenuLabel {
+  display: block;
+  padding: 10px 10px 4px;
+  color: var(--quiet);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+}
+
+.accountMenuList {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+}
+
+.accountMenuList button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.accountMenuList button:hover {
+  background: var(--surface-soft);
+}
+
+.accountMenuActions {
+  display: flex;
+  flex-direction: column;
+  padding-top: 6px;
+}
+
+.accountMenuActions a,
+.accountMenuActions button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13.5px;
+  text-align: left;
+}
+
+.accountMenuActions a:hover,
+.accountMenuActions button:hover {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.accountMenuActions button.isDanger:hover {
+  color: var(--danger);
+}
+
+.sidebarFooter .userName {
+  flex: 1;
+  min-width: 0;
 }
 
 .capturePanel {
@@ -3340,9 +3495,9 @@ kbd {
     display: grid;
   }
 
-  .topbarAvatar {
-    width: 34px;
-    height: 34px;
+  .accountMenuTrigger .userAvatar {
+    width: 34px !important;
+    height: 34px !important;
   }
 
   .mainPane {

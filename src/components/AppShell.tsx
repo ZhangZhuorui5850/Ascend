@@ -7,10 +7,11 @@ import { CapturePanel } from "@/components/CapturePanel";
 import { MobileNav, Sidebar } from "@/components/Sidebar";
 import { CommandPalette } from "@/components/CommandPalette";
 import { TopBar } from "@/components/TopBar";
+import type { DeviceAccount } from "@/lib/auth";
 import type { CaptureSubject } from "@/lib/repo/knowledge";
 
 type AppShellProps = {
-  user: { displayName: string; role: "admin" | "user" } | null;
+  user: { displayName: string; role: "admin" | "user"; account: DeviceAccount; accounts: DeviceAccount[] } | null;
   hierarchy: CaptureSubject[];
   children: React.ReactNode;
 };
@@ -35,9 +36,9 @@ export function AppShell({ user, hierarchy, children }: AppShellProps) {
 
   return (
     <div className={`appFrame ${captureOpen ? "captureOpen" : ""} ${sidebarCollapsed ? "sidebarCollapsed" : ""}`}>
-      <Sidebar collapsed={sidebarCollapsed} displayName={user.displayName} onToggle={() => setSidebarCollapsed((value) => !value)} role={user.role} />
+      <Sidebar account={user.account} collapsed={sidebarCollapsed} displayName={user.displayName} onToggle={() => setSidebarCollapsed((value) => !value)} role={user.role} />
       <div className="appWorkspace">
-        <TopBar displayName={user.displayName} onCommand={() => setCommandOpen(true)} onMenu={() => setCommandOpen(true)} role={user.role} />
+        <TopBar account={user.account} accounts={user.accounts} onCommand={() => setCommandOpen(true)} onMenu={() => setCommandOpen(true)} role={user.role} />
         <main className="mainPane">{children}</main>
       </div>
       {user.role === "user" ? (
