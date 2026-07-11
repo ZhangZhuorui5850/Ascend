@@ -12,9 +12,9 @@ Target: Tencent Lighthouse in Beijing, Docker Compose, Caddy automatic HTTPS, SQ
 ## First deployment
 
 ```bash
-sudo mkdir -p /opt/ascend（原 zgca-workbench）
-sudo chown "$USER":"$USER" /opt/ascend（原 zgca-workbench）
-cd /opt/ascend（原 zgca-workbench）
+sudo mkdir -p /opt/apps/ascend
+sudo chown "$USER":"$USER" /opt/apps/ascend
+cd /opt/apps/ascend
 
 # clone or upload the repository here, then:
 cp deploy/env.production.example .env.production
@@ -39,7 +39,7 @@ docker compose -f compose.production.yml up -d --force-recreate app
 ## Safe upgrade
 
 ```bash
-cd /opt/ascend（原 zgca-workbench）
+cd /opt/apps/ascend
 docker compose -f compose.production.yml exec -T app node scripts/backup.mjs
 git pull --ff-only
 docker compose -f compose.production.yml build app
@@ -55,7 +55,7 @@ Never upgrade without a consistent database + uploads snapshot. The migration ve
 Run a daily root cron entry (03:20 Beijing time):
 
 ```cron
-20 3 * * * cd /opt/ascend（原 zgca-workbench） && /usr/bin/docker compose -f compose.production.yml exec -T app node scripts/backup.mjs >> /var/log/zgca-backup.log 2>&1
+20 3 * * * cd /opt/apps/ascend && /usr/bin/docker compose -f compose.production.yml exec -T app node scripts/backup.mjs >> /var/log/zgca-backup.log 2>&1
 ```
 
 Copy `backups/` to a different machine or object storage; a backup on the same 40GB disk is not disaster recovery. Before restore, stop the stack, move the failed `data/` aside, restore both `workbench.sqlite` and the matching `uploads/` directory, then start the previous known-good image.
