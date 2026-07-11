@@ -12,8 +12,8 @@ export default async function LoginPage({
     <main className="loginShell">
       <section className="loginHero">
         <div>
-          <span className="brandMark">Z</span>
-          <h2>ZGCA 学习工作台</h2>
+          <span className="brandMark">登</span>
+          <h2>登峰 · Ascend</h2>
           <p>日历驱动、资料收纳、复习和总结，都为当天学习服务。</p>
         </div>
       </section>

@@ -34,7 +34,7 @@ export function TopBar({
 }) {
   const pathname = usePathname();
   const route = routeTitles.find(([pattern]) => pattern.test(pathname));
-  const title = route?.[1] || "ZGCA";
+  const title = route?.[1] || "登峰";
   const context = route?.[2] || "学习工作台";
   return (
     <header className="topbar">

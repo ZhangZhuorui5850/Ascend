@@ -66,10 +66,10 @@ export function Sidebar({
   return (
     <aside className={collapsed ? "sidebar isCollapsed" : "sidebar"}>
       <div className="brand">
-        <span className="brandMark">Z</span>
+        <span className="brandMark">{role === "admin" ? "管" : "登"}</span>
         <div className="brandCopy">
-          <strong>ZGCA</strong>
-          <small>{role === "admin" ? "管理控制台" : "学习工作台"}</small>
+          <strong>登峰</strong>
+          <small>{role === "admin" ? "ASCEND · 管理控制台" : "ASCEND · 学习工作台"}</small>
         </div>
         <button aria-label={collapsed ? "展开侧栏" : "收起侧栏"} className="sidebarToggle" onClick={onToggle} type="button">
           <ChevronLeft size={15} />
@@ -79,7 +79,7 @@ export function Sidebar({
         {links.map((item) => {
           const Icon = item.icon;
           return (
-            <Link className={isLinkActive(pathname, item) ? "active" : ""} key={item.href} href={item.href}>
+            <Link className={isLinkActive(pathname, item) ? "active" : ""} key={item.href} href={item.href} prefetch={true}>
               <Icon size={17} />
               <span className="navLabel">{item.label}</span>
             </Link>
@@ -89,7 +89,7 @@ export function Sidebar({
       <div className="sidebarFooter">
         <span className="userName" title={displayName}>{displayName}</span>
         <div className="sidebarFooterActions">
-          <Link aria-label="设置" className={pathname === "/settings" ? "active" : ""} href="/settings" title="设置">
+          <Link aria-label="设置" className={pathname === "/settings" ? "active" : ""} href="/settings" prefetch={true} title="设置">
             <Settings size={15} />
           </Link>
           <form action={logout}>
@@ -121,7 +121,7 @@ export function MobileNav({
       {mobileLinks.map((item) => {
         const Icon = item.icon;
         return (
-          <Link className={isLinkActive(pathname, item) ? "active" : ""} href={item.href} key={item.href}>
+          <Link className={isLinkActive(pathname, item) ? "active" : ""} href={item.href} key={item.href} prefetch={true}>
             <Icon size={18} />
             <span>{item.label}</span>
           </Link>

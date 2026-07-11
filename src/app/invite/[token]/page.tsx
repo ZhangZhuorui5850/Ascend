@@ -10,7 +10,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
   return (
     <main className="loginShell inviteShell">
       <section className="loginHero">
-        <div><span className="brandMark">Z</span><h2>欢迎加入 ZGCA</h2><p>你的学习计划、资料、错题和统计会存放在完全独立的个人空间。</p></div>
+        <div><span className="brandMark">登</span><h2>欢迎加入登峰</h2><p>你的学习计划、资料、错题和统计会存放在完全独立的个人空间。</p></div>
       </section>
       {invitation.valid ? (
         <InviteActivationForm token={token} displayName={invitation.displayName || "新用户"} email={invitation.email || ""} />

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect x="3" y="3" width="58" height="58" rx="8" fill="#b13a20" transform="rotate(-3 32 32)" />
+  <rect x="8" y="8" width="48" height="48" rx="4" fill="none" stroke="#fdf6ec" stroke-width="2" opacity="0.55" transform="rotate(-3 32 32)" />
+  <text
+    x="32"
+    y="34"
+    fill="#fdf6ec"
+    font-family="'Noto Serif SC','Source Han Serif SC','Songti SC','SimSun',serif"
+    font-size="34"
+    font-weight="600"
+    text-anchor="middle"
+    dominant-baseline="central"
+    transform="rotate(-3 32 32)"
+  >登</text>
+</svg>

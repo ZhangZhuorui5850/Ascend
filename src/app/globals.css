@@ -29,8 +29,12 @@ body {
   max-width: 100vw;
   margin: 0;
   color: var(--ink);
-  background: var(--bg);
+  background:
+    repeating-linear-gradient(0deg, transparent 0 27px, var(--paper-grid) 27px 28px),
+    repeating-linear-gradient(90deg, transparent 0 27px, var(--paper-grid) 27px 28px),
+    var(--bg);
   font-family: var(--font-sans);
+  line-height: 1.65;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -211,7 +215,7 @@ p {
   inset: 0;
   z-index: 40;
   border: 0;
-  background: rgba(21, 32, 43, 0.4);
+  background: rgba(32, 24, 12, 0.4);
 }
 
 .captureClose {
@@ -421,7 +425,7 @@ button:focus-visible {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 18px;
+  padding: var(--card-pad);
 }
 
 .sectionTitle {
@@ -460,7 +464,7 @@ button:focus-visible {
   display: flex;
   align-items: baseline;
   gap: 10px;
-  padding: 9px 4px;
+  padding: 9px 8px;
   border-bottom: 1px solid var(--surface-soft);
   font-size: 14px;
 }
@@ -513,7 +517,7 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 9px 6px;
+  padding: 9px 8px;
   border-radius: var(--radius-sm);
 }
 
@@ -552,7 +556,7 @@ button:focus-visible {
 
 .metricCard strong {
   font-size: 24px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .metricCard span {
@@ -592,7 +596,7 @@ button:focus-visible {
   background: var(--surface);
   color: var(--ink);
   font-weight: 600;
-  box-shadow: 0 1px 2px rgba(21, 32, 43, 0.08);
+  box-shadow: var(--shadow-xs);
 }
 
 .tierBadge {
@@ -653,19 +657,19 @@ button:focus-visible {
 .pageStack {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  max-width: 1080px;
+  gap: 18px;
+  max-width: var(--content-max);
   margin: 0 auto;
 }
 
 .pageStack.fullHeight {
-  max-width: none;
-  height: calc(100vh - 52px);
+  max-width: 1360px;
+  height: calc(100dvh - var(--topbar-height) - 52px);
 }
 
 .pageHeader h1 {
   font-size: 24px;
-  font-weight: 650;
+  font-weight: 600;
   margin: 2px 0 6px;
 }
 
@@ -693,7 +697,7 @@ button:focus-visible {
 
 .dayNav h1 {
   font-size: 24px;
-  font-weight: 650;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -733,7 +737,7 @@ button:focus-visible {
 
 .dayStats strong {
   font-size: 20px;
-  font-weight: 650;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -825,7 +829,7 @@ button:focus-visible {
 
 .queueInfo strong {
   font-size: 14.5px;
-  font-weight: 550;
+  font-weight: 500;
 }
 
 .queueInfo em {
@@ -1014,7 +1018,7 @@ button:focus-visible {
 
 .homeStat strong {
   font-size: 26px;
-  font-weight: 650;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1106,9 +1110,9 @@ button:focus-visible {
 }
 
 .taskLine.done .taskCheck {
-  background: var(--ok);
-  border-color: var(--ok);
-  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .taskTitle {
@@ -1232,7 +1236,7 @@ button:focus-visible {
 
 .noteCard textarea:focus-visible {
   outline: none;
-  background: rgba(255, 255, 255, 0.55);
+  background: color-mix(in srgb, var(--surface-raised) 60%, transparent);
 }
 
 .noteMeta {
@@ -1294,7 +1298,7 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-width: 620px;
+  max-width: 720px;
 }
 
 .countdownEditor {
@@ -1341,8 +1345,8 @@ button:focus-visible {
 }
 
 .trackHeader h2 {
-  font-size: 17px;
-  font-weight: 650;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .flag.subtle {
@@ -1459,7 +1463,7 @@ button:focus-visible {
 
 .subjectHeaderStats strong {
   font-size: 18px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .subjectHeaderStats span {
@@ -2194,7 +2198,7 @@ button:focus-visible {
 
 .panelHeader h2 {
   font-size: 16px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .dropZone {
@@ -2282,7 +2286,7 @@ button:focus-visible {
 
 .attachmentMeta strong {
   font-size: 12.5px;
-  font-weight: 550;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2412,7 +2416,7 @@ button:focus-visible {
 
 .weakPointRow strong {
   font-size: 14.5px;
-  font-weight: 550;
+  font-weight: 500;
 }
 
 .weakPointRow small {
@@ -2490,8 +2494,8 @@ button:focus-visible {
 }
 
 .calendarShell .fc .fc-toolbar-title {
-  font-size: 17px;
-  font-weight: 650;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .calendarShell .fc .fc-button {
@@ -2560,15 +2564,16 @@ button:focus-visible {
   display: grid;
   place-items: center;
   padding: 40px;
-  background: linear-gradient(160deg, var(--accent) 0%, #1d2f6f 100%);
-  color: #fff;
+  background: var(--surface-inverse);
+  color: #f0e7d3;
 }
 
 .loginHero .brandMark {
   width: 46px;
   height: 46px;
   font-size: 22px;
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--accent);
+  color: var(--accent-ink);
   margin-bottom: 16px;
 }
 
@@ -2578,7 +2583,7 @@ button:focus-visible {
 }
 
 .loginHero p {
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(240, 231, 211, 0.72);
   max-width: 34ch;
   line-height: 1.7;
 }
@@ -2643,7 +2648,6 @@ button:focus-visible {
 }
 
 @media (max-width: 1080px) {
-  .dayGrid,
   .grid2 {
     grid-template-columns: 1fr;
   }
@@ -2844,8 +2848,7 @@ button:focus-visible {
   width: var(--sidebar-width);
   gap: 24px;
   padding: 18px 14px 14px;
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
-  backdrop-filter: blur(18px);
+  background: var(--surface);
   transition: width 180ms ease;
 }
 
@@ -2864,10 +2867,12 @@ button:focus-visible {
   flex: 0 0 auto;
   width: 38px;
   height: 38px;
-  border-radius: 12px;
-  background: linear-gradient(145deg, #6b68e8, var(--accent));
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--accent) 24%, transparent);
-  font-weight: 750;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  box-shadow: 0 1px 0 var(--accent-hover), var(--shadow-xs);
+  font-family: var(--font-serif);
+  font-weight: 600;
+  transform: rotate(-3deg);
 }
 
 .brandCopy,
@@ -2914,7 +2919,7 @@ button:focus-visible {
   gap: 12px;
   min-height: 44px;
   padding: 10px 12px;
-  border-radius: 11px;
+  border-radius: var(--radius-sm);
   white-space: nowrap;
   transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
@@ -2925,7 +2930,7 @@ button:focus-visible {
 
 .sidebar nav a.active {
   box-shadow: inset 3px 0 0 var(--accent);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .sidebar.isCollapsed nav a {
@@ -2946,14 +2951,18 @@ button:focus-visible {
   justify-content: center;
 }
 
-.sidebar.isCollapsed .sidebarFooterActions a {
-  display: none;
+.sidebar.isCollapsed .sidebarFooterActions {
+  flex-direction: column;
 }
 
 .mainPane {
   width: min(100%, 1560px);
   margin: 0 auto;
   padding: 28px clamp(20px, 3vw, 48px) 96px;
+}
+
+.mainPane:has(.pageStack.fullHeight) {
+  padding-bottom: 24px;
 }
 
 .topbar {
@@ -2965,9 +2974,8 @@ button:focus-visible {
   justify-content: space-between;
   height: var(--topbar-height);
   padding: 0 clamp(20px, 3vw, 48px);
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
-  background: color-mix(in srgb, var(--bg) 82%, transparent);
-  backdrop-filter: blur(20px) saturate(140%);
+  border-bottom: 3px double var(--line-strong);
+  background: var(--bg);
 }
 
 .topbarTitle,
@@ -2985,14 +2993,14 @@ button:focus-visible {
 .topbarTitle small {
   color: var(--quiet);
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .topbarTitle strong {
   font-size: 15px;
-  font-weight: 680;
+  font-weight: 600;
 }
 
 .topbarMenu {
@@ -3007,7 +3015,7 @@ button:focus-visible {
   height: 38px;
   padding: 0 10px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--muted);
   box-shadow: var(--shadow-xs);
@@ -3036,7 +3044,7 @@ kbd {
   height: 38px;
   padding: 0;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--muted);
   box-shadow: var(--shadow-xs);
@@ -3051,11 +3059,12 @@ kbd {
   place-items: center;
   width: 36px;
   height: 36px;
-  border-radius: 50%;
+  border-radius: var(--radius-sm);
   background: var(--surface-inverse);
   color: var(--surface);
-  font-size: 13px;
-  font-weight: 750;
+  font-family: var(--font-serif);
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .capturePanel {
@@ -3080,7 +3089,7 @@ kbd {
 }
 
 .captureBackdrop {
-  background: rgba(13, 15, 20, 0.44);
+  background: rgba(32, 24, 12, 0.42);
   backdrop-filter: blur(3px);
 }
 
@@ -3101,20 +3110,20 @@ kbd {
 }
 
 .mobileNav {
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  backdrop-filter: blur(18px);
+  background: var(--surface);
+  border-top: 3px double var(--line-strong);
 }
 
 .mobileCapture {
   color: var(--accent) !important;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .mobileMoreBackdrop {
   position: fixed !important;
   inset: 0 !important;
   z-index: 60 !important;
-  background: rgba(13, 15, 20, 0.45) !important;
+  background: rgba(32, 24, 12, 0.42) !important;
 }
 
 .mobileMoreSheet {
@@ -3124,8 +3133,8 @@ kbd {
   left: 8px;
   z-index: 70;
   padding: 12px 16px 18px;
-  border: 1px solid var(--line);
-  border-radius: 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xl);
   background: var(--surface-raised);
   box-shadow: var(--shadow-lg);
 }
@@ -3165,7 +3174,7 @@ kbd {
   display: grid;
   place-items: start center;
   padding: min(18vh, 150px) 16px 16px;
-  background: rgba(13, 15, 20, 0.48);
+  background: rgba(32, 24, 12, 0.45);
   backdrop-filter: blur(4px);
 }
 
@@ -3173,7 +3182,7 @@ kbd {
   width: min(620px, 100%);
   overflow: hidden;
   border: 1px solid var(--line-strong);
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   background: var(--surface-raised);
   box-shadow: var(--shadow-lg);
 }
@@ -3213,7 +3222,7 @@ kbd {
   min-height: 54px;
   padding: 8px 10px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
   text-align: left;
@@ -3278,8 +3287,8 @@ kbd {
     justify-content: center;
   }
 
-  .sidebarFooterActions a {
-    display: none;
+  .sidebarFooterActions {
+    flex-direction: column;
   }
 }
 
@@ -3354,15 +3363,19 @@ kbd {
   border-radius: 16px;
 }
 
+/* 主指标卡跟随主题的纸面，用朱砂大数字和描边强调（不再反色，避免亮色主题里像残留的深色块） */
 .analyticsMetricGrid .primaryMetric {
   align-content: center;
-  background: linear-gradient(145deg, var(--surface-inverse), color-mix(in srgb, var(--surface-inverse) 80%, var(--accent)));
-  color: var(--surface);
+  border-color: var(--accent-line);
+  background: var(--surface);
 }
 
-.analyticsMetricGrid .primaryMetric span,
-.analyticsMetricGrid .primaryMetric small {
-  color: color-mix(in srgb, var(--surface) 72%, transparent);
+.analyticsMetricGrid .primaryMetric strong {
+  color: var(--accent);
+}
+
+.analyticsMetricGrid .primaryMetric span {
+  color: var(--muted);
 }
 
 .analyticsMetricGrid .metricCard > small {
@@ -3407,25 +3420,34 @@ kbd {
 .loginHero {
   position: relative;
   overflow: hidden;
-  border-radius: 24px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
   background:
-    radial-gradient(circle at 20% 20%, rgba(139, 135, 255, 0.32), transparent 34%),
-    radial-gradient(circle at 80% 76%, rgba(83, 177, 253, 0.18), transparent 32%),
-    linear-gradient(155deg, #171923 0%, #25234f 100%);
+    repeating-linear-gradient(0deg, transparent 0 27px, rgba(240, 231, 211, 0.05) 27px 28px),
+    repeating-linear-gradient(90deg, transparent 0 27px, rgba(240, 231, 211, 0.04) 27px 28px),
+    #2a2318;
 }
 
-.loginHero::before,
+.loginHero::before {
+  position: absolute;
+  inset: 14px;
+  border: 1px solid rgba(240, 231, 211, 0.14);
+  border-radius: var(--radius-sm);
+  content: "";
+  pointer-events: none;
+}
+
 .loginHero::after {
   position: absolute;
-  width: 420px;
-  height: 420px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 50%;
-  content: "";
+  right: 30px;
+  bottom: 26px;
+  color: rgba(240, 231, 211, 0.32);
+  content: "温故而知新";
+  font-family: var(--font-serif);
+  font-size: 14px;
+  letter-spacing: 0.5em;
+  writing-mode: vertical-rl;
 }
-
-.loginHero::before { top: -210px; right: -120px; }
-.loginHero::after { right: -220px; bottom: -220px; }
 
 .loginHero > div {
   position: relative;
@@ -3434,8 +3456,7 @@ kbd {
 
 .loginHero h2 {
   margin: 18px 0 10px;
-  font-size: clamp(28px, 3vw, 42px);
-  letter-spacing: -0.035em;
+  font-size: clamp(28px, 3vw, 40px);
 }
 
 .loginHero p {
@@ -3454,8 +3475,7 @@ kbd {
 
 .loginCard h1 {
   margin: 0;
-  font-size: 27px;
-  letter-spacing: -0.025em;
+  font-size: 26px;
 }
 
 .loginCard .primaryButton {
@@ -3485,8 +3505,8 @@ kbd {
 /* ---------- 17. Account and device security ---------- */
 
 .deviceSessions {
-  max-width: 920px;
-  padding: 22px;
+  max-width: 720px;
+  padding: var(--card-pad-lg);
 }
 
 .deviceList {
@@ -3568,7 +3588,7 @@ kbd {
   padding: 5px 8px;
   border-radius: 999px;
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .statusBadge.info {
@@ -3619,17 +3639,22 @@ kbd {
 .dangerButton {
   min-height: 40px;
   border-radius: 10px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .primaryButton {
+  border-color: var(--accent-hover);
   background: var(--accent);
-  box-shadow: 0 6px 14px color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow: var(--shadow);
 }
 
 .primaryButton:hover {
   background: var(--accent-hover);
-  transform: translateY(-1px);
+}
+
+.primaryButton:active {
+  transform: translate(1px, 1px);
+  box-shadow: var(--shadow-xs);
 }
 
 .secondaryButton {
@@ -3643,7 +3668,7 @@ kbd {
   padding: 9px 14px;
   border: 1px solid var(--danger);
   background: var(--danger);
-  color: #fff;
+  color: var(--accent-ink);
 }
 
 .field input,
@@ -3707,7 +3732,7 @@ kbd {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgba(13, 15, 20, 0.48);
+  background: rgba(32, 24, 12, 0.45);
   backdrop-filter: blur(4px);
 }
 
@@ -3834,8 +3859,7 @@ kbd {
 }
 
 .dayNav h1 {
-  font-size: clamp(22px, 2.4vw, 32px);
-  letter-spacing: -0.03em;
+  font-size: clamp(22px, 2.2vw, 28px);
 }
 
 .dayNav a {
@@ -3873,11 +3897,11 @@ kbd {
 }
 
 .dayStatusBar span {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .dayGrid {
-  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.7fr);
+  grid-template-columns: minmax(0, 1.5fr) minmax(340px, 0.75fr);
   gap: 20px;
   align-items: start;
 }
@@ -3893,19 +3917,25 @@ kbd {
   box-shadow: var(--shadow-xs);
 }
 
+.dayMainCol > .card,
+.dayAside > .card {
+  padding: var(--card-pad-lg);
+}
+
 .dayMainCol .dayTasks {
-  padding: 24px;
   border-color: var(--accent-line);
 }
 
 .dayMainCol .reviewQueue {
-  padding: 22px;
   background: color-mix(in srgb, var(--surface) 88%, var(--accent-soft));
 }
 
 .dayAside {
   position: sticky;
   top: calc(var(--topbar-height) + 20px);
+  max-height: calc(100dvh - var(--topbar-height) - 40px);
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .quickLog {
@@ -3980,27 +4010,55 @@ kbd {
 .homeFocus {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(420px, 0.85fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(380px, 0.8fr);
   gap: 36px;
   overflow: hidden;
   padding: clamp(28px, 4vw, 52px);
-  border: 1px solid var(--accent-line);
-  border-radius: var(--radius-xl);
-  background:
-    radial-gradient(circle at 84% 15%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 38%),
-    linear-gradient(135deg, var(--surface-raised), color-mix(in srgb, var(--accent-soft) 58%, var(--surface)));
-  box-shadow: var(--shadow-xs);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow);
 }
 
-.homeFocus::after {
+.homeFocus::before {
   position: absolute;
-  right: -90px;
-  bottom: -160px;
-  width: 360px;
-  height: 360px;
-  border: 1px solid color-mix(in srgb, var(--accent) 15%, transparent);
-  border-radius: 50%;
+  inset: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
   content: "";
+  pointer-events: none;
+}
+
+.homeFocusMain {
+  padding-right: 76px;
+}
+
+.homeFocusMain::after {
+  position: absolute;
+  right: 8px;
+  top: -2px;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  content: "今";
+  font-family: var(--font-serif);
+  font-size: 25px;
+  opacity: 0.85;
+  transform: rotate(4deg);
+}
+
+@media (max-width: 760px) {
+  .homeFocusMain {
+    padding-right: 0;
+  }
+
+  .homeFocusMain::after {
+    display: none;
+  }
 }
 
 .homeFocusMain {
@@ -4012,10 +4070,9 @@ kbd {
 .homeFocusMain h1 {
   max-width: 680px;
   margin: 10px 0 12px;
-  font-size: clamp(30px, 3.2vw, 48px);
-  font-weight: 720;
-  letter-spacing: -0.035em;
-  line-height: 1.13;
+  font-size: clamp(28px, 2.6vw, 40px);
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 .homeFocusMain > p {
@@ -4065,7 +4122,7 @@ kbd {
 .pulseMetric > span,
 .pulseMetric > small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .pulseMetric > strong {
@@ -4077,7 +4134,7 @@ kbd {
   color: var(--muted);
   font-size: 12px;
   font-style: normal;
-  font-weight: 550;
+  font-weight: 500;
   letter-spacing: 0;
 }
 
@@ -4119,7 +4176,7 @@ kbd {
 
 .homeContext .homeClock span {
   color: var(--quiet);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .homeCountdowns.compact {
@@ -4140,12 +4197,13 @@ kbd {
   border-radius: 9px;
   background: var(--surface-soft);
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12.5px;
   white-space: nowrap;
 }
 
 .countdownChip strong {
   color: var(--ink);
+  font-size: 13px;
 }
 
 .countdownChip.urgent {
@@ -4172,11 +4230,11 @@ kbd {
 .homeTasksCard,
 .homeSubjectsCard {
   min-height: 360px;
-  padding: 22px;
+  padding: var(--card-pad-lg);
   border-radius: var(--radius-lg);
 }
 
-.sectionTitle > div {
+.sectionTitle > div:not(.segmented) {
   display: grid;
   gap: 3px;
 }
@@ -4184,14 +4242,14 @@ kbd {
 .sectionKicker {
   color: var(--accent);
   font-size: 10px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.11em;
 }
 
 .homeTasksCard .listRow {
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
   min-height: 56px;
-  padding-inline: 4px;
+  padding-inline: 8px;
 }
 
 .homeTasksCard .listRow > svg {
@@ -4257,10 +4315,1028 @@ kbd {
 
   .homeSubjectsCard .subjectProgressRow {
     grid-template-columns: 38px minmax(0, 1fr) 46px;
+    row-gap: 4px;
   }
 
   .homeSubjectsCard .progressTrack,
-  .homeSubjectsCard .flag {
+  .homeSubjectsCard .flag.subtle {
     display: none;
+  }
+
+  /* 排序依据（到期复习/错题数）在移动端换行展示，不能藏 */
+  .homeSubjectsCard .flag.due {
+    display: inline-flex;
+    grid-column: 2 / -1;
+    justify-self: start;
+  }
+}
+
+/* ---------- 21. 朱砂手帐识别层 ---------- */
+
+/* 21.1 宋体标题体系：正文保持黑体，标题与品牌走宋体 */
+h1,
+h2,
+h3,
+.brand strong,
+.topbarTitle strong,
+.legend strong {
+  font-family: var(--font-serif);
+  letter-spacing: 0.02em;
+}
+
+.pageHeader h1,
+.dayNav h1,
+.homeFocusMain h1,
+.loginHero h2,
+.loginCard h1 {
+  font-weight: 600;
+}
+
+/* 21.2 小签（eyebrow / kicker）：朱砂色宽字距 */
+.eyebrow,
+.sectionKicker,
+.analyticsMetricGrid .metricCard > small,
+.topbarTitle small {
+  color: var(--accent);
+  letter-spacing: 0.22em;
+}
+
+/* 21.3 masthead 双线：页头如手帐刊头 */
+.pageHeader {
+  padding-bottom: 12px;
+  border-bottom: 3px double var(--line-strong);
+}
+
+.dayHeader {
+  padding-bottom: 12px;
+  border-bottom: 3px double var(--line-strong);
+}
+
+/* 21.4 章节标题的印泥点 */
+.sectionTitle h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.sectionTitle h2::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  background: var(--accent);
+  content: "";
+  transform: rotate(45deg);
+  flex: none;
+}
+
+/* 21.5 展示数字：衬线数字（Georgia），时钟保持等宽对齐 */
+.countdownCard strong,
+.pulseMetric > strong,
+.homeStat strong,
+.dayStats strong,
+.metricCard strong,
+.subjectHeaderStats strong,
+.priorityScore b,
+.countdownChip strong,
+.dayStatusBar strong {
+  font-family: var(--font-num);
+}
+
+/* 21.6 账本细节：虚线分隔、朱笔划线 */
+.listRow {
+  border-bottom-style: dashed;
+  border-bottom-color: var(--line);
+}
+
+.taskLine.done .taskTitle {
+  text-decoration-color: var(--accent);
+}
+
+.weakPointRow,
+.subjectProgressRow {
+  border-bottom-style: dashed;
+  border-bottom-color: var(--line);
+}
+
+/* 21.7 徽标去胶囊化：纸签是方角的 */
+.rowBadge,
+.tierBadge,
+.statusBadge,
+.flag,
+.taskSubject,
+.countdownChip,
+.homeAssetMetric,
+.tagPicker button {
+  border-radius: var(--radius-sm);
+}
+
+.progressTrack,
+.masteryTrack,
+.taskProgress {
+  border-radius: 2px;
+}
+
+.progressTrack span,
+.masteryTrack span,
+.taskProgress span {
+  border-radius: 2px;
+}
+
+/* 21.8 卡片与浮层圆角、阴影统一收敛 */
+.card {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+}
+
+.toast {
+  border-radius: var(--radius-lg);
+}
+
+.confirmDialog {
+  border-radius: var(--radius-lg);
+}
+
+.dialogIcon,
+.deviceIcon,
+.errorState > span {
+  border-radius: var(--radius-sm);
+}
+
+.managementBanner {
+  border-radius: var(--radius-lg);
+}
+
+.pulseMetric {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  backdrop-filter: none;
+}
+
+.pulseMetric > svg {
+  color: var(--accent);
+}
+
+.analyticsMetricGrid .metricCard {
+  border-radius: var(--radius-lg);
+}
+
+.skeletonLine,
+.skeletonHero,
+.skeletonGrid > div {
+  border-radius: var(--radius);
+}
+
+.skeletonHero {
+  border-radius: var(--radius-lg);
+}
+
+.loginCard {
+  border-radius: var(--radius-lg);
+}
+
+.segmented {
+  border-radius: var(--radius-sm);
+}
+
+.segmented button {
+  border-radius: var(--radius-xs);
+}
+
+.segmented button.active {
+  box-shadow: var(--shadow-xs);
+}
+
+.countdownCard,
+.homeStat,
+.homeContext,
+.dayStatusBar,
+.calendarShell {
+  border-radius: var(--radius-lg);
+}
+
+.mobileMoreSheet,
+.commandPalette,
+.capturePanel {
+  border-radius: var(--radius-lg);
+}
+
+.capturePanel {
+  border-radius: 0;
+}
+
+@media (max-width: 760px) {
+  .commandPalette {
+    border-radius: var(--radius-lg);
+  }
+
+  .dayMainCol .dayTasks,
+  .dayMainCol .reviewQueue,
+  .dayMainCol > .card,
+  .dayAside > .card {
+    border-radius: var(--radius-lg);
+  }
+
+  .homeFocus {
+    border-radius: var(--radius-lg);
+  }
+}
+
+/* ---------- 22. 交互增强与动效 ---------- */
+
+/* 22.1 昨晚计划回显 / 顺延提示 */
+.dayPlanEcho,
+.dayCarryHint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+  padding: 10px 14px;
+  border: 1px dashed var(--accent-line);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  font-size: 13.5px;
+}
+
+.dayPlanEcho p,
+.dayCarryHint p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.dayPlanEcho strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.dayCarryHint {
+  border-color: var(--line-strong);
+  background: var(--surface-soft);
+}
+
+.dayPlanEcho .secondaryButton,
+.dayCarryHint .secondaryButton {
+  flex: none;
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.homePlanEcho {
+  max-width: 600px;
+  margin: 10px 0 0;
+  border-left: 3px solid var(--accent);
+  padding-left: 12px;
+  color: var(--ink-soft);
+  font-family: var(--font-serif);
+  font-size: 14.5px;
+}
+
+/* 22.2 周专注迷你柱（墨面主指标卡内） */
+.weekBars {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  height: 56px;
+  margin-top: 12px;
+}
+
+.weekBar {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  min-width: 0;
+}
+
+.weekBar i {
+  display: block;
+  width: 100%;
+  max-width: 22px;
+  border-radius: 2px 2px 0 0;
+  background: var(--line-strong);
+}
+
+.weekBar.today i {
+  background: var(--accent);
+}
+
+.weekBar span {
+  font-size: 10px;
+  color: var(--quiet);
+}
+
+/* 22.3 分钟预设与内联入口 */
+.minutePresets {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.minutePresets input {
+  width: 64px;
+}
+
+.sectionLinkGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sectionLink.asButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* 22.4 动效：页面载入渐现、印章落款、朱笔勾选 */
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.mainPane > .pageStack > * {
+  animation: riseIn 0.38s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+.mainPane > .pageStack > *:nth-child(2) { animation-delay: 0.05s; }
+.mainPane > .pageStack > *:nth-child(3) { animation-delay: 0.1s; }
+.mainPane > .pageStack > *:nth-child(4) { animation-delay: 0.15s; }
+.mainPane > .pageStack > *:nth-child(5) { animation-delay: 0.2s; }
+.mainPane > .pageStack > *:nth-child(n + 6) { animation-delay: 0.24s; }
+
+@keyframes sealStamp {
+  from {
+    opacity: 0;
+    transform: rotate(4deg) scale(1.5);
+  }
+  to {
+    opacity: 0.85;
+    transform: rotate(4deg) scale(1);
+  }
+}
+
+.homeFocusMain::after {
+  animation: sealStamp 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.35) 0.25s both;
+}
+
+@keyframes checkPop {
+  0% { transform: scale(0.4); }
+  70% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
+.taskLine.done .taskCheck svg {
+  animation: checkPop 0.24s ease;
+}
+
+.brandMark {
+  transition: transform 0.2s ease;
+}
+
+.brand:hover .brandMark {
+  transform: rotate(0deg);
+}
+
+/* ---------- 23. 文件预览查看器 ---------- */
+
+.viewerBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(32, 24, 12, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.assetViewer {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(960px, 100%);
+  height: min(86vh, 100%);
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-lg);
+  animation: riseIn 0.25s ease both;
+}
+
+.viewerHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  border-bottom: 3px double var(--line-strong);
+}
+
+.viewerHead h2 {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewerHeadActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.viewerHeadActions .secondaryButton {
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.viewerClose {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.viewerClose:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.viewerBody {
+  min-height: 0;
+  overflow: auto;
+  background: var(--surface-soft);
+}
+
+.viewerBody.viewer-image {
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.viewerBody.viewer-image img {
+  max-width: 100%;
+  max-height: 100%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.viewerBody.viewer-pdf {
+  overflow: hidden;
+}
+
+.viewerBody.viewer-pdf iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.viewerBody.viewer-none {
+  display: grid;
+  place-items: center;
+}
+
+.viewerLoading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+.textView {
+  margin: 0;
+  padding: 20px 24px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mdView {
+  max-width: 72ch;
+  margin: 0 auto;
+  padding: 26px 30px 40px;
+  font-size: 14.5px;
+  line-height: 1.8;
+}
+
+.mdView h2,
+.mdView h3,
+.mdView h4 {
+  margin: 20px 0 10px;
+  font-family: var(--font-serif);
+}
+
+.mdView h2 {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 20px;
+}
+
+.mdView h3 {
+  font-size: 17px;
+}
+
+.mdView h4,
+.mdView h5,
+.mdView h6 {
+  font-size: 15px;
+}
+
+.mdView p {
+  margin: 0 0 12px;
+}
+
+.mdView ul,
+.mdView ol {
+  margin: 0 0 12px;
+  padding-left: 24px;
+}
+
+.mdView li {
+  margin-bottom: 4px;
+}
+
+.mdView blockquote {
+  margin: 0 0 12px;
+  padding: 6px 14px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink-soft);
+}
+
+.mdView blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+.mdView code {
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--bg-subtle);
+  border: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.mdView .mdCode {
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  overflow-x: auto;
+}
+
+.mdView .mdCode code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.mdView a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-line);
+  text-underline-offset: 3px;
+}
+
+.mdView hr {
+  margin: 18px 0;
+  border: 0;
+  border-top: 3px double var(--line-strong);
+}
+
+.drivePreviewButton {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+@media (max-width: 760px) {
+  .viewerBackdrop {
+    padding: 10px;
+  }
+
+  .assetViewer {
+    height: 92vh;
+  }
+
+  .mdView {
+    padding: 18px 16px 30px;
+  }
+}
+
+/* ---------- 24. 复习仪式感与空状态纸签 ---------- */
+
+/* 24.1 队首高亮（键盘评分目标） */
+.queueCard.focused {
+  border-color: var(--accent-line);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* 24.2 落章：评分后的宋体单字方章 */
+.queueCard {
+  position: relative;
+}
+
+.queueCard .queueStamp {
+  position: absolute;
+  top: 50%;
+  right: 96px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-family: var(--font-serif);
+  font-size: 21px;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  transform: translateY(-50%) rotate(-8deg);
+  animation: sealStamp 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.35) both;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.queueCard.stamped .scoreButtons {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* 24.3 撤销条 */
+.undoBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border: 1px dashed var(--accent-line);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  font-size: 13px;
+  color: var(--ink-soft);
+  animation: riseIn 0.2s ease both;
+}
+
+.undoBar span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.undoBar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  padding: 4px 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.undoBar button:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* 24.4 清零完成卡 */
+.queueCleared {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-style: dashed;
+  background: var(--surface-soft);
+}
+
+.queueCleared .clearSeal {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  flex: none;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-family: var(--font-serif);
+  font-size: 26px;
+  transform: rotate(-6deg);
+  animation: sealStamp 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.35) 0.15s both;
+}
+
+.queueCleared h2 {
+  font-size: 16px;
+  margin-bottom: 2px;
+}
+
+.queueCleared p {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.queueCleared > svg {
+  margin-left: auto;
+  color: var(--ok);
+  flex: none;
+}
+
+/* 24.5 空状态纸签 */
+.emptyState {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+
+.emptyState .emptySeal {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-family: var(--font-serif);
+  font-size: 19px;
+  transform: rotate(3deg);
+  opacity: 0.85;
+}
+
+.emptyState p {
+  flex: 1;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+.emptyState .secondaryButton {
+  flex: none;
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+/* 24.6 勾选行的柔和过渡 */
+.taskTitle,
+.taskLine {
+  transition: color 0.18s ease, opacity 0.18s ease;
+}
+
+/* ---------- 25. 统计页增强：科目时间分布 / 复习质量 / 周环比 ---------- */
+
+.subjectMinutesList {
+  display: flex;
+  flex-direction: column;
+}
+
+.subjectMinutesRow {
+  display: grid;
+  grid-template-columns: 44px minmax(96px, 0.6fr) minmax(120px, 1fr) 76px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.subjectMinutesRow:last-child {
+  border-bottom: 0;
+}
+
+.subjectMinutesRow strong {
+  font-weight: 500;
+  font-size: 14px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subjectMinutesRow .progressTrack,
+.subjectMinutesRow .progressTrack span {
+  border-radius: var(--radius-sm);
+}
+
+.subjectMinutesRow .progressTrack span {
+  background: var(--ink-soft);
+}
+
+/* 朱砂只点一处：最大的时间去向 */
+.subjectMinutesRow:first-child .progressTrack span {
+  background: var(--accent);
+}
+
+.subjectMinutesRow small {
+  color: var(--muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 复习质量分段条：朱砂=记不清，墨色由浅入深=掌握渐好 */
+.scoreDist {
+  display: flex;
+  gap: 2px;
+  height: 6px;
+  margin-top: 6px;
+}
+
+.scoreSeg {
+  min-width: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.scoreSeg.seg0 { background: var(--accent); }
+.scoreSeg.seg1 { background: var(--line-strong); }
+.scoreSeg.seg2 { background: var(--muted); }
+.scoreSeg.seg3 { background: var(--ink-soft); }
+
+/* 周环比标注 */
+.delta {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
+}
+
+.delta.up { color: var(--ok); }
+.delta.down { color: var(--danger); }
+.delta.flat { color: var(--quiet); }
+
+/* 首卡是反色纸面，环比文字统一改纸色保证可读 */
+/* 主指标卡现在是纸面，周环比沿用正常语义色即可。 */
+
+@media (max-width: 620px) {
+  .subjectMinutesRow {
+    grid-template-columns: 44px minmax(0, 1fr) 76px;
+  }
+
+  .subjectMinutesRow .progressTrack {
+    display: none;
+  }
+}
+
+/* ---------- 26. 资料库配额用量条 ---------- */
+
+.quotaMeter {
+  margin-top: auto;
+  padding: 10px 9px 4px;
+  border-top: 1px dashed var(--line);
+}
+
+.quotaTrack {
+  height: 5px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.quotaTrack span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--ink-soft);
+}
+
+.quotaMeter.tight .quotaTrack span {
+  background: var(--danger);
+}
+
+.quotaMeter small {
+  display: block;
+  margin-top: 6px;
+  color: var(--quiet);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.quotaMeter.tight small {
+  color: var(--danger);
+}
+
+/* ---------- 27. 主页刊头：时间与目标提级 ---------- */
+
+.homeContext {
+  min-height: 76px;
+  padding: 12px 20px;
+  gap: 22px;
+  border-color: var(--line-strong);
+}
+
+.homeContext .homeClock {
+  display: grid;
+  gap: 1px;
+  align-items: start;
+  padding-right: 22px;
+}
+
+.homeContext .homeClock strong {
+  font-size: 32px;
+  line-height: 1.05;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.homeContext .homeClock span {
+  font-size: 12.5px;
+}
+
+.homeCountdowns.compact {
+  align-items: center;
+  gap: 10px;
+}
+
+.countdownChip {
+  min-height: 50px;
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 13px;
+  gap: 9px;
+}
+
+.countdownChip > svg {
+  color: var(--accent);
+}
+
+.countdownChip strong {
+  font-size: 21px;
+  color: var(--accent);
+}
+
+.countdownChip.urgent {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--ink-soft);
+}
+
+.countdownChip.urgent strong {
+  color: var(--danger);
+}
+
+.countdownChip.add {
+  min-height: 50px;
+  border: 1px dashed var(--line-strong);
+  background: transparent;
+}
+
+.countdownChip.add > svg {
+  color: var(--muted);
+}
+
+@media (max-width: 760px) {
+  .homeContext {
+    min-height: 0;
+    padding: 10px 14px;
+  }
+
+  .countdownChip {
+    min-height: 42px;
+    padding: 6px 12px;
+  }
+
+  .countdownChip strong {
+    font-size: 17px;
   }
 }
