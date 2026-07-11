@@ -5,16 +5,16 @@ Target: Tencent Lighthouse in Beijing, Docker Compose, Caddy automatic HTTPS, SQ
 ## Before public launch
 
 1. Finish the applicable ICP filing for the domain/website and keep the filing information available for the site footer if required.
-2. In Cloudflare DNS, create `A app -> 82.157.141.186` as **DNS only** for the first certificate and origin test. Keep `ssh.zhuorui.me` DNS-only. The old `zgca.zhuorui.me` Tunnel record belongs to the former Mac mini setup and is not used by this deployment. After direct HTTPS is healthy, you may test switching the web record to **Proxied** for Cloudflare protection; use Full (strict) origin TLS and compare mainland latency before keeping it enabled.
+2. In Cloudflare DNS, create `A ascend -> 82.157.141.186` as **DNS only** for the first certificate and origin test. Keep `ssh.zhuorui.me` DNS-only. The old `zgca.zhuorui.me` Tunnel record belongs to the former Mac mini setup and is not used by this deployment. After direct HTTPS is healthy, you may test switching the web record to **Proxied** for Cloudflare protection; use Full (strict) origin TLS and compare mainland latency before keeping it enabled.
 3. In Tencent's firewall, allow TCP 22 only from trusted source IPs where practical, and allow TCP 80/443 plus UDP 443 publicly. Do not expose port 3000.
 4. Replace password SSH login with an SSH key, then disable password authentication only after key login has been verified in a second terminal.
 
 ## First deployment
 
 ```bash
-sudo mkdir -p /opt/zgca-workbench
-sudo chown "$USER":"$USER" /opt/zgca-workbench
-cd /opt/zgca-workbench
+sudo mkdir -p /opt/ascend（原 zgca-workbench）
+sudo chown "$USER":"$USER" /opt/ascend（原 zgca-workbench）
+cd /opt/ascend（原 zgca-workbench）
 
 # clone or upload the repository here, then:
 cp deploy/env.production.example .env.production
@@ -27,7 +27,7 @@ docker compose -f compose.production.yml build
 docker compose -f compose.production.yml up -d
 docker compose -f compose.production.yml ps
 docker compose -f compose.production.yml logs --tail=100 app caddy
-curl -fsS https://app.zhuorui.me/api/health
+curl -fsS https://ascend.zhuorui.me/api/health
 ```
 
 Use different emails and different high-entropy passwords for the ordinary owner and Admin. Admin is a separate control-plane account and owns no learning workspace. After confirming the ordinary login and completing the forced first Admin password change, remove both bootstrap password variables (`APP_LOGIN_PASSWORD` and `APP_ADMIN_PASSWORD`) from `.env.production`; the password hashes are already in SQLite. Then recreate only the app container.
@@ -39,13 +39,13 @@ docker compose -f compose.production.yml up -d --force-recreate app
 ## Safe upgrade
 
 ```bash
-cd /opt/zgca-workbench
+cd /opt/ascend（原 zgca-workbench）
 docker compose -f compose.production.yml exec -T app node scripts/backup.mjs
 git pull --ff-only
 docker compose -f compose.production.yml build app
 docker compose -f compose.production.yml up -d
 docker compose -f compose.production.yml exec -T app node scripts/verify-workspace-migration.mjs
-curl -fsS https://app.zhuorui.me/api/health
+curl -fsS https://ascend.zhuorui.me/api/health
 ```
 
 Never upgrade without a consistent database + uploads snapshot. The migration verifier must report `ok: true`, zero invalid workspace rows, and zero missing files.
@@ -55,7 +55,7 @@ Never upgrade without a consistent database + uploads snapshot. The migration ve
 Run a daily root cron entry (03:20 Beijing time):
 
 ```cron
-20 3 * * * cd /opt/zgca-workbench && /usr/bin/docker compose -f compose.production.yml exec -T app node scripts/backup.mjs >> /var/log/zgca-backup.log 2>&1
+20 3 * * * cd /opt/ascend（原 zgca-workbench） && /usr/bin/docker compose -f compose.production.yml exec -T app node scripts/backup.mjs >> /var/log/zgca-backup.log 2>&1
 ```
 
 Copy `backups/` to a different machine or object storage; a backup on the same 40GB disk is not disaster recovery. Before restore, stop the stack, move the failed `data/` aside, restore both `workbench.sqlite` and the matching `uploads/` directory, then start the previous known-good image.
