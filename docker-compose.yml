@@ -10,10 +10,8 @@ services:
     environment:
       ZGCA_DATA_ROOT: /app/data
       ZGCA_UPLOAD_ROOT: /app/data/uploads
-      ZGCA_SOURCE_ROOT: /source
     volumes:
       - ./data:/app/data
-      - ..:/source:ro
       - ./backups:/app/backups
 
   caddy:

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import type { AccessContext } from "./access-context";
 import { getSessionContext } from "./auth";
 import { SESSION_COOKIE } from "./auth-constants";
+import { logError } from "./log";
 
 export class AuthError extends Error {
   constructor(message: string, public status = 401) {
@@ -86,6 +87,9 @@ export function authErrorResponse(error: unknown): Response {
     ? (error as Error & { status?: number }).status!
     : 500;
   const message = error instanceof Error ? error.message : "Internal server error";
+
+  // 4xx 属于正常的鉴权拒绝，只有 5xx 才是需要排查的服务端错误。
+  if (status >= 500) logError("request-auth", error, { status });
 
   return Response.json({ error: message }, { status });
 }

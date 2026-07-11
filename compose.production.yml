@@ -11,6 +11,8 @@ services:
       - .env.production
     environment:
       NODE_ENV: production
+      # 限制 V8 老生代堆，让内存压力表现为可观测的 GC 而不是被 OOM killer 直接杀掉。
+      NODE_OPTIONS: "--max-old-space-size=1024"
       ZGCA_DATA_ROOT: /app/data
       ZGCA_UPLOAD_ROOT: /app/data/uploads
       ZGCA_BACKUP_ROOT: /app/backups
@@ -27,6 +29,8 @@ services:
       start_period: 20s
     security_opt:
       - no-new-privileges:true
+    # 堆上限 1GiB 之外给原生模块/缓冲留余量，超限由容器兜底。
+    mem_limit: 1536m
     stop_grace_period: 30s
 
   caddy:
@@ -47,6 +51,7 @@ services:
       - caddy_config:/config
     security_opt:
       - no-new-privileges:true
+    mem_limit: 256m
 
 volumes:
   caddy_data:

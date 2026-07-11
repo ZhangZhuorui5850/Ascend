@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { buildFallbackKnowledgeSeed, extractKnowledgeSeed } from "./knowledge-map";
+import { logError } from "./log";
 import { backfillKnowledgeHierarchy, runMigrations } from "./migrations";
 import { LEGACY_WORKSPACE_ID } from "./repo/workspaces";
 import type { KnowledgeSeed } from "./types";
@@ -22,13 +23,21 @@ export function getDb(): Database.Database {
   const dataRoot = getDataRoot();
   mkdirSync(dataRoot, { recursive: true });
   db = new Database(path.join(dataRoot, "workbench.sqlite"));
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
-  db.pragma("busy_timeout = 5000");
-  db.pragma("synchronous = NORMAL");
-  initializeDatabase(db);
-  runMigrations(db, { uploadRoot: getUploadRoot() });
-  seedKnowledgeMapIfEmpty(db);
+  try {
+    db.pragma("journal_mode = WAL");
+    db.pragma("foreign_keys = ON");
+    db.pragma("busy_timeout = 5000");
+    db.pragma("synchronous = NORMAL");
+    initializeDatabase(db);
+    runMigrations(db, { uploadRoot: getUploadRoot() });
+    seedKnowledgeMapIfEmpty(db);
+  } catch (error) {
+    // 初始化/迁移失败必须留下结构化日志再上抛，同时重置句柄避免复用半初始化的连接。
+    logError("db.init", error, { dataRoot });
+    db.close();
+    db = null;
+    throw error;
+  }
   return db;
 }
 
