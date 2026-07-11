@@ -1,11 +1,12 @@
 import type Database from "better-sqlite3";
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import type { AccessContext, UserRole, UserStatus } from "./access-context";
-import { SESSION_COOKIE } from "./auth-constants";
+import { MAX_DEVICE_ACCOUNTS, SESSION_COOKIE, SESSIONS_COOKIE } from "./auth-constants";
 import { getDbHandle } from "./db";
+import type { SealColor } from "./repo/profile";
 import { ensureWorkspaceForUser } from "./repo/workspaces";
 
-export { SESSION_COOKIE };
+export { MAX_DEVICE_ACCOUNTS, SESSION_COOKIE, SESSIONS_COOKIE };
 
 const SESSION_DAYS = 30;
 
@@ -23,6 +24,11 @@ type LoginEnv = Record<string, string | undefined>;
 
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
+}
+
+function emailLocalPart(email: string): string {
+  const at = email.indexOf("@");
+  return at > 0 ? email.slice(0, at) : email;
 }
 
 export function hashPassword(password: string, salt = randomBytes(16).toString("hex")): string {
@@ -68,7 +74,7 @@ export function ensureBootstrapUsers(
         | { id: string; displayName: string }
         | undefined;
       if (!user) {
-        user = { id: randomUUID(), displayName: "ZGCA" };
+        user = { id: randomUUID(), displayName: emailLocalPart(email) || "学习空间" };
         database.prepare(`
           INSERT INTO users (id, email, password_hash, display_name, role, status)
           VALUES (@id, @email, @passwordHash, @displayName, 'user', 'active')
@@ -79,7 +85,7 @@ export function ensureBootstrapUsers(
           displayName: user.displayName,
         });
       }
-      ensureWorkspaceForUser(database, { id: user.id, displayName: user.displayName || "ZGCA" });
+      ensureWorkspaceForUser(database, { id: user.id, displayName: user.displayName || emailLocalPart(email) || "学习空间" });
     }
 
     if (admin) {
@@ -275,6 +281,82 @@ export function revokeUserSession(
   database: Database.Database = getDbHandle(),
 ): boolean {
   return database.prepare("DELETE FROM sessions WHERE id = ? AND user_id = ?").run(sessionId, userId).changes > 0;
+}
+
+/**
+ * 合并本设备账号 token 列表：活跃 token 置顶、按用户去重（保先出现的）、
+ * 丢弃过期或无效 token、上限 MAX_DEVICE_ACCOUNTS 个。
+ */
+export function mergeAccountTokens(
+  activeToken: string | undefined,
+  listed: string[],
+  database: Database.Database = getDbHandle(),
+): string[] {
+  const merged: string[] = [];
+  const seenUsers = new Set<string>();
+  for (const token of [activeToken, ...listed]) {
+    if (!token) continue;
+    const context = getSessionContext(token, database);
+    if (!context || seenUsers.has(context.userId)) continue;
+    seenUsers.add(context.userId);
+    merged.push(token);
+    if (merged.length >= MAX_DEVICE_ACCOUNTS) break;
+  }
+  return merged;
+}
+
+export type DeviceAccount = {
+  userId: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  avatarKind: "seal" | "image";
+  avatarChar: string;
+  avatarColor: SealColor;
+  /** 头像更新时间，作为 /api/avatar 的缓存破除参数。 */
+  avatarVersion: string;
+};
+
+/** 按 token 顺序返回账号摘要（不含 token 本身，避免泄漏到客户端）。 */
+export function listAccountSummaries(
+  tokens: string[],
+  database: Database.Database = getDbHandle(),
+): DeviceAccount[] {
+  const accounts: DeviceAccount[] = [];
+  for (const token of tokens) {
+    const context = getSessionContext(token, database);
+    if (!context) continue;
+    const row = database.prepare(`
+      SELECT
+        avatar_kind AS avatarKind,
+        avatar_char AS avatarChar,
+        avatar_color AS avatarColor,
+        updated_at AS avatarVersion
+      FROM users WHERE id = ?
+    `).get(context.userId) as Pick<DeviceAccount, "avatarKind" | "avatarChar" | "avatarColor" | "avatarVersion"> | undefined;
+    if (!row) continue;
+    accounts.push({
+      userId: context.userId,
+      email: context.email,
+      displayName: context.displayName,
+      role: context.role,
+      ...row,
+    });
+  }
+  return accounts;
+}
+
+/** 在本设备 token 列表里找目标用户的有效会话 token；找不到返回 null。 */
+export function findTokenForUser(
+  tokens: string[],
+  userId: string,
+  database: Database.Database = getDbHandle(),
+): string | null {
+  for (const token of tokens) {
+    const context = getSessionContext(token, database);
+    if (context?.userId === userId) return token;
+  }
+  return null;
 }
 
 function isLoginRateLimited(database: Database.Database, email: string, ipHint: string): boolean {

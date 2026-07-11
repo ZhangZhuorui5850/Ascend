@@ -21,6 +21,8 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
+import { UserAvatar } from "@/components/UserAvatar";
+import type { DeviceAccount } from "@/lib/auth";
 import { todayKey } from "@/lib/dates";
 
 export function getNavigation(role: "admin" | "user") {
@@ -50,11 +52,13 @@ function isLinkActive(pathname: string, item: NavItem): boolean {
 }
 
 export function Sidebar({
+  account,
   collapsed,
   displayName,
   onToggle,
   role,
 }: {
+  account: DeviceAccount;
   collapsed: boolean;
   displayName: string;
   onToggle: () => void;
@@ -87,6 +91,7 @@ export function Sidebar({
         })}
       </nav>
       <div className="sidebarFooter">
+        <UserAvatar avatar={account} size={28} />
         <span className="userName" title={displayName}>{displayName}</span>
         <div className="sidebarFooterActions">
           <Link aria-label="设置" className={pathname === "/settings" ? "active" : ""} href="/settings" prefetch={true} title="设置">

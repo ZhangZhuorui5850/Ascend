@@ -69,7 +69,7 @@ async function auditLogin(name, width, height) {
 
 async function login() {
   await page.goto(`${baseUrl}/login?next=/day/${day}`, { waitUntil: "networkidle" });
-  await page.getByLabel("邮箱").fill(email);
+  await page.getByLabel("账号").fill(email);
   await page.getByLabel("密码").fill(password);
   await page.getByRole("button", { name: "进入工作台" }).click();
   await page.waitForURL(`${baseUrl}/day/${day}`, { timeout: 10_000 });

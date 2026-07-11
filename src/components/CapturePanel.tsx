@@ -74,7 +74,6 @@ export function CapturePanel({ subjects, onClose }: { subjects: CaptureSubject[]
     }
     window.addEventListener("paste", onWindowPaste);
     return () => window.removeEventListener("paste", onWindowPaste);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const selectedSubject = subjects.find((subject) => subject.code === subjectCode);

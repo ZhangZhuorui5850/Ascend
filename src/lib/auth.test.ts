@@ -4,13 +4,17 @@ import {
   changePassword,
   authenticateUser,
   ensureBootstrapUsers,
+  findTokenForUser,
   getDefaultLoginConfig,
   getSessionContext,
   hashPassword,
+  listAccountSummaries,
   listUserSessions,
+  mergeAccountTokens,
   revokeUserSession,
   verifyPassword,
 } from "./auth";
+import { MAX_DEVICE_ACCOUNTS } from "./auth-constants";
 import { assertAdmin, assertWorkspaceAccess } from "./request-auth";
 import { createTestDb, createTestWorkspace } from "./repo/testing";
 
@@ -109,6 +113,59 @@ describe("access context", () => {
   });
 });
 
+describe("device accounts (multi-session quick switch)", () => {
+  it("puts the active token first, dedupes by user keeping the newest, and drops invalid tokens", () => {
+    const db = createTestDb();
+    const alpha = createTestWorkspace(db, { email: "alpha@example.com" });
+    const beta = createTestWorkspace(db, { email: "beta@example.com" });
+    const alphaOld = createSession({ userId: alpha.userId }, db);
+    const alphaNew = createSession({ userId: alpha.userId }, db);
+    const betaSession = createSession({ userId: beta.userId }, db);
+
+    const merged = mergeAccountTokens(alphaNew.token, ["broken-token", betaSession.token, alphaOld.token], db);
+
+    expect(merged).toEqual([alphaNew.token, betaSession.token]);
+  });
+
+  it("caps the device account list", () => {
+    const db = createTestDb();
+    const tokens = Array.from({ length: MAX_DEVICE_ACCOUNTS + 2 }, (_, index) => {
+      const { userId } = createTestWorkspace(db, { email: `user-${index}@example.com` });
+      return createSession({ userId }, db).token;
+    });
+
+    expect(mergeAccountTokens(tokens[0], tokens.slice(1), db)).toHaveLength(MAX_DEVICE_ACCOUNTS);
+  });
+
+  it("summarises accounts in token order with avatar fields", () => {
+    const db = createTestDb();
+    const alpha = createTestWorkspace(db, { email: "alpha@example.com", displayName: "甲" });
+    const beta = createTestWorkspace(db, { email: "beta@example.com", displayName: "乙" });
+    const tokens = [createSession({ userId: alpha.userId }, db).token, createSession({ userId: beta.userId }, db).token];
+
+    const summaries = listAccountSummaries(tokens, db);
+
+    expect(summaries.map((account) => account.email)).toEqual(["alpha@example.com", "beta@example.com"]);
+    expect(summaries[0]).toMatchObject({
+      userId: alpha.userId,
+      displayName: "甲",
+      role: "user",
+      avatarKind: "seal",
+      avatarColor: "cinnabar",
+    });
+  });
+
+  it("finds the token for a target user and rejects unknown users", () => {
+    const db = createTestDb();
+    const alpha = createTestWorkspace(db, { email: "alpha@example.com" });
+    const beta = createTestWorkspace(db, { email: "beta@example.com" });
+    const tokens = [createSession({ userId: alpha.userId }, db).token, createSession({ userId: beta.userId }, db).token];
+
+    expect(findTokenForUser(tokens, beta.userId, db)).toBe(tokens[1]);
+    expect(findTokenForUser(tokens, "missing-user", db)).toBeNull();
+  });
+});
+
 describe("bootstrap users", () => {
   it("creates a separate ordinary user and bootstrap Admin", () => {
     const db = createTestDb();
@@ -131,6 +188,19 @@ describe("bootstrap users", () => {
     });
     expect(db.prepare("SELECT COUNT(*) AS count FROM workspaces WHERE owner_user_id IS NOT NULL").get()).toEqual({
       count: 1,
+    });
+  });
+
+  it("uses the email local-part as the bootstrap ordinary user's display name", () => {
+    const db = createTestDb();
+
+    ensureBootstrapUsers(db, {
+      APP_LOGIN_EMAIL: "Zhuorui@Example.com",
+      APP_LOGIN_PASSWORD: "owner-password",
+    });
+
+    expect(db.prepare("SELECT display_name FROM users WHERE email = 'zhuorui@example.com'").get()).toEqual({
+      display_name: "zhuorui",
     });
   });
 

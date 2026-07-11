@@ -2,8 +2,24 @@
 
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { SESSION_COOKIE, authenticateUser, changePassword, createSession, deleteSession } from "@/lib/auth";
+import {
+  SESSION_COOKIE,
+  authenticateUser,
+  changePassword,
+  createSession,
+  deleteSession,
+  findTokenForUser,
+  getSessionContext,
+  mergeAccountTokens,
+} from "@/lib/auth";
+import {
+  clearSessionCookies,
+  readSessionsCookie,
+  sessionsListExpiry,
+  setSessionCookies,
+} from "@/lib/session-cookies";
 import { requireAccessContext } from "@/lib/request-auth";
+import type { ActionResult } from "./day";
 
 export type LoginState = { error?: string };
 
@@ -23,15 +39,26 @@ export async function login(_previous: LoginState, formData: FormData): Promise<
   });
 
   const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, session.token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    expires: session.expiresAt,
-  });
+  // 新登录账号并入本设备账号列表：旧活跃会话保留，可免密切回
+  const previousActive = cookieStore.get(SESSION_COOKIE)?.value;
+  const listed = await readSessionsCookie();
+  const tokens = mergeAccountTokens(session.token, previousActive ? [previousActive, ...listed] : listed);
+  setSessionCookies(cookieStore, session.token, tokens, session.expiresAt);
 
   redirect(user.mustChangePassword ? "/change-password" : safeNextPath(formData.get("next")));
+}
+
+/** 免密切换到本设备已登录的另一个账号。 */
+export async function switchAccountAction(userId: string): Promise<ActionResult> {
+  const cookieStore = await cookies();
+  const active = cookieStore.get(SESSION_COOKIE)?.value;
+  const tokens = mergeAccountTokens(active, await readSessionsCookie());
+  const target = findTokenForUser(tokens, userId);
+  if (!target) return { ok: false, error: "该账号的登录状态已失效，请重新登录" };
+
+  const context = getSessionContext(target)!;
+  setSessionCookies(cookieStore, target, tokens, sessionsListExpiry());
+  redirect(context.role === "admin" ? "/admin" : "/");
 }
 
 export async function updateRequiredPassword(_previous: LoginState, formData: FormData): Promise<LoginState> {
@@ -52,13 +79,9 @@ export async function updateRequiredPassword(_previous: LoginState, formData: Fo
       ipHint: requestHeaders.get("x-forwarded-for") || requestHeaders.get("x-real-ip") || "",
     });
     const cookieStore = await cookies();
-    cookieStore.set(SESSION_COOKIE, session.token, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      expires: session.expiresAt,
-    });
+    // 改密后本用户全部旧会话已吊销；重建活跃会话并清理列表中的失效 token
+    const tokens = mergeAccountTokens(session.token, await readSessionsCookie());
+    setSessionCookies(cookieStore, session.token, tokens, session.expiresAt);
     destination = access.role === "admin" ? "/admin" : "/";
   } catch (error) {
     return { error: error instanceof Error ? error.message : "密码更新失败" };
@@ -66,10 +89,30 @@ export async function updateRequiredPassword(_previous: LoginState, formData: Fo
   redirect(destination);
 }
 
+/** 退出当前账号：列表里还有其他有效账号时自动顶上，否则回登录页。 */
 export async function logout(): Promise<void> {
   const cookieStore = await cookies();
-  deleteSession(cookieStore.get(SESSION_COOKIE)?.value);
-  cookieStore.delete(SESSION_COOKIE);
+  const active = cookieStore.get(SESSION_COOKIE)?.value;
+  deleteSession(active);
+
+  const remaining = mergeAccountTokens(undefined, (await readSessionsCookie()).filter((token) => token !== active));
+  if (remaining.length) {
+    const next = remaining[0];
+    const context = getSessionContext(next)!;
+    setSessionCookies(cookieStore, next, remaining, sessionsListExpiry());
+    redirect(context.role === "admin" ? "/admin" : "/");
+  }
+
+  clearSessionCookies(cookieStore);
+  redirect("/login");
+}
+
+/** 退出本设备全部账号。 */
+export async function logoutAll(): Promise<void> {
+  const cookieStore = await cookies();
+  const active = cookieStore.get(SESSION_COOKIE)?.value;
+  for (const token of new Set([active, ...(await readSessionsCookie())])) deleteSession(token);
+  clearSessionCookies(cookieStore);
   redirect("/login");
 }
 
