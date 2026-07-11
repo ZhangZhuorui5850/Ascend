@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 import type { WorkspaceScope } from "../access-context";
-import { MAX_UPLOAD_BYTES, storeUploadedFile } from "../assets";
+import { MAX_UPLOAD_BYTES, mimeTypeForUpload, storeUploadedFile } from "../assets";
 import { assertDateKey } from "../dates";
 import { ensureDay } from "./days";
 
@@ -325,6 +325,23 @@ export function searchAssets(db: Database.Database, scope: WorkspaceScope, query
   `).all(scope.workspaceId, `%${term.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`) as ExplorerFile[];
 }
 
+/**
+ * 空间用量与配额：按 blob 去重统计（ref_count > 0 的内容寻址块），同一文件多次上传只算一份。
+ */
+export function getStorageUsage(
+  db: Database.Database,
+  scope: WorkspaceScope,
+): { usedBytes: number; quotaBytes: number } {
+  const workspace = db.prepare("SELECT storage_quota_bytes FROM workspaces WHERE id = ?").get(scope.workspaceId) as
+    | { storage_quota_bytes: number }
+    | undefined;
+  if (!workspace) throw new Error("学习空间不存在");
+  const usage = db.prepare(
+    "SELECT COALESCE(SUM(size), 0) AS bytes FROM blobs WHERE workspace_id = ? AND ref_count > 0",
+  ).get(scope.workspaceId) as { bytes: number };
+  return { usedBytes: usage.bytes, quotaBytes: workspace.storage_quota_bytes };
+}
+
 export async function createAssetFromUpload(
   db: Database.Database,
   scope: WorkspaceScope,
@@ -341,14 +358,8 @@ export async function createAssetFromUpload(
   },
 ): Promise<{ id: number }> {
   if (input.file.size > MAX_UPLOAD_BYTES) throw new Error("单个文件不能超过 20MB");
-  const workspace = db.prepare("SELECT storage_quota_bytes FROM workspaces WHERE id = ?").get(scope.workspaceId) as
-    | { storage_quota_bytes: number }
-    | undefined;
-  if (!workspace) throw new Error("学习空间不存在");
-  const usage = db.prepare("SELECT COALESCE(SUM(size), 0) AS bytes FROM assets WHERE workspace_id = ?").get(
-    scope.workspaceId,
-  ) as { bytes: number };
-  if (usage.bytes + input.file.size > workspace.storage_quota_bytes) throw new Error("存储空间已满");
+  const { usedBytes, quotaBytes } = getStorageUsage(db, scope);
+  if (usedBytes + input.file.size > quotaBytes) throw new Error("存储空间已满");
   const day = assertDateKey(input.day || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" }));
   ensureDay(db, scope, day);
   const stored = await storeUploadedFile({
@@ -359,7 +370,8 @@ export async function createAssetFromUpload(
   });
   const folderPath = normalizeFolderPath(input.folderPath || "");
 
-  const mimeType = input.file.type || "application/octet-stream";
+  // 服务端按扩展名纠正 MIME，客户端 type 只作候补，防止代码/文本文件被浏览器标错。
+  const mimeType = mimeTypeForUpload(input.file.name, input.file.type);
   db.prepare(`
     INSERT INTO blobs (workspace_id, id, sha256, size, mime_type, storage_key, ref_count)
     VALUES (@workspaceId, @id, @sha256, @size, @mimeType, @storageKey, 0)

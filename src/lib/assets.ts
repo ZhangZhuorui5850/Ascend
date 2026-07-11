@@ -6,7 +6,9 @@ import { Readable } from "node:stream";
 import { getUploadRoot } from "./db";
 import { sanitizeFileName, storageNamespaceForWorkspace } from "./storage";
 
-export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+import { MAX_UPLOAD_BYTES } from "./limits";
+
+export { MAX_UPLOAD_BYTES };
 
 export type StoredUpload = {
   sha256: string;
@@ -80,15 +82,65 @@ export function resolveWorkspaceAssetPath(workspaceId: string, relativePath: str
 }
 
 export function contentDispositionFor(mimeType: string, originalName: string): string {
-  const inlineMimeTypes = new Set(["application/pdf", "image/gif", "image/jpeg", "image/png", "image/webp"]);
+  const inlineMimeTypes = new Set([
+    "application/pdf",
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "text/plain",
+    "text/markdown",
+    "text/csv",
+  ]);
   const disposition = inlineMimeTypes.has(mimeType.toLowerCase()) ? "inline" : "attachment";
-  const fallback = sanitizeFileName(originalName).replace(/"/g, "_");
+  // HTTP 头只允许 Latin-1：引号回退名必须剔除中文等字符（500 的根源），真实文件名走 filename* 的 UTF-8 编码段。
+  const ascii = sanitizeFileName(originalName).replace(/"/g, "_").replace(/[^\x20-\x7e]/g, "_");
+  const fallback = ascii.replace(/_+/g, "_") || "file";
   return `${disposition}; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(originalName)}`;
 }
 
-export async function streamAssetFile(absolutePath: string): Promise<ReadableStream<Uint8Array>> {
+export async function streamAssetFile(
+  absolutePath: string,
+  range?: { start: number; end: number },
+): Promise<ReadableStream<Uint8Array>> {
   await stat(absolutePath);
-  return Readable.toWeb(createReadStream(absolutePath)) as ReadableStream<Uint8Array>;
+  // createReadStream 的 start/end 均为闭区间，恰好对应 HTTP Range 语义。
+  const stream = range ? createReadStream(absolutePath, { start: range.start, end: range.end }) : createReadStream(absolutePath);
+  return Readable.toWeb(stream) as ReadableStream<Uint8Array>;
+}
+
+/** 按扩展名纠正的 MIME 类型表：浏览器对代码/文本类文件经常给空或错误的 type。 */
+const EXTENSION_MIME_TYPES: Record<string, string> = {
+  md: "text/markdown",
+  markdown: "text/markdown",
+  txt: "text/plain",
+  log: "text/plain",
+  csv: "text/csv",
+  pdf: "application/pdf",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+  json: "application/json",
+  py: "text/plain",
+  js: "text/plain",
+  ts: "text/plain",
+  c: "text/plain",
+  cpp: "text/plain",
+  h: "text/plain",
+  java: "text/plain",
+  sql: "text/plain",
+  sh: "text/plain",
+  yml: "text/plain",
+  yaml: "text/plain",
+  xml: "text/plain",
+};
+
+/** 服务端 MIME 纠正：扩展名命中时以服务端映射为准，否则信任客户端 type，最后兜底二进制流。 */
+export function mimeTypeForUpload(name: string, clientType: string): string {
+  const extension = path.extname(name).slice(1).toLowerCase();
+  return EXTENSION_MIME_TYPES[extension] || clientType || "application/octet-stream";
 }
 
 function isFileExistsError(error: unknown): boolean {
