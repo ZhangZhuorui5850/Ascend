@@ -2205,6 +2205,9 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  flex: 1 1 auto;
+  min-height: 200px;
+  overflow: hidden;
   padding: 10px;
   border: 1.5px dashed var(--line);
   border-radius: var(--radius);
@@ -2220,6 +2223,7 @@ button:focus-visible {
 
 .dropZoneInner {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 9px;
   padding: 14px 10px;
@@ -2247,6 +2251,12 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 7px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  /* ✕ 角标悬挑在卡片外 7px，留出内边距避免被滚动容器裁切 */
+  padding: 8px 8px 2px 0;
 }
 
 .attachmentCard {
@@ -2328,6 +2338,8 @@ button:focus-visible {
   place-items: center;
   width: 20px;
   height: 20px;
+  padding: 0;
+  line-height: 0;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--surface);
@@ -2854,6 +2866,12 @@ button:focus-visible {
 
 .sidebar.isCollapsed {
   width: var(--sidebar-collapsed);
+  padding-inline: 10px;
+}
+
+.sidebar.isCollapsed .brand {
+  justify-content: center;
+  padding-inline: 0;
 }
 
 .brand {
@@ -2949,6 +2967,7 @@ button:focus-visible {
 
 .sidebar.isCollapsed .sidebarFooter {
   justify-content: center;
+  padding-inline: 0;
 }
 
 .sidebar.isCollapsed .sidebarFooterActions {
@@ -3885,7 +3904,11 @@ kbd {
   flex: 1;
   min-width: 0;
   padding: 13px 18px;
+  /* 覆盖 .dayStats > div 的独立边框/圆角/底色：容器统一外框，格子只留右分隔线 */
+  border: 0;
   border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 
 .dayStatusBar > div:last-child {
