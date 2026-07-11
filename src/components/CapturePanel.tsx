@@ -1,8 +1,8 @@
 "use client";
 
-import { ChangeEvent, ClipboardEvent, DragEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, ClipboardEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Camera, CheckCircle2, FileText, ImageIcon, Loader2, Paperclip, Plus, Send, X } from "lucide-react";
+import { AlertCircle, Camera, CheckCircle2, FileText, FolderOpen, ImageIcon, Inbox, Loader2, Paperclip, Plus, Send, X } from "lucide-react";
 import { createPointAction } from "@/app/actions/knowledge";
 import { todayKey } from "@/lib/dates";
 import { MAX_UPLOAD_BYTES } from "@/lib/limits";
@@ -35,10 +35,12 @@ export function CapturePanel({ subjects, onClose }: { subjects: CaptureSubject[]
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const attachmentsRef = useRef<Attachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const dragDepthRef = useRef(0);
 
   useEffect(() => {
@@ -162,29 +164,75 @@ export function CapturePanel({ subjects, onClose }: { subjects: CaptureSubject[]
     }
   }
 
-  function handleDragEnter(event: DragEvent<HTMLElement>) {
-    event.preventDefault();
-    dragDepthRef.current += 1;
-    setIsDragging(true);
-  }
+  // 整页拖放：文件拖到页面任意位置都进收纳队列，松手后自动打开收纳面板。
+  // 用捕获阶段监听，避免资料库内部「拖动文件进文件夹」的 drop 处理器吞掉 OS 文件；
+  // 反过来，内部拖拽不带 Files 类型，这里不会响应。
+  useEffect(() => {
+    function hasFiles(event: globalThis.DragEvent) {
+      const types = event.dataTransfer?.types;
+      return !!types && Array.from(types).includes("Files");
+    }
+    function onDragEnter(event: globalThis.DragEvent) {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepthRef.current += 1;
+      setIsDragging(true);
+    }
+    function onDragOver(event: globalThis.DragEvent) {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    }
+    function onDragLeave(event: globalThis.DragEvent) {
+      if (!hasFiles(event)) return;
+      dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+      if (dragDepthRef.current === 0) setIsDragging(false);
+    }
+    function onDrop(event: globalThis.DragEvent) {
+      dragDepthRef.current = 0;
+      setIsDragging(false);
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const files = event.dataTransfer?.files;
+      if (files && files.length) {
+        addFiles(files);
+        window.dispatchEvent(new CustomEvent("zgca:open-capture"));
+      }
+    }
+    window.addEventListener("dragenter", onDragEnter, true);
+    window.addEventListener("dragover", onDragOver, true);
+    window.addEventListener("dragleave", onDragLeave, true);
+    window.addEventListener("drop", onDrop, true);
+    return () => {
+      window.removeEventListener("dragenter", onDragEnter, true);
+      window.removeEventListener("dragover", onDragOver, true);
+      window.removeEventListener("dragleave", onDragLeave, true);
+      window.removeEventListener("drop", onDrop, true);
+    };
+  }, []);
 
-  function handleDragOver(event: DragEvent<HTMLElement>) {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
-    setIsDragging(true);
-  }
+  // 加号菜单：点外面或按 Esc 收起
+  useEffect(() => {
+    if (!addMenuOpen) return;
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as Element | null;
+      if (!target?.closest(".captureAddWrap")) setAddMenuOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setAddMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [addMenuOpen]);
 
-  function handleDragLeave(event: DragEvent<HTMLElement>) {
-    event.preventDefault();
-    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
-    if (dragDepthRef.current === 0) setIsDragging(false);
-  }
-
-  function handleDrop(event: DragEvent<HTMLElement>) {
-    event.preventDefault();
-    dragDepthRef.current = 0;
-    setIsDragging(false);
-    addFiles(event.dataTransfer.files);
+  function pickFrom(input: HTMLInputElement | null) {
+    setAddMenuOpen(false);
+    input?.click();
   }
 
   function handleFileInput(event: ChangeEvent<HTMLInputElement>) {
@@ -266,13 +314,19 @@ export function CapturePanel({ subjects, onClose }: { subjects: CaptureSubject[]
   const queuedCount = attachments.filter((a) => a.status === "queued" || a.status === "error").length;
 
   return (
+    <>
+      {isDragging ? (
+        <div aria-hidden className="pageDropOverlay">
+          <div className="pageDropHint">
+            <Inbox size={22} />
+            <strong>松开鼠标，放入收纳</strong>
+            <span>文件会进入收纳面板的待入库队列</span>
+          </div>
+        </div>
+      ) : null}
     <aside
       className={`capturePanel ${isDragging ? "captureDragging" : ""}`}
       data-testid="capture-panel"
-      onDragEnter={handleDragEnter}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
       onPaste={handlePaste}
     >
       <div className="panelHeader">
@@ -285,12 +339,35 @@ export function CapturePanel({ subjects, onClose }: { subjects: CaptureSubject[]
       <div className={`dropZone ${isDragging ? "isDragging" : ""}`}>
         <button className="dropZoneInner" onClick={() => fileInputRef.current?.click()} type="button">
           <Paperclip size={18} />
-          <span>拖拽文件到这里、粘贴截图，或点击选择</span>
+          <span>拖拽文件到页面任意位置、粘贴截图，或点击选择</span>
         </button>
-        <button className="cameraButton" onClick={() => cameraInputRef.current?.click()} type="button">
-          <Camera size={16} />
-          拍照入库
-        </button>
+        <div className="captureAddWrap">
+          {addMenuOpen ? (
+            <div className="captureAddMenu" role="menu">
+              <button className="cameraOnly" onClick={() => pickFrom(cameraInputRef.current)} role="menuitem" type="button">
+                <Camera size={15} />
+                打开相机
+              </button>
+              <button onClick={() => pickFrom(galleryInputRef.current)} role="menuitem" type="button">
+                <ImageIcon size={15} />
+                打开相册
+              </button>
+              <button onClick={() => pickFrom(fileInputRef.current)} role="menuitem" type="button">
+                <FolderOpen size={15} />
+                上传文件
+              </button>
+            </div>
+          ) : null}
+          <button
+            aria-expanded={addMenuOpen}
+            aria-label="添加文件"
+            className={addMenuOpen ? "captureAdd open" : "captureAdd"}
+            onClick={() => setAddMenuOpen((open) => !open)}
+            type="button"
+          >
+            <Plus size={17} />
+          </button>
+        </div>
 
         {attachments.length ? (
           <div className="attachmentGrid">
@@ -417,8 +494,10 @@ export function CapturePanel({ subjects, onClose }: { subjects: CaptureSubject[]
       <p className="hint">{message || "文件会按日期落到当天，并按上面的归属挂到科目、知识点和文件夹。"}</p>
 
       <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileInput} />
+      <input ref={galleryInputRef} type="file" accept="image/*" multiple hidden onChange={handleFileInput} />
       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={handleFileInput} />
     </aside>
+    </>
   );
 }
 
