@@ -45,6 +45,8 @@ services:
       - "80:80"
       - "443:443"
       - "443:443/udp"
+      # 备案期间的临时 IP 直连入口，备案通过后移除
+      - "8443:8443"
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
