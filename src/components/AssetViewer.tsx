@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { ExternalLink, Loader2, X } from "lucide-react";
+import { parseMarkdown, type Align, type BlockNode, type InlineNode } from "@/lib/markdown";
 
 const TEXT_EXTENSIONS = new Set([
   "txt", "json", "csv", "log", "py", "js", "ts", "tsx", "jsx", "c", "cpp", "h", "hpp",
@@ -114,131 +115,103 @@ function TextPreview({ url, kind, size }: { url: string; kind: "markdown" | "tex
   );
 }
 
-/* ---------- 轻量 Markdown 渲染（输出 React 元素，不经过 innerHTML，无 XSS 面） ---------- */
+/* ---------- Markdown 渲染：解析交给 @/lib/markdown，这里只负责 AST → React 元素 ---------- */
 
 function renderMarkdown(source: string): ReactNode[] {
-  const lines = source.replace(/\r\n/g, "\n").split("\n");
-  const blocks: ReactNode[] = [];
-  let index = 0;
-  let key = 0;
-
-  while (index < lines.length) {
-    const line = lines[index];
-
-    if (!line.trim()) {
-      index += 1;
-      continue;
-    }
-
-    const fence = line.match(/^```(\w*)\s*$/);
-    if (fence) {
-      const code: string[] = [];
-      index += 1;
-      while (index < lines.length && !/^```\s*$/.test(lines[index])) {
-        code.push(lines[index]);
-        index += 1;
-      }
-      index += 1;
-      blocks.push(
-        <pre className="mdCode" key={key++}>
-          <code>{code.join("\n")}</code>
-        </pre>,
-      );
-      continue;
-    }
-
-    const heading = line.match(/^(#{1,6})\s+(.*)$/);
-    if (heading) {
-      const level = heading[1].length;
-      const text = renderInline(heading[2], `h${key}`);
-      const Tag = (`h${Math.min(level + 1, 6)}`) as "h2";
-      blocks.push(<Tag key={key++}>{text}</Tag>);
-      index += 1;
-      continue;
-    }
-
-    if (/^(-{3,}|\*{3,})\s*$/.test(line)) {
-      blocks.push(<hr key={key++} />);
-      index += 1;
-      continue;
-    }
-
-    if (/^>\s?/.test(line)) {
-      const quote: string[] = [];
-      while (index < lines.length && /^>\s?/.test(lines[index])) {
-        quote.push(lines[index].replace(/^>\s?/, ""));
-        index += 1;
-      }
-      blocks.push(<blockquote key={key++}>{renderMarkdown(quote.join("\n"))}</blockquote>);
-      continue;
-    }
-
-    if (/^\s*([-*+]|\d+\.)\s+/.test(line)) {
-      const ordered = /^\s*\d+\.\s+/.test(line);
-      const items: ReactNode[] = [];
-      while (index < lines.length && /^\s*([-*+]|\d+\.)\s+/.test(lines[index])) {
-        const itemText = lines[index].replace(/^\s*([-*+]|\d+\.)\s+/, "");
-        items.push(<li key={`li-${index}`}>{renderInline(itemText, `li${index}`)}</li>);
-        index += 1;
-      }
-      blocks.push(ordered ? <ol key={key++}>{items}</ol> : <ul key={key++}>{items}</ul>);
-      continue;
-    }
-
-    const paragraph: string[] = [line];
-    index += 1;
-    while (
-      index < lines.length &&
-      lines[index].trim() &&
-      !/^(#{1,6}\s|```|>\s?|\s*([-*+]|\d+\.)\s+|(-{3,}|\*{3,})\s*$)/.test(lines[index])
-    ) {
-      paragraph.push(lines[index]);
-      index += 1;
-    }
-    blocks.push(<p key={key++}>{renderInline(paragraph.join(" "), `p${key}`)}</p>);
-  }
-
-  return blocks;
+  return renderBlocks(parseMarkdown(source), "md");
 }
 
-function renderInline(text: string, keyPrefix: string): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  // 顺序：行内代码 > 图片（降级为链接）> 链接 > 加粗 > 斜体
-  const pattern = /(`[^`]+`)|(!?\[[^\]]*\]\([^)\s]+\))|(\*\*[^*]+\*\*)|(\*[^*]+\*)/g;
-  let last = 0;
-  let match: RegExpExecArray | null;
-  let index = 0;
-
-  while ((match = pattern.exec(text)) !== null) {
-    if (match.index > last) nodes.push(text.slice(last, match.index));
-    const token = match[0];
-    const key = `${keyPrefix}-${index++}`;
-    if (token.startsWith("`")) {
-      nodes.push(<code key={key}>{token.slice(1, -1)}</code>);
-    } else if (token.startsWith("**")) {
-      nodes.push(<strong key={key}>{token.slice(2, -2)}</strong>);
-    } else if (token.startsWith("*")) {
-      nodes.push(<em key={key}>{token.slice(1, -1)}</em>);
-    } else {
-      const link = token.match(/^(!?)\[([^\]]*)\]\(([^)\s]+)\)$/);
-      if (link) {
-        const [, , label, href] = link;
-        const safe = /^(https?:|mailto:|#)/i.test(href);
-        nodes.push(
-          safe ? (
-            <a href={href} key={key} rel="noopener noreferrer" target="_blank">
-              {label || href}
-            </a>
-          ) : (
-            <span key={key}>{label || href}</span>
-          ),
-        );
-      } else {
-        nodes.push(token);
+function renderBlocks(blocks: BlockNode[], keyPrefix: string): ReactNode[] {
+  return blocks.map((block, index) => {
+    const key = `${keyPrefix}-${index}`;
+    switch (block.kind) {
+      case "heading": {
+        // 文档 h1 降级为 h2，避免和预览窗标题抢层级
+        const Tag = (`h${Math.min(block.level + 1, 6)}`) as "h2";
+        return <Tag key={key}>{renderInlineNodes(block.inline, key)}</Tag>;
       }
+      case "codeBlock":
+        return (
+          <pre className="mdCode" key={key}>
+            <code>{block.text}</code>
+          </pre>
+        );
+      case "hr":
+        return <hr key={key} />;
+      case "blockquote":
+        return <blockquote key={key}>{renderBlocks(block.children, key)}</blockquote>;
+      case "list": {
+        const items = block.items.map((item, itemIndex) => {
+          const itemKey = `${key}-${itemIndex}`;
+          return (
+            <li className={item.checked !== null ? "mdTask" : undefined} key={itemKey}>
+              {item.checked !== null ? <input checked={item.checked} disabled readOnly type="checkbox" /> : null}
+              {renderInlineNodes(item.inline, itemKey)}
+              {renderBlocks(item.children, itemKey)}
+            </li>
+          );
+        });
+        return block.ordered ? <ol key={key}>{items}</ol> : <ul key={key}>{items}</ul>;
+      }
+      case "table":
+        return (
+          <div className="mdTableWrap" key={key}>
+            <table className="mdTable">
+              <thead>
+                <tr>
+                  {block.header.map((cell, cellIndex) => (
+                    <th key={cellIndex} style={alignStyle(block.align[cellIndex])}>
+                      {renderInlineNodes(cell, `${key}-h${cellIndex}`)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {block.rows.map((row, rowIndex) => (
+                  <tr key={rowIndex}>
+                    {row.map((cell, cellIndex) => (
+                      <td key={cellIndex} style={alignStyle(block.align[cellIndex])}>
+                        {renderInlineNodes(cell, `${key}-${rowIndex}-${cellIndex}`)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      case "paragraph":
+        return <p key={key}>{renderInlineNodes(block.inline, key)}</p>;
     }
-    last = match.index + token.length;
-  }
-  if (last < text.length) nodes.push(text.slice(last));
-  return nodes;
+  });
+}
+
+function alignStyle(align: Align): CSSProperties | undefined {
+  return align ? { textAlign: align } : undefined;
+}
+
+function renderInlineNodes(nodes: InlineNode[], keyPrefix: string): ReactNode[] {
+  return nodes.map((node, index) => {
+    const key = `${keyPrefix}-${index}`;
+    switch (node.kind) {
+      case "text":
+        return node.text;
+      case "code":
+        return <code key={key}>{node.text}</code>;
+      case "strong":
+        return <strong key={key}>{renderInlineNodes(node.children, key)}</strong>;
+      case "em":
+        return <em key={key}>{renderInlineNodes(node.children, key)}</em>;
+      case "del":
+        return <del key={key}>{renderInlineNodes(node.children, key)}</del>;
+      case "link":
+        return node.safe ? (
+          <a href={node.href} key={key} rel="noopener noreferrer" target="_blank">
+            {node.label}
+          </a>
+        ) : (
+          <span key={key}>{node.label}</span>
+        );
+    }
+  });
 }
