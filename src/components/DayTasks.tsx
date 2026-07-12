@@ -168,15 +168,15 @@ function TaskLine({ task, day, subjects, report }: {
   return (
     <div className={done ? "taskLine done" : "taskLine"}>
       <button
-        aria-checked={Boolean(task.done)}
-        aria-label={task.done ? "标记为未完成" : "标记为完成"}
+        aria-checked={done}
+        aria-label={done ? "标记为未完成" : "标记为完成"}
         className="taskCheck"
         disabled={pending}
         onClick={() => void toggle()}
         role="checkbox"
         type="button"
       >
-        {task.done ? <Check size={13} /> : null}
+        {done ? <Check size={13} /> : null}
       </button>
       <input
         aria-label="任务内容"
