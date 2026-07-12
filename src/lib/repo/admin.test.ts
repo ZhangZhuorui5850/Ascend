@@ -46,14 +46,14 @@ describe("Admin invitation lifecycle", () => {
     expect(new Date(row.expires_at).getTime() - Date.now()).toBeGreaterThan(23 * 60 * 60 * 1000);
     expect(new Date(row.expires_at).getTime() - Date.now()).toBeLessThanOrEqual(24 * 60 * 60 * 1000);
 
-    const activated = activateInvitation(db, invitation.invitationUrlToken, "a-secure-password");
+    const activated = activateInvitation(db, invitation.invitationUrlToken, "zhang...");
     expect(activated.userId).toBe(invitation.userId);
     expect(activated.workspaceId).toBeTruthy();
     expect(db.prepare("SELECT status FROM users WHERE id = ?").get(invitation.userId)).toEqual({ status: "active" });
     expect(() => activateInvitation(db, invitation.invitationUrlToken, "another-password")).toThrow("已使用");
   });
 
-  it("rejects duplicate email, expired tokens, short passwords, and ordinary callers", () => {
+  it("rejects duplicate email, expired tokens, empty passwords, and ordinary callers", () => {
     const db = createTestDb();
     const admin = createAdmin(db);
     const ordinary = createTestWorkspace(db, { email: "ordinary@example.com" });
@@ -72,7 +72,7 @@ describe("Admin invitation lifecycle", () => {
     expect(() => createInvitation(db, ordinaryContext, { email: "blocked@example.com", displayName: "越权" })).toThrow(
       "管理员",
     );
-    expect(() => activateInvitation(db, invitation.invitationUrlToken, "too-short")).toThrow("12");
+    expect(() => activateInvitation(db, invitation.invitationUrlToken, "")).toThrow("密码不能为空");
     db.prepare("UPDATE invitations SET expires_at = datetime('now', '-1 minute') WHERE user_id = ?").run(invitation.userId);
     expect(() => activateInvitation(db, invitation.invitationUrlToken, "a-secure-password")).toThrow("已过期");
   });
@@ -91,13 +91,14 @@ describe("Admin user lifecycle", () => {
     expect(getSessionContext(first.token, db)).toBeNull();
 
     const second = createSession({ userId: target.userId }, db);
-    resetUserPassword(db, admin, target.userId, "temporary-password");
+    expect(() => resetUserPassword(db, admin, target.userId, "")).toThrow("临时密码不能为空");
+    resetUserPassword(db, admin, target.userId, "zhang...");
     expect(getSessionContext(second.token, db)).toBeNull();
     const user = db.prepare("SELECT password_hash, must_change_password FROM users WHERE id = ?").get(target.userId) as {
       password_hash: string;
       must_change_password: number;
     };
-    expect(verifyPassword("temporary-password", user.password_hash)).toBe(true);
+    expect(verifyPassword("zhang...", user.password_hash)).toBe(true);
     expect(user.must_change_password).toBe(1);
   });
 

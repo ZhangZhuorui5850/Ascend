@@ -217,7 +217,7 @@ export function changePassword(
   newPassword: string,
   database: Database.Database = getDbHandle(),
 ): void {
-  if (newPassword.length < 12) throw new Error("新密码至少需要 12 个字符");
+  if (!newPassword.length) throw new Error("新密码不能为空");
   const user = database.prepare("SELECT password_hash FROM users WHERE id = ?").get(userId) as
     | { password_hash: string }
     | undefined;

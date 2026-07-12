@@ -5,7 +5,6 @@ import { hashPassword } from "../auth";
 import { ensureWorkspaceForUser } from "./workspaces";
 
 const INVITATION_HOURS = 24;
-const MIN_PASSWORD_LENGTH = 12;
 
 type AdminContext = AccessContext & { role: "admin" };
 
@@ -95,7 +94,7 @@ export function activateInvitation(
   token: string,
   password: string,
 ): { userId: string; workspaceId: string } {
-  if (password.length < MIN_PASSWORD_LENGTH) throw new Error("密码至少需要 12 个字符");
+  if (!password.length) throw new Error("密码不能为空");
   const invitation = db.prepare(`
     SELECT i.id, i.user_id, i.expires_at, i.used_at, i.created_by, u.display_name, u.status
     FROM invitations i
@@ -218,7 +217,7 @@ export function resetUserPassword(
   temporaryPassword: string,
 ): void {
   requireAdminContext(admin);
-  if (temporaryPassword.length < MIN_PASSWORD_LENGTH) throw new Error("临时密码至少需要 12 个字符");
+  if (!temporaryPassword.length) throw new Error("临时密码不能为空");
   const target = db.prepare("SELECT role FROM users WHERE id = ?").get(targetUserId) as { role: string } | undefined;
   if (!target || target.role !== "user") throw new Error("普通用户不存在");
   db.transaction(() => {

@@ -246,11 +246,19 @@ describe("bootstrap users", () => {
     const oldSession = createSession({ userId: admin.userId }, db);
 
     expect(admin.mustChangePassword).toBe(true);
-    changePassword(admin.userId, "bootstrap-password", "replacement-password", db);
+    changePassword(admin.userId, "bootstrap-password", "zhang...", db);
     expect(getSessionContext(oldSession.token, db)).toBeNull();
-    expect(authenticateUser("admin@example.com", "replacement-password", {}, db)).toMatchObject({
+    expect(authenticateUser("admin@example.com", "zhang...", {}, db)).toMatchObject({
       mustChangePassword: false,
     });
+  });
+
+  it("rejects an empty new password", () => {
+    const db = createTestDb();
+    const { userId } = createTestWorkspace(db, { email: "user@example.com" });
+    db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword("current-password"), userId);
+
+    expect(() => changePassword(userId, "current-password", "", db)).toThrow("新密码不能为空");
   });
 });
 
