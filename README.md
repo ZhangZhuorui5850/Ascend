@@ -1,117 +1,129 @@
 # ZGCA 学习工作台
 
-日历驱动的多用户备考学习系统：每位普通用户拥有完全独立的学习空间，管理员只负责邀请、账号、容量与审计。每天从「今日工作台」开始，复习到期知识点、回炉错题、收纳资料、写计划和复盘。
+日历驱动的多用户备考学习系统。每位普通用户拥有独立学习空间，管理员负责邀请、账号、容量和审计。每天从「今日工作台」开始，处理复习、错题、任务、资料、计划和复盘。
 
-## 页面结构
+> 想直接运行命令：先看 [操作速查表](./QUICKSTART.md)。完整生产运维说明见 [deploy/README.md](./deploy/README.md)。
 
-- `/`（主页）：实时时钟、考试倒计时（在设置里配置）、连续学习天数、今日任务/待复习概览、科目进度，一键进入今日工作台。
-- `/day/[date]`（今日工作台）：待处理队列（到期复习 + 错题回炉，受每日上限控制）、可勾选的任务清单（带科目标签，未完成可一键顺延到今天）、随笔卡片（一个想法一张卡片）、晚间总结与明日第一步（自动保存）、快速记录、当日资料与轨迹。
-- `/calendar`：月历热力视图，点日期进入当天工作台。
-- `/subjects`：科目按笔试/机试分组（机制一致，仅类型标签区分）；`/subjects/[code]` 是知识体系的管理台——章节排序/重命名/删除，知识点的层级、真题标记、掌握度、复习排期，行内展开可查看关联资料、错题和复习记录。
-- `/assets`：资料库资源管理器。URL 即路径（`?folder=`），支持新建/重命名/移动/删除文件夹，文件行内重命名/删除/拖拽移动、文件名搜索（`?q=`）、图片预览。
-- `/mistakes`：错题本（今日待回炉 / 回炉中 / 已毕业）。
-- `/analytics`：近七天统计 + 弱点优先级 + 科目进度。
-- `/settings`：考试倒计时（最多 5 个）、每日复习上限。
-- `/admin`：独立管理员控制台；邀请用户、停用/恢复账号、退出全部设备、重置密码、调整配额并查看审计日志。
-- `/invite/[token]`：24 小时有效的一次性邀请激活页。
+## 主要功能
 
-右侧收纳面板（宽屏常驻，窄屏抽屉）负责文件入库：拖拽/粘贴截图，选择日期、科目、章节、知识点和文件夹。
+- `/`：考试倒计时、连续学习天数、今日任务和复习概览、科目进度。
+- `/day/[date]`：到期复习、错题回炉、任务清单、随笔、总结、快速记录和当日资料。
+- `/calendar`：月历热力视图，按日期进入工作台。
+- `/subjects`：笔试与机试科目；知识体系支持章节、知识点、掌握度、真题标记和复习排期。
+- `/assets`：资料库资源管理器，支持文件夹、搜索、上传、重命名、移动、删除和预览。
+- `/mistakes`：错题回炉流程。
+- `/analytics`：近七天统计、弱点优先级和科目进度。
+- `/settings`：账户资料、头像、密码、登录设备、考试倒计时、每日复习上限、明暗模式和配色。
+- `/admin`：用户邀请、账号状态、密码重置、容量、只读工作区和审计日志。
+- `/invite/[token]`：一次性邀请激活页面。
+
+宽屏右侧、移动端抽屉中的收纳面板支持拖拽文件、粘贴截图，并为资料选择日期、科目、章节、知识点和文件夹。
+
+## 技术栈
+
+- Next.js 16.2.10（App Router、Server Actions、standalone 生产输出）
+- React 19、TypeScript
+- SQLite、better-sqlite3
+- Vitest、Playwright
+- Docker Compose、Caddy
 
 ## 本地开发
 
+要求 Node.js 22。复制环境变量模板并设置普通引导账号与独立管理员账号；两个邮箱必须不同。
+
 ```bash
+cp .env.example .env.local
 npm install
 npm run dev
 ```
 
-打开 `http://localhost:3000`。普通账号由 `APP_LOGIN_EMAIL` / `APP_LOGIN_PASSWORD` 引导创建；独立管理员由 `APP_ADMIN_EMAIL` / `APP_ADMIN_PASSWORD` 引导创建。两个邮箱必须不同。
+Windows PowerShell 可使用：
 
-管理员首次登录必须更换正式密码。更换成功后从服务器 `.env.local` 删除 `APP_ADMIN_PASSWORD`，后续不会再用环境变量覆盖数据库中的密码。管理员在“用户管理”里创建邀请链接，并自行通过微信等渠道发送；系统不依赖邮件服务，数据库也不会保存邀请令牌明文。
+```powershell
+Copy-Item .env.example .env.local
+npm install
+npm run dev
+```
 
-全新数据库会自动从内置的 M1-M7 种子初始化知识地图；如果设置了 `ZGCA_SOURCE_ROOT` 且该目录下存在 `知识地图页面.html`，则优先从该文件抽取。
+打开 `http://localhost:3000`。完整的日常命令见 [QUICKSTART.md](./QUICKSTART.md)。
+
+普通账号由 `APP_LOGIN_EMAIL` / `APP_LOGIN_PASSWORD` 引导创建，管理员由 `APP_ADMIN_EMAIL` / `APP_ADMIN_PASSWORD` 引导创建。管理员首次登录必须修改密码；账号写入数据库后，应从生产环境文件中删除两个引导密码变量并重建应用容器。
+
+全新数据库会从内置 M1–M7 种子初始化知识地图。如果设置了 `ZGCA_SOURCE_ROOT`，并且目录中存在 `知识地图页面.html`，则优先从该文件抽取。
 
 ## 测试与验证
 
 ```bash
-npm test              # vitest 单元测试（数据层 / 迁移 / 认证等）
-npm run build         # 生产构建
-npm run smoke         # Playwright 端到端冒烟（需先在 3105 端口启动：npm run start -- -p 3105）
-npm run responsive:audit  # 响应式审计（RESPONSIVE_AUDIT_URL 指定地址）
-npm run audit:multi-user  # Admin + 两用户隔离审计（MULTI_USER_AUDIT_URL 指定地址）
-npm run verify:migration # workspace 归属、关系和文件完整性检查
+npm test                  # Vitest 单元测试
+npm run lint              # ESLint
+npm run build             # Next.js 生产构建
+npm run verify:migration  # 工作区归属、关系和文件完整性
 ```
 
-## 生产运行与迁移
-
-升级已有数据库前，必须先停止写入并同时备份 SQLite 与上传目录：
-
-```bash
-npm run backup
-cp -a data "backups/pre-multi-user-$(date +%Y%m%d-%H%M%S)"
-```
-
-确认备份完成后再启动新版本。应用启动时会增量执行迁移；随后先登录一次普通引导账号，让系统认领原有数据，再运行：
-
-```bash
-npm run verify:migration
-```
-
-只有输出 `"ok": true`、`missingFiles: 0` 且没有无归属记录时才继续开放访问。若校验失败，停止新版本，保留失败现场，把 `data/` 移出工作目录并从升级前快照完整恢复数据库、WAL/SHM 和 `uploads/`，再启动旧版本；不要只回滚代码而继续使用已迁移数据库。
+端到端与响应式审计需要先启动测试服务：
 
 ```bash
 npm run build
-npm run start
+npm run start -- -p 3105
 ```
 
-## Docker / Mac mini
-
-第一次部署先准备本机环境文件：
+然后在另一个终端运行：
 
 ```bash
-cp .env.example .env.local
+npm run smoke
+npm run audit:multi-user
+RESPONSIVE_AUDIT_URL=http://localhost:3105 npm run responsive:audit
 ```
 
-然后编辑 `.env.local`，至少设置普通引导账号和独立管理员的不同邮箱与高强度密码。
+PowerShell 设置响应式审计地址的写法为：
 
-```bash
-docker compose up -d --build
+```powershell
+$env:RESPONSIVE_AUDIT_URL = "http://localhost:3105"
+npm run responsive:audit
 ```
 
-默认端口：`3000`。
+## 生产部署
 
-默认持久化：
+当前生产环境运行在北京腾讯云轻量应用服务器上：
 
-- `data/workbench.sqlite`（含 WAL）
-- `data/uploads/<workspace>/blobs/`（按用户空间隔离的内容寻址文件存储）
-- `backups/`
+- SSH：`ssh friday`（`friday@ssh.zhuorui.me`）
+- 应用目录：`/opt/apps/ascend`
+- 站点：`https://ascend.zhuorui.me`
+- 编排：`compose.production.yml`
+- 服务：单个 Next.js 应用容器，由 Caddy 提供 HTTPS 和反向代理
 
-数据库迁移使用 `schema_migrations` 版本化和校验和。多用户迁移会重建部分唯一约束，并把旧数据及文件归入 legacy workspace；因此必须按上面的快照、校验和回滚流程操作。
+高频更新、日志、重启和检查命令见 [QUICKSTART.md](./QUICKSTART.md)，首次部署、防火墙、证书、备份和完整回滚流程见 [deploy/README.md](./deploy/README.md)。
 
-### Windows 本机当服务器
+生产端口 `3000` 只在 Compose 网络中暴露，不应直接开放到公网。
 
-1. 安装 Docker Desktop，并启用 WSL2 backend。
-2. 在本仓库执行 `docker compose up -d --build`。
-3. 本机访问 `http://localhost:3000`；局域网设备访问 `http://<本机局域网 IP>:3000`（必要时放行防火墙端口）。
-4. 本地域名：hosts 加 `127.0.0.1 zgca.test` 后 `docker compose --profile proxy up -d --build`，访问 `http://zgca.test`。
+## 数据与备份
 
-Tailscale Serve 示例：
+生产 Compose 使用宿主机绑定挂载：
 
-```bash
-tailscale serve --bg 3000
+```text
+/opt/apps/ascend/data/           SQLite 与应用数据
+/opt/apps/ascend/data/uploads/   用户上传文件
+/opt/apps/ascend/backups/        数据与上传快照
 ```
 
-## 备份
+容器内分别映射为 `/app/data`、`/app/data/uploads` 和 `/app/backups`。重建容器不会删除这些宿主机目录，但升级数据库前仍必须同时备份 SQLite 和上传文件。
 
-```bash
-npm run backup
-```
-
-建议用 cron 或 launchd 每天跑一次，备份写到 `backups/YYYY-MM-DD/`。
+数据库迁移通过 `schema_migrations` 版本化。迁移后必须运行 `npm run verify:migration`，确认输出中 `ok` 为 `true`、没有无归属记录且 `missingFiles` 为 `0`。
 
 ## 代码结构
 
-- `src/lib/repo/`：数据访问层，按域拆分；业务函数显式接收 `db` 和 `workspace scope`，Admin 服务集中在 `admin.ts`。
-- `src/app/actions/`：Server Actions（`auth` / `day` / `knowledge` / `library`），页面里的全部变更走这里。
-- `src/app/api/`：仅保留文件上传（`POST /api/assets`）和文件流（`GET /api/assets/[id]/file`）。
-- `src/lib/db.ts` + `src/lib/migrations.ts`：建库、版本化迁移与知识结构回填。
-- `proxy.ts`：边缘鉴权（cookie 存在性检查），真实校验在各页面/Action 内完成。
+- `src/app/`：页面、Server Actions 和 API 路由。
+- `src/components/`：工作台、导航、资料、设置和管理端组件。
+- `src/lib/repo/`：按业务域拆分的数据访问层，所有普通业务查询带工作区边界。
+- `src/lib/db.ts`、`src/lib/migrations.ts`：数据库初始化和版本化迁移。
+- `scripts/`：备份、迁移验证、冒烟测试、响应式审计和多用户隔离审计。
+- `proxy.ts`：请求入口的会话 cookie 检查；真实授权仍在页面、Action 和数据访问边界完成。
+- `compose.production.yml`、`deploy/`：腾讯云生产部署与 Caddy 配置。
+
+主要 API 包括文件上传与下载、头像读取和健康检查；写操作主要通过 `src/app/actions/` 中的 Server Actions 完成。
+
+## 进一步阅读
+
+- [操作速查表](./QUICKSTART.md)
+- [Ubuntu 生产运维手册](./deploy/README.md)
+- [升级说明](./docs/UPGRADE_BRIEFING.md)
