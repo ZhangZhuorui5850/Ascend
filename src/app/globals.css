@@ -1117,7 +1117,7 @@ button:focus-visible {
 
 .taskTitle {
   min-width: 0;
-  padding: 6px 8px;
+  padding: 6px 0;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
