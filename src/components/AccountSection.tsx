@@ -104,18 +104,18 @@ export function AccountSection({ profile, email }: { profile: AvatarInfo; email:
             <input autoComplete="current-password" onChange={(event) => setCurrentPassword(event.target.value)} type="password" value={currentPassword} />
           </label>
           <label className="field">
-            新密码（至少 12 个字符）
-            <input autoComplete="new-password" minLength={12} onChange={(event) => setNewPassword(event.target.value)} type="password" value={newPassword} />
+            新密码
+            <input autoComplete="new-password" onChange={(event) => setNewPassword(event.target.value)} type="password" value={newPassword} />
           </label>
           <label className="field">
             再次输入新密码
-            <input autoComplete="new-password" minLength={12} onChange={(event) => setConfirmation(event.target.value)} type="password" value={confirmation} />
+            <input autoComplete="new-password" onChange={(event) => setConfirmation(event.target.value)} type="password" value={confirmation} />
           </label>
         </div>
         <div className="settingsActions">
           <button
             className="primaryButton"
-            disabled={passwordPending || !currentPassword || newPassword.length < 12 || !confirmation}
+            disabled={passwordPending || !currentPassword || !newPassword || !confirmation}
             onClick={savePassword}
             type="button"
           >

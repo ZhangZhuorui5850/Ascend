@@ -56,8 +56,8 @@ export function UserStatusActions({
       <section className="card">
         <div className="sectionTitle"><h2>重置密码</h2></div>
         <p>设置临时密码后，该用户会立即退出全部设备，并在下次登录后被要求更换密码。</p>
-        <label className="field"><span>临时密码（至少 12 位）</span><input minLength={12} onChange={(e) => setTemporaryPassword(e.target.value)} type="password" value={temporaryPassword} /></label>
-        <button className="secondaryButton" disabled={pending || status === "invited" || temporaryPassword.length < 12} onClick={() => run(() => resetUserPasswordAction(userId, temporaryPassword), "密码已重置，旧会话已失效")} type="button">重置密码</button>
+        <label className="field"><span>临时密码</span><input onChange={(e) => setTemporaryPassword(e.target.value)} type="password" value={temporaryPassword} /></label>
+        <button className="secondaryButton" disabled={pending || status === "invited" || !temporaryPassword} onClick={() => run(() => resetUserPasswordAction(userId, temporaryPassword), "密码已重置，旧会话已失效")} type="button">重置密码</button>
       </section>
       <section className="card" aria-live="polite">
         <div className="sectionTitle"><h2>操作结果</h2></div>
