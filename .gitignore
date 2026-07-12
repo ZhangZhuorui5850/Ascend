@@ -36,6 +36,7 @@ yarn-error.log*
 /backups/
 /.superpowers/
 /.worktrees/
+/undefined/
 
 # env files (can opt-in for committing if needed)
 .env*
