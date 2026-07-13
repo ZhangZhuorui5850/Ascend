@@ -5,6 +5,8 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { ArrowRight, Check, Plus, Trash2 } from "lucide-react";
 import { addTaskAction, carryOverTasksAction, deleteTaskAction, toggleTaskAction, updateTaskAction } from "@/app/actions/planner";
 import { EmptyState } from "@/components/EmptyState";
+import { useFeedback } from "@/components/FeedbackProvider";
+import { useOptimisticValue } from "@/components/useOptimisticValue";
 import type { SubjectRow } from "@/lib/repo/knowledge";
 import type { DayTask } from "@/lib/repo/planner";
 
@@ -18,10 +20,10 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
   yesterdayPlan?: string;
 }) {
   const router = useRouter();
+  const { notify } = useFeedback();
   const [title, setTitle] = useState("");
   const [subjectCode, setSubjectCode] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const [planAdded, setPlanAdded] = useState(false);
 
   const done = tasks.filter((task) => task.done).length;
@@ -42,8 +44,8 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
   }
 
   function report(result: { ok: boolean; error?: string }) {
-    setError(result.ok ? "" : result.error || "操作失败");
     if (result.ok) router.refresh();
+    else notify(result.error || "操作失败", "error");
   }
 
   async function add() {
@@ -64,7 +66,6 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
           {tasks.length ? `${done}/${tasks.length} 完成` : "列出今天要完成的事"}
         </span>
       </div>
-      {error ? <p className="formError">{error}</p> : null}
 
       {showPlan ? (
         <div className="dayPlanEcho">
@@ -146,15 +147,8 @@ function TaskLine({ task, day, subjects, report }: {
   report: (result: { ok: boolean; error?: string }) => void;
 }) {
   const [pending, setPending] = useState(false);
-  const [optimisticDone, setOptimisticDone] = useState<boolean | null>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
-  // 服务端状态跟上乐观值后清掉本地覆盖（渲染期间调整 state，避免 effect 级联渲染）
-  const [confirmedDone, setConfirmedDone] = useState(task.done);
-  if (confirmedDone !== task.done) {
-    setConfirmedDone(task.done);
-    setOptimisticDone(null);
-  }
-  const done = optimisticDone ?? Boolean(task.done);
+  const { value: done, apply, rollback } = useOptimisticValue(Boolean(task.done));
 
   useLayoutEffect(() => {
     resizeTitle(titleRef.current);
@@ -163,11 +157,17 @@ function TaskLine({ task, day, subjects, report }: {
   async function toggle() {
     if (pending) return;
     setPending(true);
-    setOptimisticDone(!done);
-    const result = await toggleTaskAction({ id: task.id, day, done: !done });
-    if (!result.ok) setOptimisticDone(null);
-    report(result);
-    setPending(false);
+    apply(!done);
+    try {
+      const result = await toggleTaskAction({ id: task.id, day, done: !done });
+      if (!result.ok) rollback();
+      report(result);
+    } catch {
+      rollback();
+      report({ ok: false, error: "网络异常，操作未保存" });
+    } finally {
+      setPending(false);
+    }
   }
 
   return (

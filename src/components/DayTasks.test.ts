@@ -27,3 +27,17 @@ describe("task-row spacing", () => {
     expect(styles).not.toMatch(/\.taskCheck svg\s*\{[^}]*(left|top):/s);
   });
 });
+
+describe("optimistic toggle wiring", () => {
+  it("uses the shared optimistic hook and rolls back on failure", () => {
+    expect(source).toContain('from "@/components/useOptimisticValue"');
+    expect(source).toContain("useOptimisticValue(Boolean(task.done))");
+    expect(source).toContain("rollback()");
+    expect(source).not.toContain("optimisticDone");
+  });
+
+  it("routes failures to the global toast instead of inline formError", () => {
+    expect(source).toContain('notify(result.error || "操作失败", "error")');
+    expect(source).not.toContain("formError");
+  });
+});
