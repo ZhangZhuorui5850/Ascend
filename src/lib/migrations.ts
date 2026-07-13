@@ -408,6 +408,15 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: "0010_point_created_at",
+    run: (database) => {
+      if (!tableExists(database, "knowledge_points")) return;
+      addColumnIfMissing(database, "knowledge_points", "created_at", "TEXT NOT NULL DEFAULT ''");
+      // 存量行的历史创建时间不可考，统一回填为迁移时刻
+      database.exec("UPDATE knowledge_points SET created_at = datetime('now') WHERE created_at = ''");
+    },
+  },
 ];
 
 function addColumnIfMissing(database: Database.Database, table: string, column: string, definition: string): void {

@@ -136,4 +136,16 @@ describe("knowledge repo", () => {
     expect(db.prepare("SELECT COUNT(*) c FROM asset_links WHERE knowledge_point_id = 'kp1'").get()).toMatchObject({ c: 0 });
     expect(db.prepare("SELECT COUNT(*) c FROM assets").get()).toMatchObject({ c: 1 });
   });
+
+  it("stamps created_at on new points and exposes it in detail queries", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试科目" });
+    const chapter = createChapter(db, legacyScope, { subjectCode: "M9", title: "第一章" });
+    createPoint(db, legacyScope, { chapterId: chapter.id, title: "知识点 A" });
+
+    const detail = getSubjectDetail(db, legacyScope, "M9");
+    const point = detail?.chapters[0]?.points[0];
+    expect(point?.created_at).toBeTruthy();
+    expect(point?.created_at).toMatch(/^\d{4}-\d{2}-\d{2}/);
+  });
 });

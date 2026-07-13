@@ -38,6 +38,7 @@ export type PointRow = {
   reviews: number;
   last_review: string | null;
   next_review: string | null;
+  created_at: string;
   asset_count: number;
   mistake_count: number;
 };
@@ -135,6 +136,7 @@ const POINT_SELECT = `
     k.reviews,
     k.last_review,
     k.next_review,
+    k.created_at,
     (SELECT COUNT(DISTINCT l.asset_id) FROM asset_links l
      WHERE l.workspace_id = k.workspace_id AND l.knowledge_point_id = k.id) AS asset_count,
     (SELECT COUNT(*) FROM mistakes m
@@ -473,10 +475,10 @@ export function createPoint(
   db.prepare(`
     INSERT INTO knowledge_points
       (workspace_id, id, subject_code, subject_name, submodule, tier, tier_name, title,
-       exam, status, mastery, reviews, chapter_id, sort_order)
+       exam, status, mastery, reviews, chapter_id, sort_order, created_at)
     VALUES
       (@workspaceId, @id, @subjectCode, @subjectName, @submodule, @tier, @tierName,
-       @title, @exam, '未学', 0, 0, @chapterId, @sortOrder)
+       @title, @exam, '未学', 0, 0, @chapterId, @sortOrder, datetime('now'))
   `).run({
     workspaceId: scope.workspaceId,
     id,

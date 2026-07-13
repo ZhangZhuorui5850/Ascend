@@ -65,7 +65,8 @@ export function initializeDatabase(database: Database.Database): void {
       mastery INTEGER NOT NULL DEFAULT 0,
       reviews INTEGER NOT NULL DEFAULT 0,
       last_review TEXT,
-      next_review TEXT
+      next_review TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS subject_chapters (
