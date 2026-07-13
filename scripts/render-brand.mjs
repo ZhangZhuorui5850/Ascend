@@ -161,6 +161,9 @@ async function shot1(svg, size) {
     [tile, 512, `${ROOT}/public/icons/icon-512.png`],
     [osIcon({ bleed: true, safe: true }), 512, `${ROOT}/public/icons/icon-maskable-512.png`],
     [osIcon({ bleed: true }), 180, `${ROOT}/src/app/apple-icon.png`],
+    // iOS 添加主屏会探测根路径 /apple-touch-icon.png；404 会被缓存成"无图标"，必须给真文件
+    [osIcon({ bleed: true }), 180, `${ROOT}/public/apple-touch-icon.png`],
+    [osIcon({ bleed: true }), 180, `${ROOT}/public/apple-touch-icon-precomposed.png`],
   ];
   for (const [svg, size, file] of shots) {
     writeFileSync(file, await shot1(svg, size));

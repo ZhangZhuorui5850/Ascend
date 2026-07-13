@@ -6883,9 +6883,45 @@ a,
     grid-template-columns: 44px minmax(0, 1fr) clamp(82px, 22vw, 104px) 44px;
   }
 
+  /* 44px 只是手指热区；可见的勾选框画在 ::before 上保持小巧 */
   .dayTasks .taskCheck {
+    position: relative;
     width: 44px;
     height: 44px;
+    border: none;
+    background: transparent;
+  }
+
+  .dayTasks .taskCheck::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 24px;
+    height: 24px;
+    border: 1.5px solid var(--line);
+    border-radius: 6px;
+    background: var(--surface);
+    transform: translate(-50%, -50%);
+  }
+
+  .dayTasks .taskCheck:hover::before {
+    border-color: var(--accent);
+  }
+
+  .dayTasks .taskLine.done .taskCheck {
+    background: transparent;
+    border: none;
+  }
+
+  .dayTasks .taskLine.done .taskCheck::before {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+
+  .dayTasks .taskCheck svg {
+    position: relative;
+    z-index: 1;
   }
 
   .dayTasks .taskTitle {
