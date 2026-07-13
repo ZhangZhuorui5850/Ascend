@@ -165,3 +165,61 @@ describe("parseMarkdown 其他块", () => {
     expect(blocks[0].children[0].kind).toBe("table");
   });
 });
+
+describe("数学公式", () => {
+  it("行内 $...$ 解析为 mathInline", () => {
+    const nodes = parseInline("设 $x^2 + y^2 = 1$ 为单位圆");
+    expect(nodes).toEqual([
+      { kind: "text", text: "设 " },
+      { kind: "mathInline", tex: "x^2 + y^2 = 1" },
+      { kind: "text", text: " 为单位圆" },
+    ]);
+  });
+
+  it("行内 $$...$$ 也解析为 mathInline", () => {
+    const nodes = parseInline("其中 $$E=mc^2$$ 成立");
+    expect(nodes.some((node) => node.kind === "mathInline" && node.tex === "E=mc^2")).toBe(true);
+  });
+
+  it("货币写法不误判：$5，又花了 $6", () => {
+    const nodes = parseInline("花了 $5，又花了 $6");
+    expect(inlineText(nodes)).toBe("花了 $5，又花了 $6");
+    expect(nodes.every((node) => node.kind === "text")).toBe(true);
+  });
+
+  it("未闭合的 $ 保持字面量", () => {
+    const nodes = parseInline("只有一个 $x 符号");
+    expect(inlineText(nodes)).toBe("只有一个 $x 符号");
+  });
+
+  it("\\$ 转义为字面量美元符", () => {
+    expect(inlineText(parseInline("价格 \\$100"))).toBe("价格 $100");
+  });
+
+  it("行内代码里的 $ 不解析", () => {
+    const nodes = parseInline("`$x$` 是变量");
+    expect(nodes[0]).toEqual({ kind: "code", text: "$x$" });
+  });
+
+  it("独立 $$ 块解析为 mathBlock", () => {
+    const blocks = parseMarkdown(["前文", "$$", "\\int_0^1 x\\,dx", "$$", "后文"].join("\n"));
+    expect(blocks[1]).toEqual({ kind: "mathBlock", tex: "\\int_0^1 x\\,dx" });
+    expect(blocks[0].kind).toBe("paragraph");
+    expect(blocks[2].kind).toBe("paragraph");
+  });
+
+  it("单行 $$...$$ 块", () => {
+    const blocks = parseMarkdown("$$a+b$$");
+    expect(blocks[0]).toEqual({ kind: "mathBlock", tex: "a+b" });
+  });
+
+  it("无闭合的 $$ 行退化为段落", () => {
+    const blocks = parseMarkdown("$$5 是个数字");
+    expect(blocks[0].kind).toBe("paragraph");
+  });
+
+  it("围栏代码块里的 $$ 不解析", () => {
+    const blocks = parseMarkdown(["```", "$$notmath$$", "```"].join("\n"));
+    expect(blocks[0]).toMatchObject({ kind: "codeBlock", text: "$$notmath$$" });
+  });
+});

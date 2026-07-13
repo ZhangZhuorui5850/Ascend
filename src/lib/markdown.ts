@@ -2,7 +2,8 @@
  * 轻量 Markdown 解析器：把文本解析成结构化块节点，由 AssetViewer 渲染成 React 元素。
  * 不产出 HTML 字符串、不经过 innerHTML，无 XSS 面。
  * 支持：标题、围栏代码、分隔线、引用、有序/无序/任务/嵌套列表、GFM 表格、
- * 行内代码/加粗/斜体/删除线/链接（图片降级为链接）。
+ * 行内代码/加粗/斜体/删除线/链接（图片降级为链接）、
+ * 数学公式（行内 $...$、独立块 $$...$$，渲染交给 KaTeX）。
  */
 
 export type Align = "left" | "center" | "right" | null;
@@ -10,6 +11,7 @@ export type Align = "left" | "center" | "right" | null;
 export type InlineNode =
   | { kind: "text"; text: string }
   | { kind: "code"; text: string }
+  | { kind: "mathInline"; tex: string }
   | { kind: "strong"; children: InlineNode[] }
   | { kind: "em"; children: InlineNode[] }
   | { kind: "del"; children: InlineNode[] }
@@ -26,6 +28,7 @@ export type ListItem = {
 export type BlockNode =
   | { kind: "heading"; level: number; inline: InlineNode[] }
   | { kind: "codeBlock"; lang: string; text: string }
+  | { kind: "mathBlock"; tex: string }
   | { kind: "hr" }
   | { kind: "blockquote"; children: BlockNode[] }
   | { kind: "list"; ordered: boolean; items: ListItem[] }
@@ -60,6 +63,30 @@ export function parseMarkdown(source: string): BlockNode[] {
       index += 1;
       blocks.push({ kind: "codeBlock", lang: fence[2], text: code.join("\n") });
       continue;
+    }
+
+    const mathFence = line.match(/^\s*\$\$(.*)$/);
+    if (mathFence) {
+      // 单行 $$...$$
+      const single = mathFence[1].match(/^(.*)\$\$\s*$/);
+      if (single) {
+        blocks.push({ kind: "mathBlock", tex: single[1].trim() });
+        index += 1;
+        continue;
+      }
+      // 多行：先确认后面有闭合行，找不到就退回按普通段落处理
+      let close = index + 1;
+      while (close < lines.length && !/\$\$\s*$/.test(lines[close])) close += 1;
+      if (close < lines.length) {
+        const tex: string[] = [];
+        if (mathFence[1].trim()) tex.push(mathFence[1]);
+        for (let i = index + 1; i < close; i += 1) tex.push(lines[i]);
+        const closing = lines[close].replace(/\$\$\s*$/, "");
+        if (closing.trim()) tex.push(closing);
+        blocks.push({ kind: "mathBlock", tex: tex.join("\n").trim() });
+        index = close + 1;
+        continue;
+      }
     }
 
     const heading = line.match(/^(#{1,6})\s+(.*?)\s*#*\s*$/);
@@ -124,7 +151,7 @@ export function parseMarkdown(source: string): BlockNode[] {
     while (
       index < lines.length &&
       lines[index].trim() &&
-      !/^(#{1,6}\s|\s*(```|~~~)|\s*>\s?|\s{0,3}(-{3,}|\*{3,}|_{3,})\s*$)/.test(lines[index]) &&
+      !/^(#{1,6}\s|\s*(```|~~~)|\s*>\s?|\s*\$\$|\s{0,3}(-{3,}|\*{3,}|_{3,})\s*$)/.test(lines[index]) &&
       !LIST_LINE.test(lines[index]) &&
       !isTableStart(lines, index)
     ) {
@@ -219,9 +246,10 @@ function parseAlign(cell: string): Align {
 
 /* ---------- 行内解析 ---------- */
 
-// 顺序：转义 > 行内代码 > 图片/链接 > 加粗 > 删除线 > 斜体
+// 顺序：转义 > 行内代码 > 数学公式 > 图片/链接 > 加粗 > 删除线 > 斜体
+// 数学：$...$ 要求首尾紧贴非空白（避免把 "$5，又花了 $6" 这类货币写法误判成公式）
 const INLINE_PATTERN =
-  /(\\.)|(`[^`]+`)|(!?\[[^\]]*\]\([^)\s]+(?:\s+"[^"]*")?\))|(\*\*.+?\*\*)|(~~.+?~~)|(\*[^*\s](?:[^*]*[^*\s])?\*)/g;
+  /(\\.)|(`[^`]+`)|(\$\$[^$\n]+?\$\$)|(\$(?!\s)(?:[^$\n]*?[^\s$])\$)|(!?\[[^\]]*\]\([^)\s]+(?:\s+"[^"]*")?\))|(\*\*.+?\*\*)|(~~.+?~~)|(\*[^*\s](?:[^*]*[^*\s])?\*)/g;
 
 export function parseInline(text: string): InlineNode[] {
   const nodes: InlineNode[] = [];
@@ -236,6 +264,10 @@ export function parseInline(text: string): InlineNode[] {
       pushText(nodes, token);
     } else if (token.startsWith("`")) {
       nodes.push({ kind: "code", text: token.slice(1, -1) });
+    } else if (token.startsWith("$$")) {
+      nodes.push({ kind: "mathInline", tex: token.slice(2, -2).trim() });
+    } else if (token.startsWith("$")) {
+      nodes.push({ kind: "mathInline", tex: token.slice(1, -1).trim() });
     } else if (token.startsWith("**")) {
       nodes.push({ kind: "strong", children: parseInline(token.slice(2, -2)) });
     } else if (token.startsWith("~~")) {
@@ -263,8 +295,8 @@ export function parseInline(text: string): InlineNode[] {
 }
 
 function pushText(nodes: InlineNode[], raw: string) {
-  // 反转义常见符号：\| \* \` \_ \[ \] 等
-  const text = raw.replace(/\\([\\`*_[\](){}#+\-.!|~<>])/g, "$1");
+  // 反转义常见符号：\| \* \` \_ \[ \] \$ 等
+  const text = raw.replace(/\\([\\`*_[\](){}#+\-.!|~<>$])/g, "$1");
   if (!text) return;
   const lastNode = nodes[nodes.length - 1];
   if (lastNode && lastNode.kind === "text") {
