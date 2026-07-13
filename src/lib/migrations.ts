@@ -417,6 +417,15 @@ const migrations: Migration[] = [
       database.exec("UPDATE knowledge_points SET created_at = datetime('now') WHERE created_at = ''");
     },
   },
+  {
+    version: "0011_chapter_tree",
+    run: (database) => {
+      if (!tableExists(database, "subject_chapters")) return;
+      // NULL = 顶层章节；存量章节全部保持顶层，零数据变动
+      addColumnIfMissing(database, "subject_chapters", "parent_id", "TEXT");
+      database.exec("CREATE INDEX IF NOT EXISTS idx_subject_chapters_parent ON subject_chapters(parent_id)");
+    },
+  },
 ];
 
 function addColumnIfMissing(database: Database.Database, table: string, column: string, definition: string): void {

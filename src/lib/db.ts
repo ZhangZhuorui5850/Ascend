@@ -74,6 +74,7 @@ export function initializeDatabase(database: Database.Database): void {
       subject_code TEXT NOT NULL,
       title TEXT NOT NULL,
       sort_order INTEGER NOT NULL DEFAULT 0,
+      parent_id TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(subject_code, title)

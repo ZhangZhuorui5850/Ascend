@@ -14,6 +14,7 @@ import {
   renameChapter,
   renameSubject,
   reorderPoints,
+  reparentChapter,
   updatePoint,
   type PointDetail,
   type SubjectTrack,
@@ -76,10 +77,29 @@ export async function deleteSubjectAction(code: string): Promise<ActionResult> {
   }
 }
 
-export async function createChapterAction(input: { subjectCode: string; title: string }): Promise<ActionResult> {
+export async function createChapterAction(input: {
+  subjectCode: string;
+  title: string;
+  parentId?: string | null;
+}): Promise<ActionResult> {
   try {
     const access = await requireWorkspace();
     createChapter(getDb(), access, input);
+    revalidateKnowledge(input.subjectCode);
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function reparentChapterAction(input: {
+  id: string;
+  parentId: string | null;
+  subjectCode: string;
+}): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    reparentChapter(getDb(), access, { id: input.id, parentId: input.parentId });
     revalidateKnowledge(input.subjectCode);
     return { ok: true };
   } catch (error) {

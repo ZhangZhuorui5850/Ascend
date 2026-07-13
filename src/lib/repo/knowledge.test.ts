@@ -13,6 +13,7 @@ import {
   moveChapter,
   renameChapter,
   reorderPoints,
+  reparentChapter,
   updatePoint,
 } from "./knowledge";
 import { createTestDb, createTestWorkspace, seedSubjectWithChapter } from "./testing";
@@ -210,5 +211,111 @@ describe("knowledge repo", () => {
 
     // 用 legacy workspace 的 scope 去重排 A 的章节：应因为集合不匹配而抛错
     expect(() => reorderPoints(db, legacyScope, { chapterId: chapter.id, orderedIds: [p2.id, p1.id] })).toThrow();
+  });
+});
+
+describe("章节递归树", () => {
+  it("getSubjectDetail 按 parent_id 组装章节树", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试科目" });
+    const root = createChapter(db, legacyScope, { subjectCode: "M9", title: "第一章" });
+    const child = createChapter(db, legacyScope, { subjectCode: "M9", title: "1.1 小节", parentId: root.id });
+    createChapter(db, legacyScope, { subjectCode: "M9", title: "1.1.1 细目", parentId: child.id });
+    createChapter(db, legacyScope, { subjectCode: "M9", title: "第二章" });
+
+    const detail = getSubjectDetail(db, legacyScope, "M9");
+    expect(detail?.chapters.map((c) => c.title)).toEqual(["第一章", "第二章"]);
+    expect(detail?.chapters[0].children.map((c) => c.title)).toEqual(["1.1 小节"]);
+    expect(detail?.chapters[0].children[0].children.map((c) => c.title)).toEqual(["1.1.1 细目"]);
+  });
+
+  it("知识点可以挂在任意层级的章节下", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试科目" });
+    const root = createChapter(db, legacyScope, { subjectCode: "M9", title: "第一章" });
+    const child = createChapter(db, legacyScope, { subjectCode: "M9", title: "1.1", parentId: root.id });
+    createPoint(db, legacyScope, { chapterId: child.id, title: "深层知识点" });
+
+    const detail = getSubjectDetail(db, legacyScope, "M9");
+    expect(detail?.chapters[0].children[0].points.map((p) => p.title)).toEqual(["深层知识点"]);
+  });
+
+  it("同科目同名章节在不同父级下拒绝创建", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试科目" });
+    const a = createChapter(db, legacyScope, { subjectCode: "M9", title: "甲" });
+    createChapter(db, legacyScope, { subjectCode: "M9", title: "乙" });
+    // 同父级同名：幂等返回既有 id
+    expect(createChapter(db, legacyScope, { subjectCode: "M9", title: "甲" }).id).toBe(a.id);
+    // 不同父级同名：明确报错
+    expect(() => createChapter(db, legacyScope, { subjectCode: "M9", title: "乙", parentId: a.id })).toThrow();
+  });
+
+  it("reparentChapter 防环：不能移入自身或子孙", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试科目" });
+    const a = createChapter(db, legacyScope, { subjectCode: "M9", title: "甲" });
+    const b = createChapter(db, legacyScope, { subjectCode: "M9", title: "乙", parentId: a.id });
+    const c = createChapter(db, legacyScope, { subjectCode: "M9", title: "丙", parentId: b.id });
+
+    expect(() => reparentChapter(db, legacyScope, { id: a.id, parentId: a.id })).toThrow();
+    expect(() => reparentChapter(db, legacyScope, { id: a.id, parentId: c.id })).toThrow();
+  });
+
+  it("reparentChapter 移动与提升", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试科目" });
+    const a = createChapter(db, legacyScope, { subjectCode: "M9", title: "甲" });
+    const b = createChapter(db, legacyScope, { subjectCode: "M9", title: "乙" });
+
+    reparentChapter(db, legacyScope, { id: b.id, parentId: a.id });
+    let detail = getSubjectDetail(db, legacyScope, "M9");
+    expect(detail?.chapters.map((c) => c.title)).toEqual(["甲"]);
+    expect(detail?.chapters[0].children.map((c) => c.title)).toEqual(["乙"]);
+
+    reparentChapter(db, legacyScope, { id: b.id, parentId: null });
+    detail = getSubjectDetail(db, legacyScope, "M9");
+    expect(detail?.chapters.map((c) => c.title)).toEqual(["甲", "乙"]);
+  });
+
+  it("章节层级最深 8 层", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试科目" });
+    let parentId: string | undefined;
+    for (let level = 1; level <= 8; level += 1) {
+      parentId = createChapter(db, legacyScope, { subjectCode: "M9", title: `层${level}`, parentId }).id;
+    }
+    expect(() => createChapter(db, legacyScope, { subjectCode: "M9", title: "层9", parentId })).toThrow();
+  });
+
+  it("deleteChapter 级联删除全部子孙章节及其知识点", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试科目" });
+    const root = createChapter(db, legacyScope, { subjectCode: "M9", title: "根" });
+    const child = createChapter(db, legacyScope, { subjectCode: "M9", title: "子", parentId: root.id });
+    const grand = createChapter(db, legacyScope, { subjectCode: "M9", title: "孙", parentId: child.id });
+    createPoint(db, legacyScope, { chapterId: grand.id, title: "孙下知识点" });
+    createChapter(db, legacyScope, { subjectCode: "M9", title: "旁支" });
+
+    deleteChapter(db, legacyScope, root.id);
+
+    const detail = getSubjectDetail(db, legacyScope, "M9");
+    expect(detail?.chapters.map((c) => c.title)).toEqual(["旁支"]);
+    expect(db.prepare("SELECT COUNT(*) c FROM knowledge_points WHERE title = '孙下知识点'").get()).toMatchObject({ c: 0 });
+  });
+
+  it("同层重排只影响同 parent 的兄弟", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试科目" });
+    const a = createChapter(db, legacyScope, { subjectCode: "M9", title: "甲" });
+    createChapter(db, legacyScope, { subjectCode: "M9", title: "子1", parentId: a.id });
+    const z2 = createChapter(db, legacyScope, { subjectCode: "M9", title: "子2", parentId: a.id });
+    createChapter(db, legacyScope, { subjectCode: "M9", title: "乙" });
+
+    moveChapter(db, legacyScope, { id: z2.id, direction: "up" });
+
+    const detail = getSubjectDetail(db, legacyScope, "M9");
+    expect(detail?.chapters.map((c) => c.title)).toEqual(["甲", "乙"]);
+    expect(detail?.chapters[0].children.map((c) => c.title)).toEqual(["子2", "子1"]);
   });
 });

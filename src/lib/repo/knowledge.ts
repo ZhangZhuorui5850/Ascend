@@ -48,8 +48,13 @@ export type ChapterWithPoints = {
   id: string;
   title: string;
   sort_order: number;
+  parent_id: string | null;
   points: PointRow[];
+  children: ChapterWithPoints[];
 };
+
+/** 章节树最深层级（含根） */
+export const MAX_CHAPTER_DEPTH = 8;
 
 export type SubjectDetail = {
   subject: SubjectRow;
@@ -152,12 +157,25 @@ export function getSubjectDetail(db: Database.Database, scope: WorkspaceScope, c
   ) as SubjectRow | undefined;
   if (!subject) return null;
 
-  const chapters = db.prepare(`
-    SELECT id, title, sort_order
+  const chapterRows = db.prepare(`
+    SELECT id, title, sort_order, parent_id
     FROM subject_chapters
     WHERE workspace_id = @workspaceId AND subject_code = @code
     ORDER BY sort_order ASC, title ASC
-  `).all({ workspaceId: scope.workspaceId, code }) as Array<{ id: string; title: string; sort_order: number }>;
+  `).all({ workspaceId: scope.workspaceId, code }) as Array<{
+    id: string; title: string; sort_order: number; parent_id: string | null;
+  }>;
+
+  // 按 parent_id 组装章节树；父级缺失（脏数据）时按顶层处理
+  const chapterById = new Map<string, ChapterWithPoints>(
+    chapterRows.map((row) => [row.id, { ...row, points: [], children: [] }]),
+  );
+  const rootChapters: ChapterWithPoints[] = [];
+  for (const node of chapterById.values()) {
+    const parent = node.parent_id ? chapterById.get(node.parent_id) : undefined;
+    if (parent) parent.children.push(node);
+    else rootChapters.push(node);
+  }
 
   const points = db.prepare(`
     ${POINT_SELECT}
@@ -165,16 +183,11 @@ export function getSubjectDetail(db: Database.Database, scope: WorkspaceScope, c
     ORDER BY k.sort_order ASC, k.id ASC
   `).all({ workspaceId: scope.workspaceId, code }) as PointRow[];
 
-  const pointsByChapter = new Map<string, PointRow[]>();
   const loosePoints: PointRow[] = [];
   for (const point of points) {
-    if (point.chapter_id && chapters.some((chapter) => chapter.id === point.chapter_id)) {
-      const group = pointsByChapter.get(point.chapter_id) || [];
-      group.push(point);
-      pointsByChapter.set(point.chapter_id, group);
-    } else {
-      loosePoints.push(point);
-    }
+    const chapter = point.chapter_id ? chapterById.get(point.chapter_id) : undefined;
+    if (chapter) chapter.points.push(point);
+    else loosePoints.push(point);
   }
 
   const assets = db.prepare(`
@@ -206,7 +219,7 @@ export function getSubjectDetail(db: Database.Database, scope: WorkspaceScope, c
 
   return {
     subject,
-    chapters: chapters.map((chapter) => ({ ...chapter, points: pointsByChapter.get(chapter.id) || [] })),
+    chapters: rootChapters,
     loosePoints,
     assets,
     mistakes,
@@ -360,26 +373,138 @@ export function deleteSubject(db: Database.Database, scope: WorkspaceScope, code
 export function createChapter(
   db: Database.Database,
   scope: WorkspaceScope,
-  input: { subjectCode: string; title: string },
+  input: { subjectCode: string; title: string; parentId?: string | null },
 ) {
   const subjectCode = input.subjectCode.trim();
   const title = input.title.trim();
+  const parentId = input.parentId?.trim() || null;
   if (!subjectCode || !title) throw new Error("科目和章节标题必填");
+
+  if (parentId) {
+    const parent = db.prepare(
+      "SELECT id, subject_code FROM subject_chapters WHERE workspace_id = ? AND id = ?",
+    ).get(scope.workspaceId, parentId) as { id: string; subject_code: string } | undefined;
+    if (!parent || parent.subject_code !== subjectCode) throw new Error("父章节不存在");
+    if (chapterDepth(db, scope, parentId) >= MAX_CHAPTER_DEPTH) {
+      throw new Error(`章节层级最多 ${MAX_CHAPTER_DEPTH} 层`);
+    }
+  }
+
+  // 章节标题在科目内唯一（表约束）：同父级下同名幂等返回，跨父级同名明确报错
   const existing = db.prepare(`
-    SELECT id FROM subject_chapters WHERE workspace_id = ? AND subject_code = ? AND title = ?
-  `).get(scope.workspaceId, subjectCode, title);
-  if (existing) return existing as { id: string };
+    SELECT id, parent_id FROM subject_chapters WHERE workspace_id = ? AND subject_code = ? AND title = ?
+  `).get(scope.workspaceId, subjectCode, title) as { id: string; parent_id: string | null } | undefined;
+  if (existing) {
+    if ((existing.parent_id ?? null) === parentId) return { id: existing.id };
+    throw new Error("同科目下已有同名章节，请换个标题");
+  }
 
   const maxOrder = db.prepare(
     `SELECT COALESCE(MAX(sort_order), 0) AS value FROM subject_chapters
-     WHERE workspace_id = ? AND subject_code = ?`,
-  ).get(scope.workspaceId, subjectCode) as { value: number };
+     WHERE workspace_id = ? AND subject_code = ? AND parent_id IS ?`,
+  ).get(scope.workspaceId, subjectCode, parentId) as { value: number };
   const id = `${scope.workspaceId}:chapter:${subjectCode}:${slugFor(title)}-${Date.now().toString(36)}`;
   db.prepare(`
-    INSERT INTO subject_chapters (workspace_id, id, subject_code, title, sort_order)
-    VALUES (@workspaceId, @id, @subjectCode, @title, @sortOrder)
-  `).run({ workspaceId: scope.workspaceId, id, subjectCode, title, sortOrder: maxOrder.value + 1 });
+    INSERT INTO subject_chapters (workspace_id, id, subject_code, title, sort_order, parent_id)
+    VALUES (@workspaceId, @id, @subjectCode, @title, @sortOrder, @parentId)
+  `).run({ workspaceId: scope.workspaceId, id, subjectCode, title, sortOrder: maxOrder.value + 1, parentId });
   return { id };
+}
+
+/** 章节自身所在层级（顶层 = 1）；带环兜底上限。 */
+function chapterDepth(db: Database.Database, scope: WorkspaceScope, chapterId: string): number {
+  const stmt = db.prepare("SELECT parent_id FROM subject_chapters WHERE workspace_id = ? AND id = ?");
+  let depth = 0;
+  let current: string | null = chapterId;
+  while (current && depth <= MAX_CHAPTER_DEPTH + 8) {
+    const row = stmt.get(scope.workspaceId, current) as { parent_id: string | null } | undefined;
+    if (!row) break;
+    depth += 1;
+    current = row.parent_id;
+  }
+  return depth;
+}
+
+/** 以 rootId 为根的整棵子树 id 列表（含根），父在前子在后。 */
+function collectChapterSubtree(db: Database.Database, scope: WorkspaceScope, rootId: string): string[] {
+  const rows = db.prepare(
+    "SELECT id, parent_id FROM subject_chapters WHERE workspace_id = ?",
+  ).all(scope.workspaceId) as Array<{ id: string; parent_id: string | null }>;
+  const childrenOf = new Map<string, string[]>();
+  for (const row of rows) {
+    if (!row.parent_id) continue;
+    const group = childrenOf.get(row.parent_id) || [];
+    group.push(row.id);
+    childrenOf.set(row.parent_id, group);
+  }
+  const result: string[] = [];
+  const queue = [rootId];
+  while (queue.length) {
+    const current = queue.shift()!;
+    if (result.includes(current)) continue; // 环兜底
+    result.push(current);
+    queue.push(...(childrenOf.get(current) || []));
+  }
+  return result;
+}
+
+/** 子树自身的高度（根算 1 层）。 */
+function chapterSubtreeHeight(db: Database.Database, scope: WorkspaceScope, rootId: string): number {
+  const subtree = new Set(collectChapterSubtree(db, scope, rootId));
+  let height = 1;
+  for (const id of subtree) {
+    let level = 1;
+    let current = id;
+    const stmt = db.prepare("SELECT parent_id FROM subject_chapters WHERE workspace_id = ? AND id = ?");
+    while (current !== rootId && level <= MAX_CHAPTER_DEPTH + 8) {
+      const row = stmt.get(scope.workspaceId, current) as { parent_id: string | null } | undefined;
+      if (!row || !row.parent_id) break;
+      current = row.parent_id;
+      level += 1;
+    }
+    if (current === rootId) height = Math.max(height, level);
+  }
+  return height;
+}
+
+/** 把章节挂到新的父级（parentId = null 表示提升为顶层）；防环、防超深。 */
+export function reparentChapter(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: { id: string; parentId: string | null },
+) {
+  const chapterId = input.id.trim();
+  if (!chapterId) throw new Error("章节必填");
+  const chapter = db.prepare(
+    "SELECT id, subject_code, parent_id FROM subject_chapters WHERE workspace_id = ? AND id = ?",
+  ).get(scope.workspaceId, chapterId) as
+    | { id: string; subject_code: string; parent_id: string | null }
+    | undefined;
+  if (!chapter) throw new Error("章节不存在");
+  const parentId = input.parentId?.trim() || null;
+  if ((chapter.parent_id ?? null) === parentId) return;
+
+  if (parentId) {
+    if (parentId === chapterId) throw new Error("不能移动到自身");
+    const parent = db.prepare(
+      "SELECT id, subject_code FROM subject_chapters WHERE workspace_id = ? AND id = ?",
+    ).get(scope.workspaceId, parentId) as { id: string; subject_code: string } | undefined;
+    if (!parent || parent.subject_code !== chapter.subject_code) throw new Error("目标章节不存在");
+    if (collectChapterSubtree(db, scope, chapterId).includes(parentId)) {
+      throw new Error("不能移动到自己的子章节里");
+    }
+    const depth = chapterDepth(db, scope, parentId) + chapterSubtreeHeight(db, scope, chapterId);
+    if (depth > MAX_CHAPTER_DEPTH) throw new Error(`章节层级最多 ${MAX_CHAPTER_DEPTH} 层`);
+  }
+
+  const maxOrder = db.prepare(
+    `SELECT COALESCE(MAX(sort_order), 0) AS value FROM subject_chapters
+     WHERE workspace_id = ? AND subject_code = ? AND parent_id IS ?`,
+  ).get(scope.workspaceId, chapter.subject_code, parentId) as { value: number };
+  db.prepare(
+    `UPDATE subject_chapters SET parent_id = ?, sort_order = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE workspace_id = ? AND id = ?`,
+  ).run(parentId, maxOrder.value + 1, scope.workspaceId, chapterId);
 }
 
 export function renameChapter(
@@ -403,15 +528,15 @@ export function moveChapter(
   input: { id: string; direction: "up" | "down" },
 ) {
   const chapter = db.prepare(`
-    SELECT id, subject_code, sort_order FROM subject_chapters WHERE workspace_id = ? AND id = ?
+    SELECT id, subject_code, sort_order, parent_id FROM subject_chapters WHERE workspace_id = ? AND id = ?
   `).get(scope.workspaceId, input.id) as
-    | { id: string; subject_code: string; sort_order: number }
+    | { id: string; subject_code: string; sort_order: number; parent_id: string | null }
     | undefined;
   if (!chapter) throw new Error("章节不存在");
   const siblings = db.prepare(
-    `SELECT id FROM subject_chapters WHERE workspace_id = ? AND subject_code = ?
+    `SELECT id FROM subject_chapters WHERE workspace_id = ? AND subject_code = ? AND parent_id IS ?
      ORDER BY sort_order ASC, title ASC`,
-  ).all(scope.workspaceId, chapter.subject_code) as Array<{ id: string }>;
+  ).all(scope.workspaceId, chapter.subject_code, chapter.parent_id) as Array<{ id: string }>;
   const index = siblings.findIndex((sibling) => sibling.id === chapter.id);
   const targetIndex = input.direction === "up" ? index - 1 : index + 1;
   if (targetIndex < 0 || targetIndex >= siblings.length) return;
@@ -423,23 +548,25 @@ export function moveChapter(
   reorder();
 }
 
-/** 级联删除章节及其知识点；学习记录/错题/资料只解除关联。 */
+/** 级联删除章节（含全部子孙章节）及其知识点；学习记录/错题/资料只解除关联。 */
 export function deleteChapter(db: Database.Database, scope: WorkspaceScope, id: string) {
-  const chapterId = id.trim();
-  if (!chapterId) throw new Error("章节必填");
+  const rootId = id.trim();
+  if (!rootId) throw new Error("章节必填");
   const remove = db.transaction(() => {
-    const points = db.prepare(`
-      SELECT id FROM knowledge_points WHERE workspace_id = ? AND chapter_id = ?
-    `).all(scope.workspaceId, chapterId) as Array<{ id: string }>;
-    for (const point of points) detachPointReferences(db, scope, point.id);
-    db.prepare("DELETE FROM knowledge_points WHERE workspace_id = ? AND chapter_id = ?").run(scope.workspaceId, chapterId);
-    db.prepare(
-      `DELETE FROM asset_knowledge_tags WHERE workspace_id = ? AND knowledge_tag_id IN
-       (SELECT id FROM knowledge_tags WHERE workspace_id = ? AND chapter_id = ?)`,
-    ).run(scope.workspaceId, scope.workspaceId, chapterId);
-    db.prepare("DELETE FROM knowledge_tags WHERE workspace_id = ? AND chapter_id = ?").run(scope.workspaceId, chapterId);
-    db.prepare("UPDATE asset_links SET chapter_id = NULL WHERE workspace_id = ? AND chapter_id = ?").run(scope.workspaceId, chapterId);
-    db.prepare("DELETE FROM subject_chapters WHERE workspace_id = ? AND id = ?").run(scope.workspaceId, chapterId);
+    for (const chapterId of collectChapterSubtree(db, scope, rootId)) {
+      const points = db.prepare(`
+        SELECT id FROM knowledge_points WHERE workspace_id = ? AND chapter_id = ?
+      `).all(scope.workspaceId, chapterId) as Array<{ id: string }>;
+      for (const point of points) detachPointReferences(db, scope, point.id);
+      db.prepare("DELETE FROM knowledge_points WHERE workspace_id = ? AND chapter_id = ?").run(scope.workspaceId, chapterId);
+      db.prepare(
+        `DELETE FROM asset_knowledge_tags WHERE workspace_id = ? AND knowledge_tag_id IN
+         (SELECT id FROM knowledge_tags WHERE workspace_id = ? AND chapter_id = ?)`,
+      ).run(scope.workspaceId, scope.workspaceId, chapterId);
+      db.prepare("DELETE FROM knowledge_tags WHERE workspace_id = ? AND chapter_id = ?").run(scope.workspaceId, chapterId);
+      db.prepare("UPDATE asset_links SET chapter_id = NULL WHERE workspace_id = ? AND chapter_id = ?").run(scope.workspaceId, chapterId);
+      db.prepare("DELETE FROM subject_chapters WHERE workspace_id = ? AND id = ?").run(scope.workspaceId, chapterId);
+    }
   });
   remove();
 }
