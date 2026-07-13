@@ -32,7 +32,7 @@
       var hint = document.getElementById("hint");
       btn.disabled = true; btn.textContent = "正在重试…"; hint.hidden = true;
       var networkOk = false;
-      try { await fetch("/manifest.webmanifest", { cache: "no-store" }); networkOk = true; } catch (e) {}
+      try { await fetch("/api/health", { cache: "no-store" }); networkOk = true; } catch (e) {}
       if (networkOk) {
         try {
           if ("serviceWorker" in navigator) {
