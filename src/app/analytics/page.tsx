@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RichText } from "@/components/RichText";
 import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { requirePageWorkspace } from "@/lib/page-auth";
@@ -128,7 +129,7 @@ export default async function AnalyticsPage() {
             <Link className="weakPointRow" href={`/subjects/${point.subjectCode}`} key={point.id}>
               <div>
                 <span className="tierBadge">{point.tierName}</span>
-                <strong>{point.title}</strong>
+                <strong><RichText text={point.title} /></strong>
                 <small>{point.subjectCode} · {point.reasons.join(" / ")}</small>
               </div>
               <div className="priorityScore">

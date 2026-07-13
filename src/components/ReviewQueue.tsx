@@ -9,6 +9,7 @@ import {
   undoReattemptAction,
   undoReviewAction,
 } from "@/app/actions/day";
+import { RichText } from "@/components/RichText";
 import type { MistakeUndo, ReviewUndo } from "@/lib/repo/reviews";
 import type { DueMistake, DueReview } from "@/lib/repo/days";
 
@@ -173,7 +174,7 @@ export function ReviewQueue({ day, dueReviews, dueReviewsTotal, dueMistakes, rea
             {stamps[`review-${point.id}`] ? <span className="queueStamp">{stamps[`review-${point.id}`]}</span> : null}
             <div className="queueInfo">
               <small>{point.subject_code} · {point.tier_name} · 掌握度 {point.mastery}</small>
-              <strong>{point.title}</strong>
+              <strong><RichText text={point.title} /></strong>
             </div>
             {!readOnly ? (
               <div className="scoreButtons" aria-label={`${point.title} 复习评分`}>
@@ -200,8 +201,8 @@ export function ReviewQueue({ day, dueReviews, dueReviewsTotal, dueMistakes, rea
             {stamps[`mistake-${mistake.id}`] ? <span className="queueStamp">{stamps[`mistake-${mistake.id}`]}</span> : null}
             <div className="queueInfo">
               <small>错题回炉{mistake.knowledge_title ? ` · ${mistake.knowledge_title}` : ""}</small>
-              <strong>{mistake.title}</strong>
-              {mistake.cause ? <em>{mistake.cause}</em> : null}
+              <strong><RichText text={mistake.title} /></strong>
+              {mistake.cause ? <em><RichText text={mistake.cause} /></em> : null}
             </div>
             {!readOnly ? (
               <div className="scoreButtons">

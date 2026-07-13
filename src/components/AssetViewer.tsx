@@ -3,6 +3,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { ExternalLink, FileText, Loader2, X } from "lucide-react";
 import { parseMarkdown, type Align, type BlockNode, type InlineNode } from "@/lib/markdown";
+import { MathTex } from "@/components/RichText";
 import { assetFileUrl } from "@/lib/asset-url";
 
 const TEXT_EXTENSIONS = new Set([
@@ -150,6 +151,8 @@ function renderBlocks(blocks: BlockNode[], keyPrefix: string): ReactNode[] {
             <code>{block.text}</code>
           </pre>
         );
+      case "mathBlock":
+        return <MathTex display key={key} tex={block.tex} />;
       case "hr":
         return <hr key={key} />;
       case "blockquote":
@@ -212,6 +215,8 @@ function renderInlineNodes(nodes: InlineNode[], keyPrefix: string): ReactNode[] 
         return node.text;
       case "code":
         return <code key={key}>{node.text}</code>;
+      case "mathInline":
+        return <MathTex display={false} key={key} tex={node.tex} />;
       case "strong":
         return <strong key={key}>{renderInlineNodes(node.children, key)}</strong>;
       case "em":

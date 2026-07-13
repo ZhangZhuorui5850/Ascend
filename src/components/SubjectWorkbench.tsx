@@ -21,6 +21,7 @@ import type { Tier } from "@/lib/types";
 import { useFeedback } from "@/components/FeedbackProvider";
 import { assetFileUrl } from "@/lib/asset-url";
 import { POINT_SORT_MODES, sortPointsForView, type PointSortMode } from "@/components/point-sort";
+import { RichText } from "@/components/RichText";
 import { useOptimisticValue } from "@/components/useOptimisticValue";
 
 type SubjectWorkbenchProps = {
@@ -408,6 +409,7 @@ function PointLine({ point, subjectCode, today, report }: {
   const [detail, setDetail] = useState<PointDetail | null>(null);
   const tierView = useOptimisticValue<Tier>(point.tier);
   const examView = useOptimisticValue<boolean>(Boolean(point.exam));
+  const [editingTitle, setEditingTitle] = useState(false);
 
   async function changeTier(next: Tier) {
     tierView.apply(next);
@@ -486,18 +488,34 @@ function PointLine({ point, subjectCode, today, report }: {
           </option>
         ))}
       </select>
-      <input
-        aria-label="知识点标题"
-        className="pointTitle"
-        defaultValue={point.title}
-        key={point.title}
-        onBlur={(event) => {
-          const title = event.target.value.trim();
-          if (title && title !== point.title) {
-            void updatePointAction({ id: point.id, title, subjectCode }).then(report);
-          }
-        }}
-      />
+      {editingTitle ? (
+        <input
+          aria-label="知识点标题"
+          autoFocus
+          className="pointTitle"
+          defaultValue={point.title}
+          onBlur={(event) => {
+            setEditingTitle(false);
+            const title = event.target.value.trim();
+            if (title && title !== point.title) {
+              void updatePointAction({ id: point.id, title, subjectCode }).then(report);
+            }
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === "Escape") event.currentTarget.blur();
+          }}
+        />
+      ) : (
+        // 非编辑态渲染公式（$...$），点击切回输入框编辑原文
+        <button
+          aria-label={`编辑知识点标题“${point.title}”`}
+          className="pointTitle pointTitleView"
+          onClick={() => setEditingTitle(true)}
+          type="button"
+        >
+          <RichText text={point.title} />
+        </button>
+      )}
       <button
         aria-label={examView.value ? "取消真题标记" : "标记为真题"}
         className={examView.value ? "examStar active" : "examStar"}
@@ -543,8 +561,8 @@ function PointLine({ point, subjectCode, today, report }: {
                   <span className={mistake.graduated ? "rowBadge" : "rowBadge mistake"}>
                     {mistake.graduated ? "已毕业" : "回炉中"}
                   </span>
-                  {mistake.title}
-                  <small>{mistake.cause || mistake.day}</small>
+                  <RichText text={mistake.title} />
+                  <small>{mistake.cause ? <RichText text={mistake.cause} /> : mistake.day}</small>
                 </div>
               ))}
               {!detail.mistakes.length ? <p className="empty inset">暂无错题。</p> : null}

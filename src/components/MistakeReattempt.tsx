@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { reattemptMistakeAction } from "@/app/actions/day";
 import type { MistakeListItem } from "@/lib/repo/reviews";
+import { RichText } from "@/components/RichText";
 
 export function MistakeReattempt({ day, mistakes }: { day: string; mistakes: MistakeListItem[] }) {
   const router = useRouter();
@@ -29,8 +30,8 @@ export function MistakeReattempt({ day, mistakes }: { day: string; mistakes: Mis
               {mistake.subject_code ? `${mistake.subject_code} · ` : ""}
               {mistake.knowledge_title || `${mistake.day} 记录`}
             </small>
-            <strong>{mistake.title}</strong>
-            {mistake.cause ? <em>{mistake.cause}</em> : null}
+            <strong><RichText text={mistake.title} /></strong>
+            {mistake.cause ? <em><RichText text={mistake.cause} /></em> : null}
           </div>
           <div className="scoreButtons">
             <button disabled={busyId === mistake.id} onClick={() => void handle(mistake, 1)} type="button">

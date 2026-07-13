@@ -1299,6 +1299,21 @@ button:focus-visible {
   background: color-mix(in srgb, var(--surface-raised) 60%, transparent);
 }
 
+/* 随笔展示态：与 textarea 同构的可点击视图，公式由 KaTeX 渲染 */
+.noteView {
+  flex: 1;
+  padding: 10px 11px 4px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 13.5px;
+  line-height: 1.6;
+  min-height: 64px;
+  cursor: text;
+  color: inherit;
+  font-family: inherit;
+}
+
 .noteMeta {
   display: flex;
   align-items: center;
@@ -1863,6 +1878,36 @@ button:focus-visible {
 .pointTitle:focus {
   border-color: var(--line);
   background: var(--surface);
+}
+
+/* 标题展示态：与输入框同构的可点击视图，公式由 KaTeX 渲染 */
+.pointTitleView {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: text;
+  color: inherit;
+  font-family: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 富文本（含公式）通用 */
+.richTextBlock {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: block;
+}
+
+.mathDisplay {
+  display: block;
+  overflow-x: auto;
+  padding: 4px 0;
+}
+
+.mathPending {
+  color: var(--muted);
 }
 
 .examStar {

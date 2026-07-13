@@ -6,6 +6,7 @@ import { Plus, X } from "lucide-react";
 import { addNoteAction, deleteNoteAction, updateNoteAction } from "@/app/actions/planner";
 import type { DayNote } from "@/lib/repo/planner";
 import { useFeedback } from "@/components/FeedbackProvider";
+import { RichText } from "@/components/RichText";
 
 export function DayNotes({ day, notes }: { day: string; notes: DayNote[] }) {
   const router = useRouter();
@@ -75,20 +76,29 @@ function NoteCard({ note, day, report }: {
   report: (result: { ok: boolean; error?: string }) => void;
 }) {
   const { confirm, notify } = useFeedback();
+  const [editing, setEditing] = useState(false);
   return (
     <div className="noteCard">
-      <textarea
-        aria-label="随笔内容"
-        defaultValue={note.content}
-        key={`${note.id}-${note.content}`}
-        onBlur={(event) => {
-          const content = event.target.value.trim();
-          if (content && content !== note.content) {
-            void updateNoteAction({ id: note.id, day, content }).then(report);
-          }
-        }}
-        rows={Math.min(8, Math.max(2, note.content.split("\n").length))}
-      />
+      {editing ? (
+        <textarea
+          aria-label="随笔内容"
+          autoFocus
+          defaultValue={note.content}
+          onBlur={(event) => {
+            setEditing(false);
+            const content = event.target.value.trim();
+            if (content && content !== note.content) {
+              void updateNoteAction({ id: note.id, day, content }).then(report);
+            }
+          }}
+          rows={Math.min(8, Math.max(2, note.content.split("\n").length))}
+        />
+      ) : (
+        // 展示态渲染公式（$...$ / $$...$$），点击进入编辑
+        <button aria-label="编辑随笔" className="noteView" onClick={() => setEditing(true)} type="button">
+          <RichText block text={note.content} />
+        </button>
+      )}
       <div className="noteMeta">
         <small>{formatNoteTime(note.created_at)}</small>
         <button

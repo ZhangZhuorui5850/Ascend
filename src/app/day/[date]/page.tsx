@@ -6,6 +6,7 @@ import { DayNotes } from "@/components/DayNotes";
 import { DayTasks } from "@/components/DayTasks";
 import { OpenCaptureButton } from "@/components/OpenCaptureButton";
 import { QuickLog } from "@/components/QuickLog";
+import { RichText } from "@/components/RichText";
 import { ReviewQueue } from "@/components/ReviewQueue";
 import { assetFileUrl } from "@/lib/asset-url";
 import { assertDateKey, shiftDateKey, todayKey } from "@/lib/dates";
@@ -124,14 +125,14 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
               {day.reviews.map((item) => (
                 <div className="listRow" key={`r-${item.id}`}>
                   <span className="rowBadge review">复习</span>
-                  <strong>{item.knowledge_title || item.note || "复习"}</strong>
+                  <strong><RichText text={item.knowledge_title || item.note || "复习"} /></strong>
                   <small>{item.score}/3</small>
                 </div>
               ))}
               {day.mistakes.map((item) => (
                 <div className="listRow" key={`m-${item.id}`}>
                   <span className="rowBadge mistake">错题</span>
-                  <strong>{item.title}</strong>
+                  <strong><RichText text={item.title} /></strong>
                   <small>{item.graduated ? "已毕业" : item.next_review ? `下次 ${item.next_review}` : ""}</small>
                 </div>
               ))}

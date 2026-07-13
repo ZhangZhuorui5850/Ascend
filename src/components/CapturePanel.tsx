@@ -4,6 +4,7 @@ import { ChangeEvent, ClipboardEvent, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation";
 import { AlertCircle, Camera, CheckCircle2, FileText, FolderOpen, ImageIcon, Inbox, Loader2, Paperclip, Plus, Send, X } from "lucide-react";
 import { createPointAction } from "@/app/actions/knowledge";
+import { RichText } from "@/components/RichText";
 import { todayKey } from "@/lib/dates";
 import { MAX_UPLOAD_BYTES } from "@/lib/limits";
 import type { CaptureSubject } from "@/lib/repo/knowledge";
@@ -447,7 +448,7 @@ export function CapturePanel({ subjects, onClose }: { subjects: CaptureSubject[]
                 onClick={() => togglePoint(point.id)}
                 type="button"
               >
-                {point.title}
+                <RichText text={point.title} />
               </button>
             ))}
             {!selectedChapter.points.length ? <span className="emptyChip">本章还没有知识点</span> : null}

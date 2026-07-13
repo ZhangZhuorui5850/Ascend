@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/EmptyState";
 import { MistakeReattempt } from "@/components/MistakeReattempt";
+import { RichText } from "@/components/RichText";
 import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { requirePageWorkspace } from "@/lib/page-auth";
@@ -44,10 +45,10 @@ export default async function MistakesPage() {
             {book.open.map((mistake) => (
               <div className="listRow" key={mistake.id}>
                 <span className="rowBadge mistake">{mistake.next_review ? `下次 ${mistake.next_review}` : "待排期"}</span>
-                <strong>{mistake.title}</strong>
+                <strong><RichText text={mistake.title} /></strong>
                 <small>
                   {mistake.subject_code ? `${mistake.subject_code} · ` : ""}
-                  {mistake.knowledge_title || mistake.cause || mistake.day}
+                  <RichText text={mistake.knowledge_title || mistake.cause || mistake.day} />
                 </small>
               </div>
             ))}
@@ -65,8 +66,8 @@ export default async function MistakesPage() {
             {book.graduated.slice(0, 30).map((mistake) => (
               <div className="listRow graduated" key={mistake.id}>
                 <span className="rowBadge">{mistake.day}</span>
-                <strong>{mistake.title}</strong>
-                <small>{mistake.knowledge_title || mistake.cause}</small>
+                <strong><RichText text={mistake.title} /></strong>
+                <small><RichText text={mistake.knowledge_title || mistake.cause} /></small>
               </div>
             ))}
             {!book.graduated.length ? <p className="empty">还没有毕业的错题。</p> : null}

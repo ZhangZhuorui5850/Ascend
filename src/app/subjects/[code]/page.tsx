@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { RichText } from "@/components/RichText";
 import { SubjectWorkbench } from "@/components/SubjectWorkbench";
 import { assetFileUrl } from "@/lib/asset-url";
 import { todayKey } from "@/lib/dates";
@@ -74,8 +75,8 @@ export default async function SubjectPage({ params }: { params: Promise<{ code: 
                 <span className={mistake.graduated ? "rowBadge" : "rowBadge mistake"}>
                   {mistake.graduated ? "已毕业" : "回炉中"}
                 </span>
-                <strong>{mistake.title}</strong>
-                <small>{mistake.knowledge_title || mistake.cause || mistake.day}</small>
+                <strong><RichText text={mistake.title} /></strong>
+                <small><RichText text={mistake.knowledge_title || mistake.cause || mistake.day} /></small>
               </div>
             ))}
             {!detail.mistakes.length ? <p className="empty">这个科目还没有错题。</p> : null}
