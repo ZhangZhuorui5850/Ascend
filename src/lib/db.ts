@@ -225,9 +225,9 @@ export function seedKnowledgeMapIfEmpty(database: Database.Database): void {
   );
   const insertPoint = database.prepare(`
     INSERT OR REPLACE INTO knowledge_points
-      (workspace_id, id, subject_code, subject_name, submodule, tier, tier_name, title, exam, status, mastery)
+      (workspace_id, id, subject_code, subject_name, submodule, tier, tier_name, title, exam, status, mastery, created_at)
     VALUES
-      (@workspaceId, @id, @subjectCode, @subjectName, @submodule, @tier, @tierName, @title, @exam, @status, @mastery)
+      (@workspaceId, @id, @subjectCode, @subjectName, @submodule, @tier, @tierName, @title, @exam, @status, @mastery, datetime('now'))
   `);
 
   const transaction = database.transaction(() => {

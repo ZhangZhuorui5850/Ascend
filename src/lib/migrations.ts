@@ -692,10 +692,10 @@ export function backfillKnowledgeHierarchy(database: Database.Database): void {
     const insertPoint = database.prepare(`
       INSERT INTO knowledge_points
         (workspace_id, id, subject_code, subject_name, submodule, tier, tier_name, title,
-         exam, status, mastery, reviews, chapter_id)
+         exam, status, mastery, reviews, chapter_id, created_at)
       VALUES
         (@workspaceId, @id, @subjectCode, @subjectName, @submodule, 'g', '了解',
-         @title, 0, '未学', 0, 0, @chapterId)
+         @title, 0, '未学', 0, 0, @chapterId, datetime('now'))
     `);
     const tagToPoint = new Map<string, string>();
     for (const tag of tags) {

@@ -54,10 +54,10 @@ export function cloneKnowledgeSeedForWorkspace(db: Database.Database, workspaceI
   const insertPoint = db.prepare(`
     INSERT INTO knowledge_points
       (workspace_id, id, subject_code, subject_name, submodule, tier, tier_name, title,
-       exam, status, mastery, reviews, chapter_id, sort_order)
+       exam, status, mastery, reviews, chapter_id, sort_order, created_at)
     VALUES
       (@workspaceId, @id, @subjectCode, @subjectName, @submodule, @tier, @tierName, @title,
-       @exam, @status, @mastery, 0, @chapterId, @sortOrder)
+       @exam, @status, @mastery, 0, @chapterId, @sortOrder, datetime('now'))
   `);
 
   for (const subject of seed.subjects) {
