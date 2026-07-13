@@ -6,4 +6,4 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Project agent guide
 
-Before changing code, read `docs/agent-development-guide.md`. It defines this project's product loop, architecture boundaries, data model, API/auth rules, sync protocol, file lifecycle, testing expectations, and required claim-label style.
+Before changing code, read `docs/agent-development-guide.md`. It defines this project's architecture boundaries, data layer rules, write path, testing expectations, and documentation conventions.

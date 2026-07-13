@@ -82,9 +82,8 @@ export async function requestInstall(): Promise<"accepted" | "dismissed" | "unav
   if (!promptEvent) return "unavailable";
   await promptEvent.prompt();
   const choice = await promptEvent.userChoice;
-  if (choice.outcome === "accepted") {
-    promptEvent = null;
-    refresh();
-  }
+  // prompt() 在同一事件上只能调用一次，dismissed 也已消费——一律丢弃，等浏览器再次派发。
+  promptEvent = null;
+  refresh();
   return choice.outcome;
 }
