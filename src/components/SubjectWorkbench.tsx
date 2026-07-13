@@ -2,7 +2,20 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical, Loader2, Plus, Star, Trash2 } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  ChevronRight,
+  CornerUpLeft,
+  Crosshair,
+  FolderPlus,
+  GripVertical,
+  Loader2,
+  Plus,
+  Star,
+  Trash2,
+} from "lucide-react";
 import {
   createChapterAction,
   createPointAction,
@@ -14,9 +27,18 @@ import {
   renameChapterAction,
   renameSubjectAction,
   reorderPointsAction,
+  reparentChapterAction,
   updatePointAction,
 } from "@/app/actions/knowledge";
-import type { ChapterWithPoints, PointDetail, PointRow, SubjectRow, SubjectTrack } from "@/lib/repo/knowledge";
+import {
+  MAX_CHAPTER_DEPTH,
+  flattenChapterPoints,
+  type ChapterWithPoints,
+  type PointDetail,
+  type PointRow,
+  type SubjectRow,
+  type SubjectTrack,
+} from "@/lib/repo/knowledge";
 import type { Tier } from "@/lib/types";
 import { useFeedback } from "@/components/FeedbackProvider";
 import { assetFileUrl } from "@/lib/asset-url";
@@ -29,6 +51,7 @@ type SubjectWorkbenchProps = {
   chapters: ChapterWithPoints[];
   loosePoints: PointRow[];
   today: string;
+  focusId?: string | null;
 };
 
 const TIER_OPTIONS: Array<{ value: Tier; label: string }> = [
@@ -37,15 +60,58 @@ const TIER_OPTIONS: Array<{ value: Tier; label: string }> = [
   { value: "g", label: "了解" },
 ];
 
-export function SubjectWorkbench({ subject, chapters, loosePoints, today }: SubjectWorkbenchProps) {
+/** 默认展开到第 3 层，更深的章节初始折叠（可手动展开并记忆） */
+const DEFAULT_EXPAND_DEPTH = 3;
+
+function countPointsDeep(chapter: ChapterWithPoints): number {
+  return chapter.points.length + chapter.children.reduce((sum, child) => sum + countPointsDeep(child), 0);
+}
+
+function countChaptersDeep(chapter: ChapterWithPoints): number {
+  return 1 + chapter.children.reduce((sum, child) => sum + countChaptersDeep(child), 0);
+}
+
+/** 从根到目标章节的路径（含目标）；找不到返回 null */
+function findChapterPath(chapters: ChapterWithPoints[], id: string): ChapterWithPoints[] | null {
+  for (const chapter of chapters) {
+    if (chapter.id === id) return [chapter];
+    const sub = findChapterPath(chapter.children, id);
+    if (sub) return [chapter, ...sub];
+  }
+  return null;
+}
+
+/** 章节树共享的操作句柄：折叠、拖拽嵌套、聚焦 */
+type TreeControls = {
+  collapsedMap: Record<string, boolean>;
+  toggleCollapsed: (id: string, defaultCollapsed: boolean) => void;
+  dragChapterId: string | null;
+  setDragChapterId: (id: string | null) => void;
+  nestChapter: (childId: string, parentId: string | null) => Promise<void>;
+  treeBusy: boolean;
+  focusChapter: (id: string | null) => void;
+};
+
+export function SubjectWorkbench({ subject, chapters, loosePoints, today, focusId = null }: SubjectWorkbenchProps) {
   const router = useRouter();
   const { confirm, notify } = useFeedback();
   const [chapterTitle, setChapterTitle] = useState("");
   const [sortMode, setSortMode] = useState<PointSortMode>("manual");
+  const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>({});
+  const [dragChapterId, setDragChapterId] = useState<string | null>(null);
+  const [treeBusy, setTreeBusy] = useState(false);
   useEffect(() => {
     const saved = localStorage.getItem(`zgca-point-sort:${subject.code}`);
+    const savedCollapsed = localStorage.getItem(`zgca-chapter-collapsed:${subject.code}`);
     window.setTimeout(() => {
       if (saved === "manual" || saved === "time" || saved === "importance") setSortMode(saved);
+      if (savedCollapsed) {
+        try {
+          setCollapsedMap(JSON.parse(savedCollapsed) as Record<string, boolean>);
+        } catch {
+          /* 坏数据直接忽略 */
+        }
+      }
     }, 0);
   }, [subject.code]);
   function changeSortMode(mode: PointSortMode) {
@@ -58,6 +124,44 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today }: Subj
     else notify(result.error || "操作失败", "error");
   }
 
+  function toggleCollapsed(id: string, defaultCollapsed: boolean) {
+    setCollapsedMap((current) => {
+      const effective = current[id] ?? defaultCollapsed;
+      const next = { ...current, [id]: !effective };
+      localStorage.setItem(`zgca-chapter-collapsed:${subject.code}`, JSON.stringify(next));
+      return next;
+    });
+  }
+
+  async function nestChapter(childId: string, parentId: string | null) {
+    if (treeBusy || childId === parentId) return;
+    setTreeBusy(true);
+    try {
+      report(await reparentChapterAction({ id: childId, parentId, subjectCode: subject.code }));
+    } catch {
+      report({ ok: false, error: "网络异常，章节移动未保存" });
+    } finally {
+      setTreeBusy(false);
+    }
+  }
+
+  function focusChapter(id: string | null) {
+    router.push(id ? `/subjects/${subject.code}?focus=${encodeURIComponent(id)}` : `/subjects/${subject.code}`);
+  }
+
+  const tree: TreeControls = {
+    collapsedMap,
+    toggleCollapsed,
+    dragChapterId,
+    setDragChapterId,
+    nestChapter,
+    treeBusy,
+    focusChapter,
+  };
+
+  const focusPath = focusId ? findChapterPath(chapters, focusId) : null;
+  const focusTarget = focusPath ? focusPath[focusPath.length - 1] : null;
+
   async function addChapter() {
     const title = chapterTitle.trim();
     if (!title) return;
@@ -67,10 +171,11 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today }: Subj
   }
 
   async function removeSubject() {
-    const pointCount = chapters.reduce((count, chapter) => count + chapter.points.length, 0) + loosePoints.length;
+    const chapterCount = chapters.reduce((count, chapter) => count + countChaptersDeep(chapter), 0);
+    const pointCount = flattenChapterPoints(chapters).length + loosePoints.length;
     const confirmed = await confirm({
       title: `删除 ${subject.code} · ${subject.name}？`,
-      description: `将删除 ${chapters.length} 个章节、${pointCount} 个知识点。学习记录和资料会保留，但会解除关联。`,
+      description: `将删除 ${chapterCount} 个章节、${pointCount} 个知识点。学习记录和资料会保留，但会解除关联。`,
       confirmLabel: "删除科目",
       danger: true,
     });
@@ -134,55 +239,96 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today }: Subj
         </div>
       </div>
 
-      <div className="chapterList">
-        {chapters.map((chapter, index) => (
-          <ChapterBlock
-            chapter={chapter}
-            first={index === 0}
-            key={chapter.id}
-            last={index === chapters.length - 1}
-            report={report}
-            sortMode={sortMode}
-            subjectCode={subject.code}
-            today={today}
-          />
-        ))}
-        {loosePoints.length ? (
-          <article className="chapterBlock">
-            <div className="chapterHead">
-              <strong className="chapterLoose">未分章知识点</strong>
-            </div>
-            <div className="pointList">
-              {sortPointsForView(loosePoints, sortMode).map((point) => (
-                <PointLine key={point.id} point={point} report={report} subjectCode={subject.code} today={today} />
-              ))}
-            </div>
-          </article>
-        ) : null}
-        {!chapters.length && !loosePoints.length ? (
-          <p className="empty">还没有章节。先添加一个章节，再往里挂知识点。</p>
-        ) : null}
-      </div>
+      {focusTarget && focusPath ? (
+        <>
+          <nav aria-label="聚焦路径" className="focusBreadcrumb">
+            <button onClick={() => focusChapter(null)} type="button">{subject.name}</button>
+            {focusPath.map((node, index) => (
+              <span key={node.id}>
+                <span aria-hidden> / </span>
+                {index === focusPath.length - 1 ? (
+                  <strong><RichText text={node.title} /></strong>
+                ) : (
+                  <button onClick={() => focusChapter(node.id)} type="button"><RichText text={node.title} /></button>
+                )}
+              </span>
+            ))}
+          </nav>
+          <div className="chapterList">
+            <ChapterBlock
+              canPromote={false}
+              chapter={focusTarget}
+              depth={1}
+              first
+              key={focusTarget.id}
+              last
+              promoteTargetId={null}
+              report={report}
+              sortMode={sortMode}
+              subjectCode={subject.code}
+              today={today}
+              tree={tree}
+            />
+          </div>
+        </>
+      ) : (
+        <>
+          {focusId && !focusTarget ? <p className="empty">聚焦的章节不存在（可能已被删除），已显示完整目录。</p> : null}
+          <div className="chapterList">
+            {chapters.map((chapter, index) => (
+              <ChapterBlock
+                canPromote={false}
+                chapter={chapter}
+                depth={1}
+                first={index === 0}
+                key={chapter.id}
+                last={index === chapters.length - 1}
+                promoteTargetId={null}
+                report={report}
+                sortMode={sortMode}
+                subjectCode={subject.code}
+                today={today}
+                tree={tree}
+              />
+            ))}
+            {loosePoints.length ? (
+              <article className="chapterBlock">
+                <div className="chapterHead">
+                  <strong className="chapterLoose">未分章知识点</strong>
+                </div>
+                <div className="pointList">
+                  {sortPointsForView(loosePoints, sortMode).map((point) => (
+                    <PointLine key={point.id} point={point} report={report} subjectCode={subject.code} today={today} />
+                  ))}
+                </div>
+              </article>
+            ) : null}
+            {!chapters.length && !loosePoints.length ? (
+              <p className="empty">还没有章节。先添加一个章节，再往里挂知识点。</p>
+            ) : null}
+          </div>
 
-      <div className="chapterCreate">
-        <input
-          value={chapterTitle}
-          onChange={(event) => setChapterTitle(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") void addChapter();
-          }}
-          placeholder="新增章节，例如：特征值与二次型"
-        />
-        <button disabled={!chapterTitle.trim()} onClick={() => void addChapter()} type="button">
-          <Plus size={15} />
-          添加章节
-        </button>
-      </div>
+          <div className="chapterCreate">
+            <input
+              value={chapterTitle}
+              onChange={(event) => setChapterTitle(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void addChapter();
+              }}
+              placeholder="新增章节，例如：特征值与二次型"
+            />
+            <button disabled={!chapterTitle.trim()} onClick={() => void addChapter()} type="button">
+              <Plus size={15} />
+              添加章节
+            </button>
+          </div>
+        </>
+      )}
     </section>
   );
 }
 
-function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMode }: {
+function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMode, depth, tree, canPromote, promoteTargetId }: {
   chapter: ChapterWithPoints;
   subjectCode: string;
   first: boolean;
@@ -190,6 +336,10 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
   today: string;
   report: (result: { ok: boolean; error?: string }) => void;
   sortMode: PointSortMode;
+  depth: number;
+  tree: TreeControls;
+  canPromote: boolean;
+  promoteTargetId: string | null;
 }) {
   const { confirm, notify } = useFeedback();
   const [pointTitle, setPointTitle] = useState("");
@@ -197,8 +347,27 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [reordering, setReordering] = useState(false);
+  const [dropHover, setDropHover] = useState(false);
+  const [addingSub, setAddingSub] = useState(false);
+  const [subTitle, setSubTitle] = useState("");
   const sortedPoints = sortPointsForView(chapter.points, sortMode);
   const draggable = sortMode === "manual";
+  const defaultCollapsed = depth >= DEFAULT_EXPAND_DEPTH;
+  const collapsed = tree.collapsedMap[chapter.id] ?? defaultCollapsed;
+  const deepPoints = countPointsDeep(chapter);
+  const subChapterCount = countChaptersDeep(chapter) - 1;
+  const canNestDeeper = depth < MAX_CHAPTER_DEPTH;
+
+  async function addSubChapter() {
+    const title = subTitle.trim();
+    if (!title) return;
+    const result = await createChapterAction({ subjectCode, title, parentId: chapter.id });
+    if (result.ok) {
+      setSubTitle("");
+      setAddingSub(false);
+    }
+    report(result);
+  }
 
   async function applyOrder(ids: string[]) {
     setReordering(true);
@@ -246,7 +415,7 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
   async function removeChapter() {
     const confirmed = await confirm({
       title: `删除章节“${chapter.title}”？`,
-      description: `其中 ${chapter.points.length} 个知识点会一并删除，学习记录会保留。`,
+      description: `其中 ${deepPoints} 个知识点${subChapterCount ? `、${subChapterCount} 个子章节` : ""}会一并删除，学习记录会保留。`,
       confirmLabel: "删除章节",
       danger: true,
     });
@@ -257,8 +426,45 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
   }
 
   return (
-    <article className="chapterBlock">
-      <div className="chapterHead">
+    <article className="chapterBlock" data-depth={depth}>
+      <div
+        className={dropHover ? "chapterHead chapterDropTarget" : "chapterHead"}
+        onDragLeave={() => setDropHover(false)}
+        onDragOver={(event) => {
+          if (!tree.dragChapterId || tree.dragChapterId === chapter.id) return;
+          event.preventDefault();
+          setDropHover(true);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDropHover(false);
+          const dragged = tree.dragChapterId;
+          tree.setDragChapterId(null);
+          if (dragged && dragged !== chapter.id) void tree.nestChapter(dragged, chapter.id);
+        }}
+      >
+        <button
+          aria-label={`拖拽“${chapter.title}”到其他章节标题上可变为其子章节`}
+          className="chapterGrip"
+          draggable={!tree.treeBusy}
+          onDragEnd={() => tree.setDragChapterId(null)}
+          onDragStart={(event) => {
+            event.dataTransfer.effectAllowed = "move";
+            tree.setDragChapterId(chapter.id);
+          }}
+          type="button"
+        >
+          <GripVertical size={13} />
+        </button>
+        <button
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? "展开章节" : "折叠章节"}
+          className="chapterCollapse"
+          onClick={() => tree.toggleCollapsed(chapter.id, defaultCollapsed)}
+          type="button"
+        >
+          {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+        </button>
         <input
           aria-label="章节标题"
           defaultValue={chapter.title}
@@ -270,11 +476,13 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
             }
           }}
         />
-        <span className="chapterCount">{chapter.points.length} 个知识点</span>
+        <span className="chapterCount">
+          {deepPoints} 个知识点{subChapterCount ? ` · ${subChapterCount} 个子章节` : ""}
+        </span>
         <div className="chapterTools">
           <button
             aria-label="上移"
-            disabled={first}
+            disabled={first || tree.treeBusy}
             onClick={() => void moveChapterAction({ id: chapter.id, direction: "up", subjectCode }).then(report)}
             type="button"
           >
@@ -282,11 +490,40 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
           </button>
           <button
             aria-label="下移"
-            disabled={last}
+            disabled={last || tree.treeBusy}
             onClick={() => void moveChapterAction({ id: chapter.id, direction: "down", subjectCode }).then(report)}
             type="button"
           >
             <ArrowDown size={14} />
+          </button>
+          {canPromote ? (
+            <button
+              aria-label="提升一层（移出当前父章节）"
+              disabled={tree.treeBusy}
+              onClick={() => void tree.nestChapter(chapter.id, promoteTargetId)}
+              title="提升一层"
+              type="button"
+            >
+              <CornerUpLeft size={14} />
+            </button>
+          ) : null}
+          {canNestDeeper ? (
+            <button
+              aria-label="添加子章节"
+              onClick={() => setAddingSub((value) => !value)}
+              title="添加子章节"
+              type="button"
+            >
+              <FolderPlus size={14} />
+            </button>
+          ) : null}
+          <button
+            aria-label={`聚焦“${chapter.title}”子树`}
+            onClick={() => tree.focusChapter(chapter.id)}
+            title="聚焦此章节"
+            type="button"
+          >
+            <Crosshair size={14} />
           </button>
           <button aria-label="删除章节" className="iconDanger" onClick={() => void removeChapter()} type="button">
             <Trash2 size={14} />
@@ -294,6 +531,27 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
         </div>
       </div>
 
+      {addingSub ? (
+        <div className="chapterCreate subChapterCreate">
+          <input
+            autoFocus
+            onChange={(event) => setSubTitle(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void addSubChapter();
+              if (event.key === "Escape") setAddingSub(false);
+            }}
+            placeholder={`在“${chapter.title}”下新增子章节`}
+            value={subTitle}
+          />
+          <button disabled={!subTitle.trim()} onClick={() => void addSubChapter()} type="button">
+            <Plus size={14} />
+            添加
+          </button>
+        </div>
+      ) : null}
+
+      {collapsed ? null : (
+      <>
       <div className="pointList">
         {sortedPoints.map((point, index) => (
           <div
@@ -392,6 +650,29 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
           <Plus size={14} />
         </button>
       </div>
+
+      {chapter.children.length ? (
+        <div className="chapterChildren">
+          {chapter.children.map((child, index) => (
+            <ChapterBlock
+              canPromote
+              chapter={child}
+              depth={depth + 1}
+              first={index === 0}
+              key={child.id}
+              last={index === chapter.children.length - 1}
+              promoteTargetId={chapter.parent_id}
+              report={report}
+              sortMode={sortMode}
+              subjectCode={subjectCode}
+              today={today}
+              tree={tree}
+            />
+          ))}
+        </div>
+      ) : null}
+      </>
+      )}
     </article>
   );
 }

@@ -6,19 +6,23 @@ import { assetFileUrl } from "@/lib/asset-url";
 import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { requirePageWorkspace } from "@/lib/page-auth";
-import { getSubjectDetail } from "@/lib/repo/knowledge";
+import { flattenChapterPoints, getSubjectDetail } from "@/lib/repo/knowledge";
 
 export const dynamic = "force-dynamic";
 
-export default async function SubjectPage({ params }: { params: Promise<{ code: string }> }) {
+export default async function SubjectPage({ params, searchParams }: {
+  params: Promise<{ code: string }>;
+  searchParams: Promise<{ focus?: string }>;
+}) {
   const { code } = await params;
+  const { focus } = await searchParams;
   const access = await requirePageWorkspace(`/subjects/${code}`);
 
   const detail = getSubjectDetail(getDb(), access, decodeURIComponent(code));
   if (!detail) notFound();
 
   const today = todayKey();
-  const allPoints = [...detail.chapters.flatMap((chapter) => chapter.points), ...detail.loosePoints];
+  const allPoints = [...flattenChapterPoints(detail.chapters), ...detail.loosePoints];
   const mastered = allPoints.filter((point) => point.status === "已掌握").length;
   const due = allPoints.filter((point) => point.next_review && point.next_review <= today).length;
   const openMistakes = detail.mistakes.filter((mistake) => !mistake.graduated).length;
@@ -39,9 +43,10 @@ export default async function SubjectPage({ params }: { params: Promise<{ code: 
       </div>
 
       <SubjectWorkbench
-        subject={detail.subject}
         chapters={detail.chapters}
+        focusId={typeof focus === "string" && focus ? focus : null}
         loosePoints={detail.loosePoints}
+        subject={detail.subject}
         today={today}
       />
 

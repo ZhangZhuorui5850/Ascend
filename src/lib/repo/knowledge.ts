@@ -56,6 +56,11 @@ export type ChapterWithPoints = {
 /** 章节树最深层级（含根） */
 export const MAX_CHAPTER_DEPTH = 8;
 
+/** 深度优先收集整棵章节树（含子孙）下的全部知识点。 */
+export function flattenChapterPoints(chapters: ChapterWithPoints[]): PointRow[] {
+  return chapters.flatMap((chapter) => [...chapter.points, ...flattenChapterPoints(chapter.children)]);
+}
+
 export type SubjectDetail = {
   subject: SubjectRow;
   chapters: ChapterWithPoints[];

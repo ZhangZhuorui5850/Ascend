@@ -1605,6 +1605,86 @@ button:focus-visible {
   padding: 10px 12px;
 }
 
+/* 递归章节树：子章节缩进 + 层级线 */
+.chapterChildren {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  margin-left: 12px;
+  padding-left: 10px;
+  border-left: 2px solid var(--line);
+}
+
+.chapterChildren .chapterBlock {
+  background: transparent;
+  border-style: dashed;
+}
+
+.chapterGrip,
+.chapterCollapse {
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--quiet);
+  flex: none;
+}
+
+.chapterGrip {
+  cursor: grab;
+}
+
+.chapterGrip:active {
+  cursor: grabbing;
+}
+
+.chapterCollapse:hover,
+.chapterGrip:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.chapterHead.chapterDropTarget {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.subChapterCreate {
+  margin: 2px 0 8px;
+}
+
+.focusBreadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.focusBreadcrumb button {
+  border: 0;
+  padding: 2px 4px;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.focusBreadcrumb button:hover {
+  background: var(--surface);
+}
+
+.focusBreadcrumb strong {
+  color: var(--ink);
+  padding: 2px 4px;
+}
+
 .chapterHead {
   display: flex;
   align-items: center;
