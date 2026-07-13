@@ -40,9 +40,9 @@ export function AppShell({ user, hierarchy, children }: AppShellProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [mobileNavOpen]);
 
-  // 顶栏汉堡按钮：手机宽度弹出导航抽屉，桌面宽度切换侧栏折叠（断点与 CSS 的 820px 一致）
+  // 顶栏汉堡按钮：手机与手机横屏弹出导航抽屉，桌面宽度切换侧栏折叠。
   function handleMenu() {
-    if (window.matchMedia("(max-width: 820px)").matches) {
+    if (window.matchMedia("(max-width: 900px)").matches) {
       setMobileNavOpen((open) => !open);
     } else {
       setSidebarCollapsed((value) => !value);

@@ -58,8 +58,9 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       "content-type": asset.mime_type || "application/octet-stream",
       "content-disposition": contentDispositionFor(asset.mime_type || "", asset.original_name),
       "x-content-type-options": "nosniff",
-      // 内容寻址的 blob 不可变，可以放心让浏览器长期缓存（private：仍需鉴权）。
-      "cache-control": "private, max-age=31536000, immutable",
+      // 资源 URL 只含工作区内的数字 ID，切换账号后可能再次出现同一 ID。
+      // 禁止浏览器与 Service Worker 留存私有附件，避免跨账号复用缓存实体。
+      "cache-control": "private, no-store, max-age=0",
       "accept-ranges": "bytes",
     };
     if (etag) baseHeaders.etag = etag;

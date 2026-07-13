@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SubjectWorkbench } from "@/components/SubjectWorkbench";
+import { assetFileUrl } from "@/lib/asset-url";
 import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { requirePageWorkspace } from "@/lib/page-auth";
@@ -51,7 +52,7 @@ export default async function SubjectPage({ params }: { params: Promise<{ code: 
           </div>
           <div className="assetList">
             {detail.assets.map((asset) => (
-              <a className="assetRow" href={`/api/assets/${asset.id}/file`} key={asset.id} target="_blank">
+              <a className="assetRow" href={assetFileUrl(asset.id)} key={asset.id} rel="noopener" target="_blank">
                 <strong>{asset.original_name}</strong>
                 <small>
                   {asset.day}

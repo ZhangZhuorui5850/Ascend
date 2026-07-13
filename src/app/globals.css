@@ -2804,6 +2804,24 @@ button:focus-visible {
     display: none;
   }
 
+  .sidebar.mobileOpen {
+    display: flex;
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 80;
+    width: min(300px, 84vw);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .mobileNavBackdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 75;
+    border: 0;
+    background: rgba(32, 24, 12, 0.42);
+  }
+
   /* 顶栏汉堡弹出的导航抽屉：手机宽度下侧栏以完整形态从左侧滑出 */
   .sidebar.mobileOpen {
     display: flex;
@@ -6615,4 +6633,320 @@ h3,
 [data-skin="terminal"] ::selection {
   background: var(--accent);
   color: var(--accent-ink);
+}
+
+/* ---------- 29. Mobile application baseline + PWA lifecycle ---------- */
+
+html {
+  min-height: 100%;
+  overflow-x: clip;
+  -webkit-text-size-adjust: 100%;
+}
+
+body,
+.appFrame,
+.loginShell {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+button,
+a,
+[role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.moveDialog {
+  display: grid;
+  gap: 18px;
+  width: min(480px, 100%);
+  padding: 22px;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-lg);
+}
+
+.moveDialog h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+
+.moveDialog p {
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+.moveDialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.viewerPdfFallback {
+  display: none;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  height: 100%;
+  padding: 28px;
+  text-align: center;
+}
+
+.viewerPdfFallback h3 {
+  font-size: 18px;
+}
+
+.viewerPdfFallback p {
+  max-width: 34ch;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.pwaNotice {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 160;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  width: min(520px, calc(100vw - 32px));
+  padding: 12px 12px 12px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-lg);
+}
+
+.pwaNotice > svg {
+  color: var(--accent);
+}
+
+.pwaNotice > div {
+  display: grid;
+  line-height: 1.45;
+}
+
+.pwaNotice strong {
+  font-size: 14px;
+}
+
+.pwaNotice span {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.pwaNoticeClose {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+}
+
+@media (max-width: 900px), (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
+  button,
+  .primaryButton,
+  .secondaryButton,
+  input,
+  select {
+    min-height: 44px;
+  }
+
+  textarea {
+    min-height: 96px;
+  }
+
+  .driveRowTools button,
+  .viewerClose,
+  .toast button,
+  .pwaNoticeClose {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .driveRow {
+    min-height: 54px;
+  }
+
+  .driveRowTools {
+    gap: 0;
+  }
+
+  .viewerBody.viewer-pdf iframe {
+    display: none;
+  }
+
+  .viewerPdfFallback {
+    display: grid;
+  }
+}
+
+@media (max-width: 900px) {
+  .appFrame,
+  .appFrame.sidebarCollapsed {
+    display: block;
+  }
+
+  .appWorkspace {
+    display: block;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .topbarTitle small,
+  .commandTrigger,
+  .topbarActions .topbarIconButton:first-of-type {
+    display: none;
+  }
+
+  .topbarMenu,
+  .mobileNav {
+    display: grid;
+  }
+
+  .captureFab {
+    display: none;
+  }
+
+  .topbar {
+    height: calc(58px + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .mainPane,
+  .mainPane:has(.pageStack.fullHeight) {
+    padding-right: max(14px, env(safe-area-inset-right));
+    padding-bottom: calc(104px + env(safe-area-inset-bottom));
+    padding-left: max(14px, env(safe-area-inset-left));
+  }
+
+  .mobileNav {
+    min-height: calc(68px + env(safe-area-inset-bottom));
+    padding-right: max(4px, env(safe-area-inset-right));
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+    padding-left: max(4px, env(safe-area-inset-left));
+  }
+
+  .mobileNav a,
+  .mobileNav > button {
+    min-height: 54px;
+  }
+
+  .sidebar.mobileOpen {
+    height: 100vh;
+    height: 100dvh;
+    height: var(--app-visual-height, 100dvh);
+    padding-top: max(18px, env(safe-area-inset-top));
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+  }
+
+  .capturePanel {
+    top: 0;
+    bottom: 0;
+    height: 100vh;
+    height: 100dvh;
+    height: var(--app-visual-height, 100dvh);
+    padding-top: max(18px, env(safe-area-inset-top));
+    padding-right: max(16px, env(safe-area-inset-right));
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+
+  .dialogBackdrop,
+  .viewerBackdrop,
+  .commandBackdrop {
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-right: max(10px, env(safe-area-inset-right));
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    padding-left: max(10px, env(safe-area-inset-left));
+  }
+
+  .assetViewer {
+    height: 100%;
+    max-height: 100dvh;
+    max-height: var(--app-visual-height, 100dvh);
+  }
+
+  .viewerHead {
+    align-items: flex-start;
+  }
+
+  .viewerHeadActions .secondaryButton {
+    padding-inline: 9px;
+  }
+
+  .driveToolbar,
+  .driveActions,
+  .driveSearch {
+    width: 100%;
+  }
+
+  .driveActions .primaryButton,
+  .driveActions .secondaryButton {
+    flex: 1 1 150px;
+  }
+
+  .driveSearch input {
+    width: 100%;
+  }
+
+  .driveTableHead,
+  .driveRow {
+    grid-template-columns: minmax(0, 1fr) 60px minmax(88px, auto);
+    gap: 4px;
+    padding-inline: 4px;
+  }
+
+  .driveRowTools {
+    flex-wrap: wrap;
+  }
+
+  .pwaNotice {
+    right: max(8px, env(safe-area-inset-right));
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    left: max(8px, env(safe-area-inset-left));
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    width: auto;
+  }
+
+  .pwaNotice .primaryButton {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .pwaNoticeClose {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  html[data-keyboard-open="true"] .mobileNav,
+  html[data-keyboard-open="true"] .pwaNotice {
+    display: none;
+  }
+
+  html[data-keyboard-open="true"] .mainPane,
+  html[data-keyboard-open="true"] .mainPane:has(.pageStack.fullHeight) {
+    padding-bottom: 24px;
+  }
+}
+
+@media (display-mode: standalone) {
+  .pwaNotice:not(.pwaUpdate) {
+    display: none;
+  }
 }

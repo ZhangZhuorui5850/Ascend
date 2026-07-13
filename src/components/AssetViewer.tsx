@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { ExternalLink, Loader2, X } from "lucide-react";
+import { ExternalLink, FileText, Loader2, X } from "lucide-react";
 import { parseMarkdown, type Align, type BlockNode, type InlineNode } from "@/lib/markdown";
+import { assetFileUrl } from "@/lib/asset-url";
 
 const TEXT_EXTENSIONS = new Set([
   "txt", "json", "csv", "log", "py", "js", "ts", "tsx", "jsx", "c", "cpp", "h", "hpp",
@@ -33,7 +34,7 @@ export function previewKind(file: { original_name: string; mime_type: string }):
 
 export function AssetViewer({ file, onClose }: { file: ViewerFile; onClose: () => void }) {
   const kind = previewKind(file);
-  const url = `/api/assets/${file.id}/file`;
+  const url = assetFileUrl(file.id);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -63,7 +64,20 @@ export function AssetViewer({ file, onClose }: { file: ViewerFile; onClose: () =
             // eslint-disable-next-line @next/next/no-img-element
             <img alt={file.original_name} src={url} />
           ) : null}
-          {kind === "pdf" ? <iframe src={url} title={file.original_name} /> : null}
+          {kind === "pdf" ? (
+            <>
+              <iframe src={url} title={file.original_name} />
+              <div className="viewerPdfFallback">
+                <FileText aria-hidden size={44} />
+                <h3>在手机的 PDF 阅读器中打开</h3>
+                <p>iPhone 与部分 Android WebView 的内嵌 PDF 支持不稳定，因此移动端不在弹窗里强制预览。</p>
+                <a className="primaryButton" href={url} rel="noopener" target="_blank">
+                  <ExternalLink size={15} />
+                  打开 PDF
+                </a>
+              </div>
+            </>
+          ) : null}
           {kind === "markdown" || kind === "text" ? <TextPreview kind={kind} size={file.size} url={url} /> : null}
           {kind === "none" ? (
             <p className="empty">这个文件类型暂不支持预览，可以在新窗口打开。</p>
