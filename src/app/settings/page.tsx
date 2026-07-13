@@ -1,5 +1,6 @@
 import { AccountSection } from "@/components/AccountSection";
 import { AppearanceSection } from "@/components/AppearanceSection";
+import { DisplaySection } from "@/components/DisplaySection";
 import { DeviceSessions } from "@/components/DeviceSessions";
 import { SettingsForm } from "@/components/SettingsForm";
 import { listUserSessions } from "@/lib/auth";
@@ -29,6 +30,7 @@ export default async function SettingsPage() {
         <a href="#account">账户</a>
         <a href="#study">学习</a>
         <a href="#appearance">外观</a>
+        <a href="#display">显示</a>
         <a href="#devices">设备</a>
       </nav>
 
@@ -55,6 +57,11 @@ export default async function SettingsPage() {
       <section aria-label="外观设置" className="settingsGroup" id="appearance">
         <h2 className="settingsGroupTitle">外观</h2>
         <AppearanceSection />
+      </section>
+
+      <section aria-label="显示与阅读" className="settingsGroup" id="display">
+        <h2 className="settingsGroupTitle">显示与阅读</h2>
+        <DisplaySection />
       </section>
 
       <section aria-label="登录设备" className="settingsGroup" id="devices">

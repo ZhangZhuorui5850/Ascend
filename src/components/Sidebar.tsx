@@ -78,10 +78,10 @@ export function Sidebar({
   return (
     <aside className={className}>
       <div className="brand">
-        <span className="brandLogo"><BrandLogo size={26} /></span>
+        <span className="brandLogo"><BrandLogo size={36} /></span>
         <div className="brandCopy">
           <strong>登峰</strong>
-          <small>{role === "admin" ? "ASCEND · 管理控制台" : "ASCEND · 学习工作台"}</small>
+          <small>{role === "admin" ? "ASCEND · 管理控制台" : "ASCEND"}</small>
         </div>
         <button aria-label={collapsed ? "展开侧栏" : "收起侧栏"} className="sidebarToggle" onClick={onToggle} type="button">
           <ChevronLeft size={15} />

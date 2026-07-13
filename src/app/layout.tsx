@@ -12,7 +12,7 @@ import { parseSessionsCookieValue } from "@/lib/session-cookies";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "登峰 · Ascend 学习工作台",
+  title: "登峰 · Ascend",
   description: "日历驱动的学习管理系统：计划、复习、错题与资料，都为当天的学习服务。",
   applicationName: "登峰",
   appleWebApp: {
@@ -36,7 +36,13 @@ export const viewport: Viewport = {
   ],
 };
 
-const themeScript = `try{const t=localStorage.getItem('zgca-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;const s=localStorage.getItem('zgca-skin');if(['aurora','brutal','cloud','terminal'].includes(s))document.documentElement.dataset.skin=s}catch(e){}`;
+const themeScript = `try{var d=document.documentElement;const t=localStorage.getItem('zgca-theme');if(t==='light'||t==='dark')d.dataset.theme=t;const s=localStorage.getItem('zgca-skin');if(['aurora','brutal','cloud','terminal'].includes(s))d.dataset.skin=s;
+var g=parseInt(localStorage.getItem('zgca-grid'));if(!isNaN(g))d.style.setProperty('--grid-alpha',String(Math.max(0,Math.min(100,g))/100));
+var z=localStorage.getItem('zgca-zoom');if(['0.9','1.1','1.25'].includes(z))d.style.setProperty('--ui-zoom',z);
+var lh=localStorage.getItem('zgca-lh');if(lh==='compact'||lh==='loose')d.dataset.lh=lh;
+if(localStorage.getItem('zgca-font')==='serif')d.dataset.uiFont='serif';
+if(localStorage.getItem('zgca-motion')==='reduce')d.dataset.motion='reduce';
+if(localStorage.getItem('zgca-contrast')==='high')d.dataset.contrast='high'}catch(e){}`;
 
 export default async function RootLayout({
   children,

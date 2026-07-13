@@ -23,6 +23,12 @@
   box-sizing: border-box;
 }
 
+/* 显示与阅读偏好（设置页「显示与阅读」，启动脚本从 localStorage 恢复） */
+:root {
+  --grid-alpha: 1;   /* 纸张网格强度 0..1 */
+  --ui-zoom: 1;      /* 界面缩放 */
+}
+
 html,
 body {
   min-height: 100%;
@@ -30,12 +36,46 @@ body {
   margin: 0;
   color: var(--ink);
   background:
-    repeating-linear-gradient(0deg, transparent 0 27px, var(--paper-grid) 27px 28px),
-    repeating-linear-gradient(90deg, transparent 0 27px, var(--paper-grid) 27px 28px),
+    repeating-linear-gradient(0deg, transparent 0 27px,
+      color-mix(in srgb, var(--paper-grid) calc(var(--grid-alpha) * 100%), transparent) 27px 28px),
+    repeating-linear-gradient(90deg, transparent 0 27px,
+      color-mix(in srgb, var(--paper-grid) calc(var(--grid-alpha) * 100%), transparent) 27px 28px),
     var(--bg);
   font-family: var(--font-sans);
   line-height: 1.65;
   -webkit-font-smoothing: antialiased;
+}
+
+body {
+  zoom: var(--ui-zoom);
+}
+
+html[data-lh="compact"] body {
+  line-height: 1.5;
+}
+
+html[data-lh="loose"] body {
+  line-height: 1.85;
+}
+
+html[data-ui-font="serif"] body {
+  font-family: var(--font-serif);
+}
+
+/* 减弱动效：近零时长保留动画结束态，transition 事件仍会触发 */
+html[data-motion="reduce"] *,
+html[data-motion="reduce"] *::before,
+html[data-motion="reduce"] *::after {
+  animation-duration: 0.001ms !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* 高对比文字：把次级文字和分隔线朝 --ink 拉近，各皮肤通用 */
+html[data-contrast="high"] {
+  --muted: color-mix(in srgb, var(--ink) 78%, var(--bg));
+  --quiet: color-mix(in srgb, var(--ink) 64%, var(--bg));
+  --line: color-mix(in srgb, var(--ink) 32%, var(--bg));
 }
 
 a {
@@ -95,13 +135,17 @@ p {
 
 .brand strong {
   display: block;
-  font-size: 15px;
-  letter-spacing: 0.02em;
+  font-size: 19px;
+  line-height: 1.25;
+  letter-spacing: 0.04em;
 }
 
 .brand small {
+  display: block;
+  margin-top: 2px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
 }
 
 .brandLogo {
@@ -112,11 +156,17 @@ p {
 
 .brandLogo svg {
   display: block;
+  transform-origin: left center;
   transition: transform 0.2s ease;
 }
 
 .brand:hover .brandLogo svg {
   transform: translateY(-2px);
+}
+
+/* 折叠后侧栏仅 69px 宽，山形徽标按比例缩回以免溢出（transform 有过渡，不跳） */
+.sidebar.isCollapsed .brandLogo svg {
+  transform: scale(0.75);
 }
 
 .sidebar nav {
@@ -3063,8 +3113,8 @@ button:focus-visible {
 
 .brand {
   position: relative;
-  gap: 11px;
-  min-height: 42px;
+  gap: 12px;
+  min-height: 50px;
   padding: 2px 6px;
   transition: padding 180ms ease;
 }
@@ -3631,6 +3681,97 @@ kbd {
   display: inline-flex;
   flex: none;
   gap: 3px;
+}
+
+/* 显示与阅读偏好行 */
+.displayRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 2px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.displayRow:last-child {
+  border-bottom: none;
+}
+
+.displayRowCopy strong {
+  display: block;
+  font-size: 14px;
+}
+
+.displayRowCopy small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.displayControl {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+}
+
+.displayControl input[type="range"] {
+  width: 170px;
+  accent-color: var(--accent);
+}
+
+.displayValue {
+  min-width: 42px;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.segmented {
+  display: inline-flex;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.segmented button {
+  padding: 6px 13px;
+  border: none;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.segmented button:last-child {
+  border-right: none;
+}
+
+.segmented button:hover {
+  color: var(--ink);
+}
+
+.segmented button.isActive {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+@media (max-width: 640px) {
+  .displayRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .displayControl {
+    justify-content: space-between;
+  }
+
+  .displayControl input[type="range"] {
+    flex: 1;
+  }
 }
 
 .skinSwatch i {
@@ -6705,7 +6846,9 @@ a,
   color: var(--muted);
 }
 
-@media (max-width: 900px), (pointer: coarse) {
+/* 触控尺寸只给真触屏：44px 目标、16px 输入字号（防 iOS 聚焦缩放）。
+   桌面把窗口拖窄只走下面的布局重排，不放大控件 */
+@media (pointer: coarse) {
   input:not([type="checkbox"]):not([type="radio"]),
   textarea,
   select {
@@ -6736,6 +6879,26 @@ a,
     min-height: 54px;
   }
 
+  .dayTasks .taskLine {
+    grid-template-columns: 44px minmax(0, 1fr) clamp(82px, 22vw, 104px) 44px;
+  }
+
+  .dayTasks .taskCheck {
+    width: 44px;
+    height: 44px;
+  }
+
+  .dayTasks .taskTitle {
+    min-height: 44px;
+  }
+
+  .dayTasks .taskLine .iconDanger {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (max-width: 900px), (pointer: coarse) {
   .driveRowTools {
     gap: 0;
   }
@@ -6771,7 +6934,7 @@ a,
   }
 
   .dayTasks .taskLine {
-    grid-template-columns: 44px minmax(0, 1fr) clamp(82px, 22vw, 104px) 44px;
+    grid-template-columns: auto minmax(0, 1fr) clamp(82px, 22vw, 104px) auto;
     grid-template-areas: "check title subject delete";
     align-items: center;
     column-gap: 8px;
@@ -6781,13 +6944,10 @@ a,
   .dayTasks .taskCheck {
     grid-area: check;
     align-self: center;
-    width: 44px;
-    height: 44px;
   }
 
   .dayTasks .taskTitle {
     grid-area: title;
-    min-height: 44px;
     padding: 9px 8px;
     overflow: hidden;
     line-height: 1.55;
@@ -6805,8 +6965,6 @@ a,
   .dayTasks .taskLine .iconDanger {
     grid-area: delete;
     align-self: center;
-    width: 44px;
-    height: 44px;
     opacity: 1;
   }
 
