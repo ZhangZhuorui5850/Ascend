@@ -3675,6 +3675,33 @@ kbd {
   text-transform: uppercase;
 }
 
+.installCard {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.installCard > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.installCard div {
+  flex: 1;
+  min-width: 0;
+}
+
+.installCard p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.installCard .installHint {
+  color: var(--warn);
+}
+
 .avatarEditor {
   display: flex;
   flex-wrap: wrap;
@@ -6915,7 +6942,7 @@ a,
   bottom: max(16px, env(safe-area-inset-bottom));
   z-index: 160;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   width: min(520px, calc(100vw - 32px));
@@ -6944,18 +6971,6 @@ a,
   font-size: 12.5px;
 }
 
-.pwaNoticeClose {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted);
-}
-
 /* 触控尺寸只给真触屏：44px 目标、16px 输入字号（防 iOS 聚焦缩放）。
    桌面把窗口拖窄只走下面的布局重排，不放大控件 */
 @media (pointer: coarse) {
@@ -6979,8 +6994,7 @@ a,
 
   .driveRowTools button,
   .viewerClose,
-  .toast button,
-  .pwaNoticeClose {
+  .toast button {
     min-width: 44px;
     min-height: 44px;
   }
@@ -7290,11 +7304,6 @@ a,
   .pwaNotice .primaryButton {
     grid-column: 2;
     justify-self: start;
-  }
-
-  .pwaNoticeClose {
-    grid-column: 3;
-    grid-row: 1;
   }
 
   html[data-keyboard-open="true"] .mobileNav,

@@ -2,6 +2,7 @@ import { AccountSection } from "@/components/AccountSection";
 import { AppearanceSection } from "@/components/AppearanceSection";
 import { DisplaySection } from "@/components/DisplaySection";
 import { DeviceSessions } from "@/components/DeviceSessions";
+import { InstallAppSection } from "@/components/InstallAppSection";
 import { SettingsForm } from "@/components/SettingsForm";
 import { listUserSessions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
@@ -32,6 +33,7 @@ export default async function SettingsPage() {
         <a href="#appearance">外观</a>
         <a href="#display">显示</a>
         <a href="#devices">设备</a>
+        <a href="#app">应用</a>
       </nav>
 
       <section aria-label="账户设置" className="settingsGroup" id="account">
@@ -67,6 +69,11 @@ export default async function SettingsPage() {
       <section aria-label="登录设备" className="settingsGroup" id="devices">
         <h2 className="settingsGroupTitle">设备</h2>
         <DeviceSessions sessions={sessions} />
+      </section>
+
+      <section aria-label="应用与安装" className="settingsGroup" id="app">
+        <h2 className="settingsGroupTitle">应用</h2>
+        <InstallAppSection />
       </section>
     </div>
   );
