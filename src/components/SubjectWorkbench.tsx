@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical, Loader2, Plus, Star, Trash2 } from "lucide-react";
 import {
   createChapterAction,
@@ -196,20 +196,38 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
   const [pointTier, setPointTier] = useState<Tier>("g");
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
+  const [reordering, setReordering] = useState(false);
   const sortedPoints = sortPointsForView(chapter.points, sortMode);
   const draggable = sortMode === "manual";
+
+  async function applyOrder(ids: string[]) {
+    setReordering(true);
+    report(await reorderPointsAction({ chapterId: chapter.id, subjectCode, orderedIds: ids }));
+    setReordering(false);
+  }
 
   async function dropOn(targetId: string) {
     const sourceId = dragId;
     setDragId(null);
     setOverId(null);
+    if (reordering) return;
     if (!sourceId || sourceId === targetId) return;
     const ids = sortedPoints.map((point) => point.id);
     const from = ids.indexOf(sourceId);
     const to = ids.indexOf(targetId);
     if (from < 0 || to < 0) return;
     ids.splice(to, 0, ...ids.splice(from, 1));
-    report(await reorderPointsAction({ chapterId: chapter.id, subjectCode, orderedIds: ids }));
+    await applyOrder(ids);
+  }
+
+  async function movePoint(pointId: string, direction: -1 | 1) {
+    if (reordering) return;
+    const ids = sortedPoints.map((point) => point.id);
+    const from = ids.indexOf(pointId);
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= ids.length) return;
+    [ids[from], ids[to]] = [ids[to], ids[from]];
+    await applyOrder(ids);
   }
 
   async function addPoint() {
@@ -272,37 +290,76 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
       </div>
 
       <div className="pointList">
-        {sortedPoints.map((point) => (
+        {sortedPoints.map((point, index) => (
           <div
             className={overId === point.id && dragId && dragId !== point.id ? "pointDragWrap dragOver" : "pointDragWrap"}
             key={point.id}
-            onDragEnd={() => {
-              setDragId(null);
-              setOverId(null);
-            }}
-            onDragOver={(event) => {
-              if (!dragId) return;
-              event.preventDefault();
-              setOverId(point.id);
-            }}
-            onDrop={(event) => {
-              event.preventDefault();
-              void dropOn(point.id);
-            }}
+            onDragEnd={
+              draggable
+                ? () => {
+                    setDragId(null);
+                    setOverId(null);
+                  }
+                : undefined
+            }
+            onDragOver={
+              draggable
+                ? (event) => {
+                    if (!dragId) return;
+                    event.preventDefault();
+                    setOverId(point.id);
+                  }
+                : undefined
+            }
+            onDrop={
+              draggable
+                ? (event) => {
+                    event.preventDefault();
+                    void dropOn(point.id);
+                  }
+                : undefined
+            }
           >
             {draggable ? (
-              <span
-                aria-label={`拖拽调整“${point.title}”的顺序`}
-                className="pointDragHandle"
-                draggable
-                onDragStart={(event) => {
-                  event.dataTransfer.effectAllowed = "move";
-                  setDragId(point.id);
-                }}
-                role="button"
-              >
-                <GripVertical size={13} />
-              </span>
+              <>
+                <button
+                  aria-disabled={reordering || undefined}
+                  aria-label={`拖拽或用方向键调整“${point.title}”的顺序`}
+                  className="pointDragHandle"
+                  draggable={!reordering}
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = "move";
+                    setDragId(point.id);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                      event.preventDefault();
+                      void movePoint(point.id, event.key === "ArrowUp" ? -1 : 1);
+                    }
+                  }}
+                  type="button"
+                >
+                  <GripVertical size={13} />
+                </button>
+                <span className="pointMoveButtons">
+                  <button
+                    aria-label={`上移“${point.title}”`}
+                    disabled={reordering || index === 0}
+                    onClick={() => void movePoint(point.id, -1)}
+                    type="button"
+                  >
+                    <ArrowUp size={11} />
+                  </button>
+                  <button
+                    aria-label={`下移“${point.title}”`}
+                    disabled={reordering || index === sortedPoints.length - 1}
+                    onClick={() => void movePoint(point.id, 1)}
+                    type="button"
+                  >
+                    <ArrowDown size={11} />
+                  </button>
+                </span>
+              </>
             ) : null}
             <PointLine point={point} report={report} subjectCode={subjectCode} today={today} />
           </div>
@@ -488,14 +545,37 @@ function MasteryCell({ point, subjectCode, report }: {
   report: (result: { ok: boolean; error?: string }) => void;
 }) {
   const [value, setValue] = useState(point.mastery);
+  const savingRef = useRef(false);
+  const queuedRef = useRef<number | null>(null);
   useEffect(() => {
-    window.setTimeout(() => setValue(point.mastery), 0);
+    // setTimeout(0) 是本项目对 eslint set-state-in-effect 规则的既有惯例；
+    // 回调内再检查一次 ref，避免请求在飞期间把旧的 point.mastery 闪回滑块。
+    window.setTimeout(() => {
+      if (!savingRef.current && queuedRef.current === null) setValue(point.mastery);
+    }, 0);
   }, [point.mastery]);
 
-  function commit() {
-    if (value !== point.mastery) {
-      void updatePointAction({ id: point.id, mastery: value, subjectCode }).then(report);
+  async function send(next: number) {
+    savingRef.current = true;
+    const result = await updatePointAction({ id: point.id, mastery: next, subjectCode });
+    savingRef.current = false;
+    if (queuedRef.current !== null && queuedRef.current !== next) {
+      const queued = queuedRef.current;
+      queuedRef.current = null;
+      void send(queued);
+      return;
     }
+    queuedRef.current = null;
+    report(result);
+  }
+
+  function commit() {
+    if (value === point.mastery) return;
+    if (savingRef.current) {
+      queuedRef.current = value;
+      return;
+    }
+    void send(value);
   }
 
   return (

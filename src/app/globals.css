@@ -1676,12 +1676,48 @@ button:focus-visible {
   display: grid;
   place-items: center;
   padding: 0 2px;
+  border: 0;
+  background: transparent;
   color: var(--quiet);
   cursor: grab;
 }
 
 .pointDragHandle:active {
   cursor: grabbing;
+}
+
+.pointDragHandle[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pointMoveButtons {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.pointMoveButtons button {
+  display: grid;
+  place-items: center;
+  padding: 2px 3px;
+  border: 0;
+  background: transparent;
+  color: var(--quiet);
+}
+
+.pointMoveButtons button:disabled {
+  opacity: 0.35;
+}
+
+@media (hover: none) {
+  .pointDragHandle {
+    display: none;
+  }
+
+  .pointMoveButtons {
+    display: flex;
+  }
 }
 
 .sortModeSwitch {
