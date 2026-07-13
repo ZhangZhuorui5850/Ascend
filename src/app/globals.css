@@ -1123,12 +1123,18 @@ button:focus-visible {
 }
 
 .taskTitle {
+  display: block;
+  width: 100%;
+  height: auto;
   min-width: 0;
   padding: 6px 0;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
   font-size: 14px;
+  line-height: 1.55;
+  overflow: hidden;
+  resize: none;
 }
 
 .taskTitle:hover,
@@ -6799,6 +6805,111 @@ a,
 
   .viewerPdfFallback {
     display: grid;
+  }
+
+  .dayTasks .sectionTitle,
+  .dayNotes .sectionTitle,
+  .dayJournal .sectionTitle {
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .dayTasks .sectionHint,
+  .dayNotes .sectionHint,
+  .dayJournal .saveStatus {
+    max-width: 58%;
+    text-align: right;
+  }
+
+  .dayTasks .taskProgress {
+    margin-bottom: 12px;
+  }
+
+  .dayTasks .taskList {
+    gap: 6px;
+  }
+
+  .dayTasks .taskLine {
+    grid-template-columns: 44px minmax(0, 1fr) clamp(82px, 22vw, 104px) 44px;
+    grid-template-areas: "check title subject delete";
+    align-items: center;
+    column-gap: 8px;
+    padding: 7px 0;
+  }
+
+  .dayTasks .taskCheck {
+    grid-area: check;
+    align-self: center;
+    width: 44px;
+    height: 44px;
+  }
+
+  .dayTasks .taskTitle {
+    grid-area: title;
+    min-height: 44px;
+    padding: 9px 8px;
+    overflow: hidden;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .dayTasks .taskSubject {
+    grid-area: subject;
+    align-self: center;
+    width: 100%;
+    padding: 7px 30px 7px 9px;
+  }
+
+  .dayTasks .taskLine .iconDanger {
+    grid-area: delete;
+    align-self: center;
+    width: 44px;
+    height: 44px;
+    opacity: 1;
+  }
+
+  .dayTasks .taskCreate {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 48px;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .dayTasks .taskCreate input {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .dayTasks .taskCreate select {
+    width: 100%;
+  }
+
+  .dayTasks .taskCreate button {
+    width: 48px;
+    padding: 0;
+  }
+
+  .dayPlanEcho,
+  .dayCarryHint {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .dayPlanEcho .secondaryButton,
+  .dayCarryHint .secondaryButton {
+    width: 100%;
+  }
+
+  .reviewQueue .queueCard {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .reviewQueue .scoreButtons {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
   }
 }
 

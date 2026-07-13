@@ -13,8 +13,11 @@ describe("TaskLine completion presentation", () => {
 });
 
 describe("task-row spacing", () => {
-  it("does not add title-side padding to the existing grid gap", () => {
-    expect(styles).toMatch(/\.taskTitle\s*\{[^}]*padding:\s*6px 0;/s);
+  it("uses a multiline editor while keeping task controls in one centered row", () => {
+    expect(source).toContain("<textarea");
+    expect(source).toContain("resizeTitle(titleRef.current)");
+    expect(styles).toMatch(/grid-template-areas:\s*"check title subject delete"/s);
+    expect(styles).toMatch(/\.dayTasks \.taskLine\s*\{[^}]*align-items:\s*center;/s);
   });
 
   it("optically centers the checkbox icon without changing the row gap", () => {

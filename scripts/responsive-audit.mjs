@@ -30,6 +30,7 @@ try {
   await auditPage("subjects-tablet", "/subjects", 1024, 900, ".subjectCards");
   await auditPage("home-mobile", "/", 390, 844, ".homeFocus");
   await auditDay("mobile", 390, 844, { sidebar: false, capturePanel: false, mobileNav: true });
+  await auditMobileTaskLayout();
   await auditPage("files-mobile", "/assets", 390, 844, ".driveExplorer");
   await auditPage("day-landscape", `/day/${day}`, 844, 390, ".dayHeader");
 
@@ -97,6 +98,37 @@ async function auditPage(name, pathname, width, height, selector) {
   await expectVisible(selector, `${name} key content`);
   await assertNoHorizontalOverflow(name);
   if (width <= 900) await assertMobileBaseline(name);
+}
+
+async function auditMobileTaskLayout() {
+  const layout = await page.evaluate(() => {
+    const create = document.querySelector(".dayTasks .taskCreate");
+    const input = create?.querySelector("input");
+    const select = create?.querySelector("select");
+    const add = create?.querySelector("button");
+    const inputRect = input?.getBoundingClientRect();
+    const selectRect = select?.getBoundingClientRect();
+    const addRect = add?.getBoundingClientRect();
+    const title = document.querySelector(".dayTasks .taskTitle");
+    const titleRect = title?.getBoundingClientRect();
+    return {
+      display: create ? getComputedStyle(create).display : "",
+      inputBottom: inputRect?.bottom || 0,
+      selectTop: selectRect?.top || 0,
+      addHeight: addRect?.height || 0,
+      titleTag: title?.tagName || "",
+      titleHeight: titleRect?.height || 0,
+      titleScrollHeight: title instanceof HTMLTextAreaElement ? title.scrollHeight : 0,
+    };
+  });
+  if (layout.display !== "grid" || layout.selectTop < layout.inputBottom + 6) {
+    throw new Error(`mobile task creator must wrap into two rows: ${JSON.stringify(layout)}`);
+  }
+  if (layout.addHeight < 44) throw new Error(`mobile add-task target is only ${layout.addHeight}px high`);
+  if (layout.titleTag && layout.titleTag !== "TEXTAREA") throw new Error(`task title must support wrapping, got ${layout.titleTag}`);
+  if (layout.titleTag && layout.titleHeight + 1 < layout.titleScrollHeight) {
+    throw new Error(`task title is vertically clipped: ${layout.titleHeight} < ${layout.titleScrollHeight}`);
+  }
 }
 
 async function auditPwaContract() {

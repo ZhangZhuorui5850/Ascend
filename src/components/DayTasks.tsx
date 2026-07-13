@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { ArrowRight, Check, Plus, Trash2 } from "lucide-react";
 import { addTaskAction, carryOverTasksAction, deleteTaskAction, toggleTaskAction, updateTaskAction } from "@/app/actions/planner";
 import { EmptyState } from "@/components/EmptyState";
@@ -147,6 +147,7 @@ function TaskLine({ task, day, subjects, report }: {
 }) {
   const [pending, setPending] = useState(false);
   const [optimisticDone, setOptimisticDone] = useState<boolean | null>(null);
+  const titleRef = useRef<HTMLTextAreaElement>(null);
   // 服务端状态跟上乐观值后清掉本地覆盖（渲染期间调整 state，避免 effect 级联渲染）
   const [confirmedDone, setConfirmedDone] = useState(task.done);
   if (confirmedDone !== task.done) {
@@ -154,6 +155,10 @@ function TaskLine({ task, day, subjects, report }: {
     setOptimisticDone(null);
   }
   const done = optimisticDone ?? Boolean(task.done);
+
+  useLayoutEffect(() => {
+    resizeTitle(titleRef.current);
+  }, [task.title]);
 
   async function toggle() {
     if (pending) return;
@@ -178,11 +183,12 @@ function TaskLine({ task, day, subjects, report }: {
       >
         {done ? <Check size={13} /> : null}
       </button>
-      <input
+      <textarea
         aria-label="任务内容"
         className="taskTitle"
         defaultValue={task.title}
         key={`${task.id}-${task.title}`}
+        onInput={(event) => resizeTitle(event.currentTarget)}
         onBlur={(event) => {
           const next = event.target.value.trim();
           if (next && next !== task.title) {
@@ -190,8 +196,13 @@ function TaskLine({ task, day, subjects, report }: {
           }
         }}
         onKeyDown={(event) => {
-          if (event.key === "Enter") (event.target as HTMLInputElement).blur();
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            event.currentTarget.blur();
+          }
         }}
+        ref={titleRef}
+        rows={1}
       />
       <select
         aria-label="科目标签"
@@ -199,7 +210,7 @@ function TaskLine({ task, day, subjects, report }: {
         onChange={(event) => void updateTaskAction({ id: task.id, day, subjectCode: event.target.value || null }).then(report)}
         value={task.subject_code || ""}
       >
-        <option value="">—</option>
+        <option value="">无科目</option>
         {subjects.map((subject) => (
           <option key={subject.code} value={subject.code}>
             {subject.code} · {subject.name}
@@ -216,4 +227,10 @@ function TaskLine({ task, day, subjects, report }: {
       </button>
     </div>
   );
+}
+
+function resizeTitle(element: HTMLTextAreaElement | null) {
+  if (!element) return;
+  element.style.height = "auto";
+  element.style.height = `${element.scrollHeight}px`;
 }

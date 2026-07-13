@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, Clock3, Flame, FolderUp, Settings, Target } from "lucide-react";
+import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, Clock3, Flame, FolderUp, Target } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { HomeClock } from "@/components/HomeClock";
 import { shiftDateKey, todayKey } from "@/lib/dates";
@@ -49,7 +49,6 @@ export default async function HomePage() {
             const days = daysUntil(today, exam.date);
             return <div className={days !== null && days <= 14 ? "countdownChip urgent" : "countdownChip"} key={`${exam.name}-${exam.date}`}><Target size={14} /><span>{exam.name}</span><strong>{days === null ? "—" : days > 0 ? `${days} 天` : days === 0 ? "今天" : "已结束"}</strong></div>;
           })}
-          <Link className="countdownChip add" href="/settings"><Settings size={14} /><span>{settings.examCountdowns.length ? "管理目标" : "设置考试目标"}</span></Link>
         </div>
         <span className="homeAssetMetric"><FolderUp size={15} />今日入库 {snapshot.today.assets}</span>
       </section>
