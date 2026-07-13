@@ -578,11 +578,15 @@ function MasteryCell({ point, subjectCode, report }: {
   const [value, setValue] = useState(point.mastery);
   const savingRef = useRef(false);
   const queuedRef = useRef<number | null>(null);
+  const lastConfirmedRef = useRef(point.mastery);
   useEffect(() => {
     // setTimeout(0) 是本项目对 eslint set-state-in-effect 规则的既有惯例；
     // 回调内再检查一次 ref，避免请求在飞期间把旧的 point.mastery 闪回滑块。
     window.setTimeout(() => {
-      if (!savingRef.current && queuedRef.current === null) setValue(point.mastery);
+      if (!savingRef.current && queuedRef.current === null) {
+        lastConfirmedRef.current = point.mastery;
+        setValue(point.mastery);
+      }
     }, 0);
   }, [point.mastery]);
 
@@ -592,16 +596,17 @@ function MasteryCell({ point, subjectCode, report }: {
     try {
       result = await updatePointAction({ id: point.id, mastery: next, subjectCode });
     } catch {
-      // 网络异常时清空排队值，不再链式补发。
-      queuedRef.current = null;
-      result = { ok: false, error: "网络异常，掌握度未保存" };
-      setValue(point.mastery);
+      result = { ok: false, error: "网络异常，掌握度未保存，请重新设置" };
     } finally {
       savingRef.current = false;
     }
-    if (!result.ok) {
+    if (result.ok) {
+      lastConfirmedRef.current = next;
+    } else {
+      // 服务端异常时补发大概率也失败，故连排队值一起丢弃；
+      // 回滚到最近一次确认成功的值（闭包的 point.mastery 可能已过期）。
       queuedRef.current = null;
-      setValue(point.mastery);
+      setValue(lastConfirmedRef.current);
     }
     if (queuedRef.current !== null && queuedRef.current !== next) {
       const queued = queuedRef.current;
