@@ -16,4 +16,9 @@ describe("task-row spacing", () => {
   it("does not add title-side padding to the existing grid gap", () => {
     expect(styles).toMatch(/\.taskTitle\s*\{[^}]*padding:\s*6px 0;/s);
   });
+
+  it("optically centers the checkbox icon without changing the row gap", () => {
+    expect(styles).toMatch(/\.taskCheck\s*\{[^}]*padding:\s*0;/s);
+    expect(styles).toMatch(/\.taskCheck svg\s*\{[^}]*left:\s*-0\.5px;[^}]*top:\s*-0\.5px;/s);
+  });
 });

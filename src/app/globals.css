@@ -1098,11 +1098,18 @@ button:focus-visible {
   place-items: center;
   width: 19px;
   height: 19px;
+  padding: 0;
   border: 1.5px solid var(--line);
   border-radius: 5px;
   background: var(--surface);
   color: transparent;
   flex-shrink: 0;
+}
+
+.taskCheck svg {
+  position: relative;
+  left: -0.5px;
+  top: -0.5px;
 }
 
 .taskCheck:hover {
