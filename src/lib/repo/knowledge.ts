@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import type { WorkspaceScope } from "../access-context";
 import { TIER_NAMES, type Tier } from "../types";
+import { clampMastery, deriveStatus } from "./mastery";
 
 export type SubjectTrack = "written" | "machine";
 
@@ -498,24 +499,27 @@ export function createPoint(
 export function updatePoint(
   db: Database.Database,
   scope: WorkspaceScope,
-  input: { id: string; title?: string; tier?: Tier; exam?: boolean },
+  input: { id: string; title?: string; tier?: Tier; exam?: boolean; mastery?: number },
 ) {
   const point = db.prepare("SELECT * FROM knowledge_points WHERE workspace_id = ? AND id = ?").get(
     scope.workspaceId,
     input.id,
   ) as
-    | { id: string; title: string; tier: Tier; exam: number }
+    | { id: string; title: string; tier: Tier; exam: number; mastery: number; status: string }
     | undefined;
   if (!point) throw new Error("知识点不存在");
   const title = input.title === undefined ? point.title : input.title.trim();
   if (!title) throw new Error("知识点标题必填");
   const tier: Tier = input.tier && ["r", "y", "g"].includes(input.tier) ? input.tier : point.tier;
   const exam = input.exam === undefined ? point.exam : input.exam ? 1 : 0;
+  const mastery = input.mastery === undefined ? point.mastery : clampMastery(input.mastery);
+  const status = input.mastery === undefined ? point.status : deriveStatus(mastery);
   db.prepare(`
     UPDATE knowledge_points
-    SET title = @title, tier = @tier, tier_name = @tierName, exam = @exam
+    SET title = @title, tier = @tier, tier_name = @tierName, exam = @exam,
+        mastery = @mastery, status = @status
     WHERE workspace_id = @workspaceId AND id = @id
-  `).run({ workspaceId: scope.workspaceId, id: input.id, title, tier, tierName: TIER_NAMES[tier], exam });
+  `).run({ workspaceId: scope.workspaceId, id: input.id, title, tier, tierName: TIER_NAMES[tier], exam, mastery, status });
 }
 
 export function deletePoint(db: Database.Database, scope: WorkspaceScope, id: string) {

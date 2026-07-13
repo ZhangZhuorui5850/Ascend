@@ -148,4 +148,26 @@ describe("knowledge repo", () => {
     expect(point?.created_at).toBeTruthy();
     expect(point?.created_at).toMatch(/^\d{4}-\d{2}-\d{2}/);
   });
+
+  it("updates mastery manually and derives status", () => {
+    const db = createTestDb();
+    seedSubjectWithChapter(db);
+
+    updatePoint(db, legacyScope, { id: "kp1", mastery: 85 });
+    let row = db.prepare("SELECT mastery, status FROM knowledge_points WHERE id = 'kp1'").get();
+    expect(row).toMatchObject({ mastery: 85, status: "已掌握" });
+
+    updatePoint(db, legacyScope, { id: "kp1", mastery: 250 });
+    row = db.prepare("SELECT mastery, status FROM knowledge_points WHERE id = 'kp1'").get();
+    expect(row).toMatchObject({ mastery: 100, status: "已掌握" });
+
+    updatePoint(db, legacyScope, { id: "kp1", mastery: 0 });
+    row = db.prepare("SELECT mastery, status FROM knowledge_points WHERE id = 'kp1'").get();
+    expect(row).toMatchObject({ mastery: 0, status: "未学" });
+
+    // 不传 mastery 时不得改动
+    updatePoint(db, legacyScope, { id: "kp1", title: "矩阵乘法（改名）" });
+    row = db.prepare("SELECT mastery, status FROM knowledge_points WHERE id = 'kp1'").get();
+    expect(row).toMatchObject({ mastery: 0, status: "未学" });
+  });
 });

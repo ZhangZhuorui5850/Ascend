@@ -3,6 +3,7 @@ import type { WorkspaceScope } from "../access-context";
 import { assertDateKey } from "../dates";
 import { nextReviewDate } from "../review-schedule";
 import { ensureDay } from "./days";
+import { deriveStatus } from "./mastery";
 
 export type MistakeListItem = {
   id: number;
@@ -285,7 +286,7 @@ export function applyReviewOutcome(
 
   const reviews = point.reviews + 1;
   const mastery = clamp(point.mastery + reviewMasteryDelta(input.score), 0, 100);
-  const status = mastery >= 80 ? "已掌握" : mastery > 0 ? "学习中" : "未学";
+  const status = deriveStatus(mastery);
   const nextReview = nextReviewDate(input.day, input.score <= 1 ? 0 : reviews);
 
   db.prepare(`
