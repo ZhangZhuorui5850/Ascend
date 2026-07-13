@@ -21,6 +21,7 @@ import type { Tier } from "@/lib/types";
 import { useFeedback } from "@/components/FeedbackProvider";
 import { assetFileUrl } from "@/lib/asset-url";
 import { POINT_SORT_MODES, sortPointsForView, type PointSortMode } from "@/components/point-sort";
+import { useOptimisticValue } from "@/components/useOptimisticValue";
 
 type SubjectWorkbenchProps = {
   subject: SubjectRow;
@@ -39,7 +40,6 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today }: Subj
   const router = useRouter();
   const { confirm, notify } = useFeedback();
   const [chapterTitle, setChapterTitle] = useState("");
-  const [error, setError] = useState("");
   const [sortMode, setSortMode] = useState<PointSortMode>("manual");
   useEffect(() => {
     const saved = localStorage.getItem(`zgca-point-sort:${subject.code}`);
@@ -53,8 +53,8 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today }: Subj
   }
 
   function report(result: { ok: boolean; error?: string }) {
-    setError(result.ok ? "" : result.error || "操作失败");
     if (result.ok) router.refresh();
+    else notify(result.error || "操作失败", "error");
   }
 
   async function addChapter() {
@@ -80,7 +80,7 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today }: Subj
       router.push("/subjects");
       router.refresh();
     } else {
-      setError(result.error || "删除失败");
+      notify(result.error || "删除失败", "error");
     }
   }
 
@@ -132,7 +132,6 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today }: Subj
           </button>
         </div>
       </div>
-      {error ? <p className="formError">{error}</p> : null}
 
       <div className="chapterList">
         {chapters.map((chapter, index) => (
@@ -407,6 +406,33 @@ function PointLine({ point, subjectCode, today, report }: {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [detail, setDetail] = useState<PointDetail | null>(null);
+  const tierView = useOptimisticValue<Tier>(point.tier);
+  const examView = useOptimisticValue<boolean>(Boolean(point.exam));
+
+  async function changeTier(next: Tier) {
+    tierView.apply(next);
+    try {
+      const result = await updatePointAction({ id: point.id, tier: next, subjectCode });
+      if (!result.ok) tierView.rollback();
+      report(result);
+    } catch {
+      tierView.rollback();
+      report({ ok: false, error: "网络异常，层级未保存" });
+    }
+  }
+
+  async function toggleExam() {
+    const next = !examView.value;
+    examView.apply(next);
+    try {
+      const result = await updatePointAction({ id: point.id, exam: next, subjectCode });
+      if (!result.ok) examView.rollback();
+      report(result);
+    } catch {
+      examView.rollback();
+      report({ ok: false, error: "网络异常，星标未保存" });
+    }
+  }
 
   async function removePoint() {
     const confirmed = await confirm({
@@ -450,9 +476,9 @@ function PointLine({ point, subjectCode, today, report }: {
       <select
         aria-label="层级"
         className="tierSelect"
-        data-tier={point.tier}
-        onChange={(event) => void updatePointAction({ id: point.id, tier: event.target.value as Tier, subjectCode }).then(report)}
-        value={point.tier}
+        data-tier={tierView.value}
+        onChange={(event) => void changeTier(event.target.value as Tier)}
+        value={tierView.value}
       >
         {TIER_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>
@@ -473,13 +499,13 @@ function PointLine({ point, subjectCode, today, report }: {
         }}
       />
       <button
-        aria-label={point.exam ? "取消真题标记" : "标记为真题"}
-        className={point.exam ? "examStar active" : "examStar"}
-        onClick={() => void updatePointAction({ id: point.id, exam: !point.exam, subjectCode }).then(report)}
-        title={point.exam ? "真题考点" : "标记为真题考点"}
+        aria-label={examView.value ? "取消真题标记" : "标记为真题"}
+        className={examView.value ? "examStar active" : "examStar"}
+        onClick={() => void toggleExam()}
+        title={examView.value ? "真题考点" : "标记为真题考点"}
         type="button"
       >
-        <Star fill={point.exam ? "currentColor" : "none"} size={13} />
+        <Star fill={examView.value ? "currentColor" : "none"} size={13} />
       </button>
       <MasteryCell point={point} report={report} subjectCode={subjectCode} />
       <small className={due ? "pointDue due" : "pointDue"}>
@@ -569,8 +595,13 @@ function MasteryCell({ point, subjectCode, report }: {
       // 网络异常时清空排队值，不再链式补发。
       queuedRef.current = null;
       result = { ok: false, error: "网络异常，掌握度未保存" };
+      setValue(point.mastery);
     } finally {
       savingRef.current = false;
+    }
+    if (!result.ok) {
+      queuedRef.current = null;
+      setValue(point.mastery);
     }
     if (queuedRef.current !== null && queuedRef.current !== next) {
       const queued = queuedRef.current;
