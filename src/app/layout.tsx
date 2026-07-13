@@ -15,6 +15,8 @@ export const metadata: Metadata = {
   title: "登峰 · Ascend",
   description: "日历驱动的学习管理系统：计划、复习、错题与资料，都为当天的学习服务。",
   applicationName: "登峰",
+  // manifest URL 加版本参数：iOS 会长期缓存 manifest 本体，改图标/名称时递增以强制重取
+  manifest: "/manifest.webmanifest?v=2",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
