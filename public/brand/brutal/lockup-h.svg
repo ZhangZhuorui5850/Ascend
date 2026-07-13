@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 250">
+  
+  <g transform="translate(24,22) scale(0.6)">
+  <defs><linearGradient id="pkh" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#2a2a2a"/><stop offset="1" stop-color="#0f0f0f"/>
+  </linearGradient></defs>
+  <path d="M0,332 L172,112 L272,252 L164,332 Z" fill="#cfc9b8"/><path d="M500,332 L368,148 L272,252 L404,332 Z" fill="#a39c86"/>
+  <path d="M16,332 L248,0 L480,332 Z" fill="url(#pkh)"/>
+  <path d="M248,0 L192,108 L248,84 L304,108 Z" fill="#fbf9f0"/>
+  <path d="M140,332 L216,240 L180,220 L248,128 L248,84" fill="none" stroke="#e04400" stroke-width="16"
+        stroke-linecap="round" stroke-linejoin="round"/></g>
+  <text x="356" y="128" fill="#141414" font-family="'Bahnschrift','Segoe UI Semibold','Segoe UI',sans-serif" font-size="74" font-weight="700"
+        letter-spacing="5">ASCEND</text>
+  <text x="360" y="186" fill="#8f8a7a" font-family="'Noto Serif SC','Source Han Serif SC','Songti SC','SimSun',serif" font-size="26" font-weight="600"
+        letter-spacing="10">登 峰 · 学习工作台</text>
+</svg>

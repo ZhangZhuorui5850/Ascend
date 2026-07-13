@@ -20,8 +20,10 @@ describe("task-row spacing", () => {
     expect(styles).toMatch(/\.dayTasks \.taskLine\s*\{[^}]*align-items:\s*center;/s);
   });
 
-  it("optically centers the checkbox icon without changing the row gap", () => {
+  it("centers the checkbox icon with place-items instead of manual nudges", () => {
     expect(styles).toMatch(/\.taskCheck\s*\{[^}]*padding:\s*0;/s);
-    expect(styles).toMatch(/\.taskCheck svg\s*\{[^}]*left:\s*-0\.5px;[^}]*top:\s*-0\.5px;/s);
+    expect(styles).toMatch(/\.taskCheck\s*\{[^}]*place-items:\s*center;/s);
+    // 曾用 left/top -0.5px 手调，反而把对勾推离中心——不允许回归
+    expect(styles).not.toMatch(/\.taskCheck svg\s*\{[^}]*(left|top):/s);
   });
 });

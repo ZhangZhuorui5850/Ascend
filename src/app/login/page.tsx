@@ -1,3 +1,4 @@
+import { BrandLogo } from "@/components/BrandLogo";
 import { LoginForm } from "@/components/LoginForm";
 
 export default async function LoginPage({
@@ -12,7 +13,7 @@ export default async function LoginPage({
     <main className="loginShell">
       <section className="loginHero">
         <div>
-          <span className="brandMark">登</span>
+          <span className="brandLogo"><BrandLogo detailed inverse size={52} /></span>
           <h2>登峰 · Ascend</h2>
           <p>日历驱动、资料收纳、复习和总结，都为当天学习服务。</p>
         </div>

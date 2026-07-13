@@ -1,6 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#f2eee3"/>
-  <rect x="76" y="76" width="360" height="360" rx="72" fill="#b13a20"/>
-  <rect x="104" y="104" width="304" height="304" rx="48" fill="none" stroke="#fdf6ec" stroke-width="12" opacity=".55"/>
-  <text x="256" y="278" fill="#fdf6ec" font-family="Songti SC,SimSun,serif" font-size="230" font-weight="600" text-anchor="middle" dominant-baseline="central">登</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs><linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#f7f3e8"/><stop offset="1" stop-color="#ece5d2"/>
+  </linearGradient></defs>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#paper)"/>
+  <g transform="translate(76.0,141.6) scale(0.72)">
+  <defs><linearGradient id="pki" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#3a3226"/><stop offset="1" stop-color="#1f1a10"/>
+  </linearGradient></defs>
+  
+  <path d="M16,332 L248,0 L480,332 Z" fill="url(#pki)"/>
+  <path d="M248,0 L192,108 L248,84 L304,108 Z" fill="#faf7ef"/>
+  <path d="M140,332 L216,240 L180,220 L248,128 L248,84" fill="none" stroke="#b13a20" stroke-width="26"
+        stroke-linecap="round" stroke-linejoin="round"/></g>
 </svg>

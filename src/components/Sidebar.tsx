@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { AccountMenu } from "@/components/AccountMenu";
+import { BrandLogo } from "@/components/BrandLogo";
 import type { DeviceAccount } from "@/lib/auth";
 import { todayKey } from "@/lib/dates";
 
@@ -77,7 +78,7 @@ export function Sidebar({
   return (
     <aside className={className}>
       <div className="brand">
-        <span className="brandMark">{role === "admin" ? "管" : "登"}</span>
+        <span className="brandLogo"><BrandLogo size={26} /></span>
         <div className="brandCopy">
           <strong>登峰</strong>
           <small>{role === "admin" ? "ASCEND · 管理控制台" : "ASCEND · 学习工作台"}</small>

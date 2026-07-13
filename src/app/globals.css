@@ -104,16 +104,19 @@ p {
   font-size: 12px;
 }
 
-.brandMark {
+.brandLogo {
+  flex: 0 0 auto;
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-weight: 700;
-  font-size: 17px;
+}
+
+.brandLogo svg {
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+.brand:hover .brandLogo svg {
+  transform: translateY(-2px);
 }
 
 .sidebar nav {
@@ -1104,12 +1107,6 @@ button:focus-visible {
   background: var(--surface);
   color: transparent;
   flex-shrink: 0;
-}
-
-.taskCheck svg {
-  position: relative;
-  left: -0.5px;
-  top: -0.5px;
 }
 
 .taskCheck:hover {
@@ -2704,12 +2701,8 @@ button:focus-visible {
   color: var(--bg);
 }
 
-.loginHero .brandMark {
-  width: 46px;
-  height: 46px;
-  font-size: 22px;
-  background: var(--accent);
-  color: var(--accent-ink);
+.loginHero .brandLogo {
+  justify-content: start;
   margin-bottom: 16px;
 }
 
@@ -3074,18 +3067,6 @@ button:focus-visible {
   min-height: 42px;
   padding: 2px 6px;
   transition: padding 180ms ease;
-}
-
-.brandMark {
-  flex: 0 0 auto;
-  width: 38px;
-  height: 38px;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  box-shadow: 0 1px 0 var(--accent-hover), var(--shadow-xs);
-  font-family: var(--font-serif);
-  font-weight: 600;
-  transform: rotate(-3deg);
 }
 
 .brandCopy,
@@ -5381,14 +5362,6 @@ h3,
   animation: checkPop 0.24s ease;
 }
 
-.brandMark {
-  transition: transform 0.2s ease;
-}
-
-.brand:hover .brandMark {
-  transform: rotate(0deg);
-}
-
 /* ---------- 23. 文件预览查看器 ---------- */
 
 .viewerBackdrop {
@@ -6166,14 +6139,6 @@ h3,
   box-shadow: 0 6px 24px rgba(124, 102, 255, 0.45);
 }
 
-[data-skin="aurora"] .brandMark {
-  background: linear-gradient(135deg, #7f6bff, #46b8ff);
-  color: #ffffff;
-  transform: rotate(0deg);
-  border-radius: var(--radius);
-  box-shadow: 0 4px 16px rgba(124, 102, 255, 0.4);
-}
-
 [data-skin="aurora"] .pageHeader h1,
 [data-skin="aurora"] .homeFocusMain h1,
 [data-skin="aurora"] .dayNav h1 {
@@ -6320,14 +6285,6 @@ h3,
   border-color: var(--line-strong);
 }
 
-[data-skin="brutal"] .brandMark {
-  border-radius: 0;
-  border: 2px solid var(--line-strong);
-  box-shadow: 3px 3px 0 var(--line-strong);
-  transform: rotate(0deg);
-  font-weight: 800;
-}
-
 [data-skin="brutal"] .sidebar nav a.active {
   background: var(--brutal-pop);
   color: #141414;
@@ -6450,12 +6407,6 @@ h3,
 [data-skin="cloud"] .quickLogForm select {
   background: var(--surface-soft);
   border-color: transparent;
-}
-
-[data-skin="cloud"] .brandMark {
-  border-radius: 14px;
-  transform: rotate(0deg);
-  box-shadow: 0 6px 14px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 [data-skin="cloud"] .sidebar nav a {
@@ -6618,16 +6569,6 @@ h3,
 
 [data-skin="terminal"] .secondaryButton {
   border-style: dashed;
-  font-family: var(--font-mono);
-}
-
-[data-skin="terminal"] .brandMark {
-  transform: rotate(0deg);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 30%, transparent);
   font-family: var(--font-mono);
 }
 

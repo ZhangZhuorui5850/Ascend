@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { BrandLogo } from "@/components/BrandLogo";
 import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 import { requireAccessContext } from "@/lib/request-auth";
 
@@ -9,7 +10,7 @@ export default async function ChangePasswordPage() {
   if (!access.mustChangePassword) redirect(access.role === "admin" ? "/admin" : "/");
   return (
     <main className="loginShell">
-      <section className="loginHero"><div><span className="brandMark">登</span><h2>保护你的账号</h2><p>正式密码不会写入日志，也不会向管理员展示。</p></div></section>
+      <section className="loginHero"><div><span className="brandLogo"><BrandLogo detailed inverse size={52} /></span><h2>保护你的账号</h2><p>正式密码不会写入日志，也不会向管理员展示。</p></div></section>
       <ChangePasswordForm />
     </main>
   );
