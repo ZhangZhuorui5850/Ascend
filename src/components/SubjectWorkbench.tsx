@@ -202,8 +202,13 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
 
   async function applyOrder(ids: string[]) {
     setReordering(true);
-    report(await reorderPointsAction({ chapterId: chapter.id, subjectCode, orderedIds: ids }));
-    setReordering(false);
+    try {
+      report(await reorderPointsAction({ chapterId: chapter.id, subjectCode, orderedIds: ids }));
+    } catch {
+      report({ ok: false, error: "网络异常，排序未保存" });
+    } finally {
+      setReordering(false);
+    }
   }
 
   async function dropOn(targetId: string) {
@@ -557,8 +562,16 @@ function MasteryCell({ point, subjectCode, report }: {
 
   async function send(next: number) {
     savingRef.current = true;
-    const result = await updatePointAction({ id: point.id, mastery: next, subjectCode });
-    savingRef.current = false;
+    let result: { ok: boolean; error?: string };
+    try {
+      result = await updatePointAction({ id: point.id, mastery: next, subjectCode });
+    } catch {
+      // 网络异常时清空排队值，不再链式补发。
+      queuedRef.current = null;
+      result = { ok: false, error: "网络异常，掌握度未保存" };
+    } finally {
+      savingRef.current = false;
+    }
     if (queuedRef.current !== null && queuedRef.current !== next) {
       const queued = queuedRef.current;
       queuedRef.current = null;
