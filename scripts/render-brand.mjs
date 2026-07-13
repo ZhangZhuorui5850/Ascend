@@ -146,6 +146,15 @@ const tile = osIcon();
 writeFileSync(`${ROOT}/src/app/icon.svg`, tile);
 writeFileSync(`${ROOT}/public/icons/app-icon.svg`, tile);
 const page1 = await browser.newPage({ deviceScaleFactor: 1 });
+
+async function shot1(svg, size) {
+  await page1.setViewportSize({ width: size, height: size });
+  const html = `<!doctype html><meta charset=utf-8><style>*{margin:0;padding:0}html,body{width:${size}px;height:${size}px;background:transparent}svg{display:block;width:${size}px;height:${size}px}</style>${svg}`;
+  await page1.goto("data:text/html;charset=utf-8," + encodeURIComponent(html));
+  await page1.evaluate(() => document.fonts.ready);
+  return page1.screenshot({ omitBackground: true, type: "png" });
+}
+
 {
   const shots = [
     [tile, 192, `${ROOT}/public/icons/icon-192.png`],
@@ -154,13 +163,38 @@ const page1 = await browser.newPage({ deviceScaleFactor: 1 });
     [osIcon({ bleed: true }), 180, `${ROOT}/src/app/apple-icon.png`],
   ];
   for (const [svg, size, file] of shots) {
-    await page1.setViewportSize({ width: size, height: size });
-    const html = `<!doctype html><meta charset=utf-8><style>*{margin:0;padding:0}html,body{width:${size}px;height:${size}px;background:transparent}svg{display:block;width:${size}px;height:${size}px}</style>${svg}`;
-    await page1.goto("data:text/html;charset=utf-8," + encodeURIComponent(html));
-    await page1.evaluate(() => document.fonts.ready);
-    writeFileSync(file, await page1.screenshot({ omitBackground: true, type: "png" }));
+    writeFileSync(file, await shot1(svg, size));
     console.log("png ", file.replace(ROOT + "\\", ""));
   }
 }
+
+// favicon.ico：16/32/48 三帧 PNG 装 ICO 容器（现代浏览器均支持 PNG 帧）
+function packIco(frames) {
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(1, 2);              // type: icon
+  header.writeUInt16LE(frames.length, 4);
+  const entries = [];
+  let offset = 6 + 16 * frames.length;
+  for (const { size, buf } of frames) {
+    const entry = Buffer.alloc(16);
+    entry.writeUInt8(size >= 256 ? 0 : size, 0);
+    entry.writeUInt8(size >= 256 ? 0 : size, 1);
+    entry.writeUInt16LE(1, 4);             // planes
+    entry.writeUInt16LE(32, 6);            // bpp
+    entry.writeUInt32LE(buf.length, 8);
+    entry.writeUInt32LE(offset, 12);
+    offset += buf.length;
+    entries.push(entry);
+  }
+  return Buffer.concat([header, ...entries, ...frames.map((f) => f.buf)]);
+}
+
+{
+  const frames = [];
+  for (const size of [16, 32, 48]) frames.push({ size, buf: await shot1(tile, size) });
+  writeFileSync(`${ROOT}/src/app/favicon.ico`, packIco(frames));
+  console.log("ico ", "src/app/favicon.ico");
+}
+
 await browser.close();
 console.log("done.");

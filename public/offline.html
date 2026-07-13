@@ -9,11 +9,47 @@
     :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
     body { min-height: 100dvh; margin: 0; display: grid; place-items: center; padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom)); box-sizing: border-box; background: #f2eee3; color: #262015; }
     main { width: min(420px, 100%); padding: 28px; border: 1px solid #c8bda2; border-radius: 12px; background: #faf7ef; box-shadow: 3px 3px 0 rgba(122,102,70,.13); }
-    b { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 18px; border-radius: 10px; background: #b13a20; color: #fff; font-size: 25px; }
+    b { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 18px; border-radius: 10px; background: linear-gradient(#f7f3e8, #ece5d2); border: 1px solid #d9d0ba; }
     h1 { margin: 0 0 8px; font-size: 23px; } p { margin: 0 0 20px; color: #6f654f; line-height: 1.7; }
     button { min-height: 44px; padding: 10px 18px; border: 0; border-radius: 8px; background: #b13a20; color: #fff; font: inherit; font-weight: 600; touch-action: manipulation; }
-    @media (prefers-color-scheme: dark) { body { background: #1c1710; color: #ece2cc; } main { background: #251f16; border-color: #50442e; } p { color: #b2a482; } }
+    button[disabled] { opacity: .6; }
+    small { display: block; margin-top: 12px; color: #6f654f; }
+    @media (prefers-color-scheme: dark) { body { background: #1c1710; color: #ece2cc; } main { background: #251f16; border-color: #50442e; } p, small { color: #b2a482; } }
   </style>
 </head>
-<body><main><b>登</b><h1>现在无法连接</h1><p>登峰没有缓存账号数据或学习内容。恢复网络后再重试，已在其他页面保存的数据不会由这个离线页改动。</p><button type="button" onclick="location.reload()">重新连接</button></main></body>
+<body><main>
+  <b aria-hidden><svg viewBox="-10 -10 520 360" width="34" height="24"><path d="M16,332 L248,0 L480,332 Z" fill="#262015"/><path d="M248,0 L192,108 L248,84 L304,108 Z" fill="#faf7ef"/><path d="M140,332 L216,240 L180,220 L248,128 L248,84" fill="none" stroke="#b13a20" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/></svg></b>
+  <h1>现在无法连接</h1>
+  <p>登峰没有缓存账号数据或学习内容。恢复网络后再重试，已在其他页面保存的数据不会由这个离线页改动。</p>
+  <button type="button" onclick="reconnect()">重新连接</button>
+  <small hidden id="hint">仍然连不上，请检查网络后再试。</small>
+  <script>
+    // 自愈：页面级 fetch 能通而导航仍落到本页，说明是 Service Worker 层卡死
+    //（典型场景：自签证书轮换后，SW 的 fetch 不继承手动信任，全部被拒）。
+    // 此时卸载 SW、清掉缓存再直连，浏览器主线程的请求就能正常放行。
+    async function reconnect() {
+      var btn = document.querySelector("button");
+      var hint = document.getElementById("hint");
+      btn.disabled = true; btn.textContent = "正在重试…"; hint.hidden = true;
+      var networkOk = false;
+      try { await fetch("/manifest.webmanifest", { cache: "no-store" }); networkOk = true; } catch (e) {}
+      if (networkOk) {
+        try {
+          if ("serviceWorker" in navigator) {
+            var regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map(function (r) { return r.unregister(); }));
+          }
+          if (window.caches) {
+            var keys = await caches.keys();
+            await Promise.all(keys.map(function (k) { return caches.delete(k); }));
+          }
+        } catch (e) {}
+        location.replace("/");
+        return;
+      }
+      btn.disabled = false; btn.textContent = "重新连接"; hint.hidden = false;
+    }
+    window.addEventListener("online", function () { reconnect(); });
+  </script>
+</main></body>
 </html>
