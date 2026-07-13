@@ -12,6 +12,7 @@ import {
   getSubjectOverviews,
   moveChapter,
   renameChapter,
+  reorderPoints,
   updatePoint,
 } from "./knowledge";
 import { createTestDb, createTestWorkspace, seedSubjectWithChapter } from "./testing";
@@ -169,5 +170,45 @@ describe("knowledge repo", () => {
     updatePoint(db, legacyScope, { id: "kp1", title: "矩阵乘法（改名）" });
     row = db.prepare("SELECT mastery, status FROM knowledge_points WHERE id = 'kp1'").get();
     expect(row).toMatchObject({ mastery: 0, status: "未学" });
+  });
+
+  it("reorders points within a chapter transactionally", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试科目" });
+    const chapter = createChapter(db, legacyScope, { subjectCode: "M9", title: "第一章" });
+    const a = createPoint(db, legacyScope, { chapterId: chapter.id, title: "甲" });
+    const b = createPoint(db, legacyScope, { chapterId: chapter.id, title: "乙" });
+    const c = createPoint(db, legacyScope, { chapterId: chapter.id, title: "丙" });
+
+    reorderPoints(db, legacyScope, { chapterId: chapter.id, orderedIds: [c.id, a.id, b.id] });
+
+    const detail = getSubjectDetail(db, legacyScope, "M9");
+    expect(detail?.chapters[0].points.map((point) => point.title)).toEqual(["丙", "甲", "乙"]);
+  });
+
+  it("rejects reorder lists that do not match the chapter", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试科目" });
+    const chapter = createChapter(db, legacyScope, { subjectCode: "M9", title: "第一章" });
+    const a = createPoint(db, legacyScope, { chapterId: chapter.id, title: "甲" });
+    createPoint(db, legacyScope, { chapterId: chapter.id, title: "乙" });
+
+    expect(() => reorderPoints(db, legacyScope, { chapterId: chapter.id, orderedIds: [a.id] })).toThrow();
+    expect(() => reorderPoints(db, legacyScope, { chapterId: chapter.id, orderedIds: [a.id, "kp-别人的"] })).toThrow();
+  });
+
+  it("scopes reorder to the workspace", () => {
+    const db = createTestDb();
+    // 先用一个占位工作区认领掉 legacy 工作区槽位，避免下面的 "a" 在全新数据库里
+    // 因为是第一个被认领的工作区而意外拿到 LEGACY_WORKSPACE_ID，导致与 legacyScope 撞车。
+    createTestWorkspace(db, { userId: "user-placeholder", email: "placeholder@example.com" });
+    const a = createTestWorkspace(db, { userId: "user-a", email: "a2@example.com" });
+    createSubject(db, a, { code: "M9", name: "A 的科目" });
+    const chapter = createChapter(db, a, { subjectCode: "M9", title: "第一章" });
+    const p1 = createPoint(db, a, { chapterId: chapter.id, title: "甲" });
+    const p2 = createPoint(db, a, { chapterId: chapter.id, title: "乙" });
+
+    // 用 legacy workspace 的 scope 去重排 A 的章节：应因为集合不匹配而抛错
+    expect(() => reorderPoints(db, legacyScope, { chapterId: chapter.id, orderedIds: [p2.id, p1.id] })).toThrow();
   });
 });

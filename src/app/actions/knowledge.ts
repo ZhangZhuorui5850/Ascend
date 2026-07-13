@@ -13,6 +13,7 @@ import {
   moveChapter,
   renameChapter,
   renameSubject,
+  reorderPoints,
   updatePoint,
   type PointDetail,
   type SubjectTrack,
@@ -141,6 +142,7 @@ export async function updatePointAction(input: {
   title?: string;
   tier?: Tier;
   exam?: boolean;
+  mastery?: number;
   subjectCode: string;
 }): Promise<ActionResult> {
   try {
@@ -157,6 +159,21 @@ export async function deletePointAction(input: { id: string; subjectCode: string
   try {
     const access = await requireWorkspace();
     deletePoint(getDb(), access, input.id);
+    revalidateKnowledge(input.subjectCode);
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function reorderPointsAction(input: {
+  chapterId: string;
+  subjectCode: string;
+  orderedIds: string[];
+}): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    reorderPoints(getDb(), access, { chapterId: input.chapterId, orderedIds: input.orderedIds });
     revalidateKnowledge(input.subjectCode);
     return { ok: true };
   } catch (error) {

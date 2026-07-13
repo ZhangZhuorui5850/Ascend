@@ -532,6 +532,33 @@ export function deletePoint(db: Database.Database, scope: WorkspaceScope, id: st
   remove();
 }
 
+/** 手动拖拽后的整章重排：orderedIds 必须与该章节现有知识点集合完全一致。 */
+export function reorderPoints(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: { chapterId: string; orderedIds: string[] },
+) {
+  const chapterId = input.chapterId.trim();
+  if (!chapterId) throw new Error("章节必填");
+  const existing = db.prepare(
+    "SELECT id FROM knowledge_points WHERE workspace_id = ? AND chapter_id = ?",
+  ).all(scope.workspaceId, chapterId) as Array<{ id: string }>;
+  const existingIds = new Set(existing.map((row) => row.id));
+  const unique = new Set(input.orderedIds);
+  if (
+    unique.size !== input.orderedIds.length
+    || existingIds.size !== unique.size
+    || !input.orderedIds.every((id) => existingIds.has(id))
+  ) {
+    throw new Error("排序列表与章节内知识点不一致，请刷新后重试");
+  }
+  const update = db.prepare("UPDATE knowledge_points SET sort_order = ? WHERE workspace_id = ? AND id = ?");
+  const reorder = db.transaction(() => {
+    input.orderedIds.forEach((id, index) => update.run(index + 1, scope.workspaceId, id));
+  });
+  reorder();
+}
+
 function detachPointReferences(db: Database.Database, scope: WorkspaceScope, pointId: string) {
   db.prepare("DELETE FROM asset_links WHERE workspace_id = ? AND knowledge_point_id = ?").run(scope.workspaceId, pointId);
   db.prepare("UPDATE mistakes SET knowledge_point_id = NULL WHERE workspace_id = ? AND knowledge_point_id = ?").run(scope.workspaceId, pointId);
