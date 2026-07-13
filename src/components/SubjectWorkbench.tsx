@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Loader2, Plus, Star, Trash2 } from "lucide-react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical, Loader2, Plus, Star, Trash2 } from "lucide-react";
 import {
   createChapterAction,
   createPointAction,
@@ -13,12 +13,14 @@ import {
   moveChapterAction,
   renameChapterAction,
   renameSubjectAction,
+  reorderPointsAction,
   updatePointAction,
 } from "@/app/actions/knowledge";
 import type { ChapterWithPoints, PointDetail, PointRow, SubjectRow, SubjectTrack } from "@/lib/repo/knowledge";
 import type { Tier } from "@/lib/types";
 import { useFeedback } from "@/components/FeedbackProvider";
 import { assetFileUrl } from "@/lib/asset-url";
+import { POINT_SORT_MODES, sortPointsForView, type PointSortMode } from "@/components/point-sort";
 
 type SubjectWorkbenchProps = {
   subject: SubjectRow;
@@ -38,6 +40,17 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today }: Subj
   const { confirm, notify } = useFeedback();
   const [chapterTitle, setChapterTitle] = useState("");
   const [error, setError] = useState("");
+  const [sortMode, setSortMode] = useState<PointSortMode>("manual");
+  useEffect(() => {
+    const saved = localStorage.getItem(`zgca-point-sort:${subject.code}`);
+    window.setTimeout(() => {
+      if (saved === "manual" || saved === "time" || saved === "importance") setSortMode(saved);
+    }, 0);
+  }, [subject.code]);
+  function changeSortMode(mode: PointSortMode) {
+    setSortMode(mode);
+    localStorage.setItem(`zgca-point-sort:${subject.code}`, mode);
+  }
 
   function report(result: { ok: boolean; error?: string }) {
     setError(result.ok ? "" : result.error || "操作失败");
@@ -75,6 +88,19 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today }: Subj
     <section className="card subjectWorkbench" aria-label="章节与知识点管理">
       <div className="sectionTitle splitTitle">
         <h2>章节与知识点</h2>
+        <div aria-label="知识点排序方式" className="sortModeSwitch" role="group">
+          {POINT_SORT_MODES.map((option) => (
+            <button
+              aria-pressed={sortMode === option.value}
+              className={sortMode === option.value ? "active" : undefined}
+              key={option.value}
+              onClick={() => changeSortMode(option.value)}
+              type="button"
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
         <div className="subjectAdmin">
           <select
             aria-label="科目类型"
@@ -116,6 +142,7 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today }: Subj
             key={chapter.id}
             last={index === chapters.length - 1}
             report={report}
+            sortMode={sortMode}
             subjectCode={subject.code}
             today={today}
           />
@@ -126,7 +153,7 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today }: Subj
               <strong className="chapterLoose">未分章知识点</strong>
             </div>
             <div className="pointList">
-              {loosePoints.map((point) => (
+              {sortPointsForView(loosePoints, sortMode).map((point) => (
                 <PointLine key={point.id} point={point} report={report} subjectCode={subject.code} today={today} />
               ))}
             </div>
@@ -155,17 +182,35 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today }: Subj
   );
 }
 
-function ChapterBlock({ chapter, subjectCode, first, last, today, report }: {
+function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMode }: {
   chapter: ChapterWithPoints;
   subjectCode: string;
   first: boolean;
   last: boolean;
   today: string;
   report: (result: { ok: boolean; error?: string }) => void;
+  sortMode: PointSortMode;
 }) {
   const { confirm, notify } = useFeedback();
   const [pointTitle, setPointTitle] = useState("");
   const [pointTier, setPointTier] = useState<Tier>("g");
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  const sortedPoints = sortPointsForView(chapter.points, sortMode);
+  const draggable = sortMode === "manual";
+
+  async function dropOn(targetId: string) {
+    const sourceId = dragId;
+    setDragId(null);
+    setOverId(null);
+    if (!sourceId || sourceId === targetId) return;
+    const ids = sortedPoints.map((point) => point.id);
+    const from = ids.indexOf(sourceId);
+    const to = ids.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    ids.splice(to, 0, ...ids.splice(from, 1));
+    report(await reorderPointsAction({ chapterId: chapter.id, subjectCode, orderedIds: ids }));
+  }
 
   async function addPoint() {
     const title = pointTitle.trim();
@@ -227,8 +272,40 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report }: {
       </div>
 
       <div className="pointList">
-        {chapter.points.map((point) => (
-          <PointLine key={point.id} point={point} report={report} subjectCode={subjectCode} today={today} />
+        {sortedPoints.map((point) => (
+          <div
+            className={overId === point.id && dragId && dragId !== point.id ? "pointDragWrap dragOver" : "pointDragWrap"}
+            key={point.id}
+            onDragEnd={() => {
+              setDragId(null);
+              setOverId(null);
+            }}
+            onDragOver={(event) => {
+              if (!dragId) return;
+              event.preventDefault();
+              setOverId(point.id);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              void dropOn(point.id);
+            }}
+          >
+            {draggable ? (
+              <span
+                aria-label={`拖拽调整“${point.title}”的顺序`}
+                className="pointDragHandle"
+                draggable
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = "move";
+                  setDragId(point.id);
+                }}
+                role="button"
+              >
+                <GripVertical size={13} />
+              </span>
+            ) : null}
+            <PointLine point={point} report={report} subjectCode={subjectCode} today={today} />
+          </div>
         ))}
         {!chapter.points.length ? <p className="empty inset">本章还没有知识点。</p> : null}
       </div>
@@ -298,7 +375,7 @@ function PointLine({ point, subjectCode, today, report }: {
 
   return (
     <div className="pointItem">
-    <div className={`pointLine tier-${point.tier}`}>
+    <div className="pointLine">
       <button
         aria-expanded={expanded}
         aria-label={expanded ? "收起详情" : "展开关联的资料和错题"}
@@ -311,6 +388,7 @@ function PointLine({ point, subjectCode, today, report }: {
       <select
         aria-label="层级"
         className="tierSelect"
+        data-tier={point.tier}
         onChange={(event) => void updatePointAction({ id: point.id, tier: event.target.value as Tier, subjectCode }).then(report)}
         value={point.tier}
       >
@@ -339,12 +417,9 @@ function PointLine({ point, subjectCode, today, report }: {
         title={point.exam ? "真题考点" : "标记为真题考点"}
         type="button"
       >
-        <Star size={13} />
+        <Star fill={point.exam ? "currentColor" : "none"} size={13} />
       </button>
-      <div className="masteryCell" title={`掌握度 ${point.mastery} · 已复习 ${point.reviews} 次`}>
-        <div className="masteryTrack"><span style={{ width: `${point.mastery}%` }} /></div>
-        <small>{point.mastery}</small>
-      </div>
+      <MasteryCell point={point} report={report} subjectCode={subjectCode} />
       <small className={due ? "pointDue due" : "pointDue"}>
         {due ? "待复习" : point.next_review ? `下次 ${point.next_review.slice(5)}` : "未排期"}
       </small>
@@ -403,6 +478,45 @@ function PointLine({ point, subjectCode, today, report }: {
         )}
       </div>
     ) : null}
+    </div>
+  );
+}
+
+function MasteryCell({ point, subjectCode, report }: {
+  point: PointRow;
+  subjectCode: string;
+  report: (result: { ok: boolean; error?: string }) => void;
+}) {
+  const [value, setValue] = useState(point.mastery);
+  useEffect(() => {
+    window.setTimeout(() => setValue(point.mastery), 0);
+  }, [point.mastery]);
+
+  function commit() {
+    if (value !== point.mastery) {
+      void updatePointAction({ id: point.id, mastery: value, subjectCode }).then(report);
+    }
+  }
+
+  return (
+    <div className="masteryCell" title={`掌握度 ${value} · 已复习 ${point.reviews} 次 · 拖动可直接设置`}>
+      <input
+        aria-label={`设置“${point.title}”的掌握度`}
+        className="masteryRange"
+        max={100}
+        min={0}
+        onBlur={commit}
+        onChange={(event) => setValue(Number(event.target.value))}
+        onKeyUp={(event) => {
+          if (event.key === "Enter" || event.key.startsWith("Arrow")) commit();
+        }}
+        onPointerUp={commit}
+        step={5}
+        style={{ "--mastery-pct": value } as CSSProperties}
+        type="range"
+        value={value}
+      />
+      <small>{value}</small>
     </div>
   );
 }

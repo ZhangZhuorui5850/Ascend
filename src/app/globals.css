@@ -1656,6 +1656,55 @@ button:focus-visible {
   flex-direction: column;
 }
 
+.pointDragWrap {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.pointDragWrap > .pointItem {
+  flex: 1;
+  min-width: 0;
+}
+
+.pointDragWrap.dragOver {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.pointDragHandle {
+  display: grid;
+  place-items: center;
+  padding: 0 2px;
+  color: var(--quiet);
+  cursor: grab;
+}
+
+.pointDragHandle:active {
+  cursor: grabbing;
+}
+
+.sortModeSwitch {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.sortModeSwitch button {
+  padding: 4px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sortModeSwitch button.active {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
 .pointItem {
   border-radius: var(--radius-sm);
 }
@@ -1667,7 +1716,6 @@ button:focus-visible {
   gap: 9px;
   padding: 5px 6px;
   border-radius: var(--radius-sm);
-  border-left: 3px solid transparent;
 }
 
 .pointExpand {
@@ -1736,25 +1784,34 @@ button:focus-visible {
   background: var(--surface);
 }
 
-.pointLine.tier-r {
-  border-left-color: var(--danger);
-}
-
-.pointLine.tier-y {
-  border-left-color: var(--warn);
-}
-
-.pointLine.tier-g {
-  border-left-color: var(--ok);
-}
-
 .tierSelect {
-  padding: 4px 6px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--muted);
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 3px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
   font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+
+.tierSelect[data-tier="r"] {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.tierSelect[data-tier="y"] {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+}
+
+.tierSelect[data-tier="g"] {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
 }
 
 .pointTitle {
@@ -1800,19 +1857,38 @@ button:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-.masteryTrack {
+.masteryRange {
+  appearance: none;
+  -webkit-appearance: none;
   flex: 1;
+  min-width: 0;
   height: 5px;
   border-radius: 999px;
-  background: var(--line);
-  overflow: hidden;
+  background: linear-gradient(
+    to right,
+    var(--accent) calc(var(--mastery-pct, 0) * 1%),
+    var(--line) calc(var(--mastery-pct, 0) * 1%)
+  );
+  cursor: pointer;
 }
 
-.masteryTrack span {
-  display: block;
-  height: 100%;
+.masteryRange::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
   background: var(--accent);
-  border-radius: 999px;
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.masteryRange::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--line);
 }
 
 .pointDue {
@@ -5031,7 +5107,7 @@ kbd {
   border-radius: var(--radius-lg);
 }
 
-.sectionTitle > div:not(.segmented) {
+.sectionTitle > div:not(.segmented):not(.sortModeSwitch) {
   display: grid;
   gap: 3px;
 }
