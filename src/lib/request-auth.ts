@@ -91,5 +91,5 @@ export function authErrorResponse(error: unknown): Response {
   // 4xx 属于正常的鉴权拒绝，只有 5xx 才是需要排查的服务端错误。
   if (status >= 500) logError("request-auth", error, { status });
 
-  return Response.json({ error: message }, { status });
+  return Response.json({ error: message }, { status, headers: { "cache-control": "private, no-store" } });
 }

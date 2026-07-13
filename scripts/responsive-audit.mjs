@@ -18,8 +18,11 @@ const browser = await chromium.launch({ headless: true, ...(executablePath ? { e
 const page = await browser.newPage();
 
 try {
+  await auditPwaContract();
   await auditLogin("login-desktop", 1440, 900);
   await auditLogin("login-mobile", 390, 844);
+  await auditLogin("login-small-mobile", 360, 800);
+  await auditServiceWorkerRuntime();
   await login();
   await auditPage("home-desktop", "/", 1440, 900, ".homeFocus");
   await auditDay("desktop", 1440, 900, { sidebar: true, capturePanel: false, mobileNav: false });
@@ -28,6 +31,7 @@ try {
   await auditPage("home-mobile", "/", 390, 844, ".homeFocus");
   await auditDay("mobile", 390, 844, { sidebar: false, capturePanel: false, mobileNav: true });
   await auditPage("files-mobile", "/assets", 390, 844, ".driveExplorer");
+  await auditPage("day-landscape", `/day/${day}`, 844, 390, ".dayHeader");
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
@@ -50,7 +54,7 @@ try {
   await page.getByRole("button", { name: "关闭更多菜单" }).click();
 
   await page.goto(`${baseUrl}/day/${day}`, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "收纳" }).click();
+  await page.getByTestId("mobile-nav").getByRole("button", { name: "收纳", exact: true }).click();
   await expectVisible('[data-testid="capture-panel"]', "mobile capture panel opens");
   await expectVisible('[data-testid="capture-backdrop"]', "mobile capture backdrop opens");
   await assertNoHorizontalOverflow("mobile capture open");
@@ -65,6 +69,7 @@ async function auditLogin(name, width, height) {
   await expectText("h1", "回到今天的学习现场", `${name} login heading`);
   await expectVisible(".loginCard", `${name} login card`);
   await assertNoHorizontalOverflow(name);
+  if (width <= 900) await assertMobileBaseline(name);
 }
 
 async function login() {
@@ -83,6 +88,7 @@ async function auditDay(name, width, height, expected) {
   await expectVisibility('[data-testid="capture-panel"]', expected.capturePanel, `${name} capture panel`);
   await expectVisibility('[data-testid="mobile-nav"]', expected.mobileNav, `${name} mobile nav`);
   await assertNoHorizontalOverflow(name);
+  if (width <= 900) await assertMobileBaseline(name);
 }
 
 async function auditPage(name, pathname, width, height, selector) {
@@ -90,6 +96,93 @@ async function auditPage(name, pathname, width, height, selector) {
   await page.goto(`${baseUrl}${pathname}`, { waitUntil: "networkidle" });
   await expectVisible(selector, `${name} key content`);
   await assertNoHorizontalOverflow(name);
+  if (width <= 900) await assertMobileBaseline(name);
+}
+
+async function auditPwaContract() {
+  const manifestResponse = await fetch(`${baseUrl}/manifest.webmanifest`);
+  if (!manifestResponse.ok) throw new Error(`manifest unavailable: ${manifestResponse.status}`);
+  const manifest = await manifestResponse.json();
+  if (manifest.display !== "standalone" || manifest.start_url !== "/") {
+    throw new Error(`manifest install contract invalid: ${JSON.stringify({ display: manifest.display, start_url: manifest.start_url })}`);
+  }
+  for (const size of ["192x192", "512x512"]) {
+    if (!manifest.icons?.some((icon) => icon.sizes === size)) throw new Error(`manifest missing ${size} icon`);
+  }
+
+  const swResponse = await fetch(`${baseUrl}/sw.js`);
+  const swCacheControl = swResponse.headers.get("cache-control") || "";
+  if (!swResponse.ok || !swCacheControl.includes("no-store")) {
+    throw new Error(`service worker must be served with no-store, got ${swResponse.status} ${swCacheControl}`);
+  }
+  const sw = await swResponse.text();
+  for (const forbidden of ["/_next/", "/api/", "request.destination", "cache.put(request"]) {
+    if (sw.includes(forbidden)) throw new Error(`service worker contains unsafe runtime-cache marker: ${forbidden}`);
+  }
+  if (!sw.includes('request.mode !== "navigate"') || !sw.includes('caches.match("/offline.html")')) {
+    throw new Error("service worker navigation fallback contract missing");
+  }
+
+  const offlineResponse = await fetch(`${baseUrl}/offline.html`);
+  if (!offlineResponse.ok || !(await offlineResponse.text()).includes("没有缓存账号数据")) {
+    throw new Error("identity-free offline fallback unavailable");
+  }
+  console.log("PWA manifest and conservative service-worker contract passed");
+}
+
+async function auditServiceWorkerRuntime() {
+  const state = await page.evaluate(async () => {
+    if (!("serviceWorker" in navigator)) return { supported: false, entries: [] };
+    const registration = await navigator.serviceWorker.ready;
+    const names = await caches.keys();
+    const entries = [];
+    for (const name of names) {
+      const cache = await caches.open(name);
+      const requests = await cache.keys();
+      entries.push({ name, paths: requests.map((request) => new URL(request.url).pathname).sort() });
+    }
+    return { supported: true, scope: registration.scope, entries };
+  });
+  if (!state.supported || !state.scope.endsWith("/")) throw new Error("service worker did not reach ready state");
+  const zgcaCaches = state.entries.filter((entry) => entry.name.startsWith("zgca-"));
+  if (zgcaCaches.length !== 1) throw new Error(`unexpected PWA cache count: ${JSON.stringify(zgcaCaches)}`);
+  const allowed = new Set(["/offline.html", "/icons/icon-192.png", "/icons/icon-512.png"]);
+  const leaked = zgcaCaches.flatMap((entry) => entry.paths).filter((pathname) => !allowed.has(pathname));
+  if (leaked.length) throw new Error(`private/dynamic paths leaked into Cache Storage: ${leaked.join(", ")}`);
+  console.log("service-worker runtime cache boundary passed");
+}
+
+async function assertMobileBaseline(label) {
+  const result = await page.evaluate(() => {
+    const controls = Array.from(document.querySelectorAll("input, textarea, select"))
+      .filter((element) => {
+        const style = getComputedStyle(element);
+        return style.display !== "none" && style.visibility !== "hidden" && !["checkbox", "radio", "hidden"].includes(element.getAttribute("type") || "");
+      })
+      .map((element) => ({ tag: element.tagName, fontSize: Number.parseFloat(getComputedStyle(element).fontSize) }));
+    const nav = document.querySelector('[data-testid="mobile-nav"]');
+    const navTargets = nav
+      ? Array.from(nav.querySelectorAll("a, button")).map((element) => {
+          const rect = element.getBoundingClientRect();
+          return { width: rect.width, height: rect.height };
+        })
+      : [];
+    const main = document.querySelector(".mainPane");
+    const navHeight = nav?.getBoundingClientRect().height || 0;
+    const mainBottomPadding = main ? Number.parseFloat(getComputedStyle(main).paddingBottom) : 0;
+    const viewport = document.querySelector('meta[name="viewport"]')?.getAttribute("content") || "";
+    return { controls, navTargets, viewport, navHeight, mainBottomPadding };
+  });
+  const undersizedFont = result.controls.find((control) => control.fontSize < 16);
+  if (undersizedFont) throw new Error(`${label}: focusable ${undersizedFont.tag} font is ${undersizedFont.fontSize}px`);
+  const undersizedNav = result.navTargets.find((target) => target.height < 44 || target.width < 44);
+  if (undersizedNav) throw new Error(`${label}: mobile nav target is ${undersizedNav.width}x${undersizedNav.height}`);
+  if (result.navHeight && result.mainBottomPadding < result.navHeight + 16) {
+    throw new Error(`${label}: main bottom padding ${result.mainBottomPadding}px does not clear ${result.navHeight}px navigation`);
+  }
+  if (!result.viewport.includes("viewport-fit=cover") || result.viewport.includes("user-scalable=no") || result.viewport.includes("maximum-scale")) {
+    throw new Error(`${label}: inaccessible viewport contract: ${result.viewport}`);
+  }
 }
 
 async function expectText(selector, expected, label) {

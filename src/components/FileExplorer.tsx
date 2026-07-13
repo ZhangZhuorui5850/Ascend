@@ -7,10 +7,12 @@ import {
   ChevronRight,
   FileText,
   Folder,
+  FolderInput,
   FolderPlus,
   HardDrive,
   ImageIcon,
   Loader2,
+  Eye,
   Pencil,
   Search,
   Trash2,
@@ -28,12 +30,14 @@ import {
 } from "@/app/actions/library";
 import type { ExplorerFile, ExplorerState, ExplorerTreeNode } from "@/lib/repo/library";
 import { MAX_UPLOAD_BYTES } from "@/lib/limits";
+import { assetFileUrl } from "@/lib/asset-url";
 import { AssetViewer, previewKind } from "@/components/AssetViewer";
 import { useFeedback } from "@/components/FeedbackProvider";
 
 type SortKey = "name" | "size" | "day";
 
 type DragPayload = { kind: "file"; id: number } | { kind: "folder"; path: string };
+type MoveTarget = { kind: "file"; id: number; name: string } | { kind: "folder"; path: string; name: string };
 
 export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
   explorer: ExplorerState;
@@ -53,6 +57,8 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
   const [error, setError] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortAsc, setSortAsc] = useState(true);
+  const [moveTarget, setMoveTarget] = useState<MoveTarget | null>(null);
+  const [moveDestination, setMoveDestination] = useState("");
   const dragRef = useRef<DragPayload | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -72,6 +78,7 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
   }, [files, sortKey, sortAsc]);
 
   const selectedFile = sortedFiles.find((file) => file.id === selectedFileId) || null;
+  const folderOptions = useMemo(() => flattenFolders(explorer.tree), [explorer.tree]);
 
   function openFolder(path: string) {
     setSelectedFileId(null);
@@ -149,6 +156,19 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
     } else if (payload.path !== targetPath) {
       report(await moveFolderAction({ path: payload.path, newParentPath: targetPath }));
     }
+  }
+
+  async function submitMove() {
+    if (!moveTarget) return;
+    const result = moveTarget.kind === "file"
+      ? await moveAssetAction({ assetId: moveTarget.id, folderPath: moveDestination })
+      : await moveFolderAction({ path: moveTarget.path, newParentPath: moveDestination });
+    if (result.ok) {
+      setMoveTarget(null);
+      setMoveDestination("");
+      notify(`已移动“${moveTarget.name}”`);
+    }
+    report(result);
   }
 
   async function uploadFiles(event: ChangeEvent<HTMLInputElement>) {
@@ -324,6 +344,16 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
                       <span className="driveDim">{folder.fileCount} 个文件</span>
                       <span />
                       <span className="driveRowTools">
+                        <button
+                          aria-label={`移动文件夹 ${folder.name}`}
+                          onClick={() => {
+                            setMoveDestination("");
+                            setMoveTarget({ kind: "folder", path: folder.path, name: folder.name });
+                          }}
+                          type="button"
+                        >
+                          <FolderInput size={14} />
+                        </button>
                         <button aria-label="重命名文件夹" onClick={() => setRenamingFolder(folder.path)} type="button">
                           <Pencil size={13} />
                         </button>
@@ -346,10 +376,6 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
                   draggable
                   key={file.id}
                   onClick={() => setSelectedFileId(file.id)}
-                  onDoubleClick={() => {
-                    if (previewKind(file) !== "none") setPreviewFile(file);
-                    else window.open(`/api/assets/${file.id}/file`, "_blank");
-                  }}
                   onDragStart={() => {
                     dragRef.current = { kind: "file", id: file.id };
                   }}
@@ -370,10 +396,19 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
                       />
                     </span>
                   ) : (
-                    <span className="driveName">
+                    <button
+                      aria-label={`打开 ${file.original_name}`}
+                      className="driveName asButton"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (previewKind(file) !== "none") setPreviewFile(file);
+                        else window.open(assetFileUrl(file.id), "_blank", "noopener");
+                      }}
+                      type="button"
+                    >
                       {file.mime_type.startsWith("image/") ? <ImageIcon size={16} /> : <FileText size={16} />}
                       {file.original_name}
-                    </span>
+                    </button>
                   )}
                   <span className="driveDim">
                     {file.subject_code || ""}
@@ -383,6 +418,22 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
                   <span className="driveDim">{formatSize(file.size)}</span>
                   <span className="driveDim">{file.day}</span>
                   <span className="driveRowTools">
+                    {previewKind(file) !== "none" ? (
+                      <button aria-label={`预览 ${file.original_name}`} onClick={(event) => { event.stopPropagation(); setPreviewFile(file); }} type="button">
+                        <Eye size={14} />
+                      </button>
+                    ) : null}
+                    <button
+                      aria-label={`移动 ${file.original_name}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setMoveDestination(file.folder_path || "");
+                        setMoveTarget({ kind: "file", id: file.id, name: file.original_name });
+                      }}
+                      type="button"
+                    >
+                      <FolderInput size={14} />
+                    </button>
                     <button
                       aria-label="重命名文件"
                       onClick={(event) => {
@@ -422,7 +473,7 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
                 {selectedFile.mime_type.startsWith("image/") ? (
                   <button className="drivePreviewButton" onClick={() => setPreviewFile(selectedFile)} type="button">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img alt={selectedFile.original_name} className="drivePreview" src={`/api/assets/${selectedFile.id}/file`} />
+                    <img alt={selectedFile.original_name} className="drivePreview" src={assetFileUrl(selectedFile.id)} />
                   </button>
                 ) : (
                   <FileText size={36} />
@@ -441,20 +492,52 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
                     预览
                   </button>
                 ) : null}
-                <a className="secondaryButton" href={`/api/assets/${selectedFile.id}/file`} target="_blank">
+                <a className="secondaryButton" href={assetFileUrl(selectedFile.id)} rel="noopener" target="_blank">
                   打开原文件
                 </a>
               </>
             ) : (
-              <p className="empty">选择一个文件查看详情。拖动文件到左侧文件夹可以移动。</p>
+              <p className="empty">选择一个文件查看详情。可使用“移动”按钮选择目标文件夹，桌面端也支持拖动。</p>
             )}
           </aside>
         </div>
       </div>
       <input hidden multiple onChange={(event) => void uploadFiles(event)} ref={fileInputRef} type="file" />
       {previewFile ? <AssetViewer file={previewFile} onClose={() => setPreviewFile(null)} /> : null}
+      {moveTarget ? (
+        <div className="dialogBackdrop" role="presentation">
+          <section aria-labelledby="move-title" aria-modal="true" className="moveDialog" role="dialog">
+            <div>
+              <h2 id="move-title">移动“{moveTarget.name}”</h2>
+              <p>选择目标文件夹。移动文件夹时不能选择它自身或它的子目录。</p>
+            </div>
+            <label className="field">
+              <span>目标位置</span>
+              <select onChange={(event) => setMoveDestination(event.target.value)} value={moveDestination}>
+                <option value="">资料库根目录</option>
+                {folderOptions.map((folder) => (
+                  <option disabled={moveTarget.kind === "folder" && (folder.path === moveTarget.path || folder.path.startsWith(`${moveTarget.path}/`))} key={folder.path} value={folder.path}>
+                    {`${"　".repeat(folder.depth)}${folder.name}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <footer>
+              <button className="secondaryButton" onClick={() => setMoveTarget(null)} type="button">取消</button>
+              <button className="primaryButton" onClick={() => void submitMove()} type="button">移动</button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
+}
+
+function flattenFolders(nodes: ExplorerTreeNode[], depth = 0): Array<{ path: string; name: string; depth: number }> {
+  return nodes.flatMap((node) => [
+    { path: node.path, name: node.name, depth },
+    ...flattenFolders(node.children, depth + 1),
+  ]);
 }
 
 function TreeNode({ node, activePath, onOpen, onDrop, dragRef }: {

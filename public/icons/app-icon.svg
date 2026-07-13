@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#f2eee3"/>
+  <rect x="76" y="76" width="360" height="360" rx="72" fill="#b13a20"/>
+  <rect x="104" y="104" width="304" height="304" rx="48" fill="none" stroke="#fdf6ec" stroke-width="12" opacity=".55"/>
+  <text x="256" y="278" fill="#fdf6ec" font-family="Songti SC,SimSun,serif" font-size="230" font-weight="600" text-anchor="middle" dominant-baseline="central">登</text>
+</svg>

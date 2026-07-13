@@ -24,8 +24,8 @@ export async function GET(request: Request, context: { params: Promise<{ userId:
     const headers: Record<string, string> = {
       "content-type": avatar.mime || "application/octet-stream",
       "x-content-type-options": "nosniff",
-      // 头像可更换，靠 updated_at ETag + ?v= 版本参数配合缓存
-      "cache-control": "private, max-age=0, must-revalidate",
+      // 设备可保留多个账号会话；切换账号后不复用任何已鉴权头像响应。
+      "cache-control": "private, no-store, max-age=0",
       etag,
     };
     if (etagMatches(request.headers.get("if-none-match"), etag)) {

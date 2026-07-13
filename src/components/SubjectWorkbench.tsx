@@ -18,6 +18,7 @@ import {
 import type { ChapterWithPoints, PointDetail, PointRow, SubjectRow, SubjectTrack } from "@/lib/repo/knowledge";
 import type { Tier } from "@/lib/types";
 import { useFeedback } from "@/components/FeedbackProvider";
+import { assetFileUrl } from "@/lib/asset-url";
 
 type SubjectWorkbenchProps = {
   subject: SubjectRow;
@@ -365,7 +366,7 @@ function PointLine({ point, subjectCode, today, report }: {
             <div className="pointDetailCol">
               <h4>关联资料 {detail.assets.length ? `(${detail.assets.length})` : ""}</h4>
               {detail.assets.map((asset) => (
-                <a href={`/api/assets/${asset.id}/file`} key={asset.id} target="_blank">
+                <a href={assetFileUrl(asset.id)} key={asset.id} rel="noopener" target="_blank">
                   {asset.original_name}
                   <small>{asset.day}</small>
                 </a>

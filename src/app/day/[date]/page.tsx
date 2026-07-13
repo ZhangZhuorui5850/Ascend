@@ -7,6 +7,7 @@ import { DayTasks } from "@/components/DayTasks";
 import { OpenCaptureButton } from "@/components/OpenCaptureButton";
 import { QuickLog } from "@/components/QuickLog";
 import { ReviewQueue } from "@/components/ReviewQueue";
+import { assetFileUrl } from "@/lib/asset-url";
 import { assertDateKey, shiftDateKey, todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { requirePageWorkspace } from "@/lib/page-auth";
@@ -101,7 +102,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
             </div>
             <div className="assetList">
               {day.assets.map((asset) => (
-                <a className="assetRow" href={`/api/assets/${asset.id}/file`} key={asset.id} target="_blank">
+                <a className="assetRow" href={assetFileUrl(asset.id)} key={asset.id} rel="noopener" target="_blank">
                   <strong>{asset.original_name}</strong>
                   <small>{asset.folder_path || "根目录"} · {formatSize(asset.size)}</small>
                 </a>
