@@ -619,7 +619,7 @@ function MasteryCell({ point, subjectCode, report }: {
   }
 
   function commit() {
-    if (value === point.mastery) return;
+    if (value === lastConfirmedRef.current) return;
     if (savingRef.current) {
       queuedRef.current = value;
       return;
