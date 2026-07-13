@@ -8,11 +8,14 @@ type InstallPromptEvent = Event & {
 export type InstallState = {
   canPrompt: boolean;
   installed: boolean;
+  /** iOS 设备（不分浏览器；iOS 上第三方浏览器也装不了，只能经 Safari 加主屏） */
   ios: boolean;
+  /** iOS 上的 Safari 本尊，可直接引导「添加到主屏幕」 */
+  iosSafari: boolean;
   supported: boolean;
 };
 
-const SERVER_STATE: InstallState = { canPrompt: false, installed: false, ios: false, supported: false };
+const SERVER_STATE: InstallState = { canPrompt: false, installed: false, ios: false, iosSafari: false, supported: false };
 
 let promptEvent: InstallPromptEvent | null = null;
 let snapshot: InstallState = SERVER_STATE;
@@ -23,16 +26,21 @@ function isStandalone(): boolean {
     || ("standalone" in navigator && (navigator as Navigator & { standalone?: boolean }).standalone === true);
 }
 
+function isIosDevice(): boolean {
+  return /iP(hone|ad|od)/.test(navigator.userAgent);
+}
+
 function isIosSafari(): boolean {
   const ua = navigator.userAgent;
-  return /iP(hone|ad|od)/.test(ua) && /Safari/.test(ua) && !/(CriOS|FxiOS|EdgiOS)/.test(ua);
+  return isIosDevice() && /Safari/.test(ua) && !/(CriOS|FxiOS|EdgiOS)/.test(ua);
 }
 
 function refresh() {
   snapshot = {
     canPrompt: promptEvent !== null,
     installed: isStandalone(),
-    ios: isIosSafari(),
+    ios: isIosDevice(),
+    iosSafari: isIosSafari(),
     supported: "onbeforeinstallprompt" in window,
   };
   listeners.forEach((listener) => listener());
@@ -51,7 +59,8 @@ if (typeof window !== "undefined") {
   snapshot = {
     canPrompt: false,
     installed: isStandalone(),
-    ios: isIosSafari(),
+    ios: isIosDevice(),
+    iosSafari: isIosSafari(),
     supported: "onbeforeinstallprompt" in window,
   };
 }
