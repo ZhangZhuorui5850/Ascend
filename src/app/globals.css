@@ -5304,13 +5304,11 @@ h3,
 }
 
 .progressTrack,
-.masteryTrack,
 .taskProgress {
   border-radius: 2px;
 }
 
 .progressTrack span,
-.masteryTrack span,
 .taskProgress span {
   border-radius: 2px;
 }
