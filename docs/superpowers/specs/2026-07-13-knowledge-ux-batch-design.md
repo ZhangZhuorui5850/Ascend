@@ -48,9 +48,10 @@
 
 ## 批次二：乐观更新统一机制
 
-- 新增客户端 hook `useOptimisticMutation`：调用时立即更新本地影子状态 → 后台执行 server action → 成功后 `router.refresh()` 收敛到服务端真值；失败（`result.ok === false` 或抛错）则回滚影子状态并触发全局错误 toast。
-- 新增轻量全局 toast 组件（错误优先，挂根布局，无第三方依赖），供全项目复用。
-- 首批接入：DayTasks 任务勾选（收编现有 ad-hoc 本地 done 状态）、知识点 tier / 星标 / 掌握度 / 标题、章节改名。低频操作维持现状，模式稳定后续铺。
+- 新增客户端 hook `useOptimisticValue`：立即更新本地覆盖值 → 后台执行 server action → 成功后 `router.refresh()` 收敛（服务端值追上时在渲染期自动清除覆盖，同 DayTasks 现有雏形模式）；失败（`result.ok === false` 或抛错）则回滚覆盖并触发全局错误 toast。
+- 全局 toast 复用既有 `FeedbackProvider.notify(message, "error")`（已挂根布局），不新增组件。
+- 首批接入：DayTasks 任务勾选（收编现有 ad-hoc 本地 done 状态到共享 hook）、知识点 tier / 星标 / 掌握度（失败回滚到服务端值）、标题与章节改名（失败 toast，输入框不强制回滚）。低频操作维持现状，模式稳定后续铺。
+- 上述组件的失败反馈由顶部内联 `formError` 文本改为全局 toast，内联错误段落移除。
 - server action 协议不变（`{ok, error}`），无服务端改动。
 
 ## 批次三：数学公式（KaTeX）
