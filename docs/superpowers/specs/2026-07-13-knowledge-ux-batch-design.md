@@ -33,7 +33,7 @@
 ### 星标与重要性视觉
 
 - 真题星激活态：`fill` 实心 + `var(--warn)`；未激活维持描边 + `var(--quiet)`。
-- tier 改为着色徽章按钮：底色 `color-mix(in srgb, <token> 15%, transparent)`、文字与边框用对应 token（r→`--danger`、y→`--warn`、g→`--ok`），点击弹出三档菜单替换现有 `<select>`。颜色全部走 token，五套皮肤自动适配。行左色条移除，重要性信息统一由徽章承载。
+- tier 改为着色徽章按钮：底色 `color-mix(in srgb, <token> 15%, transparent)`、文字与边框用对应 token（r→`--danger`、y→`--warn`、g→`--ok`），点击展开三档选择（保留原生 `<select>`、重设为徽章外观即可，兼顾可访问性）。颜色全部走 token，五套皮肤自动适配。行左色条移除，重要性信息统一由徽章承载。
 
 ### 掌握度手动更新
 
