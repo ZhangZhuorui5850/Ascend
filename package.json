@@ -1,5 +1,11 @@
 {
-  "name": "zgca-workbench",
+  "name": "ascend",
+  "description": "日历驱动的多用户备考学习系统",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZhangZhuorui5850/Ascend.git"
+  },
+  "homepage": "https://ascend.zhuorui.me",
   "version": "0.1.0",
   "private": true,
   "scripts": {

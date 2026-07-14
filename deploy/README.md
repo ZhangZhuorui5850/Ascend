@@ -55,7 +55,7 @@ Never upgrade without a consistent database + uploads snapshot. The migration ve
 Run a daily root cron entry (03:20 Beijing time):
 
 ```cron
-20 3 * * * cd /opt/apps/ascend && /usr/bin/docker compose -f compose.production.yml exec -T app node scripts/backup.mjs >> /var/log/zgca-backup.log 2>&1
+20 3 * * * cd /opt/apps/ascend && /usr/bin/docker compose -f compose.production.yml exec -T app node scripts/backup.mjs >> /var/log/ascend-backup.log 2>&1
 ```
 
 Copy `backups/` to a different machine or object storage; a backup on the same 40GB disk is not disaster recovery. Before restore, stop the stack, move the failed `data/` aside, restore both `workbench.sqlite` and the matching `uploads/` directory, then start the previous known-good image.

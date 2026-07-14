@@ -1,4 +1,4 @@
-# ZGCA Workbench upgrade briefing
+# Ascend upgrade briefing
 
 Date: 2026-07-10  
 Branch: `codex/multi-user-modernization`  
@@ -6,7 +6,7 @@ Status: application upgrade complete and release-gated; public production launch
 
 ## Outcome
 
-ZGCA is now a multi-user learning service rather than a single-user Mac mini dashboard:
+Ascend（原 ZGCA Workbench）现已从单用户 Mac mini 面板升级为多用户学习服务：
 
 - Every ordinary user owns one isolated workspace with independent tasks, notes, subjects, knowledge points, reviews, mistakes, settings, files and analytics.
 - Admin is a separate control-plane identity with no learning workspace. It can invite users, suspend/reactivate accounts, revoke sessions, reset passwords, set storage quotas, inspect audit logs and review a clearly marked user workspace summary.
@@ -97,4 +97,3 @@ Recommended public hostname: `app.zhuorui.me`.
 - [ ] Run `npm run verify:migration`, smoke, responsive audit and multi-user audit against the real hostname.
 - [ ] Configure daily backup and an off-server copy.
 - [ ] Remove the old Mac mini Tunnel record only after the new service has been stable.
-

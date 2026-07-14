@@ -1,4 +1,4 @@
-# Agent 开发指南（登峰 / zgca-workbench）
+# Agent 开发指南（Ascend / 登峰）
 
 ## 架构速览
 - Next.js 16 App Router + React 19，源码在 `src/`；无 tailwind，样式为 `src/app/globals.css` + `src/styles/tokens.css` CSS 变量（多套 `data-skin` 皮肤，颜色一律走 token）。

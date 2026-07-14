@@ -1,6 +1,8 @@
-# ZGCA 学习工作台
+# Ascend（登峰）
 
 日历驱动的多用户备考学习系统。每位普通用户拥有独立学习空间，管理员负责邀请、账号、容量和审计。每天从「今日工作台」开始，处理复习、错题、任务、资料、计划和复盘。
+
+仓库已由 `zgca-workbench` 更名为 [`ZhangZhuorui5850/Ascend`](https://github.com/ZhangZhuorui5850/Ascend)。应用中仍保留 `ZGCA_*` 环境变量以及 `zgca_*` Cookie、浏览器存储和缓存键，作为已有部署与用户数据的兼容标识；它们不是当前产品名称。
 
 > 想直接运行命令：先看 [操作速查表](./QUICKSTART.md)。完整生产运维说明见 [deploy/README.md](./deploy/README.md)。
 

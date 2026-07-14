@@ -1,7 +1,7 @@
 services:
-  zgca-workbench:
+  app:
     build: .
-    container_name: zgca-workbench
+    container_name: ascend
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -16,12 +16,12 @@ services:
 
   caddy:
     image: caddy:2-alpine
-    container_name: zgca-workbench-proxy
+    container_name: ascend-proxy
     profiles:
       - proxy
     restart: unless-stopped
     depends_on:
-      - zgca-workbench
+      - app
     ports:
       - "80:80"
     volumes:

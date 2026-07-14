@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: zgca-workbench:production
+    image: ascend:production
     restart: unless-stopped
     init: true
     user: "1001:1001"
