@@ -1805,6 +1805,44 @@ button:focus-visible {
   opacity: 0.35;
 }
 
+/* ===== Notion 式拖拽 ===== */
+
+/* setDragImage 用的浮动卡片：必须真实渲染（不能 display:none），放到屏幕外 */
+.dragCard {
+  position: absolute;
+  top: 0;
+  left: -9999px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 260px;
+  padding: 6px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-lg);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.dragCard span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dragCard small {
+  color: var(--quiet);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* 拖拽进行中：全局禁选中，避免拖过文字时高亮 */
+body[data-dragging] {
+  user-select: none;
+}
+
 @media (hover: none) {
   .pointDragHandle {
     display: none;
