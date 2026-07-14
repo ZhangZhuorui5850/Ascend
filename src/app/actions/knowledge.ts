@@ -11,6 +11,8 @@ import {
   deleteSubject,
   getPointDetail,
   moveChapter,
+  moveChapterToPosition,
+  movePointToPosition,
   renameChapter,
   renameSubject,
   reorderPoints,
@@ -194,6 +196,46 @@ export async function reorderPointsAction(input: {
   try {
     const access = await requireWorkspace();
     reorderPoints(getDb(), access, { chapterId: input.chapterId, orderedIds: input.orderedIds });
+    revalidateKnowledge(input.subjectCode);
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function movePointAction(input: {
+  pointId: string;
+  targetChapterId: string;
+  index: number;
+  subjectCode: string;
+}): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    movePointToPosition(getDb(), access, {
+      pointId: input.pointId,
+      targetChapterId: input.targetChapterId,
+      index: input.index,
+    });
+    revalidateKnowledge(input.subjectCode);
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function moveChapterToPositionAction(input: {
+  id: string;
+  parentId: string | null;
+  index: number;
+  subjectCode: string;
+}): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    moveChapterToPosition(getDb(), access, {
+      id: input.id,
+      parentId: input.parentId,
+      index: input.index,
+    });
     revalidateKnowledge(input.subjectCode);
     return { ok: true };
   } catch (error) {
