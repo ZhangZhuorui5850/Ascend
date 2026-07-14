@@ -1686,6 +1686,7 @@ button:focus-visible {
 }
 
 .chapterHead {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1752,6 +1753,7 @@ button:focus-visible {
 }
 
 .pointDragWrap {
+  position: relative;
   display: flex;
   align-items: stretch;
   gap: 2px;
@@ -1761,10 +1763,6 @@ button:focus-visible {
 .pointDragWrap > .pointItem {
   flex: 1;
   min-width: 0;
-}
-
-.pointDragWrap.dragOver {
-  box-shadow: inset 0 2px 0 var(--accent);
 }
 
 .pointDragHandle {
@@ -1841,6 +1839,84 @@ button:focus-visible {
 /* 拖拽进行中：全局禁选中，避免拖过文字时高亮 */
 body[data-dragging] {
   user-select: none;
+}
+
+/* 插入指示线：::before/::after 一条 2px 圆角线 + 另一侧伪元素做左端小圆点 */
+.pointDragWrap.dropBefore::before,
+.pointDragWrap.dropAfter::after,
+.chapterHead.dropBefore::before,
+.chapterHead.dropAfter::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.pointDragWrap.dropBefore::before,
+.chapterHead.dropBefore::before {
+  top: -1px;
+}
+
+.pointDragWrap.dropAfter::after,
+.chapterHead.dropAfter::after {
+  bottom: -1px;
+}
+
+.pointDragWrap.dropBefore::after,
+.pointDragWrap.dropAfter::before,
+.chapterHead.dropBefore::after,
+.chapterHead.dropAfter::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--surface-raised);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.pointDragWrap.dropBefore::after,
+.chapterHead.dropBefore::after {
+  top: -4px;
+}
+
+.pointDragWrap.dropAfter::before,
+.chapterHead.dropAfter::before {
+  bottom: -4px;
+}
+
+/* 移入目标整块高亮（知识点拖到章节头 / 章节嵌套） */
+.chapterHead.dropInside {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+}
+
+/* 空章节投放区 */
+.pointDropZone {
+  display: grid;
+  place-items: center;
+  margin: 2px 0 4px;
+  padding: 10px;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--quiet);
+  font-size: 12px;
+}
+
+.pointDropZone.dropInside {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 @media (hover: none) {

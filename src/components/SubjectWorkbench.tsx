@@ -24,6 +24,8 @@ import {
   deleteSubjectAction,
   getPointDetailAction,
   moveChapterAction,
+  moveChapterToPositionAction,
+  movePointAction,
   renameChapterAction,
   renameSubjectAction,
   reorderPointsAction,
@@ -45,6 +47,7 @@ import { assetFileUrl } from "@/lib/asset-url";
 import { POINT_SORT_MODES, sortPointsForView, type PointSortMode } from "@/components/point-sort";
 import { RichText } from "@/components/RichText";
 import { useOptimisticValue } from "@/components/useOptimisticValue";
+import { attachDragCard, edgeFromEvent, type DragPayload } from "@/components/dnd";
 
 type SubjectWorkbenchProps = {
   subject: SubjectRow;
@@ -81,13 +84,15 @@ function findChapterPath(chapters: ChapterWithPoints[], id: string): ChapterWith
   return null;
 }
 
-/** 章节树共享的操作句柄：折叠、拖拽嵌套、聚焦 */
+/** 章节树共享的操作句柄：折叠、拖拽、聚焦 */
 type TreeControls = {
   collapsedMap: Record<string, boolean>;
   toggleCollapsed: (id: string, defaultCollapsed: boolean) => void;
-  dragChapterId: string | null;
-  setDragChapterId: (id: string | null) => void;
+  drag: DragPayload | null;
+  setDrag: (payload: DragPayload | null) => void;
   nestChapter: (childId: string, parentId: string | null) => Promise<void>;
+  moveChapterTo: (id: string, parentId: string | null, index: number) => Promise<void>;
+  movePointTo: (pointId: string, targetChapterId: string, index: number) => Promise<void>;
   treeBusy: boolean;
   focusChapter: (id: string | null) => void;
 };
@@ -98,8 +103,13 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today, focusI
   const [chapterTitle, setChapterTitle] = useState("");
   const [sortMode, setSortMode] = useState<PointSortMode>("manual");
   const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>({});
-  const [dragChapterId, setDragChapterId] = useState<string | null>(null);
+  const [drag, setDrag] = useState<DragPayload | null>(null);
   const [treeBusy, setTreeBusy] = useState(false);
+  useEffect(() => {
+    if (drag) document.body.setAttribute("data-dragging", drag.kind);
+    else document.body.removeAttribute("data-dragging");
+    return () => document.body.removeAttribute("data-dragging");
+  }, [drag]);
   useEffect(() => {
     const saved = localStorage.getItem(`zgca-point-sort:${subject.code}`);
     const savedCollapsed = localStorage.getItem(`zgca-chapter-collapsed:${subject.code}`);
@@ -145,6 +155,30 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today, focusI
     }
   }
 
+  async function moveChapterTo(id: string, parentId: string | null, index: number) {
+    if (treeBusy || id === parentId) return;
+    setTreeBusy(true);
+    try {
+      report(await moveChapterToPositionAction({ id, parentId, index, subjectCode: subject.code }));
+    } catch {
+      report({ ok: false, error: "网络异常，章节移动未保存" });
+    } finally {
+      setTreeBusy(false);
+    }
+  }
+
+  async function movePointTo(pointId: string, targetChapterId: string, index: number) {
+    if (treeBusy) return;
+    setTreeBusy(true);
+    try {
+      report(await movePointAction({ pointId, targetChapterId, index, subjectCode: subject.code }));
+    } catch {
+      report({ ok: false, error: "网络异常，移动未保存" });
+    } finally {
+      setTreeBusy(false);
+    }
+  }
+
   function focusChapter(id: string | null) {
     router.push(id ? `/subjects/${subject.code}?focus=${encodeURIComponent(id)}` : `/subjects/${subject.code}`);
   }
@@ -152,9 +186,11 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today, focusI
   const tree: TreeControls = {
     collapsedMap,
     toggleCollapsed,
-    dragChapterId,
-    setDragChapterId,
+    drag,
+    setDrag,
     nestChapter,
+    moveChapterTo,
+    movePointTo,
     treeBusy,
     focusChapter,
   };
@@ -344,10 +380,11 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
   const { confirm, notify } = useFeedback();
   const [pointTitle, setPointTitle] = useState("");
   const [pointTier, setPointTier] = useState<Tier>("g");
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [overId, setOverId] = useState<string | null>(null);
   const [reordering, setReordering] = useState(false);
   const [dropHover, setDropHover] = useState(false);
+  const [pointDrop, setPointDrop] = useState<{ id: string; edge: "before" | "after" } | null>(null);
+  const [headDrop, setHeadDrop] = useState(false);
+  const [zoneDrop, setZoneDrop] = useState(false);
   const [addingSub, setAddingSub] = useState(false);
   const [subTitle, setSubTitle] = useState("");
   const sortedPoints = sortPointsForView(chapter.points, sortMode);
@@ -378,20 +415,6 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
     } finally {
       setReordering(false);
     }
-  }
-
-  async function dropOn(targetId: string) {
-    const sourceId = dragId;
-    setDragId(null);
-    setOverId(null);
-    if (reordering) return;
-    if (!sourceId || sourceId === targetId) return;
-    const ids = sortedPoints.map((point) => point.id);
-    const from = ids.indexOf(sourceId);
-    const to = ids.indexOf(targetId);
-    if (from < 0 || to < 0) return;
-    ids.splice(to, 0, ...ids.splice(from, 1));
-    await applyOrder(ids);
   }
 
   async function movePoint(pointId: string, direction: -1 | 1) {
@@ -428,29 +451,45 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
   return (
     <article className="chapterBlock" data-depth={depth}>
       <div
-        className={dropHover ? "chapterHead chapterDropTarget" : "chapterHead"}
-        onDragLeave={() => setDropHover(false)}
+        className={`chapterHead${headDrop ? " dropInside" : ""}${dropHover ? " chapterDropTarget" : ""}`}
         onDragOver={(event) => {
-          if (!tree.dragChapterId || tree.dragChapterId === chapter.id) return;
+          if (tree.drag?.kind === "point") {
+            if (tree.drag.chapterId === chapter.id) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+            setHeadDrop(true);
+            return;
+          }
+          if (tree.drag?.kind !== "chapter" || tree.drag.id === chapter.id) return;
           event.preventDefault();
           setDropHover(true);
         }}
+        onDragLeave={() => {
+          setHeadDrop(false);
+          setDropHover(false);
+        }}
         onDrop={(event) => {
           event.preventDefault();
+          setHeadDrop(false);
           setDropHover(false);
-          const dragged = tree.dragChapterId;
-          tree.setDragChapterId(null);
-          if (dragged && dragged !== chapter.id) void tree.nestChapter(dragged, chapter.id);
+          const dragged = tree.drag;
+          tree.setDrag(null);
+          if (dragged?.kind === "point" && dragged.chapterId !== chapter.id) {
+            void tree.movePointTo(dragged.id, chapter.id, chapter.points.length);
+            return;
+          }
+          if (dragged?.kind === "chapter" && dragged.id !== chapter.id) void tree.nestChapter(dragged.id, chapter.id);
         }}
       >
         <button
           aria-label={`拖拽“${chapter.title}”到其他章节标题上可变为其子章节`}
           className="chapterGrip"
           draggable={!tree.treeBusy}
-          onDragEnd={() => tree.setDragChapterId(null)}
+          onDragEnd={() => tree.setDrag(null)}
           onDragStart={(event) => {
             event.dataTransfer.effectAllowed = "move";
-            tree.setDragChapterId(chapter.id);
+            event.dataTransfer.setData("text/plain", chapter.title);
+            tree.setDrag({ kind: "chapter", id: chapter.id, title: chapter.title, subtreeIds: [], height: 1 });
           }}
           type="button"
         >
@@ -555,22 +594,27 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
       <div className="pointList">
         {sortedPoints.map((point, index) => (
           <div
-            className={overId === point.id && dragId && dragId !== point.id ? "pointDragWrap dragOver" : "pointDragWrap"}
+            className={
+              pointDrop?.id === point.id
+                ? `pointDragWrap ${pointDrop.edge === "before" ? "dropBefore" : "dropAfter"}`
+                : "pointDragWrap"
+            }
             key={point.id}
-            onDragEnd={
+            onDragLeave={
               draggable
-                ? () => {
-                    setDragId(null);
-                    setOverId(null);
-                  }
+                ? () => setPointDrop((current) => (current?.id === point.id ? null : current))
                 : undefined
             }
             onDragOver={
               draggable
                 ? (event) => {
-                    if (!dragId) return;
+                    if (tree.drag?.kind !== "point" || tree.drag.id === point.id) return;
                     event.preventDefault();
-                    setOverId(point.id);
+                    event.dataTransfer.dropEffect = "move";
+                    const edge = edgeFromEvent(event, "half") === "after" ? "after" : "before";
+                    setPointDrop((current) =>
+                      current?.id === point.id && current.edge === edge ? current : { id: point.id, edge },
+                    );
                   }
                 : undefined
             }
@@ -578,7 +622,14 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
               draggable
                 ? (event) => {
                     event.preventDefault();
-                    void dropOn(point.id);
+                    const dragged = tree.drag;
+                    const edge = edgeFromEvent(event, "half");
+                    setPointDrop(null);
+                    tree.setDrag(null);
+                    if (dragged?.kind !== "point" || dragged.id === point.id) return;
+                    const ids = sortedPoints.map((item) => item.id).filter((id) => id !== dragged.id);
+                    const position = ids.indexOf(point.id) + (edge === "after" ? 1 : 0);
+                    void tree.movePointTo(dragged.id, chapter.id, position);
                   }
                 : undefined
             }
@@ -589,10 +640,16 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
                   aria-disabled={reordering || undefined}
                   aria-label={`拖拽或用方向键调整“${point.title}”的顺序`}
                   className="pointDragHandle"
-                  draggable={!reordering}
+                  draggable={!reordering && !tree.treeBusy}
+                  onDragEnd={() => {
+                    tree.setDrag(null);
+                    setPointDrop(null);
+                  }}
                   onDragStart={(event) => {
                     event.dataTransfer.effectAllowed = "move";
-                    setDragId(point.id);
+                    event.dataTransfer.setData("text/plain", point.title);
+                    attachDragCard(event, point.title);
+                    tree.setDrag({ kind: "point", id: point.id, chapterId: chapter.id, title: point.title });
                   }}
                   onKeyDown={(event) => {
                     if (event.key === "ArrowUp" || event.key === "ArrowDown") {
@@ -627,7 +684,30 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
             <PointLine point={point} report={report} subjectCode={subjectCode} today={today} />
           </div>
         ))}
-        {!chapter.points.length ? <p className="empty inset">本章还没有知识点。</p> : null}
+        {!sortedPoints.length ? (
+          tree.drag?.kind === "point" ? (
+            <div
+              className={zoneDrop ? "pointDropZone dropInside" : "pointDropZone"}
+              onDragLeave={() => setZoneDrop(false)}
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setZoneDrop(true);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                setZoneDrop(false);
+                const dragged = tree.drag;
+                tree.setDrag(null);
+                if (dragged?.kind === "point") void tree.movePointTo(dragged.id, chapter.id, 0);
+              }}
+            >
+              拖到这里，移入本章
+            </div>
+          ) : (
+            <p className="empty inset">本章还没有知识点。</p>
+          )
+        ) : null}
       </div>
 
       <div className="pointCreate">
