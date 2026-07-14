@@ -691,6 +691,53 @@ export function reorderPoints(
   reorder();
 }
 
+/** 拖拽移动知识点：插到目标章节最终列表的第 index 位（0 起，越界夹取）；跨章时迁移并重排两章、同步 submodule。 */
+export function movePointToPosition(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: { pointId: string; targetChapterId: string; index: number },
+) {
+  const pointId = input.pointId.trim();
+  const targetChapterId = input.targetChapterId.trim();
+  if (!pointId || !targetChapterId) throw new Error("知识点和目标章节必填");
+  const point = db.prepare(
+    "SELECT id, chapter_id, subject_code FROM knowledge_points WHERE workspace_id = ? AND id = ?",
+  ).get(scope.workspaceId, pointId) as
+    | { id: string; chapter_id: string | null; subject_code: string }
+    | undefined;
+  if (!point) throw new Error("知识点不存在");
+  const target = db.prepare(
+    "SELECT id, title, subject_code FROM subject_chapters WHERE workspace_id = ? AND id = ?",
+  ).get(scope.workspaceId, targetChapterId) as
+    | { id: string; title: string; subject_code: string }
+    | undefined;
+  if (!target) throw new Error("目标章节不存在");
+  if (target.subject_code !== point.subject_code) throw new Error("不能移动到其他科目的章节");
+
+  const listOf = db.prepare(
+    `SELECT id FROM knowledge_points WHERE workspace_id = ? AND chapter_id = ?
+     ORDER BY sort_order ASC, id ASC`,
+  );
+  const setOrder = db.prepare("UPDATE knowledge_points SET sort_order = ? WHERE workspace_id = ? AND id = ?");
+  const move = db.transaction(() => {
+    if (point.chapter_id && point.chapter_id !== targetChapterId) {
+      const rest = (listOf.all(scope.workspaceId, point.chapter_id) as Array<{ id: string }>)
+        .filter((row) => row.id !== pointId);
+      rest.forEach((row, order) => setOrder.run(order + 1, scope.workspaceId, row.id));
+    }
+    db.prepare(
+      "UPDATE knowledge_points SET chapter_id = ?, submodule = ? WHERE workspace_id = ? AND id = ?",
+    ).run(targetChapterId, target.title, scope.workspaceId, pointId);
+    const ids = (listOf.all(scope.workspaceId, targetChapterId) as Array<{ id: string }>)
+      .map((row) => row.id)
+      .filter((id) => id !== pointId);
+    const index = Math.max(0, Math.min(Math.trunc(input.index), ids.length));
+    ids.splice(index, 0, pointId);
+    ids.forEach((id, order) => setOrder.run(order + 1, scope.workspaceId, id));
+  });
+  move();
+}
+
 function detachPointReferences(db: Database.Database, scope: WorkspaceScope, pointId: string) {
   db.prepare("DELETE FROM asset_links WHERE workspace_id = ? AND knowledge_point_id = ?").run(scope.workspaceId, pointId);
   db.prepare("UPDATE mistakes SET knowledge_point_id = NULL WHERE workspace_id = ? AND knowledge_point_id = ?").run(scope.workspaceId, pointId);

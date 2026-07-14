@@ -11,6 +11,7 @@ import {
   getSubjectDetail,
   getSubjectOverviews,
   moveChapter,
+  movePointToPosition,
   renameChapter,
   reorderPoints,
   reparentChapter,
@@ -211,6 +212,90 @@ describe("knowledge repo", () => {
 
     // 用 legacy workspace 的 scope 去重排 A 的章节：应因为集合不匹配而抛错
     expect(() => reorderPoints(db, legacyScope, { chapterId: chapter.id, orderedIds: [p2.id, p1.id] })).toThrow();
+  });
+
+  it("moves a point within its chapter to the given position", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试" });
+    const chapter = createChapter(db, legacyScope, { subjectCode: "M9", title: "第一章" });
+    const a = createPoint(db, legacyScope, { chapterId: chapter.id, title: "A" });
+    createPoint(db, legacyScope, { chapterId: chapter.id, title: "B" });
+    createPoint(db, legacyScope, { chapterId: chapter.id, title: "C" });
+
+    movePointToPosition(db, legacyScope, { pointId: a.id, targetChapterId: chapter.id, index: 2 });
+
+    const detail = getSubjectDetail(db, legacyScope, "M9");
+    expect(detail?.chapters[0].points.map((point) => point.title)).toEqual(["B", "C", "A"]);
+  });
+
+  it("moves a point across chapters, renumbers both and syncs submodule", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试" });
+    const first = createChapter(db, legacyScope, { subjectCode: "M9", title: "第一章" });
+    const second = createChapter(db, legacyScope, { subjectCode: "M9", title: "第二章" });
+    const a = createPoint(db, legacyScope, { chapterId: first.id, title: "A" });
+    createPoint(db, legacyScope, { chapterId: first.id, title: "B" });
+    createPoint(db, legacyScope, { chapterId: second.id, title: "C" });
+
+    movePointToPosition(db, legacyScope, { pointId: a.id, targetChapterId: second.id, index: 0 });
+
+    const detail = getSubjectDetail(db, legacyScope, "M9");
+    const chapters = detail?.chapters ?? [];
+    expect(chapters.find((c) => c.id === first.id)?.points.map((p) => p.title)).toEqual(["B"]);
+    expect(chapters.find((c) => c.id === second.id)?.points.map((p) => p.title)).toEqual(["A", "C"]);
+    const moved = db.prepare(
+      "SELECT chapter_id, submodule, sort_order FROM knowledge_points WHERE id = ?",
+    ).get(a.id);
+    expect(moved).toMatchObject({ chapter_id: second.id, submodule: "第二章", sort_order: 1 });
+    const left = db.prepare(
+      "SELECT sort_order FROM knowledge_points WHERE chapter_id = ?",
+    ).get(first.id);
+    expect(left).toMatchObject({ sort_order: 1 });
+  });
+
+  it("clamps an out-of-range point index to the end", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试" });
+    const chapter = createChapter(db, legacyScope, { subjectCode: "M9", title: "第一章" });
+    const a = createPoint(db, legacyScope, { chapterId: chapter.id, title: "A" });
+    createPoint(db, legacyScope, { chapterId: chapter.id, title: "B" });
+
+    movePointToPosition(db, legacyScope, { pointId: a.id, targetChapterId: chapter.id, index: 99 });
+
+    const detail = getSubjectDetail(db, legacyScope, "M9");
+    expect(detail?.chapters[0].points.map((point) => point.title)).toEqual(["B", "A"]);
+  });
+
+  it("rejects cross-subject point moves and missing rows", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "甲" });
+    createSubject(db, legacyScope, { code: "M8", name: "乙" });
+    const home = createChapter(db, legacyScope, { subjectCode: "M9", title: "甲一章" });
+    const foreign = createChapter(db, legacyScope, { subjectCode: "M8", title: "乙一章" });
+    const a = createPoint(db, legacyScope, { chapterId: home.id, title: "A" });
+
+    expect(() =>
+      movePointToPosition(db, legacyScope, { pointId: a.id, targetChapterId: foreign.id, index: 0 }),
+    ).toThrow("不能移动到其他科目的章节");
+    expect(() =>
+      movePointToPosition(db, legacyScope, { pointId: "missing", targetChapterId: home.id, index: 0 }),
+    ).toThrow("知识点不存在");
+    expect(() =>
+      movePointToPosition(db, legacyScope, { pointId: a.id, targetChapterId: "missing", index: 0 }),
+    ).toThrow("目标章节不存在");
+  });
+
+  it("keeps point moves isolated by workspace", () => {
+    const db = createTestDb();
+    const alice = createTestWorkspace(db, { userId: "user-a-move", email: "a-move@example.com" });
+    const bob = createTestWorkspace(db, { userId: "user-b-move", email: "b-move@example.com" });
+    createSubject(db, alice, { code: "OWN", name: "A 的科目" });
+    const chapter = createChapter(db, alice, { subjectCode: "OWN", title: "第一章" });
+    const point = createPoint(db, alice, { chapterId: chapter.id, title: "A" });
+
+    expect(() =>
+      movePointToPosition(db, bob, { pointId: point.id, targetChapterId: chapter.id, index: 0 }),
+    ).toThrow("知识点不存在");
   });
 });
 
