@@ -11,6 +11,7 @@ import {
   getSubjectDetail,
   getSubjectOverviews,
   moveChapter,
+  moveChapterToPosition,
   movePointToPosition,
   renameChapter,
   reorderPoints,
@@ -296,6 +297,86 @@ describe("knowledge repo", () => {
     expect(() =>
       movePointToPosition(db, bob, { pointId: point.id, targetChapterId: chapter.id, index: 0 }),
     ).toThrow("知识点不存在");
+  });
+
+  it("reorders a chapter among top-level siblings", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试" });
+    createChapter(db, legacyScope, { subjectCode: "M9", title: "A" });
+    createChapter(db, legacyScope, { subjectCode: "M9", title: "B" });
+    const c = createChapter(db, legacyScope, { subjectCode: "M9", title: "C" });
+
+    moveChapterToPosition(db, legacyScope, { id: c.id, parentId: null, index: 0 });
+
+    const detail = getSubjectDetail(db, legacyScope, "M9");
+    expect(detail?.chapters.map((chapter) => chapter.title)).toEqual(["C", "A", "B"]);
+  });
+
+  it("moves a chapter under a new parent at the given position", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试" });
+    const parent = createChapter(db, legacyScope, { subjectCode: "M9", title: "父" });
+    createChapter(db, legacyScope, { subjectCode: "M9", title: "老大", parentId: parent.id });
+    const joiner = createChapter(db, legacyScope, { subjectCode: "M9", title: "插队" });
+
+    moveChapterToPosition(db, legacyScope, { id: joiner.id, parentId: parent.id, index: 0 });
+
+    const detail = getSubjectDetail(db, legacyScope, "M9");
+    const tree = detail?.chapters.find((chapter) => chapter.id === parent.id);
+    expect(tree?.children.map((child) => child.title)).toEqual(["插队", "老大"]);
+  });
+
+  it("moves a nested chapter back to top level", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试" });
+    const parent = createChapter(db, legacyScope, { subjectCode: "M9", title: "父" });
+    const child = createChapter(db, legacyScope, { subjectCode: "M9", title: "子", parentId: parent.id });
+
+    moveChapterToPosition(db, legacyScope, { id: child.id, parentId: null, index: 0 });
+
+    const detail = getSubjectDetail(db, legacyScope, "M9");
+    expect(detail?.chapters.map((chapter) => chapter.title)).toEqual(["子", "父"]);
+    expect(detail?.chapters.find((chapter) => chapter.id === parent.id)?.children).toEqual([]);
+  });
+
+  it("rejects moving a chapter into its own subtree", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试" });
+    const root = createChapter(db, legacyScope, { subjectCode: "M9", title: "根" });
+    const leaf = createChapter(db, legacyScope, { subjectCode: "M9", title: "叶", parentId: root.id });
+
+    expect(() =>
+      moveChapterToPosition(db, legacyScope, { id: root.id, parentId: leaf.id, index: 0 }),
+    ).toThrow("不能移动到自己的子章节里");
+  });
+
+  it("rejects chapter moves beyond the max depth", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试" });
+    let parentId: string | null = null;
+    let deepest = "";
+    for (let level = 1; level <= 8; level += 1) {
+      const created = createChapter(db, legacyScope, { subjectCode: "M9", title: `层${level}`, parentId });
+      parentId = created.id;
+      deepest = created.id;
+    }
+    const extra = createChapter(db, legacyScope, { subjectCode: "M9", title: "顶层" });
+
+    expect(() =>
+      moveChapterToPosition(db, legacyScope, { id: extra.id, parentId: deepest, index: 0 }),
+    ).toThrow(/层级/);
+  });
+
+  it("keeps chapter moves isolated by workspace", () => {
+    const db = createTestDb();
+    const alice = createTestWorkspace(db, { userId: "user-a2", email: "a2-chapter@example.com" });
+    const bob = createTestWorkspace(db, { userId: "user-b2", email: "b2-chapter@example.com" });
+    createSubject(db, alice, { code: "OWN", name: "A 的科目" });
+    const chapter = createChapter(db, alice, { subjectCode: "OWN", title: "第一章" });
+
+    expect(() =>
+      moveChapterToPosition(db, bob, { id: chapter.id, parentId: null, index: 0 }),
+    ).toThrow("章节不存在");
   });
 });
 

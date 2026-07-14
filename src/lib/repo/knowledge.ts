@@ -512,6 +512,53 @@ export function reparentChapter(
   ).run(parentId, maxOrder.value + 1, scope.workspaceId, chapterId);
 }
 
+/** 拖拽移动章节：挂到 parentId（null = 顶层）同级第 index 位（0 起，越界夹取）；防环、防超深。 */
+export function moveChapterToPosition(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: { id: string; parentId: string | null; index: number },
+) {
+  const chapterId = input.id.trim();
+  if (!chapterId) throw new Error("章节必填");
+  const chapter = db.prepare(
+    "SELECT id, subject_code, parent_id FROM subject_chapters WHERE workspace_id = ? AND id = ?",
+  ).get(scope.workspaceId, chapterId) as
+    | { id: string; subject_code: string; parent_id: string | null }
+    | undefined;
+  if (!chapter) throw new Error("章节不存在");
+  const parentId = input.parentId?.trim() || null;
+
+  if (parentId) {
+    if (parentId === chapterId) throw new Error("不能移动到自身");
+    const parent = db.prepare(
+      "SELECT id, subject_code FROM subject_chapters WHERE workspace_id = ? AND id = ?",
+    ).get(scope.workspaceId, parentId) as { id: string; subject_code: string } | undefined;
+    if (!parent || parent.subject_code !== chapter.subject_code) throw new Error("目标章节不存在");
+    if (collectChapterSubtree(db, scope, chapterId).includes(parentId)) {
+      throw new Error("不能移动到自己的子章节里");
+    }
+    const depth = chapterDepth(db, scope, parentId) + chapterSubtreeHeight(db, scope, chapterId);
+    if (depth > MAX_CHAPTER_DEPTH) throw new Error(`章节层级最多 ${MAX_CHAPTER_DEPTH} 层`);
+  }
+
+  const siblings = (db.prepare(
+    `SELECT id FROM subject_chapters WHERE workspace_id = ? AND subject_code = ? AND parent_id IS ?
+     ORDER BY sort_order ASC, title ASC`,
+  ).all(scope.workspaceId, chapter.subject_code, parentId) as Array<{ id: string }>)
+    .map((row) => row.id)
+    .filter((id) => id !== chapterId);
+  const index = Math.max(0, Math.min(Math.trunc(input.index), siblings.length));
+  siblings.splice(index, 0, chapterId);
+  const setOrder = db.prepare("UPDATE subject_chapters SET sort_order = ? WHERE workspace_id = ? AND id = ?");
+  const move = db.transaction(() => {
+    db.prepare(
+      "UPDATE subject_chapters SET parent_id = ?, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?",
+    ).run(parentId, scope.workspaceId, chapterId);
+    siblings.forEach((id, order) => setOrder.run(order + 1, scope.workspaceId, id));
+  });
+  move();
+}
+
 export function renameChapter(
   db: Database.Database,
   scope: WorkspaceScope,
