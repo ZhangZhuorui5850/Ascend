@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -47,7 +47,7 @@ import { assetFileUrl } from "@/lib/asset-url";
 import { POINT_SORT_MODES, sortPointsForView, type PointSortMode } from "@/components/point-sort";
 import { RichText } from "@/components/RichText";
 import { useOptimisticValue } from "@/components/useOptimisticValue";
-import { attachDragCard, edgeFromEvent, type DragPayload } from "@/components/dnd";
+import { attachDragCard, edgeFromEvent, type ChapterDrag, type DragPayload, type DropEdge } from "@/components/dnd";
 
 type SubjectWorkbenchProps = {
   subject: SubjectRow;
@@ -72,6 +72,16 @@ function countPointsDeep(chapter: ChapterWithPoints): number {
 
 function countChaptersDeep(chapter: ChapterWithPoints): number {
   return 1 + chapter.children.reduce((sum, child) => sum + countChaptersDeep(child), 0);
+}
+
+/** 整棵子树（含根）的 id 列表，用于拖拽时禁止投放到自己内部 */
+function subtreeIdsOf(chapter: ChapterWithPoints): string[] {
+  return [chapter.id, ...chapter.children.flatMap(subtreeIdsOf)];
+}
+
+/** 子树高度（根算 1），用于客户端预判层级上限 */
+function subtreeHeightOf(chapter: ChapterWithPoints): number {
+  return 1 + chapter.children.reduce((max, child) => Math.max(max, subtreeHeightOf(child)), 0);
 }
 
 /** 从根到目标章节的路径（含目标）；找不到返回 null */
@@ -300,6 +310,7 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today, focusI
               last
               promoteTargetId={null}
               report={report}
+              siblingIds={[focusTarget.id]}
               sortMode={sortMode}
               subjectCode={subject.code}
               today={today}
@@ -321,6 +332,7 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today, focusI
                 last={index === chapters.length - 1}
                 promoteTargetId={null}
                 report={report}
+                siblingIds={chapters.map((item) => item.id)}
                 sortMode={sortMode}
                 subjectCode={subject.code}
                 today={today}
@@ -364,7 +376,7 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today, focusI
   );
 }
 
-function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMode, depth, tree, canPromote, promoteTargetId }: {
+function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMode, depth, tree, canPromote, promoteTargetId, siblingIds }: {
   chapter: ChapterWithPoints;
   subjectCode: string;
   first: boolean;
@@ -376,12 +388,13 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
   tree: TreeControls;
   canPromote: boolean;
   promoteTargetId: string | null;
+  siblingIds: string[];
 }) {
   const { confirm, notify } = useFeedback();
   const [pointTitle, setPointTitle] = useState("");
   const [pointTier, setPointTier] = useState<Tier>("g");
   const [reordering, setReordering] = useState(false);
-  const [dropHover, setDropHover] = useState(false);
+  const [chapterDrop, setChapterDrop] = useState<DropEdge | null>(null);
   const [pointDrop, setPointDrop] = useState<{ id: string; edge: "before" | "after" } | null>(null);
   const [headDrop, setHeadDrop] = useState(false);
   const [zoneDrop, setZoneDrop] = useState(false);
@@ -404,6 +417,16 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
       setAddingSub(false);
     }
     report(result);
+  }
+
+  /** 章节拖拽命中：null = 非法目标（自己/自己的子树/超深） */
+  function chapterEdgeFor(event: ReactDragEvent<HTMLDivElement>, dragged: ChapterDrag): DropEdge | null {
+    if (dragged.id === chapter.id || dragged.subtreeIds.includes(chapter.id)) return null;
+    const fitsInside = depth + dragged.height <= MAX_CHAPTER_DEPTH;
+    const fitsBeside = depth - 1 + dragged.height <= MAX_CHAPTER_DEPTH;
+    let edge: DropEdge | null = edgeFromEvent(event, fitsInside ? "nest" : "half");
+    if (edge !== "inside" && !fitsBeside) edge = fitsInside ? "inside" : null;
+    return edge;
   }
 
   async function applyOrder(ids: string[]) {
@@ -451,7 +474,9 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
   return (
     <article className="chapterBlock" data-depth={depth}>
       <div
-        className={`chapterHead${headDrop ? " dropInside" : ""}${dropHover ? " chapterDropTarget" : ""}`}
+        className={`chapterHead${
+          (headDrop || chapterDrop === "inside") && tree.drag ? " dropInside" : ""
+        }${chapterDrop === "before" && tree.drag ? " dropBefore" : ""}${chapterDrop === "after" && tree.drag ? " dropAfter" : ""}`}
         onDragOver={(event) => {
           if (tree.drag?.kind === "point") {
             if (tree.drag.chapterId === chapter.id) return;
@@ -460,36 +485,58 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
             setHeadDrop(true);
             return;
           }
-          if (tree.drag?.kind !== "chapter" || tree.drag.id === chapter.id) return;
+          if (tree.drag?.kind !== "chapter") return;
+          const edge = chapterEdgeFor(event, tree.drag);
+          if (!edge) {
+            setChapterDrop(null);
+            return;
+          }
           event.preventDefault();
-          setDropHover(true);
+          event.dataTransfer.dropEffect = "move";
+          setChapterDrop((current) => (current === edge ? current : edge));
         }}
         onDragLeave={() => {
           setHeadDrop(false);
-          setDropHover(false);
+          setChapterDrop(null);
         }}
         onDrop={(event) => {
           event.preventDefault();
-          setHeadDrop(false);
-          setDropHover(false);
           const dragged = tree.drag;
+          setHeadDrop(false);
+          setChapterDrop(null);
           tree.setDrag(null);
-          if (dragged?.kind === "point" && dragged.chapterId !== chapter.id) {
-            void tree.movePointTo(dragged.id, chapter.id, chapter.points.length);
+          if (dragged?.kind === "point") {
+            if (dragged.chapterId !== chapter.id) void tree.movePointTo(dragged.id, chapter.id, chapter.points.length);
             return;
           }
-          if (dragged?.kind === "chapter" && dragged.id !== chapter.id) void tree.nestChapter(dragged.id, chapter.id);
+          if (dragged?.kind !== "chapter") return;
+          const edge = chapterEdgeFor(event, dragged);
+          if (!edge) return;
+          if (edge === "inside") {
+            void tree.moveChapterTo(dragged.id, chapter.id, chapter.children.length);
+            return;
+          }
+          const ids = siblingIds.filter((id) => id !== dragged.id);
+          const position = ids.indexOf(chapter.id) + (edge === "after" ? 1 : 0);
+          void tree.moveChapterTo(dragged.id, chapter.parent_id, position);
         }}
       >
         <button
-          aria-label={`拖拽“${chapter.title}”到其他章节标题上可变为其子章节`}
+          aria-label={`拖拽“${chapter.title}”调整顺序，拖到其他章节标题中部可变为其子章节`}
           className="chapterGrip"
           draggable={!tree.treeBusy}
           onDragEnd={() => tree.setDrag(null)}
           onDragStart={(event) => {
             event.dataTransfer.effectAllowed = "move";
             event.dataTransfer.setData("text/plain", chapter.title);
-            tree.setDrag({ kind: "chapter", id: chapter.id, title: chapter.title, subtreeIds: [], height: 1 });
+            attachDragCard(event, chapter.title, `${deepPoints} 个知识点`);
+            tree.setDrag({
+              kind: "chapter",
+              id: chapter.id,
+              title: chapter.title,
+              subtreeIds: subtreeIdsOf(chapter),
+              height: subtreeHeightOf(chapter),
+            });
           }}
           type="button"
         >
@@ -595,7 +642,7 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
         {sortedPoints.map((point, index) => (
           <div
             className={
-              pointDrop?.id === point.id
+              pointDrop?.id === point.id && tree.drag
                 ? `pointDragWrap ${pointDrop.edge === "before" ? "dropBefore" : "dropAfter"}`
                 : "pointDragWrap"
             }
@@ -743,6 +790,7 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
               last={index === chapter.children.length - 1}
               promoteTargetId={chapter.parent_id}
               report={report}
+              siblingIds={chapter.children.map((item) => item.id)}
               sortMode={sortMode}
               subjectCode={subjectCode}
               today={today}

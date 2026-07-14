@@ -1647,12 +1647,6 @@ button:focus-visible {
   color: var(--ink);
 }
 
-.chapterHead.chapterDropTarget {
-  outline: 2px dashed var(--accent);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm);
-}
-
 .subChapterCreate {
   margin: 2px 0 8px;
 }
