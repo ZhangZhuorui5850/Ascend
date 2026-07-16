@@ -1,12 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useLayoutEffect, useRef, useState } from "react";
 import { ArrowRight, Check, ChevronDown, Clock3, Plus, Trash2 } from "lucide-react";
 import { addTaskAction, carryOverTasksAction, deleteTaskAction, toggleTaskAction, updateTaskAction } from "@/app/actions/planner";
 import { EmptyState } from "@/components/EmptyState";
 import { useFeedback } from "@/components/FeedbackProvider";
-import { useOptimisticValue } from "@/components/useOptimisticValue";
 import type { SubjectRow } from "@/lib/repo/knowledge";
 import type { DayTask } from "@/lib/repo/planner";
 
@@ -19,7 +17,6 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
   carryCount?: number;
   yesterdayPlan?: string;
 }) {
-  const router = useRouter();
   const { notify } = useFeedback();
   const [title, setTitle] = useState("");
   const [subjectCode, setSubjectCode] = useState("");
@@ -28,9 +25,13 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
   const [scheduledStart, setScheduledStart] = useState("");
   const [busy, setBusy] = useState(false);
   const [planAdded, setPlanAdded] = useState(false);
+  const [completionOverrides, setCompletionOverrides] = useState<Record<number, boolean>>({});
 
-  const done = tasks.filter((task) => task.done).length;
-  const openCount = tasks.length - done;
+  const displayTasks = tasks.map((task) => completionOverrides[task.id] === undefined
+    ? task
+    : { ...task, done: completionOverrides[task.id] ? 1 : 0 });
+  const done = displayTasks.filter((task) => task.done).length;
+  const openCount = displayTasks.length - done;
   const isPast = day < today;
   const isToday = day === today;
   const planText = yesterdayPlan.trim();
@@ -47,8 +48,17 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
   }
 
   function report(result: { ok: boolean; error?: string }) {
-    if (result.ok) router.refresh();
-    else notify(result.error || "操作失败", "error");
+    if (!result.ok) notify(result.error || "操作失败", "error");
+  }
+
+  function setTaskCompletion(id: number, done: boolean) {
+    const serverDone = Boolean(tasks.find((task) => task.id === id)?.done);
+    setCompletionOverrides((current) => {
+      const next = { ...current };
+      if (done === serverDone) delete next[id];
+      else next[id] = done;
+      return next;
+    });
   }
 
   async function add() {
@@ -101,8 +111,8 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
       ) : null}
 
       <div className="taskList">
-        {tasks.map((task) => (
-          <TaskLine day={day} key={task.id} report={report} subjects={subjects} task={task} />
+        {displayTasks.map((task) => (
+          <TaskLine day={day} key={task.id} onCompletionChange={setTaskCompletion} report={report} subjects={subjects} task={task} />
         ))}
         {!tasks.length ? <EmptyState seal="空" text="还没有任务。加上第一条，例如「特征值 20 题」。" /> : null}
       </div>
@@ -154,16 +164,17 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
   );
 }
 
-function TaskLine({ task, day, subjects, report }: {
+function TaskLine({ task, day, subjects, report, onCompletionChange }: {
   task: DayTask;
   day: string;
   subjects: SubjectRow[];
   report: (result: { ok: boolean; error?: string }) => void;
+  onCompletionChange: (id: number, done: boolean) => void;
 }) {
   const [pending, setPending] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const titleRef = useRef<HTMLTextAreaElement>(null);
-  const { value: done, apply, rollback } = useOptimisticValue(Boolean(task.done));
+  const done = Boolean(task.done);
 
   useLayoutEffect(() => {
     resizeTitle(titleRef.current);
@@ -171,14 +182,15 @@ function TaskLine({ task, day, subjects, report }: {
 
   async function toggle() {
     if (pending) return;
+    const nextDone = !done;
     setPending(true);
-    apply(!done);
+    onCompletionChange(task.id, nextDone);
     try {
-      const result = await toggleTaskAction({ id: task.id, day, done: !done });
-      if (!result.ok) rollback();
+      const result = await toggleTaskAction({ id: task.id, day, done: nextDone });
+      if (!result.ok) onCompletionChange(task.id, done);
       report(result);
     } catch {
-      rollback();
+      onCompletionChange(task.id, done);
       report({ ok: false, error: "网络异常，操作未保存" });
     } finally {
       setPending(false);

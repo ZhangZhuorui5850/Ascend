@@ -30,8 +30,7 @@ export function listTasks(db: Database.Database, scope: WorkspaceScope, day: str
            priority, estimated_minutes, scheduled_start, notes
     FROM day_tasks
     WHERE workspace_id = @workspaceId AND day = @day
-    ORDER BY done ASC,
-             CASE WHEN scheduled_start IS NULL THEN 1 ELSE 0 END ASC,
+    ORDER BY CASE WHEN scheduled_start IS NULL THEN 1 ELSE 0 END ASC,
              scheduled_start ASC,
              priority ASC,
              sort_order ASC,
@@ -45,7 +44,7 @@ export function listCalendarTasks(db: Database.Database, scope: WorkspaceScope):
            priority, estimated_minutes, scheduled_start, notes
     FROM day_tasks
     WHERE workspace_id = @workspaceId
-    ORDER BY day ASC, done ASC,
+    ORDER BY day ASC,
              CASE WHEN scheduled_start IS NULL THEN 1 ELSE 0 END ASC,
              scheduled_start ASC, priority ASC, sort_order ASC, id ASC
   `).all({ workspaceId: scope.workspaceId }) as DayTask[];
