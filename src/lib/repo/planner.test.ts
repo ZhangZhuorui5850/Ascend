@@ -127,13 +127,13 @@ describe("day tasks", () => {
     expect(listCalendarTasks(db, legacyScope).map((item) => item.id)).toContain(task.id);
   });
 
-  it("orders open tasks before done ones", () => {
+  it("keeps task positions stable when completion changes", () => {
     const db = createTestDb();
     const a = addTask(db, legacyScope, { day: "2026-07-09", title: "A" });
     addTask(db, legacyScope, { day: "2026-07-09", title: "B" });
     toggleTask(db, legacyScope, { id: a.id, done: true });
 
-    expect(listTasks(db, legacyScope, "2026-07-09").map((task) => task.title)).toEqual(["B", "A"]);
+    expect(listTasks(db, legacyScope, "2026-07-09").map((task) => task.title)).toEqual(["A", "B"]);
   });
 
   it("carries open tasks over to another day", () => {

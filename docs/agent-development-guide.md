@@ -3,7 +3,7 @@
 ## 架构速览
 - Next.js 16 App Router + React 19，源码在 `src/`；无 tailwind，样式为 `src/app/globals.css` + `src/styles/tokens.css` CSS 变量（多套 `data-skin` 皮肤，颜色一律走 token）。
 - 数据库 better-sqlite3（同步、无 ORM）：建表 `src/lib/db.ts`（服务全新库），版本化迁移 `src/lib/migrations.ts`（服务存量库，带 checksum，只能追加不能改旧迁移）。查询集中在 `src/lib/repo/*.ts` 手写 prepared statements，多租户按 `workspace_id` 隔离。
-- 写路径统一：客户端组件 → `src/app/actions/*`（server action，`requireWorkspace()` 鉴权 → repo → `revalidatePath`）→ 客户端 `router.refresh()`。action 一律返回 `{ok, error?}`，不抛错给客户端。
+- 写路径统一：客户端组件 → `src/app/actions/*`（Server Action，`requireWorkspace()` 鉴权 → repo）。新增、删除、改期等结构变化调用 `refresh()`，在同一次 Action 响应中携带更新后的 RSC；高频字段切换（如任务完成状态）由页面级客户端状态即时更新，Action 专注写库并在失败时回滚。缓存页面的写操作使用 `revalidatePath`。action 一律返回 `{ok, error?}`，不抛错给客户端。
 
 ## 测试与验证
 - `npm test`（vitest，测试与源码同目录 `*.test.ts`，repo 测试用 `createTestDb()` 内存库跑全量建表+迁移）；`npm run lint`；`npm run build`。三者全绿才算完成。

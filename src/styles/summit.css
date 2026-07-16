@@ -1383,7 +1383,6 @@ select {
 .fc .eventPriority3 { background: var(--muted) !important; color: var(--surface) !important; }
 .fc .eventTaskDone { opacity: 1; text-decoration: line-through; }
 .fc .eventMilestone { border: 0 !important; background: var(--warn) !important; color: var(--warn-soft) !important; }
-.fc .eventActivity { background: color-mix(in srgb, var(--ok-soft) 75%, transparent) !important; }
 
 .fc .fc-toolbar-title {
   font-family: var(--font-serif);
@@ -1400,6 +1399,296 @@ select {
 .fc .fc-daygrid-day-number {
   color: var(--muted);
   font-size: 11px;
+}
+
+.calendarDayPopoverPositioner {
+  position: fixed;
+  z-index: 90;
+  width: min(340px, calc(100vw - 24px));
+}
+
+.calendarDayPopoverPositioner.above {
+  transform: translateY(-100%);
+}
+
+.calendarDayPopover {
+  position: relative;
+  display: grid;
+  max-height: min(430px, calc(100dvh - 24px));
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent-line) 62%, var(--line));
+  border-radius: 17px;
+  background: color-mix(in srgb, var(--surface-raised) 96%, transparent);
+  box-shadow: 0 22px 54px rgba(31, 28, 20, 0.2), 0 5px 16px rgba(31, 28, 20, 0.1);
+  backdrop-filter: blur(18px);
+}
+
+.calendarDayPopoverPositioner.below .calendarDayPopover {
+  transform-origin: var(--calendar-popover-arrow-x) top;
+  animation: calendar-popover-in-below 220ms var(--summit-ease) both;
+}
+
+.calendarDayPopoverPositioner.above .calendarDayPopover {
+  transform-origin: var(--calendar-popover-arrow-x) bottom;
+  animation: calendar-popover-in-above 220ms var(--summit-ease) both;
+}
+
+.calendarDayPopover::before {
+  position: absolute;
+  left: var(--calendar-popover-arrow-x);
+  width: 12px;
+  height: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent-line) 62%, var(--line));
+  background: var(--surface-raised);
+  content: "";
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.calendarDayPopoverPositioner.below .calendarDayPopover::before {
+  top: -7px;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.calendarDayPopoverPositioner.above .calendarDayPopover::before {
+  bottom: -7px;
+  border-top: 0;
+  border-left: 0;
+}
+
+.calendarDayPopoverHeader {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 17px 17px 13px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--accent-soft) 62%, var(--surface-raised)), var(--surface-raised));
+}
+
+.calendarDayPopoverHeader > div {
+  display: grid;
+  gap: 2px;
+}
+
+.calendarDayPopoverHeader span {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+
+.calendarDayPopoverHeader h2 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 21px;
+}
+
+.calendarDayPopoverHeader button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface-raised) 74%, transparent);
+  color: var(--muted);
+}
+
+.calendarDayPopoverHeader button:hover {
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+.calendarDayProgress {
+  display: grid;
+  gap: 7px;
+  padding: 13px 17px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.calendarDayProgress > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.calendarDayProgress > div:first-child span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.calendarDayProgress > div:first-child strong {
+  color: var(--accent);
+  font-family: var(--font-num);
+  font-size: 12px;
+}
+
+.calendarDayProgressTrack {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--line);
+}
+
+.calendarDayProgressTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 240ms var(--summit-ease);
+}
+
+.calendarDayProgress small {
+  color: var(--quiet);
+  font-size: 9px;
+}
+
+.calendarDayTaskList {
+  display: grid;
+  gap: 6px;
+  max-height: 218px;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.calendarDayTask,
+.calendarDayMilestone {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 48px;
+  padding: 8px 9px 8px 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-raised);
+}
+
+.calendarDayTask::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--muted);
+  content: "";
+}
+
+.calendarDayTask.priority1::before { background: var(--accent); }
+.calendarDayTask.priority2::before { background: var(--summit-blue); }
+
+.calendarDayTaskCheck {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--accent-line);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--accent-ink);
+}
+
+.calendarDayTask.done .calendarDayTaskCheck {
+  border-color: var(--ok);
+  background: var(--ok);
+}
+
+.calendarDayTask > div,
+.calendarDayMilestone > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.calendarDayTask > div strong,
+.calendarDayMilestone strong {
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendarDayTask > div small,
+.calendarDayMilestone small {
+  overflow: hidden;
+  color: var(--quiet);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendarDayTask > span {
+  color: var(--quiet);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.calendarDayTask.done {
+  opacity: 0.62;
+}
+
+.calendarDayTask.done strong {
+  text-decoration: line-through;
+}
+
+.calendarDayMilestone {
+  grid-template-columns: auto minmax(0, 1fr);
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn-soft) 38%, var(--surface-raised));
+}
+
+.calendarDayMilestone small {
+  color: color-mix(in srgb, var(--warn) 64%, var(--muted));
+}
+
+.calendarDayEmpty {
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  padding: 24px 12px;
+  color: var(--accent);
+  text-align: center;
+}
+
+.calendarDayEmpty strong { color: var(--ink); font-size: 12px; }
+.calendarDayEmpty span { color: var(--quiet); font-size: 10px; }
+
+.calendarDayDetailLink {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 10px 17px;
+  border-top: 1px solid var(--line);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.calendarDayDetailLink:hover {
+  background: var(--accent-soft);
+}
+
+@keyframes calendar-popover-in-below {
+  from { opacity: 0; transform: translateY(-7px) scale(0.96); }
+}
+
+@keyframes calendar-popover-in-above {
+  from { opacity: 0; transform: translateY(7px) scale(0.96); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .calendarDayPopoverPositioner .calendarDayPopover {
+    animation-duration: 1ms;
+  }
 }
 
 .capturePanel,

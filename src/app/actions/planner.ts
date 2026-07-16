@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { refresh } from "next/cache";
 import { getDb } from "@/lib/db";
 import {
   addNote,
@@ -32,9 +32,7 @@ export async function addTaskAction(input: {
   try {
     const access = await requireWorkspace();
     addTask(getDb(), access, input);
-    revalidatePath(`/day/${input.day}`);
-    revalidatePath("/");
-    revalidatePath("/calendar");
+    refresh();
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -45,9 +43,6 @@ export async function toggleTaskAction(input: { id: number; day: string; done: b
   try {
     const access = await requireWorkspace();
     toggleTask(getDb(), access, input);
-    revalidatePath(`/day/${input.day}`);
-    revalidatePath("/");
-    revalidatePath("/calendar");
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -67,9 +62,7 @@ export async function updateTaskAction(input: {
   try {
     const access = await requireWorkspace();
     updateTask(getDb(), access, input);
-    revalidatePath(`/day/${input.day}`);
-    revalidatePath("/");
-    revalidatePath("/calendar");
+    refresh();
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -85,11 +78,8 @@ export async function scheduleTaskAction(input: {
 }): Promise<ActionResult> {
   try {
     const access = await requireWorkspace();
-    const result = scheduleTask(getDb(), access, input);
-    revalidatePath(`/day/${result.previousDay}`);
-    revalidatePath(`/day/${result.day}`);
-    revalidatePath("/");
-    revalidatePath("/calendar");
+    scheduleTask(getDb(), access, input);
+    refresh();
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -100,9 +90,7 @@ export async function deleteTaskAction(input: { id: number; day: string }): Prom
   try {
     const access = await requireWorkspace();
     deleteTask(getDb(), access, input.id);
-    revalidatePath(`/day/${input.day}`);
-    revalidatePath("/");
-    revalidatePath("/calendar");
+    refresh();
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -113,10 +101,7 @@ export async function carryOverTasksAction(input: { fromDay: string; toDay: stri
   try {
     const access = await requireWorkspace();
     const moved = carryOverTasks(getDb(), access, input);
-    revalidatePath(`/day/${input.fromDay}`);
-    revalidatePath(`/day/${input.toDay}`);
-    revalidatePath("/");
-    revalidatePath("/calendar");
+    refresh();
     return { ok: true, moved };
   } catch (error) {
     return failure(error);
@@ -127,7 +112,7 @@ export async function addNoteAction(input: { day: string; content: string }): Pr
   try {
     const access = await requireWorkspace();
     addNote(getDb(), access, input);
-    revalidatePath(`/day/${input.day}`);
+    refresh();
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -138,7 +123,7 @@ export async function updateNoteAction(input: { id: number; day: string; content
   try {
     const access = await requireWorkspace();
     updateNote(getDb(), access, input);
-    revalidatePath(`/day/${input.day}`);
+    refresh();
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -149,7 +134,7 @@ export async function deleteNoteAction(input: { id: number; day: string }): Prom
   try {
     const access = await requireWorkspace();
     deleteNote(getDb(), access, input.id);
-    revalidatePath(`/day/${input.day}`);
+    refresh();
     return { ok: true };
   } catch (error) {
     return failure(error);
