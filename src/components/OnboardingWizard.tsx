@@ -20,6 +20,8 @@ export function OnboardingWizard({ initial, subjects }: { initial: AppSettings; 
   );
   const [examName, setExamName] = useState(initial.examCountdowns[0]?.name || "");
   const [examDate, setExamDate] = useState(initial.examCountdowns[0]?.date || "");
+  const [examSubjectCode, setExamSubjectCode] = useState(initial.examCountdowns[0]?.subjectCode || "");
+  const [examTargetScore, setExamTargetScore] = useState(initial.examCountdowns[0]?.targetScore?.toString() || "");
   const [reviewLimit, setReviewLimit] = useState(initial.dailyReviewLimit);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -41,7 +43,7 @@ export function OnboardingWizard({ initial, subjects }: { initial: AppSettings; 
       learningGoal: goal,
       weeklyMinutes,
       enabledSubjectCodes: enabled,
-      examCountdowns: examName.trim() && examDate ? [{ name: examName, date: examDate }] : [],
+      examCountdowns: examName.trim() && examDate ? [{ name: examName, date: examDate, subjectCode: examSubjectCode || undefined, targetScore: examTargetScore ? Number(examTargetScore) : undefined }] : [],
       dailyReviewLimit: reviewLimit,
     });
     setBusy(false);
@@ -96,7 +98,7 @@ export function OnboardingWizard({ initial, subjects }: { initial: AppSettings; 
           <div className="onboardingPaceBuilder">
             <section><div className="onboardingPaceHead"><Clock3 size={15} /><span><strong>每周学习投入</strong><small>当前 {Math.round(weeklyMinutes / 60 * 10) / 10} 小时</small></span></div><div className="onboardingPresetGrid" role="group" aria-label="每周学习投入">{WEEKLY_PRESETS.map((minutes) => <button aria-pressed={weeklyMinutes === minutes} className={weeklyMinutes === minutes ? "active" : undefined} key={minutes} onClick={() => setWeeklyMinutes(minutes)} type="button"><strong>{minutes / 60}</strong><span>小时</span>{weeklyMinutes === minutes ? <Check size={12} /> : null}</button>)}</div></section>
             <section><div className="onboardingPaceHead"><Target size={15} /><span><strong>每日复习容量</strong><small>当前 {reviewLimit} 个知识点</small></span></div><div className="onboardingPresetGrid" role="group" aria-label="每日复习容量">{REVIEW_PRESETS.map((limit) => <button aria-pressed={reviewLimit === limit} className={reviewLimit === limit ? "active" : undefined} key={limit} onClick={() => setReviewLimit(limit)} type="button"><strong>{limit}</strong><span>知识点</span>{reviewLimit === limit ? <Check size={12} /> : null}</button>)}</div></section>
-            <section className="onboardingExamMilestone"><div className="onboardingPaceHead"><CalendarDays size={15} /><span><strong>最近考试里程碑</strong><small>用于首页倒计时与冲刺优先级</small></span></div><div><label><span>考试名称</span><input onChange={(event) => setExamName(event.target.value)} placeholder="例如：期末考试" value={examName} /></label><label><span>考试日期</span><input onChange={(event) => setExamDate(event.target.value)} type="date" value={examDate} /></label></div></section>
+            <section className="onboardingExamMilestone"><div className="onboardingPaceHead"><CalendarDays size={15} /><span><strong>最近考试里程碑</strong><small>用于首页倒计时与冲刺优先级</small></span></div><div><label><span>考试名称</span><input onChange={(event) => setExamName(event.target.value)} placeholder="例如：期末考试" value={examName} /></label><label><span>考试日期</span><input onChange={(event) => setExamDate(event.target.value)} type="date" value={examDate} /></label><label><span>关联科目</span><select aria-label="考试关联科目" onChange={(event) => setExamSubjectCode(event.target.value)} value={examSubjectCode}><option value="">综合考试</option>{subjects.filter((subject) => enabled.includes(subject.code)).map((subject) => <option key={subject.code} value={subject.code}>{subject.code} · {subject.name}</option>)}</select></label><label><span>目标分数</span><input max="1000" min="1" onChange={(event) => setExamTargetScore(event.target.value)} placeholder="例如 120" type="number" value={examTargetScore} /></label></div></section>
             <details className="onboardingCustomPace"><summary>精确设置分钟数与复习上限</summary><div><label><span>每周分钟</span><input min="30" max="10080" onChange={(event) => setWeeklyMinutes(Number(event.target.value) || 30)} type="number" value={weeklyMinutes} /></label><label><span>每日知识点</span><input min="1" max="100" onChange={(event) => setReviewLimit(Math.max(1, Math.min(100, Number(event.target.value) || 1)))} type="number" value={reviewLimit} /></label></div></details>
           </div>
         </div>

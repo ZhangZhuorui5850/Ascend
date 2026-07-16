@@ -8,6 +8,7 @@ import {
   carryOverTasks,
   deleteNote,
   deleteTask,
+  scheduleTask,
   toggleTask,
   updateNote,
   updateTask,
@@ -19,11 +20,21 @@ function failure(error: unknown): ActionResult {
   return { ok: false, error: error instanceof Error ? error.message : "操作失败" };
 }
 
-export async function addTaskAction(input: { day: string; title: string; subjectCode?: string }): Promise<ActionResult> {
+export async function addTaskAction(input: {
+  day: string;
+  title: string;
+  subjectCode?: string;
+  priority?: number;
+  estimatedMinutes?: number;
+  scheduledStart?: string | null;
+  notes?: string;
+}): Promise<ActionResult> {
   try {
     const access = await requireWorkspace();
     addTask(getDb(), access, input);
     revalidatePath(`/day/${input.day}`);
+    revalidatePath("/");
+    revalidatePath("/calendar");
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -35,6 +46,8 @@ export async function toggleTaskAction(input: { id: number; day: string; done: b
     const access = await requireWorkspace();
     toggleTask(getDb(), access, input);
     revalidatePath(`/day/${input.day}`);
+    revalidatePath("/");
+    revalidatePath("/calendar");
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -46,11 +59,37 @@ export async function updateTaskAction(input: {
   day: string;
   title?: string;
   subjectCode?: string | null;
+  priority?: number;
+  estimatedMinutes?: number;
+  scheduledStart?: string | null;
+  notes?: string;
 }): Promise<ActionResult> {
   try {
     const access = await requireWorkspace();
     updateTask(getDb(), access, input);
     revalidatePath(`/day/${input.day}`);
+    revalidatePath("/");
+    revalidatePath("/calendar");
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function scheduleTaskAction(input: {
+  id: number;
+  previousDay: string;
+  day: string;
+  scheduledStart?: string | null;
+  estimatedMinutes?: number;
+}): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    const result = scheduleTask(getDb(), access, input);
+    revalidatePath(`/day/${result.previousDay}`);
+    revalidatePath(`/day/${result.day}`);
+    revalidatePath("/");
+    revalidatePath("/calendar");
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -62,6 +101,8 @@ export async function deleteTaskAction(input: { id: number; day: string }): Prom
     const access = await requireWorkspace();
     deleteTask(getDb(), access, input.id);
     revalidatePath(`/day/${input.day}`);
+    revalidatePath("/");
+    revalidatePath("/calendar");
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -74,6 +115,8 @@ export async function carryOverTasksAction(input: { fromDay: string; toDay: stri
     const moved = carryOverTasks(getDb(), access, input);
     revalidatePath(`/day/${input.fromDay}`);
     revalidatePath(`/day/${input.toDay}`);
+    revalidatePath("/");
+    revalidatePath("/calendar");
     return { ok: true, moved };
   } catch (error) {
     return failure(error);

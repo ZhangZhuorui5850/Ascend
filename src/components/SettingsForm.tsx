@@ -88,10 +88,12 @@ export function SettingsForm({ initial, subjects }: { initial: AppSettings; subj
         </div>
         <div className="countdownEditor">
           {countdowns.map((item, index) => (
-            <div className="countdownEditorRow" key={index}>
+            <div className="countdownEditorRow summitCountdownRow" key={index}>
               <span className="countdownIndex"><CalendarDays size={14} /></span>
               <label><span>考试名称</span><input aria-label="考试名称" value={item.name} onChange={(event) => updateCountdown(index, { name: event.target.value })} placeholder="例如：考研初试" /></label>
               <label><span>考试日期</span><input aria-label="考试日期" type="date" value={item.date} onChange={(event) => updateCountdown(index, { date: event.target.value })} /></label>
+              <label><span>关联科目</span><select aria-label="考试关联科目" value={item.subjectCode || ""} onChange={(event) => updateCountdown(index, { subjectCode: event.target.value || undefined })}><option value="">综合考试</option>{subjects.map((subject) => <option key={subject.code} value={subject.code}>{subject.code} · {subject.name}</option>)}</select></label>
+              <label><span>目标分数</span><input aria-label="考试目标分数" min="1" max="1000" type="number" value={item.targetScore || ""} onChange={(event) => updateCountdown(index, { targetScore: event.target.value ? Number(event.target.value) : undefined })} placeholder="120" /></label>
               <button
                 aria-label="删除这条倒计时"
                 className="iconDanger"
@@ -105,7 +107,7 @@ export function SettingsForm({ initial, subjects }: { initial: AppSettings; subj
           {countdowns.length < 5 ? (
             <button
               className="secondaryButton"
-              onClick={() => setCountdowns((current) => [...current, { name: "", date: "" }])}
+              onClick={() => setCountdowns((current) => [...current, { name: "", date: "", subjectCode: "" }])}
               type="button"
             >
               <Plus size={14} />

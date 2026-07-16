@@ -9,14 +9,16 @@ import {
   deleteNote,
   deleteTask,
   listNotes,
+  listCalendarTasks,
   listTasks,
+  scheduleTask,
   toggleTask,
   updateNote,
   updateTask,
 } from "./planner";
 import { getSettings, saveDailyReviewLimit, saveExamCountdowns } from "./settings";
 import { getStudyStreak } from "./stats";
-import { createTestDb, createTestWorkspace } from "./testing";
+import { createTestDb, createTestWorkspace, seedSubjectWithChapter } from "./testing";
 import { LEGACY_WORKSPACE_ID } from "./workspaces";
 
 const legacyScope = { workspaceId: LEGACY_WORKSPACE_ID };
@@ -45,8 +47,18 @@ describe("workspace planning isolation", () => {
 describe("day tasks", () => {
   it("adds, toggles, edits and deletes tasks", () => {
     const db = createTestDb();
+    seedSubjectWithChapter(db);
     const task = addTask(db, legacyScope, { day: "2026-07-09", title: "特征值 20 题", subjectCode: "M1" });
-    expect(task).toMatchObject({ title: "特征值 20 题", subject_code: "M1", done: 0, sort_order: 1 });
+    expect(task).toMatchObject({
+      title: "特征值 20 题",
+      subject_code: "M1",
+      done: 0,
+      sort_order: 1,
+      priority: 2,
+      estimated_minutes: 30,
+      scheduled_start: null,
+      notes: "",
+    });
 
     toggleTask(db, legacyScope, { id: task.id, done: true });
     expect(listTasks(db, legacyScope, "2026-07-09")[0].done).toBe(1);
@@ -56,6 +68,63 @@ describe("day tasks", () => {
 
     deleteTask(db, legacyScope, task.id);
     expect(listTasks(db, legacyScope, "2026-07-09")).toHaveLength(0);
+  });
+
+  it("stores task priority, time budget, schedule and notes", () => {
+    const db = createTestDb();
+    seedSubjectWithChapter(db);
+    const task = addTask(db, legacyScope, {
+      day: "2026-07-09",
+      title: "线性代数专项",
+      subjectCode: "M1",
+      priority: 1,
+      estimatedMinutes: 90,
+      scheduledStart: "09:30",
+      notes: "完成矩阵与特征值两组题",
+    });
+
+    expect(task).toMatchObject({
+      priority: 1,
+      estimated_minutes: 90,
+      scheduled_start: "09:30",
+      notes: "完成矩阵与特征值两组题",
+    });
+
+    updateTask(db, legacyScope, {
+      id: task.id,
+      priority: 3,
+      estimatedMinutes: 45,
+      scheduledStart: null,
+      notes: "调整后的训练",
+    });
+    expect(listTasks(db, legacyScope, "2026-07-09")[0]).toMatchObject({
+      priority: 3,
+      estimated_minutes: 45,
+      scheduled_start: null,
+      notes: "调整后的训练",
+    });
+    expect(() => updateTask(db, legacyScope, { id: task.id, scheduledStart: "25:90" })).toThrow("开始时间格式");
+    expect(() => updateTask(db, legacyScope, { id: task.id, estimatedMinutes: 2 })).toThrow("预计时长");
+  });
+
+  it("reschedules tasks across days and exposes the calendar projection", () => {
+    const db = createTestDb();
+    const task = addTask(db, legacyScope, { day: "2026-07-09", title: "专项训练" });
+
+    const result = scheduleTask(db, legacyScope, {
+      id: task.id,
+      day: "2026-07-10",
+      scheduledStart: "14:00",
+      estimatedMinutes: 60,
+    });
+
+    expect(result).toEqual({ previousDay: "2026-07-09", day: "2026-07-10" });
+    expect(listTasks(db, legacyScope, "2026-07-09")).toHaveLength(0);
+    expect(listTasks(db, legacyScope, "2026-07-10")[0]).toMatchObject({
+      scheduled_start: "14:00",
+      estimated_minutes: 60,
+    });
+    expect(listCalendarTasks(db, legacyScope).map((item) => item.id)).toContain(task.id);
   });
 
   it("orders open tasks before done ones", () => {
@@ -106,13 +175,14 @@ describe("day notes", () => {
 describe("settings", () => {
   it("stores exam countdowns and review limit with defaults", () => {
     const db = createTestDb();
+    seedSubjectWithChapter(db);
     expect(getSettings(db, legacyScope)).toMatchObject({ examCountdowns: [], dailyReviewLimit: 12 });
 
-    saveExamCountdowns(db, legacyScope, [{ name: "笔试", date: "2026-09-01" }, { name: "", date: "2026-09-02" }]);
+    saveExamCountdowns(db, legacyScope, [{ name: "笔试", date: "2026-09-01", subjectCode: "M1", targetScore: 120 }, { name: "", date: "2026-09-02" }]);
     saveDailyReviewLimit(db, legacyScope, 8);
 
     expect(getSettings(db, legacyScope)).toMatchObject({
-      examCountdowns: [{ name: "笔试", date: "2026-09-01" }],
+      examCountdowns: [{ name: "笔试", date: "2026-09-01", subjectCode: "M1", targetScore: 120 }],
       dailyReviewLimit: 8,
     });
     expect(() => saveDailyReviewLimit(db, legacyScope, 0)).toThrow();

@@ -101,6 +101,21 @@ describe("runMigrations", () => {
     expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'review_recovery_events'").get()).toMatchObject({ name: "review_recovery_events" });
   });
 
+  it("adds task scheduling fields", () => {
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    runMigrations(db);
+
+    const taskColumns = (db.prepare("PRAGMA table_info(day_tasks)").all() as Array<{ name: string }>).map((row) => row.name);
+    expect(taskColumns).toEqual(expect.arrayContaining([
+      "priority",
+      "estimated_minutes",
+      "scheduled_start",
+      "notes",
+    ]));
+    expect(getAppliedMigrations(db)).toContain("0016_task_schedule");
+  });
+
   it("assigns legacy domain rows to the legacy workspace", () => {
     const db = new Database(":memory:");
     initializeDatabase(db);

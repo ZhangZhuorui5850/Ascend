@@ -520,6 +520,20 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: "0016_task_schedule",
+    run: (database) => {
+      if (!tableExists(database, "day_tasks")) return;
+      addColumnIfMissing(database, "day_tasks", "priority", "INTEGER NOT NULL DEFAULT 2");
+      addColumnIfMissing(database, "day_tasks", "estimated_minutes", "INTEGER NOT NULL DEFAULT 30");
+      addColumnIfMissing(database, "day_tasks", "scheduled_start", "TEXT");
+      addColumnIfMissing(database, "day_tasks", "notes", "TEXT NOT NULL DEFAULT ''");
+      database.exec(`
+        CREATE INDEX IF NOT EXISTS idx_tasks_schedule
+        ON day_tasks(workspace_id, day, scheduled_start, done, priority)
+      `);
+    },
+  },
 ];
 
 function addColumnIfMissing(database: Database.Database, table: string, column: string, definition: string): void {

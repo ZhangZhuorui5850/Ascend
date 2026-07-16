@@ -15,7 +15,7 @@ describe("settings repo", () => {
       learningGoal: "完成线性代数一轮复习",
       weeklyMinutes: 420,
       enabledSubjectCodes: ["M1"],
-      examCountdowns: [{ name: "期末", date: "2026-12-20" }],
+      examCountdowns: [{ name: "期末", date: "2026-12-20", subjectCode: "M1", targetScore: 120 }],
       dailyReviewLimit: 18,
     });
 
@@ -25,6 +25,7 @@ describe("settings repo", () => {
       enabledSubjectCodes: ["M1"],
       dailyReviewLimit: 18,
       onboardingCompleted: true,
+      examCountdowns: [{ name: "期末", date: "2026-12-20", subjectCode: "M1", targetScore: 120 }],
     });
   });
 

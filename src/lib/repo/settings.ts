@@ -5,6 +5,8 @@ import { assertDateKey } from "../dates";
 export type ExamCountdown = {
   name: string;
   date: string;
+  subjectCode?: string;
+  targetScore?: number;
 };
 
 export type AppSettings = {
@@ -31,7 +33,14 @@ export function getSettings(db: Database.Database, scope: WorkspaceScope): AppSe
     if (Array.isArray(parsed)) {
       examCountdowns = parsed
         .filter((item) => item && typeof item.name === "string" && typeof item.date === "string")
-        .map((item) => ({ name: item.name, date: item.date }));
+        .map((item) => ({
+          name: item.name,
+          date: item.date,
+          ...(typeof item.subjectCode === "string" && item.subjectCode ? { subjectCode: item.subjectCode } : {}),
+          ...(Number.isFinite(Number(item.targetScore)) && Number(item.targetScore) > 0
+            ? { targetScore: Number(item.targetScore) }
+            : {}),
+        }));
     }
   } catch {
     examCountdowns = [];
@@ -65,11 +74,31 @@ export function saveExamCountdowns(
   countdowns: ExamCountdown[],
 ): void {
   const cleaned = countdowns
-    .map((item) => ({ name: item.name.trim(), date: item.date.trim() }))
+    .map((item) => ({
+      name: item.name.trim(),
+      date: item.date.trim(),
+      subjectCode: item.subjectCode?.trim() || "",
+      targetScore: item.targetScore === undefined ? undefined : Number(item.targetScore),
+    }))
     .filter((item) => item.name && item.date)
     .slice(0, 5);
-  for (const item of cleaned) assertDateKey(item.date);
-  setSetting(db, scope, "exam_countdowns", JSON.stringify(cleaned));
+  const availableSubjects = new Set(
+    (db.prepare("SELECT code FROM subjects WHERE workspace_id = ?").all(scope.workspaceId) as Array<{ code: string }>)
+      .map((item) => item.code),
+  );
+  for (const item of cleaned) {
+    assertDateKey(item.date);
+    if (item.subjectCode && !availableSubjects.has(item.subjectCode)) throw new Error("考试关联科目不存在");
+    if (item.targetScore !== undefined && (!Number.isFinite(item.targetScore) || item.targetScore <= 0 || item.targetScore > 1000)) {
+      throw new Error("考试目标分数需在 1-1000 之间");
+    }
+  }
+  setSetting(db, scope, "exam_countdowns", JSON.stringify(cleaned.map((item) => ({
+    name: item.name,
+    date: item.date,
+    ...(item.subjectCode ? { subjectCode: item.subjectCode } : {}),
+    ...(item.targetScore !== undefined ? { targetScore: item.targetScore } : {}),
+  }))));
 }
 
 export function saveDailyReviewLimit(db: Database.Database, scope: WorkspaceScope, limit: number): void {
