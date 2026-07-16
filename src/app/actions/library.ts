@@ -5,11 +5,14 @@ import { getDb } from "@/lib/db";
 import {
   createFolder,
   deleteAsset,
+  deleteAssets,
   deleteFolder,
   moveAsset,
+  moveAssets,
   moveFolder,
   renameAsset,
   renameFolder,
+  updateAssetMetadata,
 } from "@/lib/repo/library";
 import { requireWorkspace } from "@/lib/request-auth";
 import type { ActionResult } from "./day";
@@ -92,6 +95,47 @@ export async function deleteAssetAction(assetId: number): Promise<ActionResult> 
   try {
     const access = await requireWorkspace();
     deleteAsset(getDb(), access, assetId);
+    revalidateLibrary();
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function moveAssetsAction(input: { assetIds: number[]; folderPath: string }): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    moveAssets(getDb(), access, input);
+    revalidateLibrary();
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function deleteAssetsAction(assetIds: number[]): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    deleteAssets(getDb(), access, assetIds);
+    revalidateLibrary();
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function updateAssetMetadataAction(input: {
+  assetId: number;
+  day: string;
+  category: string;
+  note: string;
+  subjectCode?: string;
+  chapterId?: string;
+  knowledgePointIds?: string[];
+}): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    updateAssetMetadata(getDb(), access, input);
     revalidateLibrary();
     return { ok: true };
   } catch (error) {

@@ -8,6 +8,7 @@ import {
   createReviewEvent,
   createStudySession,
   reattemptMistake,
+  spreadReviewBacklog,
   undoReattempt,
   undoReviewEvent,
   type MistakeUndo,
@@ -61,6 +62,7 @@ export async function addMistake(input: {
   day: string;
   title: string;
   cause?: string;
+  causeCategory?: string;
   subjectCode?: string;
   knowledgePointId?: string;
 }): Promise<ActionResult> {
@@ -80,12 +82,29 @@ export async function scoreReview(input: {
   knowledgePointId: string;
   score: number;
   note?: string;
+  operationId?: string;
 }): Promise<ScoreResult> {
   try {
     const access = await requireWorkspace();
     const undo = createReviewEvent(getDb(), access, input);
     revalidatePath(`/day/${input.day}`);
     return { ok: true, undo };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function spreadBacklogAction(input: {
+  day: string;
+  dailyLimit: number;
+  horizonDays?: number;
+}): Promise<ActionResult & { moved?: number; throughDate?: string }> {
+  try {
+    const access = await requireWorkspace();
+    const result = spreadReviewBacklog(getDb(), access, input);
+    revalidatePath(`/day/${input.day}`);
+    revalidatePath("/");
+    return { ok: true, ...result };
   } catch (error) {
     return failure(error);
   }

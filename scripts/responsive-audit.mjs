@@ -24,6 +24,7 @@ try {
   await auditLogin("login-small-mobile", 360, 800);
   await auditServiceWorkerRuntime();
   await login();
+  await ensureOnboarding();
   await auditPage("home-desktop", "/", 1440, 900, ".homeFocus");
   await auditDay("desktop", 1440, 900, { sidebar: true, capturePanel: false, mobileNav: false });
   await auditPage("files-desktop", "/assets", 1440, 900, ".driveExplorer");
@@ -132,7 +133,7 @@ async function auditMobileTaskLayout() {
 }
 
 async function auditPwaContract() {
-  const manifestResponse = await fetch(`${baseUrl}/manifest.webmanifest`);
+  const manifestResponse = await fetch(`${baseUrl}/site.webmanifest`);
   if (!manifestResponse.ok) throw new Error(`manifest unavailable: ${manifestResponse.status}`);
   const manifest = await manifestResponse.json();
   if (manifest.display !== "standalone" || manifest.start_url !== "/") {
@@ -156,10 +157,21 @@ async function auditPwaContract() {
   }
 
   const offlineResponse = await fetch(`${baseUrl}/offline.html`);
-  if (!offlineResponse.ok || !(await offlineResponse.text()).includes("没有缓存账号数据")) {
+  if (!offlineResponse.ok || !(await offlineResponse.text()).includes("离线评分")) {
     throw new Error("identity-free offline fallback unavailable");
   }
   console.log("PWA manifest and conservative service-worker contract passed");
+}
+
+async function ensureOnboarding() {
+  await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
+  if (!page.url().includes("/onboarding")) return;
+  await page.locator(".onboardingPane textarea").fill("响应式审计学习目标");
+  await page.getByRole("button", { name: "下一步" }).click();
+  await page.getByRole("button", { name: "下一步" }).click();
+  await page.getByRole("button", { name: "下一步" }).click();
+  await page.getByRole("button", { name: "进入今日工作台" }).click();
+  await page.waitForURL(`${baseUrl}/`, { timeout: 10_000 });
 }
 
 async function auditServiceWorkerRuntime() {

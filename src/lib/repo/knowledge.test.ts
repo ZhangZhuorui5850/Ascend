@@ -484,4 +484,104 @@ describe("章节递归树", () => {
     expect(detail?.chapters.map((c) => c.title)).toEqual(["甲", "乙"]);
     expect(detail?.chapters[0].children.map((c) => c.title)).toEqual(["子2", "子1"]);
   });
+
+  it("子知识点继承父点的章节与 submodule，同组同名幂等", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试科目" });
+    const chapter = createChapter(db, legacyScope, { subjectCode: "M9", title: "第一章" });
+    const parent = createPoint(db, legacyScope, { chapterId: chapter.id, title: "父点" });
+    const child = createPoint(db, legacyScope, { parentPointId: parent.id, title: "子点" });
+    const dup = createPoint(db, legacyScope, { parentPointId: parent.id, title: "子点" });
+    expect(dup.id).toBe(child.id);
+    // 不同父下允许同名
+    const other = createPoint(db, legacyScope, { chapterId: chapter.id, title: "子点" });
+    expect(other.id).not.toBe(child.id);
+
+    const row = db.prepare("SELECT chapter_id, parent_point_id, submodule FROM knowledge_points WHERE id = ?").get(child.id);
+    expect(row).toMatchObject({ chapter_id: chapter.id, parent_point_id: parent.id, submodule: "第一章" });
+
+    const detail = getSubjectDetail(db, legacyScope, "M9");
+    const parentNode = detail?.chapters[0].points.find((point) => point.id === parent.id);
+    expect(parentNode?.children.map((point) => point.title)).toEqual(["子点"]);
+  });
+
+  it("知识点嵌套防环、限深，删除级联子树", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试科目" });
+    const chapter = createChapter(db, legacyScope, { subjectCode: "M9", title: "第一章" });
+    const a = createPoint(db, legacyScope, { chapterId: chapter.id, title: "A" });
+    const b = createPoint(db, legacyScope, { parentPointId: a.id, title: "B" });
+    const c = createPoint(db, legacyScope, { parentPointId: b.id, title: "C" });
+
+    expect(() => movePointToPosition(db, legacyScope, { pointId: a.id, targetParentPointId: c.id, index: 0 }))
+      .toThrow("不能移动到自己的子知识点里");
+    expect(() => movePointToPosition(db, legacyScope, { pointId: a.id, targetParentPointId: a.id, index: 0 }))
+      .toThrow("不能移动到自身");
+
+    // 8 层上限：独立搭一条 8 层链，再往最深处塞第 9 层
+    let deepest = createPoint(db, legacyScope, { chapterId: chapter.id, title: "深1" }).id;
+    let seventh = deepest;
+    for (let depth = 2; depth <= 8; depth += 1) {
+      if (depth === 8) seventh = deepest;
+      deepest = createPoint(db, legacyScope, { parentPointId: deepest, title: `深${depth}` }).id;
+    }
+    expect(() => createPoint(db, legacyScope, { parentPointId: deepest, title: "第九层" }))
+      .toThrow("知识点层级最多 8 层");
+    // 把带 2 层子树的 B（B → C）挂到第 7 层下：7 + 2 = 9 > 8
+    expect(() => movePointToPosition(db, legacyScope, { pointId: b.id, targetParentPointId: seventh, index: 0 }))
+      .toThrow("知识点层级最多 8 层");
+
+    deletePoint(db, legacyScope, b.id);
+    expect(db.prepare(
+      "SELECT COUNT(*) c FROM knowledge_points WHERE workspace_id = ? AND title IN ('A','B','C')",
+    ).get(LEGACY_WORKSPACE_ID)).toMatchObject({ c: 1 }); // 只剩 A
+  });
+
+  it("知识点子树跨章移动时 chapter_id/submodule 整树同步并重排原组", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试科目" });
+    const first = createChapter(db, legacyScope, { subjectCode: "M9", title: "第一章" });
+    const second = createChapter(db, legacyScope, { subjectCode: "M9", title: "第二章" });
+    const a = createPoint(db, legacyScope, { chapterId: first.id, title: "A" });
+    const a1 = createPoint(db, legacyScope, { parentPointId: a.id, title: "A1" });
+    const a1x = createPoint(db, legacyScope, { parentPointId: a1.id, title: "A1x" });
+    const rest = createPoint(db, legacyScope, { chapterId: first.id, title: "剩下" });
+
+    movePointToPosition(db, legacyScope, { pointId: a.id, targetChapterId: second.id, index: 0 });
+
+    for (const id of [a.id, a1.id, a1x.id]) {
+      expect(db.prepare("SELECT chapter_id, submodule FROM knowledge_points WHERE id = ?").get(id))
+        .toMatchObject({ chapter_id: second.id, submodule: "第二章" });
+    }
+    expect(db.prepare("SELECT sort_order FROM knowledge_points WHERE id = ?").get(rest.id)).toMatchObject({ sort_order: 1 });
+    // 树形组装：A 在第二章下，仍带着 A1 → A1x
+    const detail = getSubjectDetail(db, legacyScope, "M9");
+    const moved = detail?.chapters.find((chapterNode) => chapterNode.id === second.id)?.points[0];
+    expect(moved?.children[0].children[0].title).toBe("A1x");
+  });
+
+  it("嵌套成为子点并在兄弟组内按 index 插入", () => {
+    const db = createTestDb();
+    createSubject(db, legacyScope, { code: "M9", name: "测试科目" });
+    const chapter = createChapter(db, legacyScope, { subjectCode: "M9", title: "第一章" });
+    const parent = createPoint(db, legacyScope, { chapterId: chapter.id, title: "父" });
+    createPoint(db, legacyScope, { parentPointId: parent.id, title: "子1" });
+    createPoint(db, legacyScope, { parentPointId: parent.id, title: "子2" });
+    const wanderer = createPoint(db, legacyScope, { chapterId: chapter.id, title: "游子" });
+
+    movePointToPosition(db, legacyScope, { pointId: wanderer.id, targetParentPointId: parent.id, index: 1 });
+
+    const detail = getSubjectDetail(db, legacyScope, "M9");
+    const parentNode = detail?.chapters[0].points.find((point) => point.id === parent.id);
+    expect(parentNode?.children.map((point) => point.title)).toEqual(["子1", "游子", "子2"]);
+    // 兄弟组重排只作用于该组
+    reorderPoints(db, legacyScope, {
+      chapterId: chapter.id,
+      parentPointId: parent.id,
+      orderedIds: parentNode!.children.map((point) => point.id).reverse(),
+    });
+    const after = getSubjectDetail(db, legacyScope, "M9");
+    const parentAfter = after?.chapters[0].points.find((point) => point.id === parent.id);
+    expect(parentAfter?.children.map((point) => point.title)).toEqual(["子2", "游子", "子1"]);
+  });
 });

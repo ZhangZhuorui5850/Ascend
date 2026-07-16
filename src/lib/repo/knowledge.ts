@@ -29,6 +29,7 @@ export type SubjectOverview = SubjectRow & {
 export type PointRow = {
   id: string;
   chapter_id: string | null;
+  parent_point_id: string | null;
   subject_code: string;
   title: string;
   tier: Tier;
@@ -39,32 +40,51 @@ export type PointRow = {
   reviews: number;
   last_review: string | null;
   next_review: string | null;
+  prompt: string;
+  answer: string;
+  interval_step: number;
+  lapse_count: number;
+  last_score: number | null;
   created_at: string;
   asset_count: number;
   mistake_count: number;
 };
+
+/** 知识点树节点：children 为子知识点，顺序即兄弟组内 sort_order */
+export type PointNode = PointRow & { children: PointNode[] };
 
 export type ChapterWithPoints = {
   id: string;
   title: string;
   sort_order: number;
   parent_id: string | null;
-  points: PointRow[];
+  points: PointNode[];
   children: ChapterWithPoints[];
 };
 
 /** 章节树最深层级（含根） */
 export const MAX_CHAPTER_DEPTH = 8;
 
-/** 深度优先收集整棵章节树（含子孙）下的全部知识点。 */
-export function flattenChapterPoints(chapters: ChapterWithPoints[]): PointRow[] {
-  return chapters.flatMap((chapter) => [...chapter.points, ...flattenChapterPoints(chapter.children)]);
+/** 知识点树最深层级（章节直属 = 1） */
+export const MAX_POINT_DEPTH = 8;
+
+/** 深度优先拍平知识点树（含每个根自身）。 */
+export function flattenPointTree(points: PointNode[]): PointNode[] {
+  return points.flatMap((point) => [point, ...flattenPointTree(point.children)]);
+}
+
+/** 深度优先收集整棵章节树（含子孙）下的全部知识点（含嵌套子点）。 */
+export function flattenChapterPoints(chapters: ChapterWithPoints[]): PointNode[] {
+  return chapters.flatMap((chapter) => [
+    ...flattenPointTree(chapter.points),
+    ...flattenChapterPoints(chapter.children),
+  ]);
 }
 
 export type SubjectDetail = {
   subject: SubjectRow;
   chapters: ChapterWithPoints[];
-  loosePoints: PointRow[];
+  loosePoints: PointNode[];
   assets: Array<{
     id: number;
     day: string;
@@ -137,6 +157,7 @@ const POINT_SELECT = `
   SELECT
     k.id,
     k.chapter_id,
+    k.parent_point_id,
     k.subject_code,
     k.title,
     k.tier,
@@ -147,6 +168,11 @@ const POINT_SELECT = `
     k.reviews,
     k.last_review,
     k.next_review,
+    k.prompt,
+    k.answer,
+    k.interval_step,
+    k.lapse_count,
+    k.last_score,
     k.created_at,
     (SELECT COUNT(DISTINCT l.asset_id) FROM asset_links l
      WHERE l.workspace_id = k.workspace_id AND l.knowledge_point_id = k.id) AS asset_count,
@@ -188,11 +214,18 @@ export function getSubjectDetail(db: Database.Database, scope: WorkspaceScope, c
     ORDER BY k.sort_order ASC, k.id ASC
   `).all({ workspaceId: scope.workspaceId, code }) as PointRow[];
 
-  const loosePoints: PointRow[] = [];
-  for (const point of points) {
-    const chapter = point.chapter_id ? chapterById.get(point.chapter_id) : undefined;
-    if (chapter) chapter.points.push(point);
-    else loosePoints.push(point);
+  // 组装知识点树：父点缺失（脏数据）时按章节直属处理；查询序即兄弟组内顺序
+  const pointById = new Map<string, PointNode>(points.map((row) => [row.id, { ...row, children: [] }]));
+  const loosePoints: PointNode[] = [];
+  for (const node of pointById.values()) {
+    const parent = node.parent_point_id ? pointById.get(node.parent_point_id) : undefined;
+    if (parent && parent.id !== node.id) {
+      parent.children.push(node);
+      continue;
+    }
+    const chapter = node.chapter_id ? chapterById.get(node.chapter_id) : undefined;
+    if (chapter) chapter.points.push(node);
+    else loosePoints.push(node);
   }
 
   const assets = db.prepare(`
@@ -623,53 +656,146 @@ export function deleteChapter(db: Database.Database, scope: WorkspaceScope, id: 
   remove();
 }
 
+/** 知识点自身所在层级（章节直属 = 1）；带环兜底上限。 */
+function pointDepth(db: Database.Database, scope: WorkspaceScope, pointId: string): number {
+  const stmt = db.prepare("SELECT parent_point_id FROM knowledge_points WHERE workspace_id = ? AND id = ?");
+  let depth = 0;
+  let current: string | null = pointId;
+  while (current && depth <= MAX_POINT_DEPTH + 8) {
+    const row = stmt.get(scope.workspaceId, current) as { parent_point_id: string | null } | undefined;
+    if (!row) break;
+    depth += 1;
+    current = row.parent_point_id;
+  }
+  return depth;
+}
+
+/** 以 rootId 为根的整棵知识点子树 id 列表（含根），父在前子在后。 */
+function collectPointSubtree(db: Database.Database, scope: WorkspaceScope, rootId: string): string[] {
+  const rows = db.prepare(
+    "SELECT id, parent_point_id FROM knowledge_points WHERE workspace_id = ? AND parent_point_id IS NOT NULL",
+  ).all(scope.workspaceId) as Array<{ id: string; parent_point_id: string }>;
+  const childrenOf = new Map<string, string[]>();
+  for (const row of rows) {
+    const group = childrenOf.get(row.parent_point_id) || [];
+    group.push(row.id);
+    childrenOf.set(row.parent_point_id, group);
+  }
+  const result: string[] = [];
+  const queue = [rootId];
+  while (queue.length) {
+    const current = queue.shift()!;
+    if (result.includes(current)) continue; // 环兜底
+    result.push(current);
+    queue.push(...(childrenOf.get(current) || []));
+  }
+  return result;
+}
+
+/** 知识点子树自身的高度（根算 1 层）。 */
+function pointSubtreeHeight(db: Database.Database, scope: WorkspaceScope, rootId: string): number {
+  const subtree = new Set(collectPointSubtree(db, scope, rootId));
+  const stmt = db.prepare("SELECT parent_point_id FROM knowledge_points WHERE workspace_id = ? AND id = ?");
+  let height = 1;
+  for (const id of subtree) {
+    let level = 1;
+    let current = id;
+    while (current !== rootId && level <= MAX_POINT_DEPTH + 8) {
+      const row = stmt.get(scope.workspaceId, current) as { parent_point_id: string | null } | undefined;
+      if (!row || !row.parent_point_id) break;
+      current = row.parent_point_id;
+      level += 1;
+    }
+    if (current === rootId) height = Math.max(height, level);
+  }
+  return height;
+}
+
+/** 兄弟组 =（同 chapter_id, 同 parent_point_id）；chapter_id 可为 NULL（未分章）。 */
+const SIBLING_SELECT = `
+  SELECT id FROM knowledge_points
+  WHERE workspace_id = ? AND chapter_id IS ? AND parent_point_id IS ?
+  ORDER BY sort_order ASC, id ASC
+`;
+
 export function createPoint(
   db: Database.Database,
   scope: WorkspaceScope,
-  input: { chapterId: string; title: string; tier?: Tier; exam?: boolean },
+  input: { chapterId?: string | null; parentPointId?: string | null; title: string; tier?: Tier; exam?: boolean },
 ) {
-  const chapterId = input.chapterId.trim();
   const title = input.title.trim();
-  if (!chapterId || !title) throw new Error("章节和知识点标题必填");
-  const chapter = db.prepare(`
-    SELECT c.id, c.title, c.subject_code, s.name AS subject_name
-    FROM subject_chapters c
-    JOIN subjects s ON s.code = c.subject_code AND s.workspace_id = c.workspace_id
-    WHERE c.workspace_id = ? AND c.id = ?
-  `).get(scope.workspaceId, chapterId) as
-    | { id: string; title: string; subject_code: string; subject_name: string }
-    | undefined;
-  if (!chapter) throw new Error("章节不存在");
+  const parentPointId = input.parentPointId?.trim() || null;
+  let chapterId = input.chapterId?.trim() || null;
+  if (!title) throw new Error("知识点标题必填");
 
+  let subjectCode: string;
+  let subjectName: string;
+  let submodule: string;
+  if (parentPointId) {
+    // 子知识点：章节/科目/submodule 全部继承父点
+    const parent = db.prepare(`
+      SELECT id, chapter_id, subject_code, subject_name, submodule
+      FROM knowledge_points WHERE workspace_id = ? AND id = ?
+    `).get(scope.workspaceId, parentPointId) as
+      | { id: string; chapter_id: string | null; subject_code: string; subject_name: string; submodule: string }
+      | undefined;
+    if (!parent) throw new Error("父知识点不存在");
+    if (pointDepth(db, scope, parentPointId) >= MAX_POINT_DEPTH) {
+      throw new Error(`知识点层级最多 ${MAX_POINT_DEPTH} 层`);
+    }
+    chapterId = parent.chapter_id;
+    subjectCode = parent.subject_code;
+    subjectName = parent.subject_name;
+    submodule = parent.submodule;
+  } else {
+    if (!chapterId) throw new Error("章节和知识点标题必填");
+    const chapter = db.prepare(`
+      SELECT c.id, c.title, c.subject_code, s.name AS subject_name
+      FROM subject_chapters c
+      JOIN subjects s ON s.code = c.subject_code AND s.workspace_id = c.workspace_id
+      WHERE c.workspace_id = ? AND c.id = ?
+    `).get(scope.workspaceId, chapterId) as
+      | { id: string; title: string; subject_code: string; subject_name: string }
+      | undefined;
+    if (!chapter) throw new Error("章节不存在");
+    subjectCode = chapter.subject_code;
+    subjectName = chapter.subject_name;
+    submodule = chapter.title;
+  }
+
+  // 同兄弟组内同名幂等返回；不同父点下允许同名
   const existing = db.prepare(`
-    SELECT id FROM knowledge_points WHERE workspace_id = ? AND chapter_id = ? AND title = ?
-  `).get(scope.workspaceId, chapterId, title);
+    SELECT id FROM knowledge_points
+    WHERE workspace_id = ? AND chapter_id IS ? AND parent_point_id IS ? AND title = ?
+  `).get(scope.workspaceId, chapterId, parentPointId, title);
   if (existing) return existing as { id: string };
 
   const tier: Tier = input.tier && ["r", "y", "g"].includes(input.tier) ? input.tier : "g";
   const maxOrder = db.prepare(
     `SELECT COALESCE(MAX(sort_order), 0) AS value FROM knowledge_points
-     WHERE workspace_id = ? AND chapter_id = ?`,
-  ).get(scope.workspaceId, chapterId) as { value: number };
-  const id = `${scope.workspaceId}:kp:${chapterId}:${slugFor(title)}-${Date.now().toString(36)}`;
+     WHERE workspace_id = ? AND chapter_id IS ? AND parent_point_id IS ?`,
+  ).get(scope.workspaceId, chapterId, parentPointId) as { value: number };
+  // 同毫秒内不同兄弟组可创建同名点，时间戳后再加随机段防 id 撞 UNIQUE
+  const id = `${scope.workspaceId}:kp:${chapterId ?? "loose"}:${slugFor(title)}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   db.prepare(`
     INSERT INTO knowledge_points
       (workspace_id, id, subject_code, subject_name, submodule, tier, tier_name, title,
-       exam, status, mastery, reviews, chapter_id, sort_order, created_at)
+       exam, status, mastery, reviews, chapter_id, parent_point_id, sort_order, created_at)
     VALUES
       (@workspaceId, @id, @subjectCode, @subjectName, @submodule, @tier, @tierName,
-       @title, @exam, '未学', 0, 0, @chapterId, @sortOrder, datetime('now'))
+       @title, @exam, '未学', 0, 0, @chapterId, @parentPointId, @sortOrder, datetime('now'))
   `).run({
     workspaceId: scope.workspaceId,
     id,
-    subjectCode: chapter.subject_code,
-    subjectName: chapter.subject_name,
-    submodule: chapter.title,
+    subjectCode,
+    subjectName,
+    submodule,
     tier,
     tierName: TIER_NAMES[tier],
     title,
     exam: input.exam ? 1 : 0,
     chapterId,
+    parentPointId,
     sortOrder: maxOrder.value + 1,
   });
   return { id };
@@ -678,13 +804,30 @@ export function createPoint(
 export function updatePoint(
   db: Database.Database,
   scope: WorkspaceScope,
-  input: { id: string; title?: string; tier?: Tier; exam?: boolean; mastery?: number },
+  input: {
+    id: string;
+    title?: string;
+    tier?: Tier;
+    exam?: boolean;
+    mastery?: number;
+    prompt?: string;
+    answer?: string;
+  },
 ) {
   const point = db.prepare("SELECT * FROM knowledge_points WHERE workspace_id = ? AND id = ?").get(
     scope.workspaceId,
     input.id,
   ) as
-    | { id: string; title: string; tier: Tier; exam: number; mastery: number; status: string }
+    | {
+        id: string;
+        title: string;
+        tier: Tier;
+        exam: number;
+        mastery: number;
+        status: string;
+        prompt: string;
+        answer: string;
+      }
     | undefined;
   if (!point) throw new Error("知识点不存在");
   const title = input.title === undefined ? point.title : input.title.trim();
@@ -693,35 +836,52 @@ export function updatePoint(
   const exam = input.exam === undefined ? point.exam : input.exam ? 1 : 0;
   const mastery = input.mastery === undefined ? point.mastery : clampMastery(input.mastery);
   const status = input.mastery === undefined ? point.status : deriveStatus(mastery);
+  const prompt = input.prompt === undefined ? point.prompt : input.prompt.trim();
+  const answer = input.answer === undefined ? point.answer : input.answer.trim();
   db.prepare(`
     UPDATE knowledge_points
     SET title = @title, tier = @tier, tier_name = @tierName, exam = @exam,
-        mastery = @mastery, status = @status
+        mastery = @mastery, status = @status, prompt = @prompt, answer = @answer
     WHERE workspace_id = @workspaceId AND id = @id
-  `).run({ workspaceId: scope.workspaceId, id: input.id, title, tier, tierName: TIER_NAMES[tier], exam, mastery, status });
+  `).run({
+    workspaceId: scope.workspaceId,
+    id: input.id,
+    title,
+    tier,
+    tierName: TIER_NAMES[tier],
+    exam,
+    mastery,
+    status,
+    prompt,
+    answer,
+  });
 }
 
+/** 级联删除知识点（含全部子孙知识点）；学习记录/错题/资料只解除关联。 */
 export function deletePoint(db: Database.Database, scope: WorkspaceScope, id: string) {
   const pointId = id.trim();
   if (!pointId) throw new Error("知识点必填");
   const remove = db.transaction(() => {
-    detachPointReferences(db, scope, pointId);
-    db.prepare("DELETE FROM knowledge_points WHERE workspace_id = ? AND id = ?").run(scope.workspaceId, pointId);
+    for (const nodeId of collectPointSubtree(db, scope, pointId)) {
+      detachPointReferences(db, scope, nodeId);
+      db.prepare("DELETE FROM knowledge_points WHERE workspace_id = ? AND id = ?").run(scope.workspaceId, nodeId);
+    }
   });
   remove();
 }
 
-/** 手动拖拽后的整章重排：orderedIds 必须与该章节现有知识点集合完全一致。 */
+/** 手动拖拽后的兄弟组重排：orderedIds 必须与（chapterId, parentPointId）组内现有知识点集合完全一致。 */
 export function reorderPoints(
   db: Database.Database,
   scope: WorkspaceScope,
-  input: { chapterId: string; orderedIds: string[] },
+  input: { chapterId?: string | null; parentPointId?: string | null; orderedIds: string[] },
 ) {
-  const chapterId = input.chapterId.trim();
-  if (!chapterId) throw new Error("章节必填");
+  const chapterId = input.chapterId?.trim() || null;
+  const parentPointId = input.parentPointId?.trim() || null;
+  if (!chapterId && !parentPointId) throw new Error("章节必填");
   const existing = db.prepare(
-    "SELECT id FROM knowledge_points WHERE workspace_id = ? AND chapter_id = ?",
-  ).all(scope.workspaceId, chapterId) as Array<{ id: string }>;
+    "SELECT id FROM knowledge_points WHERE workspace_id = ? AND chapter_id IS ? AND parent_point_id IS ?",
+  ).all(scope.workspaceId, chapterId, parentPointId) as Array<{ id: string }>;
   const existingIds = new Set(existing.map((row) => row.id));
   const unique = new Set(input.orderedIds);
   if (
@@ -729,7 +889,7 @@ export function reorderPoints(
     || existingIds.size !== unique.size
     || !input.orderedIds.every((id) => existingIds.has(id))
   ) {
-    throw new Error("排序列表与章节内知识点不一致，请刷新后重试");
+    throw new Error("排序列表与知识点不一致，请刷新后重试");
   }
   const update = db.prepare("UPDATE knowledge_points SET sort_order = ? WHERE workspace_id = ? AND id = ?");
   const reorder = db.transaction(() => {
@@ -738,44 +898,81 @@ export function reorderPoints(
   reorder();
 }
 
-/** 拖拽移动知识点：插到目标章节最终列表的第 index 位（0 起，越界夹取）；跨章时迁移并重排两章、同步 submodule。 */
+/**
+ * 拖拽移动知识点（整棵子树跟随）：
+ * - targetParentPointId 有值：成为该知识点的子点，章节随父点走（targetChapterId 忽略）；
+ * - 否则挂到 targetChapterId 章节直属层。
+ * 插到目标兄弟组第 index 位（0 起，越界夹取）；防环、防超深；跨章时同步整棵子树的 chapter_id/submodule 并重排原组。
+ */
 export function movePointToPosition(
   db: Database.Database,
   scope: WorkspaceScope,
-  input: { pointId: string; targetChapterId: string; index: number },
+  input: { pointId: string; targetChapterId?: string | null; targetParentPointId?: string | null; index: number },
 ) {
   const pointId = input.pointId.trim();
-  const targetChapterId = input.targetChapterId.trim();
-  if (!pointId || !targetChapterId) throw new Error("知识点和目标章节必填");
+  const targetParentPointId = input.targetParentPointId?.trim() || null;
+  if (!pointId) throw new Error("知识点必填");
   const point = db.prepare(
-    "SELECT id, chapter_id, subject_code FROM knowledge_points WHERE workspace_id = ? AND id = ?",
+    "SELECT id, chapter_id, parent_point_id, subject_code FROM knowledge_points WHERE workspace_id = ? AND id = ?",
   ).get(scope.workspaceId, pointId) as
-    | { id: string; chapter_id: string | null; subject_code: string }
+    | { id: string; chapter_id: string | null; parent_point_id: string | null; subject_code: string }
     | undefined;
   if (!point) throw new Error("知识点不存在");
-  const target = db.prepare(
-    "SELECT id, title, subject_code FROM subject_chapters WHERE workspace_id = ? AND id = ?",
-  ).get(scope.workspaceId, targetChapterId) as
-    | { id: string; title: string; subject_code: string }
-    | undefined;
-  if (!target) throw new Error("目标章节不存在");
-  if (target.subject_code !== point.subject_code) throw new Error("不能移动到其他科目的章节");
 
-  const listOf = db.prepare(
-    `SELECT id FROM knowledge_points WHERE workspace_id = ? AND chapter_id = ?
-     ORDER BY sort_order ASC, id ASC`,
-  );
+  let targetChapterId: string | null;
+  let submodule: string;
+  if (targetParentPointId) {
+    if (targetParentPointId === pointId) throw new Error("不能移动到自身");
+    const parent = db.prepare(`
+      SELECT id, chapter_id, subject_code, submodule FROM knowledge_points WHERE workspace_id = ? AND id = ?
+    `).get(scope.workspaceId, targetParentPointId) as
+      | { id: string; chapter_id: string | null; subject_code: string; submodule: string }
+      | undefined;
+    if (!parent) throw new Error("目标知识点不存在");
+    if (parent.subject_code !== point.subject_code) throw new Error("不能移动到其他科目的知识点下");
+    if (collectPointSubtree(db, scope, pointId).includes(targetParentPointId)) {
+      throw new Error("不能移动到自己的子知识点里");
+    }
+    const depth = pointDepth(db, scope, targetParentPointId) + pointSubtreeHeight(db, scope, pointId);
+    if (depth > MAX_POINT_DEPTH) throw new Error(`知识点层级最多 ${MAX_POINT_DEPTH} 层`);
+    targetChapterId = parent.chapter_id;
+    submodule = parent.submodule;
+  } else {
+    targetChapterId = input.targetChapterId?.trim() || null;
+    if (!targetChapterId) throw new Error("知识点和目标章节必填");
+    const target = db.prepare(
+      "SELECT id, title, subject_code FROM subject_chapters WHERE workspace_id = ? AND id = ?",
+    ).get(scope.workspaceId, targetChapterId) as
+      | { id: string; title: string; subject_code: string }
+      | undefined;
+    if (!target) throw new Error("目标章节不存在");
+    if (target.subject_code !== point.subject_code) throw new Error("不能移动到其他科目的章节");
+    submodule = target.title;
+  }
+
   const setOrder = db.prepare("UPDATE knowledge_points SET sort_order = ? WHERE workspace_id = ? AND id = ?");
+  const sameGroup = (point.chapter_id ?? null) === targetChapterId
+    && (point.parent_point_id ?? null) === targetParentPointId;
   const move = db.transaction(() => {
-    if (point.chapter_id && point.chapter_id !== targetChapterId) {
-      const rest = (listOf.all(scope.workspaceId, point.chapter_id) as Array<{ id: string }>)
-        .filter((row) => row.id !== pointId);
+    if (!sameGroup) {
+      const rest = (db.prepare(SIBLING_SELECT).all(
+        scope.workspaceId, point.chapter_id, point.parent_point_id,
+      ) as Array<{ id: string }>).filter((row) => row.id !== pointId);
       rest.forEach((row, order) => setOrder.run(order + 1, scope.workspaceId, row.id));
     }
     db.prepare(
+      "UPDATE knowledge_points SET chapter_id = ?, parent_point_id = ?, submodule = ? WHERE workspace_id = ? AND id = ?",
+    ).run(targetChapterId, targetParentPointId, submodule, scope.workspaceId, pointId);
+    // 不变量：整棵子树的 chapter_id/submodule 与根一致
+    const syncDescendant = db.prepare(
       "UPDATE knowledge_points SET chapter_id = ?, submodule = ? WHERE workspace_id = ? AND id = ?",
-    ).run(targetChapterId, target.title, scope.workspaceId, pointId);
-    const ids = (listOf.all(scope.workspaceId, targetChapterId) as Array<{ id: string }>)
+    );
+    for (const nodeId of collectPointSubtree(db, scope, pointId)) {
+      if (nodeId !== pointId) syncDescendant.run(targetChapterId, submodule, scope.workspaceId, nodeId);
+    }
+    const ids = (db.prepare(SIBLING_SELECT).all(
+      scope.workspaceId, targetChapterId, targetParentPointId,
+    ) as Array<{ id: string }>)
       .map((row) => row.id)
       .filter((id) => id !== pointId);
     const index = Math.max(0, Math.min(Math.trunc(input.index), ids.length));

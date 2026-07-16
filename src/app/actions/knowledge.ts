@@ -22,6 +22,7 @@ import {
   type SubjectTrack,
 } from "@/lib/repo/knowledge";
 import { requireWorkspace } from "@/lib/request-auth";
+import { markPointLearned } from "@/lib/repo/reviews";
 import type { Tier } from "@/lib/types";
 import type { ActionResult } from "./day";
 
@@ -143,7 +144,8 @@ export async function deleteChapterAction(input: { id: string; subjectCode: stri
 }
 
 export async function createPointAction(input: {
-  chapterId: string;
+  chapterId?: string | null;
+  parentPointId?: string | null;
   title: string;
   tier?: Tier;
   exam?: boolean;
@@ -165,12 +167,30 @@ export async function updatePointAction(input: {
   tier?: Tier;
   exam?: boolean;
   mastery?: number;
+  prompt?: string;
+  answer?: string;
   subjectCode: string;
 }): Promise<ActionResult> {
   try {
     const access = await requireWorkspace();
     updatePoint(getDb(), access, input);
     revalidateKnowledge(input.subjectCode);
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function markPointLearnedAction(input: {
+  id: string;
+  day: string;
+  subjectCode: string;
+}): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    markPointLearned(getDb(), access, { knowledgePointId: input.id, day: input.day });
+    revalidateKnowledge(input.subjectCode);
+    revalidatePath(`/day/${input.day}`);
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -189,13 +209,18 @@ export async function deletePointAction(input: { id: string; subjectCode: string
 }
 
 export async function reorderPointsAction(input: {
-  chapterId: string;
+  chapterId?: string | null;
+  parentPointId?: string | null;
   subjectCode: string;
   orderedIds: string[];
 }): Promise<ActionResult> {
   try {
     const access = await requireWorkspace();
-    reorderPoints(getDb(), access, { chapterId: input.chapterId, orderedIds: input.orderedIds });
+    reorderPoints(getDb(), access, {
+      chapterId: input.chapterId,
+      parentPointId: input.parentPointId,
+      orderedIds: input.orderedIds,
+    });
     revalidateKnowledge(input.subjectCode);
     return { ok: true };
   } catch (error) {
@@ -205,7 +230,8 @@ export async function reorderPointsAction(input: {
 
 export async function movePointAction(input: {
   pointId: string;
-  targetChapterId: string;
+  targetChapterId?: string | null;
+  targetParentPointId?: string | null;
   index: number;
   subjectCode: string;
 }): Promise<ActionResult> {
@@ -214,6 +240,7 @@ export async function movePointAction(input: {
     movePointToPosition(getDb(), access, {
       pointId: input.pointId,
       targetChapterId: input.targetChapterId,
+      targetParentPointId: input.targetParentPointId,
       index: input.index,
     });
     revalidateKnowledge(input.subjectCode);

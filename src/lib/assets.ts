@@ -16,6 +16,7 @@ export type StoredUpload = {
   absolutePath: string;
   safeName: string;
   size: number;
+  created: boolean;
 };
 
 export function storageKeyFor(workspaceId: string, day: string, sha256: string, originalName: string): string {
@@ -40,8 +41,10 @@ export async function storeUploadedFile(input: {
   const absolutePath = input.uploadRoot ? resolveAssetPathForRoot(input.uploadRoot, relativePath) : resolveAssetPath(relativePath);
 
   mkdirSync(path.dirname(absolutePath), { recursive: true });
+  let created = false;
   try {
     writeFileSync(absolutePath, bytes, { flag: "wx" });
+    created = true;
   } catch (error) {
     if (!isFileExistsError(error)) throw error;
   }
@@ -52,6 +55,7 @@ export async function storeUploadedFile(input: {
     absolutePath,
     safeName: path.basename(relativePath),
     size: bytes.length,
+    created,
   };
 }
 

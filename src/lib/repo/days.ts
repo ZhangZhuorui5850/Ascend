@@ -23,6 +23,8 @@ export type DueReview = {
   tier_name: string;
   mastery: number;
   next_review: string;
+  prompt: string;
+  answer: string;
 };
 
 export type DueMistake = {
@@ -41,6 +43,7 @@ export type DayData = {
   dueReviews: DueReview[];
   dueReviewsTotal: number;
   dueMistakes: DueMistake[];
+  dueMistakesTotal: number;
   assets: Array<{ id: number; original_name: string; mime_type: string; size: number; folder_path: string }>;
   sessions: Array<{ id: number; title: string; subject_code: string | null; duration_minutes: number; output: string }>;
   reviews: Array<{ id: number; knowledge_title: string | null; subject_code: string | null; score: number; note: string }>;
@@ -64,12 +67,12 @@ export function getDay(
   db: Database.Database,
   scope: WorkspaceScope,
   date: string,
-  options: { reviewLimit?: number } = {},
+  options: { reviewLimit?: number; examSprint?: boolean } = {},
 ): DayData {
   assertDateKey(date);
   ensureDay(db, scope, date);
   const reviewLimit = Math.max(1, options.reviewLimit ?? 12);
-  const params = { workspaceId: scope.workspaceId, date, limit: reviewLimit };
+  const params = { workspaceId: scope.workspaceId, date, limit: reviewLimit, examSprint: options.examSprint ? 1 : 0 };
   const entry = db.prepare(`
     SELECT * FROM daily_entries WHERE workspace_id = @workspaceId AND date = @date
   `).get(params) as DayEntry;
@@ -93,10 +96,13 @@ export function getDay(
     FROM mistakes WHERE workspace_id = @workspaceId AND day = @date ORDER BY created_at DESC
   `).all(params) as DayData["mistakes"];
   const dueReviews = db.prepare(`
-    SELECT id, title, subject_code, tier_name, mastery, next_review
+    SELECT id, title, subject_code, tier_name, mastery, next_review, prompt, answer
     FROM knowledge_points
     WHERE workspace_id = @workspaceId AND next_review IS NOT NULL AND next_review <= @date
-    ORDER BY tier ASC, next_review ASC
+    ORDER BY CASE WHEN @examSprint = 1 AND exam = 1 THEN 0 ELSE 1 END,
+             CASE tier WHEN 'r' THEN 0 WHEN 'y' THEN 1 ELSE 2 END,
+             next_review ASC,
+             mastery ASC
     LIMIT @limit
   `).all(params) as DueReview[];
   const dueReviewsTotal = (db.prepare(`
@@ -112,6 +118,11 @@ export function getDay(
     ORDER BY m.next_review ASC, m.created_at ASC
     LIMIT 12
   `).all(params) as DueMistake[];
+  const dueMistakesTotal = (db.prepare(`
+    SELECT COUNT(*) AS count FROM mistakes
+    WHERE workspace_id = @workspaceId
+      AND graduated = 0 AND next_review IS NOT NULL AND next_review <= @date
+  `).get(params) as { count: number }).count;
 
   return {
     entry,
@@ -120,6 +131,7 @@ export function getDay(
     dueReviews,
     dueReviewsTotal,
     dueMistakes,
+    dueMistakesTotal,
     assets,
     sessions,
     reviews,

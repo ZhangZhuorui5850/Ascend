@@ -4,17 +4,24 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
 import {
+  CalendarDays,
+  Check,
   ChevronRight,
   FileText,
   Folder,
   FolderInput,
   FolderPlus,
+  Grid3X3,
   HardDrive,
   ImageIcon,
   Loader2,
+  List,
+  Link2,
+  NotebookPen,
   Eye,
   Pencil,
   Search,
+  Tags,
   Trash2,
   Upload,
   X,
@@ -22,13 +29,17 @@ import {
 import {
   createFolderAction,
   deleteAssetAction,
+  deleteAssetsAction,
   deleteFolderAction,
   moveAssetAction,
+  moveAssetsAction,
   moveFolderAction,
   renameAssetAction,
   renameFolderAction,
+  updateAssetMetadataAction,
 } from "@/app/actions/library";
 import type { ExplorerFile, ExplorerState, ExplorerTreeNode } from "@/lib/repo/library";
+import type { CaptureSubject } from "@/lib/repo/knowledge";
 import { MAX_UPLOAD_BYTES } from "@/lib/limits";
 import { assetFileUrl } from "@/lib/asset-url";
 import { AssetViewer, previewKind } from "@/components/AssetViewer";
@@ -37,10 +48,11 @@ import { useFeedback } from "@/components/FeedbackProvider";
 type SortKey = "name" | "size" | "day";
 
 type DragPayload = { kind: "file"; id: number } | { kind: "folder"; path: string };
-type MoveTarget = { kind: "file"; id: number; name: string } | { kind: "folder"; path: string; name: string };
+type MoveTarget = { kind: "file"; id: number; name: string } | { kind: "folder"; path: string; name: string } | { kind: "batch"; ids: number[]; name: string };
 
-export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
+export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, usage }: {
   explorer: ExplorerState;
+  hierarchy: CaptureSubject[];
   searchQuery: string;
   searchResults: ExplorerFile[] | null;
   usage?: { usedBytes: number; quotaBytes: number };
@@ -48,12 +60,16 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
   const router = useRouter();
   const { confirm, notify } = useFeedback();
   const [selectedFileId, setSelectedFileId] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [previewFile, setPreviewFile] = useState<ExplorerFile | null>(null);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [folderName, setFolderName] = useState("");
   const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
   const [renamingFile, setRenamingFile] = useState<number | null>(null);
   const [uploading, setUploading] = useState(0);
+  const [uploaded, setUploaded] = useState(0);
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [dropActive, setDropActive] = useState(false);
   const [error, setError] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortAsc, setSortAsc] = useState(true);
@@ -162,10 +178,13 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
     if (!moveTarget) return;
     const result = moveTarget.kind === "file"
       ? await moveAssetAction({ assetId: moveTarget.id, folderPath: moveDestination })
-      : await moveFolderAction({ path: moveTarget.path, newParentPath: moveDestination });
+      : moveTarget.kind === "batch"
+        ? await moveAssetsAction({ assetIds: moveTarget.ids, folderPath: moveDestination })
+        : await moveFolderAction({ path: moveTarget.path, newParentPath: moveDestination });
     if (result.ok) {
       setMoveTarget(null);
       setMoveDestination("");
+      if (moveTarget.kind === "batch") setSelectedIds(new Set());
       notify(`已移动“${moveTarget.name}”`);
     }
     report(result);
@@ -174,13 +193,22 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
   async function uploadFiles(event: ChangeEvent<HTMLInputElement>) {
     const list = Array.from(event.target.files || []);
     event.target.value = "";
+    await uploadFileList(list);
+  }
+
+  async function uploadFileList(list: File[]) {
     if (!list.length) return;
     setUploading(list.length);
+    setUploaded(0);
     const failures: string[] = [];
-    for (const file of list) {
+    let cursor = 0;
+    async function worker() {
+      while (cursor < list.length) {
+        const file = list[cursor++];
       if (file.size > MAX_UPLOAD_BYTES) {
         failures.push(`${file.name}：超过 20MB 上限`);
         setUploading((current) => Math.max(0, current - 1));
+        setUploaded((current) => current + 1);
         continue;
       }
       try {
@@ -196,7 +224,10 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
         failures.push(`${file.name}：网络错误`);
       }
       setUploading((current) => Math.max(0, current - 1));
+      setUploaded((current) => current + 1);
+      }
     }
+    await Promise.all(Array.from({ length: Math.min(3, list.length) }, () => worker()));
     if (failures.length) {
       notify(`${failures.length} 个文件上传失败：${failures[0]}${failures.length > 1 ? " 等" : ""}`, "error");
     } else if (list.length) {
@@ -205,8 +236,39 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
     router.refresh();
   }
 
+  function toggleSelected(id: number) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleBatchDelete() {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    const accepted = await confirm({ title: `删除 ${ids.length} 个文件？`, description: "关联关系会同步解除。", confirmLabel: "批量删除", danger: true });
+    if (!accepted) return;
+    const result = await deleteAssetsAction(ids);
+    if (result.ok) setSelectedIds(new Set());
+    report(result);
+  }
+
   return (
-    <section className="driveExplorer" aria-label="资料库资源管理器">
+    <section
+      className={dropActive ? "driveExplorer dropActive" : "driveExplorer"}
+      aria-label="资料库资源管理器"
+      onDragEnter={(event) => { if (event.dataTransfer.types.includes("Files")) setDropActive(true); }}
+      onDragLeave={(event) => { if (event.currentTarget === event.target) setDropActive(false); }}
+      onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }}
+      onDrop={(event) => {
+        if (!event.dataTransfer.files.length) return;
+        event.preventDefault();
+        setDropActive(false);
+        void uploadFileList(Array.from(event.dataTransfer.files));
+      }}
+    >
       <aside className="driveTree" aria-label="文件夹树">
         <button
           className={!explorer.currentPath && !isSearch ? "driveTreeRoot active" : "driveTreeRoot"}
@@ -249,13 +311,17 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
           <div className="driveActions">
             <form action="/assets" className="driveSearch" role="search">
               <Search size={14} />
-              <input defaultValue={searchQuery} key={searchQuery} name="q" placeholder="搜索文件名" />
+              <input defaultValue={searchQuery} key={searchQuery} name="q" placeholder="搜索名称、备注、科目、知识点" />
               {searchQuery ? (
                 <Link aria-label="清除搜索" className="driveSearchClear" href="/assets">
                   <X size={13} />
                 </Link>
               ) : null}
             </form>
+            <div className="driveViewSwitch" aria-label="文件视图">
+              <button aria-label="列表视图" className={viewMode === "list" ? "active" : ""} onClick={() => setViewMode("list")} type="button"><List size={15} /></button>
+              <button aria-label="网格视图" className={viewMode === "grid" ? "active" : ""} onClick={() => setViewMode("grid")} type="button"><Grid3X3 size={15} /></button>
+            </div>
             <button className="secondaryButton" onClick={() => setCreatingFolder(true)} type="button">
               <FolderPlus size={15} />
               新建文件夹
@@ -267,10 +333,19 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
           </div>
         </div>
         {error ? <p className="formError">{error}</p> : null}
+        {uploaded || uploading ? <div className="uploadProgress"><span style={{ width: `${Math.round((uploaded / Math.max(1, uploaded + uploading)) * 100)}%` }} /><b>{uploading ? `正在并发上传 · 已完成 ${uploaded}` : `上传完成 · ${uploaded} 个文件`}</b></div> : null}
+        {selectedIds.size ? (
+          <div className="driveBatchBar">
+            <strong>已选 {selectedIds.size} 个文件</strong>
+            <button onClick={() => { setMoveDestination(explorer.currentPath); setMoveTarget({ kind: "batch", ids: [...selectedIds], name: `${selectedIds.size} 个文件` }); }} type="button"><FolderInput size={14} />批量移动</button>
+            <button className="iconDanger" onClick={() => void handleBatchDelete()} type="button"><Trash2 size={14} />批量删除</button>
+            <button onClick={() => setSelectedIds(new Set())} type="button">取消选择</button>
+          </div>
+        ) : null}
 
         <div className="driveContent">
           <div className="driveListPanel">
-            <div className="driveTable" role="table" aria-label="当前文件夹内容">
+            <div className={viewMode === "grid" ? "driveTable gridMode" : "driveTable"} role="table" aria-label="当前文件夹内容">
               <div className="driveTableHead" role="row">
                 <button onClick={() => toggleSort("name")} type="button">
                   名称{sortKey === "name" ? (sortAsc ? " ↑" : " ↓") : ""}
@@ -372,7 +447,7 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
 
               {sortedFiles.map((file) => (
                 <div
-                  className={selectedFile?.id === file.id ? "driveRow active" : "driveRow"}
+                  className={`${selectedFile?.id === file.id ? "driveRow active" : "driveRow"}${selectedIds.has(file.id) ? " selected" : ""}`}
                   draggable
                   key={file.id}
                   onClick={() => setSelectedFileId(file.id)}
@@ -383,6 +458,7 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
                 >
                   {renamingFile === file.id ? (
                     <span className="driveName">
+                      <input aria-label={`选择 ${file.original_name}`} checked={selectedIds.has(file.id)} onChange={() => toggleSelected(file.id)} onClick={(event) => event.stopPropagation()} type="checkbox" />
                       {file.mime_type.startsWith("image/") ? <ImageIcon size={16} /> : <FileText size={16} />}
                       <input
                         autoFocus
@@ -406,7 +482,11 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
                       }}
                       type="button"
                     >
-                      {file.mime_type.startsWith("image/") ? <ImageIcon size={16} /> : <FileText size={16} />}
+                      <input aria-label={`选择 ${file.original_name}`} checked={selectedIds.has(file.id)} onChange={() => toggleSelected(file.id)} onClick={(event) => event.stopPropagation()} type="checkbox" />
+                      {viewMode === "grid" && file.mime_type.startsWith("image/") ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img alt="" src={assetFileUrl(file.id)} />
+                      ) : file.mime_type.startsWith("image/") ? <ImageIcon size={16} /> : <FileText size={16} />}
                       {file.original_name}
                     </button>
                   )}
@@ -487,6 +567,7 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
                   {selectedFile.subject_code ? <div><dt>科目</dt><dd>{selectedFile.subject_code}</dd></div> : null}
                   {selectedFile.knowledge_titles ? <div><dt>知识点</dt><dd>{selectedFile.knowledge_titles}</dd></div> : null}
                 </dl>
+                <AssetMetadataEditor file={selectedFile} hierarchy={hierarchy} key={selectedFile.id} onSaved={report} />
                 {previewKind(selectedFile) !== "none" ? (
                   <button className="primaryButton" onClick={() => setPreviewFile(selectedFile)} type="button">
                     预览
@@ -530,6 +611,69 @@ export function FileExplorer({ explorer, searchQuery, searchResults, usage }: {
         </div>
       ) : null}
     </section>
+  );
+}
+
+function AssetMetadataEditor({ file, hierarchy, onSaved }: { file: ExplorerFile; hierarchy: CaptureSubject[]; onSaved: (result: { ok: boolean; error?: string }) => void }) {
+  const initialPointId = file.knowledge_point_ids.split(",").filter(Boolean)[0] || "";
+  const [day, setDay] = useState(file.day);
+  const [category, setCategory] = useState(file.category || "knowledge");
+  const [note, setNote] = useState(file.note || "");
+  const [subjectCode, setSubjectCode] = useState(file.subject_code || "");
+  const [chapterId, setChapterId] = useState(file.chapter_id || "");
+  const [pointId, setPointId] = useState(initialPointId);
+  const [baseline, setBaseline] = useState({
+    day: file.day,
+    category: file.category || "knowledge",
+    note: file.note || "",
+    subjectCode: file.subject_code || "",
+    chapterId: file.chapter_id || "",
+    pointId: initialPointId,
+  });
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const subject = hierarchy.find((item) => item.code === subjectCode);
+  const chapter = subject?.chapters.find((item) => item.id === chapterId);
+  const dirty = day !== baseline.day || category !== baseline.category || note !== baseline.note || subjectCode !== baseline.subjectCode || chapterId !== baseline.chapterId || pointId !== baseline.pointId;
+  async function save() {
+    if (busy || !dirty) return;
+    setBusy(true);
+    setSaved(false);
+    const result = await updateAssetMetadataAction({
+      assetId: file.id,
+      day,
+      category,
+      note,
+      subjectCode: subjectCode || undefined,
+      chapterId: chapterId || undefined,
+      knowledgePointIds: pointId ? [pointId] : [],
+    });
+    setBusy(false);
+    if (result.ok) {
+      setBaseline({ day, category, note, subjectCode, chapterId, pointId });
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 1800);
+    }
+    onSaved(result);
+  }
+  return (
+    <div className="assetMetadataEditor">
+      <header className="assetMetadataHead"><div><span className="sectionKicker">ORGANIZE</span><h3>整理这份资料</h3></div><span className={dirty ? "dirty" : undefined}>{saved ? <><Check size={12} />已保存</> : dirty ? "有修改待保存" : "信息已同步"}</span></header>
+      <section className="assetMetaBasics">
+        <label><span><CalendarDays size={13} />资料日期</span><input onChange={(event) => setDay(event.target.value)} type="date" value={day} /></label>
+        <label><span><Tags size={13} />内容类型</span><select onChange={(event) => setCategory(event.target.value)} value={category}><option value="knowledge">知识资料</option><option value="mistake">错题资料</option><option value="note">学习笔记</option></select></label>
+      </section>
+      <section className="assetLinkSection">
+        <div className="assetMetaSectionTitle"><Link2 size={14} /><div><strong>关联学习位置</strong><small>按科目、章节、知识点逐级定位</small></div></div>
+        <div className="assetLinkPath">
+          <label><span>1 · 科目</span><select onChange={(event) => { setSubjectCode(event.target.value); setChapterId(""); setPointId(""); }} value={subjectCode}><option value="">选择科目</option>{hierarchy.map((item) => <option key={item.code} value={item.code}>{item.code} · {item.name}</option>)}</select></label>
+          <label><span>2 · 章节</span><select disabled={!subject} onChange={(event) => { setChapterId(event.target.value); setPointId(""); }} value={chapterId}><option value="">选择章节</option>{subject?.chapters.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
+          <label><span>3 · 知识点</span><select disabled={!chapter} onChange={(event) => setPointId(event.target.value)} value={pointId}><option value="">选择知识点</option>{chapter?.points.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
+        </div>
+      </section>
+      <label className="assetNoteEditor"><span><NotebookPen size={13} />检索备注</span><textarea onChange={(event) => setNote(event.target.value)} placeholder="记录来源、用途或未来检索时会使用的关键词" rows={4} value={note} /></label>
+      <button className="assetMetadataSave" disabled={busy || !dirty} onClick={() => void save()} type="button">{busy ? "保存中…" : "保存整理结果"}</button>
+    </div>
   );
 }
 

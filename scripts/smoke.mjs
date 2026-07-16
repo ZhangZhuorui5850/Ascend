@@ -1,15 +1,17 @@
 import { chromium } from "playwright";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
-const fileEnv = Object.fromEntries(
-  readFileSync(new URL("../.env.local", import.meta.url), "utf8")
+const envPath = new URL("../.env.local", import.meta.url);
+const fileEnv = existsSync(envPath) ? Object.fromEntries(
+  readFileSync(envPath, "utf8")
     .split(/\r?\n/)
     .filter((line) => line.includes("="))
     .map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]),
-);
+) : {};
 const env = { ...fileEnv, ...process.env };
 
 const BASE = process.env.SMOKE_URL || "http://localhost:3105";
+const marker = Date.now().toString(36);
 const results = [];
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
@@ -34,6 +36,16 @@ try {
 
   // 3. home renders clock + settings countdown flow
   await page.goto(BASE);
+  await page.waitForSelector(".homeFocus, .onboardingPane", { timeout: 10000 });
+  if (page.url().includes("/onboarding")) {
+    await page.fill(".onboardingPane textarea", "冒烟测试学习目标");
+    await page.click('.onboardingActions button:has-text("下一步")');
+    await page.click('.onboardingActions button:has-text("下一步")');
+    await page.click('.onboardingActions button:has-text("下一步")');
+    await page.click('.onboardingActions button:has-text("进入今日工作台")');
+    await page.waitForURL(BASE + "/", { timeout: 10000 });
+    ok("onboarding completes", true);
+  }
   await page.waitForSelector(".homeFocus");
   await page.waitForFunction(() => /\d{2}:\d{2}:\d{2}/.test(document.querySelector(".homeClock strong")?.textContent || ""));
   ok("home renders live clock", true);
@@ -54,13 +66,17 @@ try {
   const dayUrl = page.url();
 
   // 4a. tasks: add, tag, toggle
-  await page.fill(".taskCreate input", "冒烟任务");
+  const taskName = `冒烟任务-${marker}`;
+  await page.fill(".taskCreate input", taskName);
   await page.selectOption(".taskCreate select", { index: 1 });
   await page.click('.taskCreate button[aria-label="添加任务"]');
-  await page.waitForSelector('.taskLine .taskTitle', { timeout: 10000 });
+  await page.waitForFunction((name) => Array.from(document.querySelectorAll(".taskTitle")).some((node) => node.value === name), taskName);
+  const smokeTaskIndex = await page.locator(".taskLine").evaluateAll((rows, name) => rows.findIndex((row) => row.querySelector(".taskTitle")?.value === name), taskName);
+  const smokeTask = page.locator(".taskLine").nth(smokeTaskIndex);
   ok("task created", true);
-  await page.click(".taskLine .taskCheck");
-  await page.waitForSelector(".taskLine.done", { timeout: 10000 });
+  await smokeTask.locator(".taskCheck").click();
+  await smokeTask.waitFor({ state: "visible", timeout: 10000 });
+  await page.waitForFunction((name) => Array.from(document.querySelectorAll(".taskLine.done .taskTitle")).some((node) => node.value === name), taskName);
   ok("task toggled done", true);
 
   // 4b. notes: add a tip card
@@ -104,7 +120,7 @@ try {
   const block = page.locator(".chapterBlock", { has: page.locator(`input[value="${chapterName}"]`) });
   await block.locator(".pointCreate input").fill("冒烟知识点");
   await block.locator(".pointCreate button").click();
-  await page.waitForSelector('.pointTitle[value="冒烟知识点"]', { timeout: 10000 });
+  await page.locator('.pointTitle.pointTitleView', { hasText: "冒烟知识点" }).first().waitFor({ timeout: 10000 });
   ok("point created", true);
 
   // 9. delete the chapter again (cascade)
@@ -117,15 +133,16 @@ try {
   await page.goto(`${BASE}/assets`);
   await page.waitForSelector(".driveExplorer");
   await page.click('button:has-text("新建文件夹")');
-  const folderName = `冒烟目录${Date.now() % 10000}`;
+  const folderName = `冒烟目录-${marker}`;
   await page.fill(".driveRow.creating input", folderName);
   await page.keyboard.press("Enter");
   await page.waitForSelector(`.driveName:has-text("${folderName}")`, { timeout: 10000 });
   ok("folder created", true);
 
   const fileInput = page.locator('.driveExplorer input[type="file"]');
-  await fileInput.setInputFiles({ name: "smoke-upload.txt", mimeType: "text/plain", buffer: Buffer.from("hello zgca") });
-  await page.waitForSelector('.driveRow:has-text("smoke-upload.txt")', { timeout: 15000 });
+  const uploadName = `smoke-upload-${marker}.txt`;
+  await fileInput.setInputFiles({ name: uploadName, mimeType: "text/plain", buffer: Buffer.from("hello ascend") });
+  await page.waitForSelector(`.driveRow:has-text("${uploadName}")`, { timeout: 15000 });
   ok("file uploaded to current folder", true);
 
   // open folder via click, then go back to root via breadcrumb root button
@@ -136,19 +153,19 @@ try {
   await page.waitForURL("**/assets");
 
   // search
-  await page.fill('.driveSearch input', "smoke-upload");
+  await page.fill('.driveSearch input', uploadName);
   await page.press('.driveSearch input', "Enter");
   await page.waitForURL("**/assets?q=**");
-  await page.waitForSelector('.driveRow:has-text("smoke-upload.txt")');
+  await page.waitForSelector(`.driveRow:has-text("${uploadName}")`);
   ok("search finds uploaded file", true);
   await page.goto(`${BASE}/assets`);
 
   // delete file
-  const fileRow = page.locator('.driveRow:has-text("smoke-upload.txt")');
+  const fileRow = page.locator(`.driveRow:has-text("${uploadName}")`);
   await fileRow.hover();
   await fileRow.locator('button[aria-label="删除文件"]').click();
   await page.locator(".confirmDialog .dangerButton").click();
-  await page.waitForSelector('.driveRow:has-text("smoke-upload.txt")', { state: "detached", timeout: 10000 });
+  await page.waitForSelector(`.driveRow:has-text("${uploadName}")`, { state: "detached", timeout: 10000 });
   ok("file deleted", true);
 
   // delete folder

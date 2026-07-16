@@ -10,6 +10,10 @@ export type ExamCountdown = {
 export type AppSettings = {
   examCountdowns: ExamCountdown[];
   dailyReviewLimit: number;
+  learningGoal: string;
+  weeklyMinutes: number;
+  enabledSubjectCodes: string[];
+  onboardingCompleted: boolean;
 };
 
 export const DEFAULT_DAILY_REVIEW_LIMIT = 12;
@@ -34,9 +38,24 @@ export function getSettings(db: Database.Database, scope: WorkspaceScope): AppSe
   }
 
   const limit = Number(map.get("daily_review_limit"));
+  const weeklyMinutes = Number(map.get("weekly_minutes"));
+  let enabledSubjectCodes: string[] = [];
+  try {
+    const parsed = JSON.parse(map.get("enabled_subject_codes") || "[]");
+    if (Array.isArray(parsed)) enabledSubjectCodes = parsed.filter((item): item is string => typeof item === "string");
+  } catch {
+    enabledSubjectCodes = [];
+  }
+  const workspace = db.prepare(`
+    SELECT onboarding_completed FROM workspaces WHERE id = ?
+  `).get(scope.workspaceId) as { onboarding_completed: number } | undefined;
   return {
     examCountdowns,
     dailyReviewLimit: Number.isInteger(limit) && limit > 0 ? limit : DEFAULT_DAILY_REVIEW_LIMIT,
+    learningGoal: map.get("learning_goal") || "",
+    weeklyMinutes: Number.isInteger(weeklyMinutes) && weeklyMinutes >= 30 ? weeklyMinutes : 300,
+    enabledSubjectCodes,
+    onboardingCompleted: Boolean(workspace?.onboarding_completed),
   };
 }
 
@@ -57,6 +76,49 @@ export function saveDailyReviewLimit(db: Database.Database, scope: WorkspaceScop
   const value = Math.round(Number(limit));
   if (!Number.isInteger(value) || value < 1 || value > 100) throw new Error("每日复习上限需在 1-100 之间");
   setSetting(db, scope, "daily_review_limit", String(value));
+}
+
+export function saveLearningPreferences(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: { learningGoal: string; weeklyMinutes: number; enabledSubjectCodes: string[] },
+): void {
+  const learningGoal = input.learningGoal.trim().slice(0, 120);
+  if (!learningGoal) throw new Error("请填写当前学习目标");
+  const weeklyMinutes = Math.round(Number(input.weeklyMinutes));
+  if (!Number.isInteger(weeklyMinutes) || weeklyMinutes < 30 || weeklyMinutes > 10080) {
+    throw new Error("每周学习时长需在 30-10080 分钟之间");
+  }
+  const available = new Set(
+    (db.prepare("SELECT code FROM subjects WHERE workspace_id = ?").all(scope.workspaceId) as Array<{ code: string }>)
+      .map((row) => row.code),
+  );
+  const enabledSubjectCodes = [...new Set(input.enabledSubjectCodes.map((code) => code.trim()).filter((code) => available.has(code)))];
+  if (!enabledSubjectCodes.length) throw new Error("请至少选择一个当前科目");
+  setSetting(db, scope, "learning_goal", learningGoal);
+  setSetting(db, scope, "weekly_minutes", String(weeklyMinutes));
+  setSetting(db, scope, "enabled_subject_codes", JSON.stringify(enabledSubjectCodes));
+}
+
+export function completeOnboarding(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: {
+    learningGoal: string;
+    weeklyMinutes: number;
+    enabledSubjectCodes: string[];
+    examCountdowns: ExamCountdown[];
+    dailyReviewLimit: number;
+  },
+): void {
+  db.transaction(() => {
+    saveLearningPreferences(db, scope, input);
+    saveExamCountdowns(db, scope, input.examCountdowns);
+    saveDailyReviewLimit(db, scope, input.dailyReviewLimit);
+    db.prepare(`
+      UPDATE workspaces SET onboarding_completed = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+    `).run(scope.workspaceId);
+  })();
 }
 
 function setSetting(db: Database.Database, scope: WorkspaceScope, key: string, value: string): void {

@@ -33,7 +33,8 @@ try {
   await friend.getByLabel("新密码").fill(friendPassword);
   await friend.getByLabel("再次输入").fill(friendPassword);
   await friend.getByRole("button", { name: "激活账号" }).click();
-  await friend.waitForURL(`${baseUrl}/`, { timeout: 15_000 });
+  await friend.waitForURL((url) => ["/", "/onboarding"].includes(url.pathname), { timeout: 15_000 });
+  await completeOnboardingIfNeeded(friend, "多用户审计学习目标");
   assert(await friend.getByText(friendName).count(), "Invited user activates and receives a session");
 
   const owner = await ownerContext.newPage();
@@ -43,9 +44,12 @@ try {
   const friendAsset = await createUserContent(friend, `friend-task-${marker}`, `friend-file-${marker}.txt`);
   assert(ownerAsset !== friendAsset, "Two users create distinct asset records");
 
-  const ownerCross = await ownerContext.request.get(`${baseUrl}${friendAsset}`);
-  const friendCross = await friendContext.request.get(`${baseUrl}${ownerAsset}`);
-  assert(ownerCross.status() === 404 && friendCross.status() === 404, "Cross-workspace file access returns 404");
+  const ownerCross = await owner.evaluate(async (url) => (await fetch(url)).status, friendAsset);
+  const friendCross = await friend.evaluate(async (url) => (await fetch(url)).status, ownerAsset);
+  assert(
+    ownerCross === 404 && friendCross === 404,
+    `Cross-workspace file access returns 404 (owner=${ownerCross}, friend=${friendCross})`,
+  );
 
   await admin.goto(`${baseUrl}/admin/users`, { waitUntil: "networkidle" });
   assert(await admin.getByText(ownerEmail).count(), "Admin can see the original user summary");
@@ -70,16 +74,19 @@ try {
 
 async function login(page, email, password, nextPath) {
   await page.goto(`${baseUrl}/login?next=${encodeURIComponent(nextPath)}`, { waitUntil: "networkidle" });
-  await page.getByLabel("邮箱").fill(email);
-  await page.getByLabel("密码").fill(password);
+  await page.locator('input[name="email"]').fill(email);
+  await page.locator('input[name="password"]').fill(password);
   await page.getByRole("button", { name: "进入工作台" }).click();
-  await page.waitForURL((url) => url.pathname === nextPath || url.pathname === "/change-password", { timeout: 15_000 });
+  await page.waitForURL((url) => url.pathname === nextPath || url.pathname === "/change-password" || url.pathname === "/onboarding", { timeout: 15_000 });
   if (new URL(page.url()).pathname === "/change-password") {
     const replacement = `Changed-${marker}-password!`;
     await page.getByLabel("当前密码").fill(password);
     await page.getByLabel("新密码", { exact: true }).fill(replacement);
     await page.getByLabel("再次输入新密码").fill(replacement);
     await page.getByRole("button", { name: "更新密码并继续" }).click();
+  }
+  if (new URL(page.url()).pathname === "/onboarding") {
+    await completeOnboardingIfNeeded(page, "多用户审计主账号目标");
   }
   await page.waitForURL(`${baseUrl}${nextPath}`, { timeout: 15_000 });
 }
@@ -107,6 +114,16 @@ async function createUserContent(page, taskName, fileName) {
   const href = await page.locator('.driveDetails a[href*="/api/assets/"]').getAttribute("href");
   if (!href) throw new Error(`No asset download URL for ${fileName}`);
   return href;
+}
+
+async function completeOnboardingIfNeeded(page, goal) {
+  if (!new URL(page.url()).pathname.includes("onboarding")) return;
+  await page.locator(".onboardingPane textarea").fill(goal);
+  await page.getByRole("button", { name: "下一步" }).click();
+  await page.getByRole("button", { name: "下一步" }).click();
+  await page.getByRole("button", { name: "下一步" }).click();
+  await page.getByRole("button", { name: "进入今日工作台" }).click();
+  await page.waitForURL(`${baseUrl}/`, { timeout: 10_000 });
 }
 
 function assert(condition, message) {

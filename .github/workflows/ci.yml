@@ -1,0 +1,29 @@
+name: quality-gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ZGCA_DATA_ROOT: ${{ github.workspace }}/.ci-data
+      ZGCA_UPLOAD_ROOT: ${{ github.workspace }}/.ci-data/uploads
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - run: npm run build
+      - name: Verify fresh and upgraded database migrations
+        run: npm test -- --run src/lib/migrations.test.ts src/lib/repo/workspaces.test.ts

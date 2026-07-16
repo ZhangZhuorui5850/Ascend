@@ -2,6 +2,7 @@ import { FileExplorer } from "@/components/FileExplorer";
 import { getDb } from "@/lib/db";
 import { requirePageWorkspace } from "@/lib/page-auth";
 import { getExplorer, getStorageUsage, searchAssets } from "@/lib/repo/library";
+import { getCaptureHierarchy } from "@/lib/repo/knowledge";
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +22,11 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
   const explorer = getExplorer(db, access, folder);
   const searchResults = q ? searchAssets(db, access, q) : null;
   const usage = getStorageUsage(db, access);
+  const hierarchy = getCaptureHierarchy(db, access);
 
   return (
     <div className="pageStack fullHeight">
-      <FileExplorer explorer={explorer} searchQuery={q} searchResults={searchResults} usage={usage} />
+      <FileExplorer explorer={explorer} hierarchy={hierarchy} searchQuery={q} searchResults={searchResults} usage={usage} />
     </div>
   );
 }

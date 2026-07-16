@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { unlinkSync } from "node:fs";
 import type { WorkspaceScope } from "../access-context";
 import { MAX_UPLOAD_BYTES, mimeTypeForUpload, storeUploadedFile } from "../assets";
 import { assertDateKey } from "../dates";
@@ -23,7 +24,11 @@ export type ExplorerFile = {
   folder_path: string;
   created_at: string;
   subject_code: string | null;
+  chapter_id: string | null;
+  knowledge_point_ids: string;
   knowledge_titles: string;
+  category: string;
+  note: string;
 };
 
 export type ExplorerState = {
@@ -213,6 +218,62 @@ export function renameAsset(db: Database.Database, scope: WorkspaceScope, input:
   if (!result.changes) throw new Error("文件不存在");
 }
 
+export function updateAssetMetadata(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: {
+    assetId: number;
+    day: string;
+    category: string;
+    note: string;
+    subjectCode?: string;
+    chapterId?: string;
+    knowledgePointIds?: string[];
+  },
+): void {
+  const day = assertDateKey(input.day);
+  db.transaction(() => {
+    const result = db.prepare(`
+      UPDATE assets SET day = ?, category = ?, note = ? WHERE workspace_id = ? AND id = ?
+    `).run(day, normalizeAssetCategory(input.category), input.note.trim().slice(0, 4000), scope.workspaceId, input.assetId);
+    if (!result.changes) throw new Error("文件不存在");
+    db.prepare("DELETE FROM asset_links WHERE workspace_id = ? AND asset_id = ?").run(scope.workspaceId, input.assetId);
+    linkAsset(db, scope, input);
+    ensureDay(db, scope, day);
+  })();
+}
+
+export function moveAssets(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: { assetIds: number[]; folderPath: string },
+): number {
+  const ids = [...new Set(input.assetIds.map(Number).filter(Number.isInteger))].slice(0, 500);
+  if (!ids.length) return 0;
+  const folderPath = normalizeFolderPath(input.folderPath);
+  if (folderPath && !db.prepare("SELECT 1 FROM folders WHERE workspace_id = ? AND path = ?").get(scope.workspaceId, folderPath)) {
+    throw new Error("目标文件夹不存在");
+  }
+  return db.transaction(() => {
+    const update = db.prepare("UPDATE assets SET folder_path = ? WHERE workspace_id = ? AND id = ?");
+    return ids.reduce((count, id) => count + update.run(folderPath, scope.workspaceId, id).changes, 0);
+  })();
+}
+
+export function deleteAssets(db: Database.Database, scope: WorkspaceScope, assetIds: number[]): number {
+  const ids = [...new Set(assetIds.map(Number).filter(Number.isInteger))].slice(0, 500);
+  return db.transaction(() => {
+    let removed = 0;
+    for (const id of ids) {
+      const exists = db.prepare("SELECT 1 FROM assets WHERE workspace_id = ? AND id = ?").get(scope.workspaceId, id);
+      if (!exists) continue;
+      deleteAsset(db, scope, id);
+      removed += 1;
+    }
+    return removed;
+  })();
+}
+
 /** 删除文件记录并解除全部关联；磁盘上的内容寻址 blob 保留（可被去重复用）。 */
 export function deleteAsset(db: Database.Database, scope: WorkspaceScope, assetId: number): void {
   const asset = db.prepare("SELECT id, relative_path FROM assets WHERE workspace_id = ? AND id = ?").get(scope.workspaceId, assetId) as
@@ -287,8 +348,10 @@ export function getExplorer(db: Database.Database, scope: WorkspaceScope, pathVa
 
   const files = db.prepare(`
     SELECT
-      a.id, a.original_name, a.mime_type, a.size, a.day, a.folder_path, a.created_at,
+      a.id, a.original_name, a.mime_type, a.size, a.day, a.folder_path, a.created_at, a.category, a.note,
       MAX(l.subject_code) AS subject_code,
+      MAX(l.chapter_id) AS chapter_id,
+      COALESCE(GROUP_CONCAT(DISTINCT l.knowledge_point_id), '') AS knowledge_point_ids,
       COALESCE(GROUP_CONCAT(DISTINCT k.title), '') AS knowledge_titles
     FROM assets a
     LEFT JOIN asset_links l ON l.asset_id = a.id AND l.workspace_id = a.workspace_id
@@ -312,17 +375,28 @@ export function searchAssets(db: Database.Database, scope: WorkspaceScope, query
   if (!term) return [];
   return db.prepare(`
     SELECT
-      a.id, a.original_name, a.mime_type, a.size, a.day, a.folder_path, a.created_at,
+      a.id, a.original_name, a.mime_type, a.size, a.day, a.folder_path, a.created_at, a.category, a.note,
       MAX(l.subject_code) AS subject_code,
+      MAX(l.chapter_id) AS chapter_id,
+      COALESCE(GROUP_CONCAT(DISTINCT l.knowledge_point_id), '') AS knowledge_point_ids,
       COALESCE(GROUP_CONCAT(DISTINCT k.title), '') AS knowledge_titles
     FROM assets a
     LEFT JOIN asset_links l ON l.asset_id = a.id AND l.workspace_id = a.workspace_id
     LEFT JOIN knowledge_points k ON k.id = l.knowledge_point_id AND k.workspace_id = a.workspace_id
-    WHERE a.workspace_id = ? AND a.original_name LIKE ? ESCAPE '\\'
+    LEFT JOIN subject_chapters c ON c.id = l.chapter_id AND c.workspace_id = a.workspace_id
+    WHERE a.workspace_id = ? AND (
+      a.original_name LIKE ? ESCAPE '\\'
+      OR a.note LIKE ? ESCAPE '\\'
+      OR a.category LIKE ? ESCAPE '\\'
+      OR a.folder_path LIKE ? ESCAPE '\\'
+      OR COALESCE(l.subject_code, '') LIKE ? ESCAPE '\\'
+      OR COALESCE(c.title, '') LIKE ? ESCAPE '\\'
+      OR COALESCE(k.title, '') LIKE ? ESCAPE '\\'
+    )
     GROUP BY a.id
     ORDER BY a.created_at DESC
     LIMIT 100
-  `).all(scope.workspaceId, `%${term.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`) as ExplorerFile[];
+  `).all(scope.workspaceId, ...Array(7).fill(`%${term.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`)) as ExplorerFile[];
 }
 
 /**
@@ -372,47 +446,71 @@ export async function createAssetFromUpload(
 
   // 服务端按扩展名纠正 MIME，客户端 type 只作候补，防止代码/文本文件被浏览器标错。
   const mimeType = mimeTypeForUpload(input.file.name, input.file.type);
-  db.prepare(`
-    INSERT INTO blobs (workspace_id, id, sha256, size, mime_type, storage_key, ref_count)
-    VALUES (@workspaceId, @id, @sha256, @size, @mimeType, @storageKey, 0)
-    ON CONFLICT(id) DO UPDATE SET ref_count = ref_count
-  `).run({
-    workspaceId: scope.workspaceId,
-    id: `${scope.workspaceId}:${stored.sha256}`,
-    sha256: stored.sha256,
-    size: stored.size,
-    mimeType,
-    storageKey: stored.relativePath,
-  });
+  try {
+    return db.transaction(() => {
+      const freshUsage = getStorageUsage(db, scope);
+      const existingBlob = db.prepare(`
+        SELECT ref_count FROM blobs WHERE workspace_id = ? AND id = ?
+      `).get(scope.workspaceId, `${scope.workspaceId}:${stored.sha256}`) as { ref_count: number } | undefined;
+      if (!existingBlob && freshUsage.usedBytes + stored.size > freshUsage.quotaBytes) throw new Error("存储空间已满");
 
-  const result = db.prepare(`
-    INSERT INTO assets (workspace_id, day, original_name, safe_name, relative_path, mime_type, size, category, folder_path, note)
-    VALUES (@workspaceId, @day, @originalName, @safeName, @relativePath, @mimeType, @size, @category, @folderPath, @note)
-  `).run({
-    workspaceId: scope.workspaceId,
-    day,
-    originalName: input.file.name,
-    safeName: stored.safeName,
-    relativePath: stored.relativePath,
-    mimeType,
-    size: stored.size,
-    category: normalizeAssetCategory(input.category),
-    folderPath,
-    note: (input.note || "").trim(),
-  });
-  const assetId = Number(result.lastInsertRowid);
-  db.prepare("UPDATE blobs SET ref_count = ref_count + 1 WHERE workspace_id = ? AND id = ?").run(
-    scope.workspaceId,
-    `${scope.workspaceId}:${stored.sha256}`,
-  );
-  ensureFolderPath(db, scope, folderPath);
-  linkAsset(db, scope, {
-    assetId,
-    subjectCode: input.subjectCode,
-    chapterId: input.chapterId,
-    knowledgePointIds: input.knowledgePointIds,
-  });
-  return { id: assetId };
+      db.prepare(`
+        INSERT INTO blobs (workspace_id, id, sha256, size, mime_type, storage_key, ref_count)
+        VALUES (@workspaceId, @id, @sha256, @size, @mimeType, @storageKey, 0)
+        ON CONFLICT(id) DO UPDATE SET ref_count = ref_count
+      `).run({
+        workspaceId: scope.workspaceId,
+        id: `${scope.workspaceId}:${stored.sha256}`,
+        sha256: stored.sha256,
+        size: stored.size,
+        mimeType,
+        storageKey: stored.relativePath,
+      });
+
+      const result = db.prepare(`
+        INSERT INTO assets (workspace_id, day, original_name, safe_name, relative_path, mime_type, size, category, folder_path, note)
+        VALUES (@workspaceId, @day, @originalName, @safeName, @relativePath, @mimeType, @size, @category, @folderPath, @note)
+      `).run({
+        workspaceId: scope.workspaceId,
+        day,
+        originalName: input.file.name,
+        safeName: stored.safeName,
+        relativePath: stored.relativePath,
+        mimeType,
+        size: stored.size,
+        category: normalizeAssetCategory(input.category),
+        folderPath,
+        note: (input.note || "").trim(),
+      });
+      const assetId = Number(result.lastInsertRowid);
+      db.prepare("UPDATE blobs SET ref_count = ref_count + 1 WHERE workspace_id = ? AND id = ?").run(
+        scope.workspaceId,
+        `${scope.workspaceId}:${stored.sha256}`,
+      );
+      ensureFolderPath(db, scope, folderPath);
+      linkAsset(db, scope, {
+        assetId,
+        subjectCode: input.subjectCode,
+        chapterId: input.chapterId,
+        knowledgePointIds: input.knowledgePointIds,
+      });
+      return { id: assetId };
+    })();
+  } catch (error) {
+    if (stored.created) {
+      const referenced = db.prepare(`
+        SELECT 1 FROM blobs WHERE workspace_id = ? AND storage_key = ? AND ref_count > 0
+      `).get(scope.workspaceId, stored.relativePath);
+      if (!referenced) {
+        try {
+          unlinkSync(stored.absolutePath);
+        } catch {
+          // GC 会清理极少数无法立即删除的孤立文件。
+        }
+      }
+    }
+    throw error;
+  }
 }
 
 export function linkAsset(
@@ -420,7 +518,7 @@ export function linkAsset(
   scope: WorkspaceScope,
   input: { assetId: number; subjectCode?: string; chapterId?: string; knowledgePointIds?: string[] },
 ): void {
-  const subjectCode = input.subjectCode?.trim() || null;
+  let subjectCode = input.subjectCode?.trim() || null;
   const chapterId = input.chapterId?.trim() || null;
   const pointIds = (input.knowledgePointIds || []).map((id) => id.trim()).filter(Boolean);
   if (!subjectCode && !chapterId && !pointIds.length) return;
@@ -432,6 +530,15 @@ export function linkAsset(
   if (!pointIds.length) {
     const asset = db.prepare("SELECT id FROM assets WHERE workspace_id = ? AND id = ?").get(scope.workspaceId, input.assetId);
     if (!asset) throw new Error("文件不存在");
+    if (chapterId) {
+      const chapter = db.prepare(`
+        SELECT subject_code FROM subject_chapters WHERE workspace_id = ? AND id = ?
+      `).get(scope.workspaceId, chapterId) as { subject_code: string } | undefined;
+      if (!chapter) throw new Error("章节不存在");
+      subjectCode = chapter.subject_code;
+    } else if (subjectCode && !db.prepare("SELECT 1 FROM subjects WHERE workspace_id = ? AND code = ?").get(scope.workspaceId, subjectCode)) {
+      throw new Error("科目不存在");
+    }
     insert.run(scope.workspaceId, input.assetId, subjectCode, chapterId, null);
     return;
   }
@@ -440,7 +547,7 @@ export function linkAsset(
   `);
   for (const pointId of pointIds) {
     const point = lookupPoint.get(scope.workspaceId, pointId) as { subject_code: string; chapter_id: string | null } | undefined;
-    if (!point) continue;
+    if (!point) throw new Error("知识点不存在");
     insert.run(scope.workspaceId, input.assetId, point.subject_code, point.chapter_id, pointId);
   }
 }

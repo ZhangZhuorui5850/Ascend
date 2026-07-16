@@ -6,12 +6,14 @@ import { CheckCircle2, Undo2 } from "lucide-react";
 import {
   reattemptMistakeAction,
   scoreReview,
+  spreadBacklogAction,
   undoReattemptAction,
   undoReviewAction,
 } from "@/app/actions/day";
 import { RichText } from "@/components/RichText";
 import type { MistakeUndo, ReviewUndo } from "@/lib/repo/reviews";
 import type { DueMistake, DueReview } from "@/lib/repo/days";
+import { cacheReviewSnapshot, flushOfflineReviews, getOfflineReviewCount, queueOfflineReview } from "@/lib/offline-review";
 
 const SCORE_LABELS = ["忘了", "模糊", "基本会", "熟练"];
 const SCORE_STAMPS = ["忘", "疑", "会", "熟"];
@@ -20,11 +22,15 @@ type LastUndo =
   | { kind: "review"; label: string; title: string; payload: ReviewUndo }
   | { kind: "mistake"; label: string; title: string; payload: MistakeUndo };
 
-export function ReviewQueue({ day, dueReviews, dueReviewsTotal, dueMistakes, readOnly = false, doneToday = 0 }: {
+export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, dueMistakes, dueMistakesTotal = 0, dailyLimit = 12, examSprint = false, readOnly = false, doneToday = 0 }: {
   day: string;
+  offlineScope: string;
   dueReviews: DueReview[];
   dueReviewsTotal?: number;
   dueMistakes: DueMistake[];
+  dueMistakesTotal?: number;
+  dailyLimit?: number;
+  examSprint?: boolean;
   readOnly?: boolean;
   doneToday?: number;
 }) {
@@ -33,10 +39,38 @@ export function ReviewQueue({ day, dueReviews, dueReviewsTotal, dueMistakes, rea
   const [error, setError] = useState("");
   const [stamps, setStamps] = useState<Record<string, string>>({});
   const [lastUndo, setLastUndo] = useState<LastUndo | null>(null);
+  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [undoBusy, setUndoBusy] = useState(false);
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
+  const [offline, setOffline] = useState(false);
+  const [pendingOffline, setPendingOffline] = useState(0);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const backlogTotal = (dueReviewsTotal || dueReviews.length) + dueMistakesTotal;
 
   const empty = !dueReviews.length && !dueMistakes.length;
+
+  useEffect(() => {
+    void cacheReviewSnapshot(offlineScope, day, dueReviews).catch(() => undefined);
+    void getOfflineReviewCount(offlineScope).then(setPendingOffline).catch(() => undefined);
+    async function handleOnline() {
+      setOffline(false);
+      try {
+        const synced = await flushOfflineReviews(offlineScope);
+        setPendingOffline(0);
+        if (synced) router.refresh();
+      } catch {
+        setPendingOffline(await getOfflineReviewCount(offlineScope));
+      }
+    }
+    function handleOffline() { setOffline(true); }
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    if (navigator.onLine) void handleOnline();
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [day, dueReviews, offlineScope, router]);
 
   function armUndo(next: LastUndo) {
     if (undoTimer.current) clearTimeout(undoTimer.current);
@@ -48,7 +82,22 @@ export function ReviewQueue({ day, dueReviews, dueReviewsTotal, dueMistakes, rea
     if (busyKey) return;
     setBusyKey(`review-${point.id}`);
     setError("");
-    const result = await scoreReview({ day, knowledgePointId: point.id, score });
+    const operationId = crypto.randomUUID();
+    if (!navigator.onLine) {
+      try {
+        await queueOfflineReview({ operationId, workspaceKey: offlineScope, day, knowledgePointId: point.id, score, createdAt: new Date().toISOString() });
+      } catch {
+        setError("本机离线存储当前不可用");
+        setBusyKey("");
+        return;
+      }
+      setOffline(true);
+      setPendingOffline((current) => current + 1);
+      setStamps((current) => ({ ...current, [`review-${point.id}`]: SCORE_STAMPS[score] }));
+      setBusyKey("");
+      return;
+    }
+    const result = await scoreReview({ day, knowledgePointId: point.id, score, operationId });
     if (!result.ok) {
       setError(result.error || "操作失败");
       setBusyKey("");
@@ -99,6 +148,19 @@ export function ReviewQueue({ day, dueReviews, dueReviewsTotal, dueMistakes, rea
     router.refresh();
   }
 
+  async function handleRecovery(horizonDays: 3 | 7) {
+    if (recoveryBusy) return;
+    setRecoveryBusy(true);
+    setError("");
+    const result = await spreadBacklogAction({ day, dailyLimit, horizonDays });
+    setRecoveryBusy(false);
+    if (!result.ok) {
+      setError(result.error || "分摊失败");
+      return;
+    }
+    router.refresh();
+  }
+
   // 键盘评分：1-4 给队首卡片打分（错题卡 1=仍错 2=已会）
   useEffect(() => {
     if (readOnly || empty) return;
@@ -109,7 +171,7 @@ export function ReviewQueue({ day, dueReviews, dueReviewsTotal, dueMistakes, rea
       const num = Number(event.key);
       if (!Number.isInteger(num) || num < 1 || num > 4) return;
       const firstReview = dueReviews[0];
-      if (firstReview) {
+      if (firstReview && revealed[firstReview.id]) {
         event.preventDefault();
         void handleReview(firstReview, num - 1);
         return;
@@ -123,7 +185,7 @@ export function ReviewQueue({ day, dueReviews, dueReviewsTotal, dueMistakes, rea
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readOnly, empty, busyKey, dueReviews, dueMistakes, day]);
+  }, [readOnly, empty, busyKey, dueReviews, dueMistakes, day, revealed]);
 
   if (empty) {
     if (!readOnly && doneToday > 0) {
@@ -153,6 +215,17 @@ export function ReviewQueue({ day, dueReviews, dueReviewsTotal, dueMistakes, rea
               : "复习到期的知识点和该回炉的错题 · 键盘 1-4 可给队首评分"}
         </span>
       </div>
+      {offline || pendingOffline ? <p className="offlineReviewStatus">{offline ? "离线模式：评分会保存在本机" : "正在同步"} · 待同步 {pendingOffline} 条</p> : null}
+      {!readOnly && examSprint ? <p className="examSprintHint">临考冲刺已开启：考试相关知识点会优先进入队列。</p> : null}
+      {!readOnly && backlogTotal > dailyLimit ? (
+        <div className="backlogRecovery">
+          <span>当前积压 {backlogTotal} 项，超过每日上限 {dailyLimit} 项。</span>
+          <span className="backlogActions">
+            <button disabled={recoveryBusy} onClick={() => void handleRecovery(3)} type="button">分摊 3 天</button>
+            <button disabled={recoveryBusy} onClick={() => void handleRecovery(7)} type="button">{recoveryBusy ? "分摊中…" : "分摊 7 天"}</button>
+          </span>
+        </div>
+      ) : null}
       {error ? <p className="formError">{error}</p> : null}
       {lastUndo ? (
         <div className="undoBar">
@@ -174,22 +247,38 @@ export function ReviewQueue({ day, dueReviews, dueReviewsTotal, dueMistakes, rea
             {stamps[`review-${point.id}`] ? <span className="queueStamp">{stamps[`review-${point.id}`]}</span> : null}
             <div className="queueInfo">
               <small>{point.subject_code} · {point.tier_name} · 掌握度 {point.mastery}</small>
-              <strong><RichText text={point.title} /></strong>
+              <strong><RichText text={point.prompt || point.title} /></strong>
+              {revealed[point.id] ? (
+                <div className="queueAnswer">
+                  <span>参考答案</span>
+                  <RichText text={point.answer || "请复述关键定义、步骤和易错点，再按真实回忆程度评分。"} />
+                </div>
+              ) : null}
             </div>
             {!readOnly ? (
-              <div className="scoreButtons" aria-label={`${point.title} 复习评分`}>
-                {[0, 1, 2, 3].map((score) => (
-                  <button
-                    disabled={busyKey === `review-${point.id}`}
-                    key={score}
-                    onClick={() => void handleReview(point, score)}
-                    title={SCORE_LABELS[score]}
-                    type="button"
-                  >
-                    {SCORE_LABELS[score]}
-                  </button>
-                ))}
-              </div>
+              revealed[point.id] ? (
+                <div className="scoreButtons" aria-label={`${point.title} 复习评分`}>
+                  {[0, 1, 2, 3].map((score) => (
+                    <button
+                      disabled={busyKey === `review-${point.id}`}
+                      key={score}
+                      onClick={() => void handleReview(point, score)}
+                      title={SCORE_LABELS[score]}
+                      type="button"
+                    >
+                      {SCORE_LABELS[score]}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <button
+                  className="primaryButton revealAnswer"
+                  onClick={() => setRevealed((current) => ({ ...current, [point.id]: true }))}
+                  type="button"
+                >
+                  显示答案
+                </button>
+              )
             ) : null}
           </article>
         ))}

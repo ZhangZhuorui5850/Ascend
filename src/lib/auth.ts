@@ -9,6 +9,8 @@ import { ensureWorkspaceForUser } from "./repo/workspaces";
 export { MAX_DEVICE_ACCOUNTS, SESSION_COOKIE, SESSIONS_COOKIE };
 
 const SESSION_DAYS = 30;
+const DEVELOPMENT_ADMIN_ACCOUNT = "admin";
+const DEVELOPMENT_ADMIN_PASSWORD = "666666";
 
 type UserRow = {
   id: string;
@@ -53,8 +55,13 @@ export function getDefaultLoginConfig(env: LoginEnv = process.env): { email: str
 }
 
 function getAdminLoginConfig(env: LoginEnv): { email: string; password: string } | null {
-  if (!env.APP_ADMIN_EMAIL || !env.APP_ADMIN_PASSWORD) return null;
-  return { email: env.APP_ADMIN_EMAIL, password: env.APP_ADMIN_PASSWORD };
+  if (env.APP_ADMIN_EMAIL && env.APP_ADMIN_PASSWORD) {
+    return { email: env.APP_ADMIN_EMAIL, password: env.APP_ADMIN_PASSWORD };
+  }
+  if (env.NODE_ENV === "development") {
+    return { email: DEVELOPMENT_ADMIN_ACCOUNT, password: DEVELOPMENT_ADMIN_PASSWORD };
+  }
+  return null;
 }
 
 export function ensureBootstrapUsers(

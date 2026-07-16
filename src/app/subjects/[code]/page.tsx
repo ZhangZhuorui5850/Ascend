@@ -6,23 +6,23 @@ import { assetFileUrl } from "@/lib/asset-url";
 import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { requirePageWorkspace } from "@/lib/page-auth";
-import { flattenChapterPoints, getSubjectDetail } from "@/lib/repo/knowledge";
+import { flattenChapterPoints, flattenPointTree, getSubjectDetail } from "@/lib/repo/knowledge";
 
 export const dynamic = "force-dynamic";
 
 export default async function SubjectPage({ params, searchParams }: {
   params: Promise<{ code: string }>;
-  searchParams: Promise<{ focus?: string }>;
+  searchParams: Promise<{ focus?: string; view?: string }>;
 }) {
   const { code } = await params;
-  const { focus } = await searchParams;
+  const { focus, view } = await searchParams;
   const access = await requirePageWorkspace(`/subjects/${code}`);
 
   const detail = getSubjectDetail(getDb(), access, decodeURIComponent(code));
   if (!detail) notFound();
 
   const today = todayKey();
-  const allPoints = [...flattenChapterPoints(detail.chapters), ...detail.loosePoints];
+  const allPoints = [...flattenChapterPoints(detail.chapters), ...flattenPointTree(detail.loosePoints)];
   const mastered = allPoints.filter((point) => point.status === "已掌握").length;
   const due = allPoints.filter((point) => point.next_review && point.next_review <= today).length;
   const openMistakes = detail.mistakes.filter((mistake) => !mistake.graduated).length;
@@ -48,6 +48,7 @@ export default async function SubjectPage({ params, searchParams }: {
         loosePoints={detail.loosePoints}
         subject={detail.subject}
         today={today}
+        view={view === "map" ? "map" : "list"}
       />
 
       <section className="grid2">

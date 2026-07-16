@@ -8,6 +8,7 @@ import {
   BookOpen,
   CalendarDays,
   ClipboardList,
+  GraduationCap,
   HardDrive,
   Home,
   LogOut,
@@ -25,6 +26,12 @@ import { AccountMenu } from "@/components/AccountMenu";
 import { BrandLogo } from "@/components/BrandLogo";
 import type { DeviceAccount } from "@/lib/auth";
 import { todayKey } from "@/lib/dates";
+import { clearOfflineLearningData } from "@/lib/offline-review";
+
+async function logoutWithOfflineCleanup() {
+  await clearOfflineLearningData().catch(() => undefined);
+  await logout();
+}
 
 export function getNavigation(role: "admin" | "user") {
   if (role === "admin") {
@@ -41,6 +48,7 @@ export function getNavigation(role: "admin" | "user") {
     { href: "/subjects", match: "/subjects", exact: false, label: "科目", icon: BookOpen },
     { href: "/assets", match: "/assets", exact: false, label: "资料库", icon: HardDrive },
     { href: "/mistakes", match: "/mistakes", exact: false, label: "错题本", icon: Tag },
+    { href: "/mock-exams", match: "/mock-exams", exact: false, label: "模考", icon: GraduationCap },
     { href: "/analytics", match: "/analytics", exact: false, label: "统计", icon: BarChart3 },
   ];
 }
@@ -104,7 +112,7 @@ export function Sidebar({
           <Link aria-label="设置" className={pathname === "/settings" ? "active" : ""} href="/settings" onClick={onNavigate} prefetch={true} title="设置">
             <Settings size={15} />
           </Link>
-          <form action={logout}>
+          <form action={logoutWithOfflineCleanup}>
             <button type="submit" title="退出登录" aria-label="退出登录">
               <LogOut size={15} />
             </button>
@@ -126,7 +134,7 @@ export function MobileNav({
   const links = getNavigation(role);
   const [moreOpen, setMoreOpen] = useState(false);
   const mobileLinks = role === "admin" ? links : [links[0], links[1], links[4]];
-  const moreLinks = role === "admin" ? [] : [links[2], links[3], links[5], links[6]];
+  const moreLinks = role === "admin" ? [] : [links[2], links[3], links[5], links[6], links[7]];
 
   return (
     <nav className="mobileNav" aria-label="移动端主导航" data-testid="mobile-nav">
@@ -163,7 +171,7 @@ export function MobileNav({
                 return <Link href={item.href} key={item.href} onClick={() => setMoreOpen(false)}><Icon size={18} /><span>{item.label}</span></Link>;
               })}
               <Link href="/settings" onClick={() => setMoreOpen(false)}><Settings size={18} /><span>设置</span></Link>
-              <form action={logout}><button type="submit"><LogOut size={18} /><span>退出</span></button></form>
+              <form action={logoutWithOfflineCleanup}><button type="submit"><LogOut size={18} /><span>退出</span></button></form>
             </div>
           </div>
         </>

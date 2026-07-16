@@ -19,7 +19,7 @@ export default async function MistakesPage() {
     <div className="pageStack">
       <div className="pageHeader">
         <h1>错题本</h1>
-        <p>错题会自动进入间隔复习：仍错继续排队，答对两级即毕业。</p>
+        <p>错题会自动进入间隔复习：仍错继续排队，两次跨日答对后毕业。</p>
       </div>
 
       <section className="card" aria-label="今日待回炉">
@@ -48,6 +48,7 @@ export default async function MistakesPage() {
                 <strong><RichText text={mistake.title} /></strong>
                 <small>
                   {mistake.subject_code ? `${mistake.subject_code} · ` : ""}
+                  {mistake.cause_category ? `${mistake.cause_category} · ` : ""}
                   <RichText text={mistake.knowledge_title || mistake.cause || mistake.day} />
                 </small>
               </div>

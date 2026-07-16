@@ -4,6 +4,7 @@ import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { requirePageWorkspace } from "@/lib/page-auth";
 import { getSubjectOverviews } from "@/lib/repo/knowledge";
+import { getMockExamDashboard } from "@/lib/repo/mock-exams";
 import {
   getLearningAnalytics,
   WEAK_POINT_HIGH_SCORE,
@@ -21,6 +22,7 @@ export default async function AnalyticsPage() {
   const today = todayKey();
   const analytics = getLearningAnalytics(db, access, today);
   const subjects = getSubjectOverviews(db, access, today);
+  const mockExams = getMockExamDashboard(db, access);
 
   const reviewTotal = analytics.scoreDist.reduce((total, count) => total + count, 0);
   const backlogTotal = analytics.backlog.dueReviews + analytics.backlog.dueMistakes;
@@ -94,6 +96,16 @@ export default async function AnalyticsPage() {
           ) : (
             <em className="delta flat">今日无到期</em>
           )}
+        </div>
+      </section>
+
+      <section className="card analyticsMockSummary" aria-label="模考趋势">
+        <div className="sectionTitle"><div><span className="sectionKicker">MOCK EXAMS</span><h2>模考趋势</h2></div><Link className="sectionLink" href="/mock-exams">记录与分析</Link></div>
+        <div>
+          <p><strong>{mockExams.exams.length}</strong><span>模考次数</span></p>
+          <p><strong>{mockExams.averagePercent}%</strong><span>平均得分率</span></p>
+          <p><strong>{mockExams.bestPercent}%</strong><span>最佳得分率</span></p>
+          <p><strong>{mockExams.weakAreas[0]?.label || "—"}</strong><span>优先补强</span></p>
         </div>
       </section>
 

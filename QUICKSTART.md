@@ -6,10 +6,11 @@
 
 首次运行：
 
-```powershell
-Copy-Item .env.example .env.local
+```bash
 npm install
 ```
+
+开发模式未提供 `.env.local` 时，会创建管理员 `admin`，初始密码为 `666666`，首次登录必须修改。生产模式不会启用该默认账号。需要引导普通账号或覆盖管理员账号时，再复制 `.env.example` 为 `.env.local` 并修改其中配置。
 
 日常启动：
 
@@ -39,6 +40,7 @@ npm run up
 ssh friday
 cd /opt/apps/ascend
 docker compose -f compose.production.yml exec -T app node scripts/backup.mjs
+docker compose -f compose.production.yml exec -T app node scripts/verify-backup.mjs
 git pull --ff-only
 docker compose -f compose.production.yml up -d --build app
 curl -fsS https://ascend.zhuorui.me/api/health

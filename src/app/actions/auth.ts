@@ -30,7 +30,7 @@ export async function login(_previous: LoginState, formData: FormData): Promise<
   const user = authenticateUser(email, password, {
     ipHint: requestHeaders.get("x-forwarded-for") || requestHeaders.get("x-real-ip") || "",
   });
-  if (!user) return { error: "邮箱或密码不正确，或登录尝试过于频繁" };
+  if (!user) return { error: "账号或密码不正确，或登录尝试过于频繁" };
 
   const session = createSession({
     userId: user.userId,

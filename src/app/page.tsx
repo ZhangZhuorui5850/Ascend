@@ -20,7 +20,10 @@ export default async function HomePage() {
   const today = todayKey();
   const snapshot = getHomeSnapshot(db, access, today);
   const settings = getSettings(db, access);
-  const subjects = getSubjectOverviews(db, access, today);
+  const allSubjects = getSubjectOverviews(db, access, today);
+  const subjects = settings.enabledSubjectCodes.length
+    ? allSubjects.filter((subject) => settings.enabledSubjectCodes.includes(subject.code))
+    : allSubjects;
   const tasks = listTasks(db, access, today).filter((task) => !task.done).slice(0, 5);
   const pendingCount = snapshot.dueReviews + snapshot.dueMistakes;
   const yesterdayPlan = getTomorrowPlan(db, access, shiftDateKey(today, -1));
@@ -44,6 +47,7 @@ export default async function HomePage() {
     <div className="pageStack homePage">
       <section className="homeContext" aria-label="时间与目标">
         <HomeClock />
+        {settings.learningGoal ? <span className="homeLearningGoal"><Target size={14} />{settings.learningGoal}</span> : null}
         <div className="homeCountdowns compact">
           {settings.examCountdowns.map((exam) => {
             const days = daysUntil(today, exam.date);

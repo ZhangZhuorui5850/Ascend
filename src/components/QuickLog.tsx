@@ -3,13 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { addMistake, addStudySession } from "@/app/actions/day";
-import type { SubjectRow } from "@/lib/repo/knowledge";
+import type { CaptureSubject } from "@/lib/repo/knowledge";
 
 const MINUTE_PRESETS = [25, 50, 90];
+const MISTAKE_CATEGORIES = ["概念混淆", "审题遗漏", "公式不熟", "计算失误", "方法选择", "时间管理"];
 
 export function QuickLog({ day, subjects, recentCauses = [] }: {
   day: string;
-  subjects: SubjectRow[];
+  subjects: CaptureSubject[];
   recentCauses?: string[];
 }) {
   const router = useRouter();
@@ -19,8 +20,13 @@ export function QuickLog({ day, subjects, recentCauses = [] }: {
   const [minutes, setMinutes] = useState(50);
   const [cause, setCause] = useState("");
   const [subjectCode, setSubjectCode] = useState("");
+  const [chapterId, setChapterId] = useState("");
+  const [knowledgePointId, setKnowledgePointId] = useState("");
+  const [causeCategory, setCauseCategory] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const selectedSubject = subjects.find((subject) => subject.code === subjectCode);
+  const selectedChapter = selectedSubject?.chapters.find((chapter) => chapter.id === chapterId);
 
   async function submit() {
     const trimmed = title.trim();
@@ -29,11 +35,19 @@ export function QuickLog({ day, subjects, recentCauses = [] }: {
     setError("");
     const result =
       mode === "session"
-        ? await addStudySession({ day, title: trimmed, durationMinutes: minutes, subjectCode })
-        : await addMistake({ day, title: trimmed, cause: cause.trim(), subjectCode });
+        ? await addStudySession({ day, title: trimmed, durationMinutes: minutes, subjectCode, knowledgePointId })
+        : await addMistake({
+            day,
+            title: trimmed,
+            cause: cause.trim(),
+            causeCategory,
+            subjectCode,
+            knowledgePointId,
+          });
     if (result.ok) {
       setTitle("");
       setCause("");
+      setCauseCategory("");
       router.refresh();
       titleRef.current?.focus();
     } else {
@@ -95,6 +109,12 @@ export function QuickLog({ day, subjects, recentCauses = [] }: {
               onChange={(event) => setCause(event.target.value)}
               placeholder="原因：概念混淆 / 审题漏条件 / 公式不熟…"
             />
+            <select aria-label="错因分类" onChange={(event) => setCauseCategory(event.target.value)} value={causeCategory}>
+              <option value="">错因分类（可选）</option>
+              {MISTAKE_CATEGORIES.map((category) => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
             {recentCauses.length ? (
               <div className="tagPicker" role="group" aria-label="最近用过的原因">
                 {recentCauses.map((item) => (
@@ -112,12 +132,44 @@ export function QuickLog({ day, subjects, recentCauses = [] }: {
           </>
         )}
         <div className="quickLogRow">
-          <select onChange={(event) => setSubjectCode(event.target.value)} value={subjectCode}>
+          <select
+            onChange={(event) => {
+              setSubjectCode(event.target.value);
+              setChapterId("");
+              setKnowledgePointId("");
+            }}
+            value={subjectCode}
+          >
             <option value="">科目（可选）</option>
             {subjects.map((subject) => (
               <option key={subject.code} value={subject.code}>
                 {subject.code} · {subject.name}
               </option>
+            ))}
+          </select>
+          <select
+            aria-label="章节"
+            disabled={!selectedSubject}
+            onChange={(event) => {
+              setChapterId(event.target.value);
+              setKnowledgePointId("");
+            }}
+            value={chapterId}
+          >
+            <option value="">章节（可选）</option>
+            {selectedSubject?.chapters.map((chapter) => (
+              <option key={chapter.id} value={chapter.id}>{chapter.title}</option>
+            ))}
+          </select>
+          <select
+            aria-label="知识点"
+            disabled={!selectedChapter}
+            onChange={(event) => setKnowledgePointId(event.target.value)}
+            value={knowledgePointId}
+          >
+            <option value="">知识点（可选）</option>
+            {selectedChapter?.points.map((point) => (
+              <option key={point.id} value={point.id}>{point.title}</option>
             ))}
           </select>
           <button className="primaryButton" disabled={busy || !title.trim()} onClick={() => void submit()} type="button">

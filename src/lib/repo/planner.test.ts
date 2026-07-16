@@ -106,12 +106,12 @@ describe("day notes", () => {
 describe("settings", () => {
   it("stores exam countdowns and review limit with defaults", () => {
     const db = createTestDb();
-    expect(getSettings(db, legacyScope)).toEqual({ examCountdowns: [], dailyReviewLimit: 12 });
+    expect(getSettings(db, legacyScope)).toMatchObject({ examCountdowns: [], dailyReviewLimit: 12 });
 
     saveExamCountdowns(db, legacyScope, [{ name: "笔试", date: "2026-09-01" }, { name: "", date: "2026-09-02" }]);
     saveDailyReviewLimit(db, legacyScope, 8);
 
-    expect(getSettings(db, legacyScope)).toEqual({
+    expect(getSettings(db, legacyScope)).toMatchObject({
       examCountdowns: [{ name: "笔试", date: "2026-09-01" }],
       dailyReviewLimit: 8,
     });

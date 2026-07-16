@@ -1,4 +1,4 @@
-const CACHE_VERSION = "zgca-shell-v2";
+const CACHE_VERSION = "zgca-shell-v3";
 const PUBLIC_SHELL = ["/offline.html", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {

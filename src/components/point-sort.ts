@@ -10,8 +10,8 @@ export const POINT_SORT_MODES: Array<{ value: PointSortMode; label: string }> = 
 
 const TIER_RANK: Record<string, number> = { r: 0, y: 1, g: 2 };
 
-/** 展示层排序：manual 直接沿用服务端 sort_order 顺序；其余模式拷贝后稳定排序。 */
-export function sortPointsForView(points: PointRow[], mode: PointSortMode): PointRow[] {
+/** 展示层排序：manual 直接沿用服务端 sort_order 顺序；其余模式拷贝后稳定排序。泛型保留 PointNode 的 children。 */
+export function sortPointsForView<T extends PointRow>(points: T[], mode: PointSortMode): T[] {
   if (mode === "manual") return points;
   const copy = [...points];
   if (mode === "time") {

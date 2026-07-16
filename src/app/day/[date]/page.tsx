@@ -13,7 +13,7 @@ import { assertDateKey, shiftDateKey, todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { requirePageWorkspace } from "@/lib/page-auth";
 import { getDay, getTomorrowPlan } from "@/lib/repo/days";
-import { getSubjects } from "@/lib/repo/knowledge";
+import { getCaptureHierarchy, getSubjects } from "@/lib/repo/knowledge";
 import { listTasks } from "@/lib/repo/planner";
 import { listRecentMistakeCauses } from "@/lib/repo/reviews";
 import { getSettings } from "@/lib/repo/settings";
@@ -31,8 +31,13 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
 
   const db = getDb();
   const settings = getSettings(db, access);
-  const day = getDay(db, access, date, { reviewLimit: settings.dailyReviewLimit });
+  const examSprint = settings.examCountdowns.some((exam) => {
+    const days = Math.round((Date.parse(`${exam.date}T00:00:00+08:00`) - Date.parse(`${date}T00:00:00+08:00`)) / 86400000);
+    return days >= 0 && days <= 14;
+  });
+  const day = getDay(db, access, date, { reviewLimit: settings.dailyReviewLimit, examSprint });
   const subjects = getSubjects(db, access);
+  const captureHierarchy = getCaptureHierarchy(db, access);
   const today = todayKey();
   const isToday = date === today;
   const studyMinutes = day.sessions.reduce((total, session) => total + session.duration_minutes, 0);
@@ -67,9 +72,19 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
         <div className={queueCount ? "due" : ""}><strong>{queueCount}</strong><span>待处理</span></div>
       </section>
 
+      <details className="mobileDayNavigator">
+        <summary>展开今日模块导航</summary>
+        <nav>
+          <a href="#day-tasks">任务 {doneTasks}/{day.tasks.length}</a>
+          <a href="#day-reviews">待处理 {queueCount}</a>
+          <a href="#day-notes">随手记 {day.notes.length}</a>
+          <a href="#day-journal">复盘</a>
+        </nav>
+      </details>
+
       <div className="dayGrid">
         <div className="dayMainCol">
-          <DayTasks
+          <details className="dayModule" open><summary>今日任务 · {doneTasks}/{day.tasks.length}</summary><div id="day-tasks"><DayTasks
             carryCount={carryCount}
             carryFrom={yesterday}
             day={date}
@@ -77,21 +92,25 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
             tasks={day.tasks}
             today={today}
             yesterdayPlan={yesterdayPlan}
-          />
-          <ReviewQueue
+          /></div></details>
+          <details className="dayModule" open><summary>复习队列 · {queueCount}</summary><div id="day-reviews"><ReviewQueue
             day={date}
+            offlineScope={access.workspaceId}
             doneToday={day.reviews.length}
             dueReviews={day.dueReviews}
             dueReviewsTotal={day.dueReviewsTotal}
             dueMistakes={day.dueMistakes}
+            dueMistakesTotal={day.dueMistakesTotal}
+            dailyLimit={settings.dailyReviewLimit}
+            examSprint={examSprint}
             readOnly={!isToday}
-          />
-          <DayNotes day={date} notes={day.notes} />
-          <DayJournal key={date} date={date} entry={day.entry} />
+          /></div></details>
+          <details className="dayModule" open><summary>随手记 · {day.notes.length}</summary><div id="day-notes"><DayNotes day={date} notes={day.notes} /></div></details>
+          <details className="dayModule" open><summary>当日复盘</summary><div id="day-journal"><DayJournal key={date} date={date} entry={day.entry} /></div></details>
         </div>
 
         <div className="dayAside">
-          <QuickLog day={date} recentCauses={listRecentMistakeCauses(db, access)} subjects={subjects} />
+          <QuickLog day={date} recentCauses={listRecentMistakeCauses(db, access)} subjects={captureHierarchy} />
 
           <section className="card" aria-label="当日资料">
             <div className="sectionTitle">

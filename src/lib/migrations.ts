@@ -426,6 +426,100 @@ const migrations: Migration[] = [
       database.exec("CREATE INDEX IF NOT EXISTS idx_subject_chapters_parent ON subject_chapters(parent_id)");
     },
   },
+  {
+    version: "0012_point_tree",
+    run: (database) => {
+      if (!tableExists(database, "knowledge_points")) return;
+      // NULL = 章节直属知识点；存量知识点全部保持章节直属，零数据变动。
+      // 不变量：整棵点树的 chapter_id 与根一致；sort_order 在（chapter_id, parent_point_id）兄弟组内递增。
+      addColumnIfMissing(database, "knowledge_points", "parent_point_id", "TEXT");
+      database.exec("CREATE INDEX IF NOT EXISTS idx_knowledge_points_parent ON knowledge_points(parent_point_id)");
+    },
+  },
+  {
+    version: "0013_learning_engine",
+    run: (database) => {
+      if (tableExists(database, "knowledge_points")) {
+        addColumnIfMissing(database, "knowledge_points", "prompt", "TEXT NOT NULL DEFAULT ''");
+        addColumnIfMissing(database, "knowledge_points", "answer", "TEXT NOT NULL DEFAULT ''");
+        addColumnIfMissing(database, "knowledge_points", "interval_step", "INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing(database, "knowledge_points", "lapse_count", "INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing(database, "knowledge_points", "last_score", "INTEGER");
+        database.exec(`
+          CREATE INDEX IF NOT EXISTS idx_points_due_priority
+          ON knowledge_points(workspace_id, next_review, tier, mastery)
+        `);
+      }
+      if (tableExists(database, "mistakes")) {
+        addColumnIfMissing(database, "mistakes", "pass_count", "INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing(database, "mistakes", "last_pass_day", "TEXT");
+        addColumnIfMissing(database, "mistakes", "cause_category", "TEXT NOT NULL DEFAULT ''");
+      }
+      if (tableExists(database, "review_events")) {
+        addColumnIfMissing(database, "review_events", "operation_id", "TEXT");
+        database.exec(`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_review_events_operation
+          ON review_events(workspace_id, operation_id)
+          WHERE operation_id IS NOT NULL
+        `);
+      }
+    },
+  },
+  {
+    version: "0014_learning_product",
+    run: (database) => {
+      if (tableExists(database, "workspaces")) {
+        addColumnIfMissing(database, "workspaces", "onboarding_completed", "INTEGER NOT NULL DEFAULT 0");
+        const activityTables = ["study_sessions", "review_events", "mistakes", "day_tasks", "assets"]
+          .filter((table) => tableExists(database, table));
+        if (activityTables.length) {
+          const activityChecks = activityTables
+            .map((table) => `EXISTS (SELECT 1 FROM ${table} activity WHERE activity.workspace_id = workspaces.id)`)
+            .join(" OR ");
+          database.exec(`
+            UPDATE workspaces SET onboarding_completed = 1
+            WHERE onboarding_completed = 0 AND (${activityChecks})
+          `);
+        }
+      }
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS mock_exams (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          workspace_id TEXT NOT NULL,
+          day TEXT NOT NULL,
+          name TEXT NOT NULL,
+          subject_code TEXT,
+          score REAL NOT NULL DEFAULT 0,
+          max_score REAL NOT NULL DEFAULT 100,
+          duration_minutes INTEGER NOT NULL DEFAULT 0,
+          breakdown_json TEXT NOT NULL DEFAULT '[]',
+          notes TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_mock_exams_workspace_day
+          ON mock_exams(workspace_id, day DESC, created_at DESC);
+      `);
+    },
+  },
+  {
+    version: "0015_recovery_audit",
+    run: (database) => {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS review_recovery_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          workspace_id TEXT NOT NULL,
+          day TEXT NOT NULL,
+          moved_count INTEGER NOT NULL DEFAULT 0,
+          horizon_days INTEGER NOT NULL DEFAULT 7,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_review_recovery_workspace
+          ON review_recovery_events(workspace_id, day DESC);
+      `);
+    },
+  },
 ];
 
 function addColumnIfMissing(database: Database.Database, table: string, column: string, definition: string): void {

@@ -8,14 +8,16 @@
 
 ## 主要功能
 
-- `/`：考试倒计时、连续学习天数、今日任务和复习概览、科目进度。
-- `/day/[date]`：到期复习、错题回炉、任务清单、随笔、总结、快速记录和当日资料。
-- `/calendar`：月历热力视图，按日期进入工作台。
-- `/subjects`：笔试与机试科目；知识体系支持章节、知识点、掌握度、真题标记和复习排期。
-- `/assets`：资料库资源管理器，支持文件夹、搜索、上传、重命名、移动、删除和预览。
-- `/mistakes`：错题回炉流程。
-- `/analytics`：近七天统计、弱点优先级和科目进度。
-- `/settings`：账户资料、头像、密码、登录设备、考试倒计时、每日复习上限、明暗模式和配色。
+- `/onboarding`：四步设置学习目标、主线科目、每周投入、考试日期和复习额度。
+- `/`：学习目标、考试倒计时、连续天数、今日任务、复习概览和科目进度。
+- `/day/[date]`：主动回忆、错题跨日回炉、积压分摊、任务、随笔、总结、关联知识点的快速记录和当日资料；手机端支持模块折叠。
+- `/calendar`：月历与日程列表，按日期进入工作台；手机默认日程列表。
+- `/subjects`：章节/知识点树、掌握度、真题标记、首次学习排期，以及复习提示和参考答案。
+- `/assets`：列表/网格、图片预览、多选批量移动与删除、三路并发上传、系统拖放、元数据编辑和扩展搜索。
+- `/mistakes`：错因分类、跨日两次通过的回炉流程。
+- `/mock-exams`：模考成绩、能力拆分、趋势和薄弱项分析。
+- `/analytics`：近七天统计、弱点优先级、模考摘要和科目进度。
+- `/settings`：账户、学习目标、科目、考试倒计时、复习上限、登录设备和外观。
 - `/admin`：用户邀请、账号状态、密码重置、容量、只读工作区和审计日志。
 - `/invite/[token]`：一次性邀请激活页面。
 
@@ -31,7 +33,9 @@
 
 ## 本地开发
 
-要求 Node.js 22。复制环境变量模板并设置普通引导账号与独立管理员账号；两个邮箱必须不同。
+要求 Node.js 22。开发模式未配置 `APP_ADMIN_EMAIL` / `APP_ADMIN_PASSWORD` 时，空库会自动创建管理员账号 `admin`、初始密码 `666666`，首次登录必须修改密码。该默认账号不会在生产模式启用。
+
+如需同时引导创建普通账号，或覆盖开发管理员账号，请复制环境变量模板并设置普通账号与独立管理员账号；两个账号必须不同。
 
 ```bash
 cp .env.example .env.local
@@ -60,6 +64,7 @@ npm test                  # Vitest 单元测试
 npm run lint              # ESLint
 npm run build             # Next.js 生产构建
 npm run verify:migration  # 工作区归属、关系和文件完整性
+npm run verify:backup     # 备份标记、SQLite 完整性和镜像一致性
 ```
 
 端到端与响应式审计需要先启动测试服务：
@@ -74,6 +79,7 @@ npm run start -- -p 3105
 ```bash
 npm run smoke
 npm run audit:multi-user
+npm run audit:offline-review
 RESPONSIVE_AUDIT_URL=http://localhost:3105 npm run responsive:audit
 ```
 
@@ -111,6 +117,8 @@ npm run responsive:audit
 容器内分别映射为 `/app/data`、`/app/data/uploads` 和 `/app/backups`。重建容器不会删除这些宿主机目录，但升级数据库前仍必须同时备份 SQLite 和上传文件。
 
 数据库迁移通过 `schema_migrations` 版本化。迁移后必须运行 `npm run verify:migration`，确认输出中 `ok` 为 `true`、没有无归属记录且 `missingFiles` 为 `0`。
+
+备份会生成 `backup-manifest.json` 与 `_SUCCESS`。设置 `ZGCA_BACKUP_MIRROR_ROOT` 后会把同一快照复制到主备份目录之外；使用 `npm run verify:backup` 校验 SQLite 完整性和镜像文件大小。
 
 ## 代码结构
 

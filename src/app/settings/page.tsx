@@ -8,6 +8,7 @@ import { listUserSessions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { requirePageWorkspace } from "@/lib/page-auth";
 import { getUserProfile } from "@/lib/repo/profile";
+import { getSubjects } from "@/lib/repo/knowledge";
 import { getSettings } from "@/lib/repo/settings";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ export default async function SettingsPage() {
   const settings = getSettings(db, access);
   const sessions = listUserSessions(access.userId, db);
   const profile = getUserProfile(db, access.userId)!;
+  const subjects = getSubjects(db, access);
 
   return (
     <div className="pageStack">
@@ -53,7 +55,7 @@ export default async function SettingsPage() {
 
       <section aria-label="学习设置" className="settingsGroup" id="study">
         <h2 className="settingsGroupTitle">学习</h2>
-        <SettingsForm initial={settings} />
+        <SettingsForm initial={settings} subjects={subjects} />
       </section>
 
       <section aria-label="外观设置" className="settingsGroup" id="appearance">

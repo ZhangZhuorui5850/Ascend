@@ -1,4 +1,14 @@
-import { copyFileSync, existsSync, linkSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  linkSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 
@@ -7,6 +17,7 @@ const require = createRequire(import.meta.url);
 const root = process.cwd();
 const dataRoot = process.env.ZGCA_DATA_ROOT || path.join(root, "data");
 const backupRoot = process.env.ZGCA_BACKUP_ROOT || path.join(root, "backups");
+const mirrorRoot = process.env.ZGCA_BACKUP_MIRROR_ROOT || "";
 // 保留最近 N 份按日期命名的备份，默认 14 份。
 const keepCount = (() => {
   const raw = Number(process.env.ZGCA_BACKUP_KEEP);
@@ -37,6 +48,9 @@ function listBackupDirs() {
 
 try {
   mkdirSync(target, { recursive: true });
+  let databaseBytes = 0;
+  let uploadFiles = 0;
+  let uploadBytes = 0;
 
   const sqlite = path.join(dataRoot, "workbench.sqlite");
   if (existsSync(sqlite)) {
@@ -53,6 +67,7 @@ try {
         console.warn(`wal_checkpoint skipped: ${error instanceof Error ? error.message : error}`);
       }
       await db.backup(path.join(target, "workbench.sqlite"));
+      databaseBytes = statSync(path.join(target, "workbench.sqlite")).size;
     } finally {
       db.close();
     }
@@ -67,6 +82,8 @@ try {
     let copied = 0;
     for (const relative of walkFiles(uploads)) {
       const source = path.join(uploads, relative);
+      uploadFiles += 1;
+      uploadBytes += statSync(source).size;
       const destination = path.join(target, "uploads", relative);
       if (existsSync(destination)) continue;
       mkdirSync(path.dirname(destination), { recursive: true });
@@ -86,6 +103,28 @@ try {
     console.log(`Uploads: ${copied} copied, ${linked} hard-linked`);
   }
 
+  const manifest = {
+    status: "ok",
+    createdAt: new Date().toISOString(),
+    stamp,
+    databaseBytes,
+    uploadFiles,
+    uploadBytes,
+  };
+  writeFileSync(path.join(target, "backup-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+  writeFileSync(path.join(target, "_SUCCESS"), `${manifest.createdAt}\n`);
+
+  if (mirrorRoot) {
+    const resolvedMirror = path.resolve(mirrorRoot);
+    const resolvedBackup = path.resolve(backupRoot);
+    if (resolvedMirror === resolvedBackup || resolvedMirror.startsWith(`${resolvedBackup}${path.sep}`)) {
+      throw new Error("ZGCA_BACKUP_MIRROR_ROOT 必须位于主备份目录之外");
+    }
+    mkdirSync(resolvedMirror, { recursive: true });
+    cpSync(target, path.join(resolvedMirror, stamp), { recursive: true, force: true });
+    console.log(JSON.stringify({ event: "backup_mirrored", stamp, mirrorRoot: resolvedMirror }));
+  }
+
   // 轮转：只保留最近 keepCount 份，删掉更早的。
   const dirs = listBackupDirs();
   for (const name of dirs.slice(0, Math.max(0, dirs.length - keepCount))) {
@@ -93,7 +132,7 @@ try {
     console.log(`Pruned old backup ${name}`);
   }
 
-  console.log(`Backup written to ${target}`);
+  console.log(JSON.stringify({ event: "backup_complete", target, ...manifest }));
 } catch (error) {
   console.error(`Backup failed: ${error instanceof Error ? (error.stack ?? error.message) : error}`);
   process.exitCode = 1;

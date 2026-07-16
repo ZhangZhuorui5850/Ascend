@@ -167,6 +167,30 @@ describe("device accounts (multi-session quick switch)", () => {
 });
 
 describe("bootstrap users", () => {
+  it("creates the forced-change development Admin when no Admin environment variables exist", () => {
+    const db = createTestDb();
+
+    ensureBootstrapUsers(db, { NODE_ENV: "development" });
+
+    expect(db.prepare("SELECT role, status, must_change_password FROM users WHERE email = 'admin'").get()).toEqual({
+      role: "admin",
+      status: "active",
+      must_change_password: 1,
+    });
+    expect(authenticateUser("admin", "666666", {}, db)).toMatchObject({
+      role: "admin",
+      mustChangePassword: true,
+    });
+  });
+
+  it("does not create default credentials in production", () => {
+    const db = createTestDb();
+
+    ensureBootstrapUsers(db, { NODE_ENV: "production" });
+
+    expect(db.prepare("SELECT COUNT(*) AS count FROM users").get()).toEqual({ count: 0 });
+  });
+
   it("creates a separate ordinary user and bootstrap Admin", () => {
     const db = createTestDb();
 

@@ -1,20 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
   createFolder,
   createAssetFromUpload,
   deleteAsset,
+  deleteAssets,
   deleteFolder,
   getExplorer,
   linkAsset,
   moveAsset,
+  moveAssets,
   moveFolder,
   normalizeFolderPath,
   renameAsset,
   renameFolder,
   searchAssets,
+  updateAssetMetadata,
 } from "./library";
 import { createTestDb, createTestWorkspace, seedSubjectWithChapter } from "./testing";
 import { LEGACY_WORKSPACE_ID } from "./workspaces";
@@ -133,7 +136,7 @@ describe("library repo", () => {
     seedSubjectWithChapter(db);
     const id = insertAsset(db, "notes.md", "");
 
-    linkAsset(db, legacyScope, { assetId: id, knowledgePointIds: ["kp1", "missing"] });
+    linkAsset(db, legacyScope, { assetId: id, knowledgePointIds: ["kp1"] });
 
     const links = db.prepare("SELECT subject_code, chapter_id, knowledge_point_id FROM asset_links").all();
     expect(links).toEqual([{ subject_code: "M1", chapter_id: "chapter:M1:matrix", knowledge_point_id: "kp1" }]);
@@ -147,6 +150,21 @@ describe("library repo", () => {
     expect(searchAssets(db, legacyScope, "100%").map((file) => file.original_name)).toEqual(["线代_总结 100%.pdf"]);
     expect(searchAssets(db, legacyScope, "总结")).toHaveLength(1);
     expect(searchAssets(db, legacyScope, "")).toEqual([]);
+  });
+
+  it("searches metadata and supports scoped batch operations", () => {
+    const db = createTestDb();
+    const a = createFolder(db, legacyScope, { parentPath: "", name: "来源" });
+    const b = createFolder(db, legacyScope, { parentPath: "", name: "归档" });
+    const first = insertAsset(db, "one.pdf", a);
+    const second = insertAsset(db, "two.pdf", a);
+    updateAssetMetadata(db, legacyScope, { assetId: first, day: "2026-07-01", category: "note", note: "拉格朗日乘子专题" });
+
+    expect(searchAssets(db, legacyScope, "拉格朗日").map((file) => file.id)).toEqual([first]);
+    expect(moveAssets(db, legacyScope, { assetIds: [first, second], folderPath: b })).toBe(2);
+    expect(getExplorer(db, legacyScope, b).files).toHaveLength(2);
+    expect(deleteAssets(db, legacyScope, [first, second])).toBe(2);
+    expect(getExplorer(db, legacyScope, b).files).toHaveLength(0);
   });
 
   it("isolates folders, search results, and mutations by workspace", () => {
@@ -188,6 +206,28 @@ describe("library repo", () => {
       `).all() as Array<{ workspace_id: string; relative_path: string }>;
       expect(rows).toHaveLength(2);
       for (const row of rows) expect(row.relative_path.startsWith(`${encodeURIComponent(row.workspace_id)}/`)).toBe(true);
+    } finally {
+      rmSync(uploadRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("rolls back upload metadata and removes a newly written file when linking fails", async () => {
+    const db = createTestDb();
+    const owner = createTestWorkspace(db, { email: "atomic-upload@example.com" });
+    const uploadRoot = mkdtempSync(path.join(os.tmpdir(), "ascend-atomic-upload-"));
+    const file = new File(["atomic bytes"], "atomic.txt", { type: "text/plain" });
+
+    try {
+      await expect(createAssetFromUpload(db, owner, {
+        file,
+        uploadRoot,
+        knowledgePointIds: ["missing-point"],
+      })).rejects.toThrow("知识点不存在");
+      expect(db.prepare("SELECT COUNT(*) AS count FROM assets WHERE workspace_id = ?").get(owner.workspaceId)).toMatchObject({ count: 0 });
+      expect(db.prepare("SELECT COUNT(*) AS count FROM blobs WHERE workspace_id = ?").get(owner.workspaceId)).toMatchObject({ count: 0 });
+      const namespace = path.join(uploadRoot, encodeURIComponent(owner.workspaceId));
+      const files = existsSync(namespace) ? readdirSync(namespace, { recursive: true }).filter((entry) => !String(entry).endsWith("blobs")) : [];
+      expect(files.filter((entry) => String(entry).match(/[0-9a-f]{64}$/))).toHaveLength(0);
     } finally {
       rmSync(uploadRoot, { recursive: true, force: true });
     }

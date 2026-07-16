@@ -68,6 +68,39 @@ describe("runMigrations", () => {
     }
   });
 
+  it("adds learning-engine state and idempotency fields", () => {
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    runMigrations(db);
+
+    const pointColumns = (db.prepare("PRAGMA table_info(knowledge_points)").all() as Array<{ name: string }>).map((row) => row.name);
+    expect(pointColumns).toEqual(expect.arrayContaining([
+      "prompt",
+      "answer",
+      "interval_step",
+      "lapse_count",
+      "last_score",
+    ]));
+    const mistakeColumns = (db.prepare("PRAGMA table_info(mistakes)").all() as Array<{ name: string }>).map((row) => row.name);
+    expect(mistakeColumns).toEqual(expect.arrayContaining(["pass_count", "last_pass_day", "cause_category"]));
+    const reviewColumns = (db.prepare("PRAGMA table_info(review_events)").all() as Array<{ name: string }>).map((row) => row.name);
+    expect(reviewColumns).toContain("operation_id");
+    expect(getAppliedMigrations(db)).toContain("0013_learning_engine");
+  });
+
+  it("adds onboarding and mock-exam product state", () => {
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    runMigrations(db);
+
+    const workspaceColumns = (db.prepare("PRAGMA table_info(workspaces)").all() as Array<{ name: string }>).map((row) => row.name);
+    expect(workspaceColumns).toContain("onboarding_completed");
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'mock_exams'").get()).toMatchObject({ name: "mock_exams" });
+    expect(getAppliedMigrations(db)).toContain("0014_learning_product");
+    expect(getAppliedMigrations(db)).toContain("0015_recovery_audit");
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'review_recovery_events'").get()).toMatchObject({ name: "review_recovery_events" });
+  });
+
   it("assigns legacy domain rows to the legacy workspace", () => {
     const db = new Database(":memory:");
     initializeDatabase(db);
