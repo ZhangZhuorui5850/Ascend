@@ -5,7 +5,6 @@ import { useEffect, useRef, useState, type CSSProperties, type DragEvent as Reac
 import {
   ArrowDown,
   ArrowUp,
-  BookOpenCheck,
   ChevronDown,
   ChevronRight,
   CornerUpLeft,
@@ -27,7 +26,6 @@ import {
   deletePointAction,
   deleteSubjectAction,
   getPointDetailAction,
-  markPointLearnedAction,
   moveChapterAction,
   moveChapterToPositionAction,
   movePointAction,
@@ -864,7 +862,7 @@ function PointBranch({ point, chapterId, parentPointId, pointDepth, siblingIds, 
   }
 
   return (
-    <div className="pointBranch">
+    <div className="pointBranch" data-depth={pointDepth}>
       <div
         className={`pointDragWrap${drop === "before" && tree.drag ? " dropBefore" : ""}${
           drop === "after" && tree.drag ? " dropAfter" : ""
@@ -1062,12 +1060,6 @@ function PointLine({ point, subjectCode, today, report, onAddChild }: {
     if (result.ok) notify("知识点已删除");
   }
 
-  async function learnedToday() {
-    const result = await markPointLearnedAction({ id: point.id, day: today, subjectCode });
-    report(result);
-    if (result.ok) notify("已排入明日复习");
-  }
-
   async function toggleExpand() {
     if (expanded) {
       setExpanded(false);
@@ -1153,25 +1145,22 @@ function PointLine({ point, subjectCode, today, report, onAddChild }: {
         {point.asset_count && point.mistake_count ? " · " : ""}
         {point.mistake_count ? `${point.mistake_count} 错题` : ""}
       </small>
-      {!point.next_review ? (
-        <button
-          aria-label={`标记今天学了“${point.title}”`}
-          className="pointLearned"
-          onClick={() => void learnedToday()}
-          title="今天学了，明天开始复习"
-          type="button"
-        >
-          <BookOpenCheck size={13} />
+      <div className="pointActions">
+        {onAddChild ? (
+          <button
+            aria-label={`为“${point.title}”添加子知识点`}
+            className="pointAddChild"
+            onClick={onAddChild}
+            title="添加子知识点"
+            type="button"
+          >
+            <Plus size={13} />
+          </button>
+        ) : null}
+        <button aria-label="删除知识点" className="iconDanger" onClick={() => void removePoint()} type="button">
+          <Trash2 size={13} />
         </button>
-      ) : null}
-      {onAddChild ? (
-        <button aria-label={`为“${point.title}”添加子知识点`} onClick={onAddChild} title="添加子知识点" type="button">
-          <Plus size={13} />
-        </button>
-      ) : null}
-      <button aria-label="删除知识点" className="iconDanger" onClick={() => void removePoint()} type="button">
-        <Trash2 size={13} />
-      </button>
+      </div>
     </div>
     {expanded ? (
       <div className="pointDetail">
