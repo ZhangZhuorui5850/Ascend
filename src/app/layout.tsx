@@ -70,7 +70,7 @@ export default async function RootLayout({
   const account = accounts.find((item) => item.userId === user?.userId);
 
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body>
         <FeedbackProvider>

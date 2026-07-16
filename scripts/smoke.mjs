@@ -86,8 +86,12 @@ try {
   ok("task toggled done", true);
 
   const inboxTaskName = `待排任务-${marker}`;
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(400);
   await page.fill(".taskComposerTitle", inboxTaskName);
-  await page.fill('.taskCreate input[aria-label="计划开始时间"]', "");
+  const composerStart = page.locator('.taskCreate input[aria-label="计划开始时间"]');
+  await composerStart.fill("");
+  await page.waitForFunction(() => document.querySelector('.taskCreate input[aria-label="计划开始时间"]')?.value === "");
   await page.click('.taskCreate button[aria-label="添加任务"]');
   await page.waitForFunction((name) => Array.from(document.querySelectorAll(".taskTitle")).some((node) => node.value === name), inboxTaskName);
   ok("unscheduled task created", true);

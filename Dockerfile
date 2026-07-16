@@ -1,17 +1,17 @@
-FROM node:22-bookworm-slim AS deps
+FROM node:24-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 # 生产服务器在大陆，官方 registry 单请求 ~6s，走 npmmirror
 RUN npm config set registry https://registry.npmmirror.com && npm ci
 
-FROM node:22-bookworm-slim AS builder
+FROM node:24-bookworm-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm config set registry https://registry.npmmirror.com && npm run build
 
-FROM node:22-bookworm-slim AS runner
+FROM node:24-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
