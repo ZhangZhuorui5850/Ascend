@@ -25,8 +25,9 @@ export default async function SettingsPage() {
   return (
     <div className="pageStack">
       <div className="pageHeader">
+        <span className="eyebrow">PERSONAL SYSTEM · 个人系统</span>
         <h1>设置</h1>
-        <p>账户资料、学习偏好与外观主题，都在这里调整。</p>
+        <p>管理学习目标、考试节点、日常节奏、显示偏好与设备安全。</p>
       </div>
 
       <nav aria-label="设置分类" className="settingsTabs">

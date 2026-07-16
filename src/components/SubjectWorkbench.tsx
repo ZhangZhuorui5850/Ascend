@@ -65,6 +65,7 @@ import { POINT_SORT_MODES, sortPointsForView, type PointSortMode } from "@/compo
 import { RichText } from "@/components/RichText";
 import { useOptimisticValue } from "@/components/useOptimisticValue";
 import { PointRecallEditor } from "@/components/PointRecallEditor";
+import { CreateTrainingTaskButton } from "@/components/CreateTrainingTaskButton";
 import {
   attachDragCard,
   treeDropEdgeFromEvent,
@@ -1178,6 +1179,10 @@ function PointLine({ point, subjectCode, today, report, onAddChild }: {
           <p className="empty inset"><Loader2 className="spin" size={13} /> 加载中…</p>
         ) : detail ? (
           <>
+            <div className="pointTrainingAction">
+              <div><span className="sectionKicker">NEXT ACTION</span><strong>针对训练</strong><small>创建 45 分钟 P1 训练，带回今日工作台执行。</small></div>
+              <CreateTrainingTaskButton compact day={today} notes={`知识点专项训练：${point.title}。完成后更新掌握度并记录回忆线索。`} subjectCode={subjectCode} title={`知识点专项：${point.title}`} />
+            </div>
             <PointRecallEditor point={point} report={report} subjectCode={subjectCode} />
             <div className="pointDetailCol">
               <h4>关联资料 {detail.assets.length ? `(${detail.assets.length})` : ""}</h4>

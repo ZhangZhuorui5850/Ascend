@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ViewTransition } from "react";
 import { Inbox } from "lucide-react";
 import { CapturePanel } from "@/components/CapturePanel";
 import { MobileNav, Sidebar } from "@/components/Sidebar";
@@ -70,7 +71,11 @@ export function AppShell({ user, hierarchy, children }: AppShellProps) {
       ) : null}
       <div className="appWorkspace">
         <TopBar account={user.account} accounts={user.accounts} onCommand={() => setCommandOpen(true)} onMenu={handleMenu} role={user.role} />
-        <main className="mainPane">{children}</main>
+        <main className="mainPane">
+          <ViewTransition key={pathname} name="ascend-page" enter="summit-page-enter" exit="summit-page-exit">
+            {children}
+          </ViewTransition>
+        </main>
       </div>
       {user.role === "user" ? (
         <>

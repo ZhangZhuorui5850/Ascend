@@ -51,7 +51,7 @@ export default async function HomePage() {
         <div className="homeCountdowns compact">
           {settings.examCountdowns.map((exam) => {
             const days = daysUntil(today, exam.date);
-            return <div className={days !== null && days <= 14 ? "countdownChip urgent" : "countdownChip"} key={`${exam.name}-${exam.date}`}><Target size={14} /><span>{exam.name}</span><strong>{days === null ? "—" : days > 0 ? `${days} 天` : days === 0 ? "今天" : "已结束"}</strong></div>;
+            return <div className={days !== null && days <= 14 ? "countdownChip urgent" : "countdownChip"} key={`${exam.name}-${exam.date}`}><Target size={14} /><span>{exam.subjectCode ? `${exam.subjectCode} · ` : ""}{exam.name}</span>{exam.targetScore ? <small>目标 {exam.targetScore}</small> : null}<strong>{days === null ? "—" : days > 0 ? `${days} 天` : days === 0 ? "今天" : "已结束"}</strong></div>;
           })}
         </div>
         <span className="homeAssetMetric"><FolderUp size={15} />今日入库 {snapshot.today.assets}</span>
@@ -87,8 +87,9 @@ export default async function HomePage() {
           <div className="list">
             {tasks.map((task) => (
               <Link className="listRow" href={`/day/${today}`} key={task.id}>
+                <span className={`homeTaskPriority priority${task.priority}`}>P{task.priority}</span>
                 {task.subject_code ? <span className="rowBadge">{task.subject_code}</span> : null}
-                <strong>{task.title}</strong><ArrowRight size={14} />
+                <strong>{task.title}</strong><small className="homeTaskTime"><Clock3 size={11} />{task.scheduled_start || "待排"} · {task.estimated_minutes}m</small><ArrowRight size={14} />
               </Link>
             ))}
             {!tasks.length && snapshot.openTasks === 0 ? (

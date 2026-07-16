@@ -1,5 +1,6 @@
 import { Activity, ArrowDownRight, ArrowUpRight, BarChart3, Crosshair, Trophy } from "lucide-react";
 import { MockExamForm } from "@/components/MockExamForm";
+import { CreateTrainingTaskButton } from "@/components/CreateTrainingTaskButton";
 import { EmptyState } from "@/components/EmptyState";
 import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
@@ -15,6 +16,8 @@ export default async function MockExamsPage() {
   const dashboard = getMockExamDashboard(db, access);
   const subjects = getSubjects(db, access);
   const change = dashboard.changePercent;
+  const latestSubject = dashboard.exams[0]?.subject_code;
+  const today = todayKey();
   return (
     <div className="pageStack mockExamPage">
       <header className="pageHeader mockExamPageHeader">
@@ -35,7 +38,7 @@ export default async function MockExamsPage() {
       </section>
 
       <div className="mockExamGrid">
-        <MockExamForm subjects={subjects} today={todayKey()} />
+        <MockExamForm subjects={subjects} today={today} />
         <aside className="card mockExamInsight" aria-label="优先补强">
           <div className="mockExamInsightHead"><span className="mockInsightIcon"><Crosshair size={17} /></span><div><span className="sectionKicker">NEXT FOCUS</span><h2>下一轮重点</h2></div></div>
           {dashboard.weakAreas.length ? (
@@ -44,7 +47,7 @@ export default async function MockExamsPage() {
               <div className="weakAreaList">
                 {dashboard.weakAreas.map((area, index) => <div className={index === 0 ? "lead" : undefined} key={area.label}><span>{area.label}</span><div><i style={{ width: `${area.percent}%` }} /></div><b>{area.percent}%</b></div>)}
               </div>
-              <div className="mockInsightAdvice"><strong>训练建议</strong><p>下一次模考前，将一半专项训练时间投入“{dashboard.weakAreas[0].label}”，并使用同类题验证变化。</p></div>
+              <div className="mockInsightAdvice"><strong>训练建议</strong><p>下一次模考前，将一半专项训练时间投入“{dashboard.weakAreas[0].label}”，并使用同类题验证变化。</p><CreateTrainingTaskButton day={today} notes="由模考能力诊断生成；完成同类题后进行一次小测验证。" subjectCode={latestSubject} title={`模考专项：${dashboard.weakAreas[0].label}`} /></div>
             </>
           ) : (
             <div className="mockInsightEmpty"><span>01</span><p><strong>完成首次诊断</strong><small>记录一次模考后，这里会按历史得分率排列能力短板。</small></p></div>

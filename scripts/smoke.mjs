@@ -42,7 +42,7 @@ try {
     await page.click('.onboardingActions button:has-text("下一步")');
     await page.click('.onboardingActions button:has-text("下一步")');
     await page.click('.onboardingActions button:has-text("下一步")');
-    await page.click('.onboardingActions button:has-text("进入今日工作台")');
+    await page.click('.onboardingActions button:has-text("保存并进入工作台")');
     await page.waitForURL(BASE + "/", { timeout: 10000 });
     ok("onboarding completes", true);
   }
@@ -67,17 +67,30 @@ try {
 
   // 4a. tasks: add, tag, toggle
   const taskName = `冒烟任务-${marker}`;
-  await page.fill(".taskCreate input", taskName);
-  await page.selectOption(".taskCreate select", { index: 1 });
+  await page.fill(".taskComposerTitle", taskName);
+  await page.selectOption('.taskCreate select[aria-label="科目标签"]', { index: 1 });
+  await page.selectOption('.taskCreate select[aria-label="任务优先级"]', "1");
+  await page.selectOption('.taskCreate select[aria-label="预计时长"]', "45");
+  await page.fill('.taskCreate input[aria-label="计划开始时间"]', "09:30");
   await page.click('.taskCreate button[aria-label="添加任务"]');
   await page.waitForFunction((name) => Array.from(document.querySelectorAll(".taskTitle")).some((node) => node.value === name), taskName);
   const smokeTaskIndex = await page.locator(".taskLine").evaluateAll((rows, name) => rows.findIndex((row) => row.querySelector(".taskTitle")?.value === name), taskName);
   const smokeTask = page.locator(".taskLine").nth(smokeTaskIndex);
   ok("task created", true);
+  ok("task schedule metadata renders", await smokeTask.locator('.taskTiming:has-text("09:30 · 45m")').count() === 1);
+  await smokeTask.locator(".taskExpand").click();
+  ok("task detail editor expands", await smokeTask.locator(".taskLineDetails").isVisible());
   await smokeTask.locator(".taskCheck").click();
   await smokeTask.waitFor({ state: "visible", timeout: 10000 });
   await page.waitForFunction((name) => Array.from(document.querySelectorAll(".taskLine.done .taskTitle")).some((node) => node.value === name), taskName);
   ok("task toggled done", true);
+
+  const inboxTaskName = `待排任务-${marker}`;
+  await page.fill(".taskComposerTitle", inboxTaskName);
+  await page.fill('.taskCreate input[aria-label="计划开始时间"]', "");
+  await page.click('.taskCreate button[aria-label="添加任务"]');
+  await page.waitForFunction((name) => Array.from(document.querySelectorAll(".taskTitle")).some((node) => node.value === name), inboxTaskName);
+  ok("unscheduled task created", true);
 
   // 4b. notes: add a tip card
   await page.fill(".noteCard.composer textarea", "冒烟随笔：一个小想法");
@@ -191,6 +204,8 @@ try {
   await page.goto(`${BASE}/calendar`);
   await page.waitForSelector(".fc-daygrid", { timeout: 10000 });
   ok("calendar renders", true);
+  await page.waitForSelector(`.calendarInboxTask:has-text("${inboxTaskName}")`, { timeout: 10000 });
+  ok("calendar inbox receives unscheduled task", true);
 
   // 14. capture panel: upload via panel with subject binding
   await page.goto(dayUrl);

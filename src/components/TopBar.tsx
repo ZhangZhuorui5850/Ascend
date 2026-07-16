@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, Search, Settings, Users } from "lucide-react";
+import { CalendarRange, Menu, Search, Settings, Users } from "lucide-react";
 import { AccountMenu } from "@/components/AccountMenu";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import type { DeviceAccount } from "@/lib/auth";
+import { todayKey } from "@/lib/dates";
 
 const routeTitles: Array<[RegExp, string, string]> = [
   [/^\/$/, "主页", "学习概览"],
@@ -41,6 +42,8 @@ export function TopBar({
   const route = routeTitles.find(([pattern]) => pattern.test(pathname));
   const title = route?.[1] || "登峰";
   const context = route?.[2] || "学习工作台";
+  const today = todayKey();
+  const dayLabel = new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric", weekday: "short" }).format(new Date(`${today}T12:00:00`));
   return (
     <header className="topbar">
       <div className="topbarTitle">
@@ -48,6 +51,7 @@ export function TopBar({
         <div><small>{context}</small><strong>{title}</strong></div>
       </div>
       <div className="topbarActions">
+        {role === "user" ? <Link className="topbarDate" href={`/day/${today}`}><CalendarRange size={15} /><span>{dayLabel}</span></Link> : null}
         <button className="commandTrigger" onClick={onCommand} type="button"><Search size={15} /><span>搜索或快速操作</span><kbd>⌘ K</kbd></button>
         <ThemeSwitcher />
         <Link aria-label={role === "admin" ? "用户管理" : "设置"} className="topbarIconButton" href={role === "admin" ? "/admin/users" : "/settings"} title={role === "admin" ? "用户管理" : "设置"}>

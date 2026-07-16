@@ -36,20 +36,20 @@ async function logoutWithOfflineCleanup() {
 export function getNavigation(role: "admin" | "user") {
   if (role === "admin") {
     return [
-      { href: "/admin", match: "/admin", exact: true, label: "管理概览", icon: ShieldCheck },
-      { href: "/admin/users", match: "/admin/users", exact: false, label: "用户管理", icon: Users },
-      { href: "/admin/audit", match: "/admin/audit", exact: false, label: "操作日志", icon: ScrollText },
+      { href: "/admin", match: "/admin", exact: true, label: "管理概览", group: "管理", icon: ShieldCheck },
+      { href: "/admin/users", match: "/admin/users", exact: false, label: "用户管理", group: "管理", icon: Users },
+      { href: "/admin/audit", match: "/admin/audit", exact: false, label: "操作日志", group: "系统", icon: ScrollText },
     ];
   }
   return [
-    { href: "/", match: "/", exact: true, label: "主页", icon: Home },
-    { href: `/day/${todayKey()}`, match: "/day", exact: false, label: "今日", icon: ClipboardList },
-    { href: "/calendar", match: "/calendar", exact: false, label: "日历", icon: CalendarDays },
-    { href: "/subjects", match: "/subjects", exact: false, label: "科目", icon: BookOpen },
-    { href: "/assets", match: "/assets", exact: false, label: "资料库", icon: HardDrive },
-    { href: "/mistakes", match: "/mistakes", exact: false, label: "错题本", icon: Tag },
-    { href: "/mock-exams", match: "/mock-exams", exact: false, label: "模考", icon: GraduationCap },
-    { href: "/analytics", match: "/analytics", exact: false, label: "统计", icon: BarChart3 },
+    { href: "/", match: "/", exact: true, label: "总览", group: "计划", icon: Home },
+    { href: `/day/${todayKey()}`, match: "/day", exact: false, label: "今日执行", group: "计划", icon: ClipboardList },
+    { href: "/calendar", match: "/calendar", exact: false, label: "学习日历", group: "计划", icon: CalendarDays },
+    { href: "/subjects", match: "/subjects", exact: false, label: "知识体系", group: "学习", icon: BookOpen },
+    { href: "/mistakes", match: "/mistakes", exact: false, label: "错题回炉", group: "学习", icon: Tag },
+    { href: "/mock-exams", match: "/mock-exams", exact: false, label: "模考冲刺", group: "学习", icon: GraduationCap },
+    { href: "/assets", match: "/assets", exact: false, label: "资料库", group: "洞察", icon: HardDrive },
+    { href: "/analytics", match: "/analytics", exact: false, label: "学习分析", group: "洞察", icon: BarChart3 },
   ];
 }
 
@@ -96,13 +96,16 @@ export function Sidebar({
         </button>
       </div>
       <nav>
-        {links.map((item) => {
+        {links.map((item, index) => {
           const Icon = item.icon;
           return (
-            <Link className={isLinkActive(pathname, item) ? "active" : ""} key={item.href} href={item.href} onClick={onNavigate} prefetch={true}>
-              <Icon size={17} />
-              <span className="navLabel">{item.label}</span>
-            </Link>
+            <div className="navItemWrap" key={item.href}>
+              {index === 0 || links[index - 1].group !== item.group ? <span className="navGroupLabel">{item.group}</span> : null}
+              <Link className={isLinkActive(pathname, item) ? "active" : ""} href={item.href} onClick={onNavigate} prefetch={true} transitionTypes={["nav-forward"]}>
+                <Icon size={17} />
+                <span className="navLabel">{item.label}</span>
+              </Link>
+            </div>
           );
         })}
       </nav>
@@ -133,15 +136,15 @@ export function MobileNav({
   const pathname = usePathname();
   const links = getNavigation(role);
   const [moreOpen, setMoreOpen] = useState(false);
-  const mobileLinks = role === "admin" ? links : [links[0], links[1], links[4]];
-  const moreLinks = role === "admin" ? [] : [links[2], links[3], links[5], links[6], links[7]];
+  const mobileLinks = role === "admin" ? links : [links[0], links[1], links[2]];
+  const moreLinks = role === "admin" ? [] : [links[3], links[4], links[5], links[6], links[7]];
 
   return (
     <nav className="mobileNav" aria-label="移动端主导航" data-testid="mobile-nav">
       {mobileLinks.map((item) => {
         const Icon = item.icon;
         return (
-          <Link className={isLinkActive(pathname, item) ? "active" : ""} href={item.href} key={item.href} prefetch={true}>
+          <Link className={isLinkActive(pathname, item) ? "active" : ""} href={item.href} key={item.href} prefetch={true} transitionTypes={["nav-forward"]}>
             <Icon size={18} />
             <span>{item.label}</span>
           </Link>

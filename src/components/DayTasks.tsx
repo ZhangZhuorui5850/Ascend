@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useLayoutEffect, useRef, useState } from "react";
-import { ArrowRight, Check, Plus, Trash2 } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Clock3, Plus, Trash2 } from "lucide-react";
 import { addTaskAction, carryOverTasksAction, deleteTaskAction, toggleTaskAction, updateTaskAction } from "@/app/actions/planner";
 import { EmptyState } from "@/components/EmptyState";
 import { useFeedback } from "@/components/FeedbackProvider";
@@ -23,6 +23,9 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
   const { notify } = useFeedback();
   const [title, setTitle] = useState("");
   const [subjectCode, setSubjectCode] = useState("");
+  const [priority, setPriority] = useState(2);
+  const [estimatedMinutes, setEstimatedMinutes] = useState(30);
+  const [scheduledStart, setScheduledStart] = useState("");
   const [busy, setBusy] = useState(false);
   const [planAdded, setPlanAdded] = useState(false);
 
@@ -52,7 +55,7 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
     const trimmed = title.trim();
     if (!trimmed || busy) return;
     setBusy(true);
-    const result = await addTaskAction({ day, title: trimmed, subjectCode });
+    const result = await addTaskAction({ day, title: trimmed, subjectCode, priority, estimatedMinutes, scheduledStart: scheduledStart || null });
     if (result.ok) setTitle("");
     report(result);
     setBusy(false);
@@ -104,8 +107,9 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
         {!tasks.length ? <EmptyState seal="空" text="还没有任务。加上第一条，例如「特征值 20 题」。" /> : null}
       </div>
 
-      <div className="taskCreate">
+      <div className="taskCreate taskComposer">
         <input
+          className="taskComposerTitle"
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           onKeyDown={(event) => {
@@ -121,8 +125,18 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
             </option>
           ))}
         </select>
-        <button aria-label="添加任务" disabled={busy || !title.trim()} onClick={() => void add()} type="button">
+        <label className="taskComposerField"><span>优先级</span><select aria-label="任务优先级" onChange={(event) => setPriority(Number(event.target.value))} value={priority}>
+          <option value={1}>P1 · 关键</option>
+          <option value={2}>P2 · 常规</option>
+          <option value={3}>P3 · 弹性</option>
+        </select></label>
+        <label className="taskComposerField"><span>预计</span><select aria-label="预计时长" onChange={(event) => setEstimatedMinutes(Number(event.target.value))} value={estimatedMinutes}>
+          {[15, 25, 30, 45, 60, 90, 120].map((minutes) => <option key={minutes} value={minutes}>{minutes} 分钟</option>)}
+        </select></label>
+        <label className="taskComposerField"><span>开始</span><input aria-label="计划开始时间" onChange={(event) => setScheduledStart(event.target.value)} type="time" value={scheduledStart} /></label>
+        <button aria-label="添加任务" className="taskComposerSubmit" disabled={busy || !title.trim()} onClick={() => void add()} type="button">
           <Plus size={15} />
+          <span>加入计划</span>
         </button>
       </div>
 
@@ -147,6 +161,7 @@ function TaskLine({ task, day, subjects, report }: {
   report: (result: { ok: boolean; error?: string }) => void;
 }) {
   const [pending, setPending] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const { value: done, apply, rollback } = useOptimisticValue(Boolean(task.done));
 
@@ -171,7 +186,8 @@ function TaskLine({ task, day, subjects, report }: {
   }
 
   return (
-    <div className={done ? "taskLine done" : "taskLine"}>
+    <div className={`${done ? "taskLine done" : "taskLine"} priority${task.priority}`}>
+      <div className="taskLineMain">
       <button
         aria-checked={done}
         aria-label={done ? "标记为未完成" : "标记为完成"}
@@ -204,6 +220,8 @@ function TaskLine({ task, day, subjects, report }: {
         ref={titleRef}
         rows={1}
       />
+      <span className={`taskPriority priority${task.priority}`}>P{task.priority}</span>
+      <span className="taskTiming"><Clock3 size={12} />{task.scheduled_start || "待排"} · {task.estimated_minutes}m</span>
       <select
         aria-label="科目标签"
         className={task.subject_code ? "taskSubject tagged" : "taskSubject"}
@@ -217,6 +235,7 @@ function TaskLine({ task, day, subjects, report }: {
           </option>
         ))}
       </select>
+      <button aria-expanded={expanded} aria-label="编辑任务详情" className="taskExpand" onClick={() => setExpanded((value) => !value)} type="button"><ChevronDown size={14} /></button>
       <button
         aria-label="删除任务"
         className="iconDanger"
@@ -225,6 +244,17 @@ function TaskLine({ task, day, subjects, report }: {
       >
         <Trash2 size={13} />
       </button>
+      </div>
+      {expanded ? <div className="taskLineDetails">
+        <label><span>优先级</span><select defaultValue={task.priority} onChange={(event) => void updateTaskAction({ id: task.id, day, priority: Number(event.target.value) }).then(report)}>
+          <option value={1}>P1 · 关键</option><option value={2}>P2 · 常规</option><option value={3}>P3 · 弹性</option>
+        </select></label>
+        <label><span>开始时间</span><input defaultValue={task.scheduled_start || ""} onBlur={(event) => void updateTaskAction({ id: task.id, day, scheduledStart: event.target.value || null }).then(report)} type="time" /></label>
+        <label><span>预计分钟</span><input defaultValue={task.estimated_minutes} max={480} min={5} onBlur={(event) => void updateTaskAction({ id: task.id, day, estimatedMinutes: Number(event.target.value) }).then(report)} step={5} type="number" /></label>
+        <label className="taskNotes"><span>执行备注</span><textarea defaultValue={task.notes} maxLength={500} onBlur={(event) => {
+          if (event.target.value !== task.notes) void updateTaskAction({ id: task.id, day, notes: event.target.value }).then(report);
+        }} placeholder="写下完成标准、资料位置或训练范围" rows={2} /></label>
+      </div> : null}
     </div>
   );
 }

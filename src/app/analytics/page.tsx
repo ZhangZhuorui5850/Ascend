@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { RichText } from "@/components/RichText";
+import { CreateTrainingTaskButton } from "@/components/CreateTrainingTaskButton";
 import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { requirePageWorkspace } from "@/lib/page-auth";
@@ -32,8 +33,9 @@ export default async function AnalyticsPage() {
   return (
     <div className="pageStack">
       <div className="pageHeader">
-        <h1>统计</h1>
-        <p>最近一周的学习行为，以及现在最值得回炉的知识点。</p>
+        <span className="eyebrow">LEARNING SIGNALS · 学习信号</span>
+        <h1>学习分析</h1>
+        <p>从时间投入、复习质量和模考表现中识别下一步行动。</p>
       </div>
 
       <section className="metricGrid analyticsMetricGrid" aria-label="近七天概览">
@@ -138,7 +140,8 @@ export default async function AnalyticsPage() {
         </div>
         <div className="weakPointList">
           {analytics.weakPoints.map((point) => (
-            <Link className="weakPointRow" href={`/subjects/${point.subjectCode}`} key={point.id}>
+            <div className="weakPointRow weakPointActionRow" key={point.id}>
+              <Link href={`/subjects/${point.subjectCode}?focus=${encodeURIComponent(point.id)}`}>
               <div>
                 <span className="tierBadge">{point.tierName}</span>
                 <strong><RichText text={point.title} /></strong>
@@ -154,7 +157,15 @@ export default async function AnalyticsPage() {
                 )}
                 <span>优先级</span>
               </div>
-            </Link>
+              </Link>
+              <CreateTrainingTaskButton
+                compact
+                day={today}
+                notes={`分析来源：${point.reasons.join(" / ")}。进入 ${point.title} 知识点完成针对训练。`}
+                subjectCode={point.subjectCode}
+                title={`专项回炉：${point.title}`}
+              />
+            </div>
           ))}
           {!analytics.weakPoints.length ? (
             <p className="empty">没有明显弱点。可以推进新章节，或做一次综合模拟。</p>

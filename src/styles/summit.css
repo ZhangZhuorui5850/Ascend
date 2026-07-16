@@ -1,0 +1,1651 @@
+/* ============================================================
+   Summit Atelier · Ascend 2026 visual system
+   A calm exam-oriented learning cockpit with tactile paper surfaces.
+   This layer intentionally sits after the legacy stylesheet while the
+   product is migrated page-by-page.
+   ============================================================ */
+
+:root {
+  --summit-chrome: #171914;
+  --summit-chrome-soft: #22251e;
+  --summit-chrome-line: rgba(255, 255, 255, 0.09);
+  --summit-chrome-ink: #f3f0e6;
+  --summit-chrome-muted: #9d9f91;
+  --summit-glow: rgba(186, 73, 42, 0.16);
+  --summit-green: #2f6d57;
+  --summit-blue: #456d8d;
+  --summit-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --summit-ease-snappy: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --sidebar-width: 258px;
+  --sidebar-collapsed: 78px;
+  --topbar-height: 76px;
+  --content-max: 1440px;
+  --radius-xs: 7px;
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --shadow-xs: 0 1px 2px rgba(46, 36, 22, 0.06);
+  --shadow: 0 1px 2px rgba(46, 36, 22, 0.05), 0 10px 26px rgba(46, 36, 22, 0.05);
+  --shadow-lg: 0 2px 5px rgba(46, 36, 22, 0.08), 0 24px 64px rgba(46, 36, 22, 0.14);
+}
+
+html,
+body {
+  background:
+    radial-gradient(circle at 82% 4%, color-mix(in srgb, var(--accent-soft) 58%, transparent), transparent 26rem),
+    linear-gradient(135deg, color-mix(in srgb, var(--bg) 93%, white), var(--bg) 55%, var(--bg-subtle));
+}
+
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E");
+  content: "";
+  opacity: 0.035;
+  pointer-events: none;
+}
+
+/* Shell */
+.appFrame {
+  min-height: 100dvh;
+  background: transparent;
+  transition: grid-template-columns 320ms var(--summit-ease);
+}
+
+.appWorkspace {
+  min-width: 0;
+}
+
+.sidebar {
+  gap: 18px;
+  width: var(--sidebar-width);
+  padding: 20px 14px 16px;
+  border: 0;
+  background:
+    radial-gradient(circle at 28% 0%, rgba(255, 255, 255, 0.075), transparent 18rem),
+    linear-gradient(180deg, var(--summit-chrome-soft), var(--summit-chrome));
+  color: var(--summit-chrome-ink);
+  box-shadow: 12px 0 35px rgba(22, 20, 15, 0.08);
+  transition: width 320ms var(--summit-ease);
+}
+
+.sidebar::after {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 1px;
+  background: linear-gradient(transparent, rgba(255, 255, 255, 0.13), transparent);
+  content: "";
+}
+
+.brand {
+  min-height: 55px;
+  padding: 2px 9px 12px;
+  border-bottom: 1px solid var(--summit-chrome-line);
+}
+
+.brandCopy strong {
+  color: var(--summit-chrome-ink);
+  font-family: var(--font-serif);
+  font-size: 19px;
+  letter-spacing: 0.08em;
+}
+
+.brandCopy small {
+  color: var(--summit-chrome-muted);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+}
+
+.brandLogo {
+  filter: drop-shadow(0 7px 10px rgba(0, 0, 0, 0.22));
+}
+
+.sidebarToggle {
+  right: -13px;
+  width: 27px;
+  height: 27px;
+  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--summit-chrome-soft);
+  color: var(--summit-chrome-muted);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+}
+
+.sidebar nav {
+  display: block;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.navItemWrap {
+  display: grid;
+}
+
+.navGroupLabel {
+  height: 27px;
+  padding: 9px 12px 3px;
+  overflow: hidden;
+  color: #74786c;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: height 180ms var(--summit-ease), opacity 140ms ease;
+}
+
+.sidebar nav a {
+  position: relative;
+  min-height: 43px;
+  margin: 1px 0;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: #b8baae;
+  font-size: 13px;
+  font-weight: 520;
+  transition: background 180ms ease, color 180ms ease, border-color 180ms ease, transform 220ms var(--summit-ease);
+}
+
+.sidebar nav a:hover {
+  border-color: var(--summit-chrome-line);
+  background: rgba(255, 255, 255, 0.045);
+  color: white;
+  transform: translateX(3px);
+}
+
+.sidebar nav a.active {
+  border-color: rgba(226, 118, 79, 0.19);
+  background: linear-gradient(90deg, rgba(193, 72, 40, 0.24), rgba(193, 72, 40, 0.07));
+  color: #fff8ee;
+  box-shadow: inset 2px 0 0 #e37450;
+}
+
+.sidebar nav a.active svg {
+  color: #f08a64;
+  filter: drop-shadow(0 0 9px rgba(240, 138, 100, 0.24));
+}
+
+.sidebar.isCollapsed .navGroupLabel {
+  height: 9px;
+  padding: 0;
+  opacity: 0;
+}
+
+.sidebar.isCollapsed nav a {
+  padding-inline: 15px;
+}
+
+.sidebarFooter {
+  margin-top: auto;
+  border-top-color: var(--summit-chrome-line);
+  color: var(--summit-chrome-muted);
+}
+
+.sidebarFooterActions a,
+.sidebarFooterActions button {
+  border-color: var(--summit-chrome-line);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--summit-chrome-muted);
+}
+
+.topbar {
+  height: var(--topbar-height);
+  padding: 0 clamp(22px, 3.2vw, 52px);
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 83%, transparent);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(20px) saturate(125%);
+  view-transition-name: ascend-topbar;
+}
+
+.topbarTitle {
+  gap: 14px;
+}
+
+.topbarTitle small {
+  color: var(--accent);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+}
+
+.topbarTitle strong {
+  color: var(--ink);
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: 0.025em;
+}
+
+.topbarDate,
+.commandTrigger,
+.topbarIconButton,
+.themeSwitcher > button {
+  height: 38px;
+  border: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--surface-raised) 82%, transparent);
+  box-shadow: var(--shadow-xs);
+}
+
+.topbarDate {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.commandTrigger {
+  min-width: 238px;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.commandTrigger:hover {
+  border-color: var(--accent-line);
+  box-shadow: 0 8px 24px var(--summit-glow);
+  transform: translateY(-1px);
+}
+
+.mainPane {
+  width: min(100%, var(--content-max));
+  padding: clamp(24px, 3vw, 46px) clamp(22px, 3.2vw, 52px) 104px;
+}
+
+/* Primitives */
+.pageStack {
+  gap: 24px;
+}
+
+.card,
+.metricCard,
+.countdownCard,
+.analyticsCard,
+.settingsCard {
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(140deg, rgba(255, 255, 255, 0.38), transparent 38%),
+    color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  box-shadow: var(--shadow);
+}
+
+.card {
+  padding: clamp(19px, 2vw, 26px);
+}
+
+.card::before {
+  border-radius: inherit;
+}
+
+.primaryButton,
+.secondaryButton,
+button.primaryButton,
+a.primaryButton {
+  min-height: 40px;
+  border-radius: 11px;
+  transition: transform 180ms var(--summit-ease), box-shadow 180ms ease, background 180ms ease;
+}
+
+.primaryButton {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 92%, white), var(--accent-hover));
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 19%, transparent);
+}
+
+.primaryButton:hover,
+.secondaryButton:hover {
+  transform: translateY(-2px);
+}
+
+input,
+textarea,
+select {
+  border-radius: 10px;
+}
+
+.sectionKicker,
+.eyebrow {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.18em;
+}
+
+.sectionTitle h2,
+.pageHeader h1,
+.dayHeader h1 {
+  font-family: var(--font-serif);
+  letter-spacing: 0.01em;
+}
+
+.pageHeader {
+  position: relative;
+  align-items: end;
+  min-height: 94px;
+  padding: 6px 2px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pageHeader::after {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 72px;
+  height: 2px;
+  background: var(--accent);
+  content: "";
+}
+
+.pageHeader h1 {
+  font-size: clamp(28px, 3vw, 40px);
+  line-height: 1.25;
+}
+
+.pageHeader p {
+  max-width: 68ch;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.sectionLink {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.trainingTaskButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 11px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 650;
+  transition: transform 160ms var(--summit-ease), box-shadow 160ms ease;
+}
+
+.trainingTaskButton:hover {
+  box-shadow: 0 7px 18px var(--summit-glow);
+  transform: translateY(-1px);
+}
+
+.trainingTaskButton.compact {
+  min-height: 30px;
+  padding-inline: 8px;
+  white-space: nowrap;
+}
+
+.weakPointActionRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.weakPointActionRow > a {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mistakeActionRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.mistakeActionRow > small {
+  grid-column: 2 / 3;
+}
+
+.mistakeActionRow > .trainingTaskButton {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
+.pointTrainingAction {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  grid-column: 1 / -1;
+  padding: 12px 14px;
+  border: 1px solid var(--accent-line);
+  border-radius: 11px;
+  background: linear-gradient(110deg, var(--accent-soft), color-mix(in srgb, var(--surface-raised) 86%, transparent));
+}
+
+.pointTrainingAction > div {
+  display: grid;
+  gap: 1px;
+}
+
+.pointTrainingAction strong { font-size: 13px; }
+.pointTrainingAction small { color: var(--muted); font-size: 10px; }
+
+.rowBadge,
+.flag,
+.pill,
+.statusBadge {
+  border-radius: 999px;
+}
+
+/* Home cockpit */
+.homePage {
+  gap: 22px;
+}
+
+.homeContext {
+  min-height: 44px;
+  padding: 7px 9px 7px 15px;
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  box-shadow: var(--shadow-xs);
+  backdrop-filter: blur(14px);
+}
+
+.homeFocus {
+  position: relative;
+  overflow: hidden;
+  min-height: 330px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 27px;
+  background:
+    radial-gradient(circle at 84% 15%, rgba(217, 112, 73, 0.25), transparent 21rem),
+    radial-gradient(circle at 53% 115%, rgba(106, 135, 102, 0.18), transparent 25rem),
+    linear-gradient(135deg, #20231c, #171914 70%);
+  color: #f6f1e7;
+  box-shadow: 0 30px 70px rgba(28, 25, 18, 0.2);
+}
+
+.homeFocus::after {
+  position: absolute;
+  top: -56%;
+  right: -9%;
+  width: 420px;
+  aspect-ratio: 1;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 50%;
+  box-shadow: 0 0 0 42px rgba(255, 255, 255, 0.018), 0 0 0 88px rgba(255, 255, 255, 0.012);
+  content: "";
+}
+
+.homeFocusMain {
+  position: relative;
+  z-index: 1;
+  padding: clamp(30px, 4vw, 52px);
+}
+
+.homeFocusMain h1 {
+  max-width: 17ch;
+  color: #fffaf0;
+  font-family: var(--font-serif);
+  font-size: clamp(30px, 4vw, 52px);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.18;
+}
+
+.homeFocusMain > p {
+  color: #b9b9ad;
+}
+
+.homeFocus .eyebrow {
+  color: #e88c69;
+}
+
+.homeFocus .primaryButton {
+  color: white;
+}
+
+.homeFocus .secondaryButton {
+  border-color: rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.065);
+  color: #e6e2d8;
+}
+
+.homePulse {
+  position: relative;
+  z-index: 1;
+  align-self: stretch;
+  border-left-color: rgba(255, 255, 255, 0.085);
+  background: rgba(255, 255, 255, 0.022);
+  backdrop-filter: blur(14px);
+}
+
+.pulseMetric {
+  border-color: rgba(255, 255, 255, 0.075);
+}
+
+.pulseMetric strong,
+.pulseMetric > svg {
+  color: #f1e9db;
+}
+
+.pulseMetric span,
+.pulseMetric small,
+.pulseMetric em {
+  color: #8f9387;
+}
+
+.homeContentGrid {
+  gap: 22px;
+}
+
+.listRow,
+.subjectProgressRow {
+  border-radius: 11px;
+  transition: background 160ms ease, transform 180ms var(--summit-ease);
+}
+
+.listRow:hover,
+.subjectProgressRow:hover {
+  background: var(--surface-soft);
+  transform: translateX(3px);
+}
+
+.homeTasksCard .listRow {
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+}
+
+.homeTaskPriority {
+  color: var(--quiet);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.homeTaskPriority.priority1 { color: var(--accent); }
+
+.homeTaskTime {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--quiet);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.countdownChip small {
+  color: var(--quiet);
+  font-size: 9px;
+}
+
+.assetPageHeader {
+  flex: 0 0 auto;
+}
+
+/* Knowledge system */
+.trackHeader {
+  margin-bottom: 11px;
+  padding-inline: 2px;
+}
+
+.trackHeader h2 {
+  font-family: var(--font-serif);
+  font-size: 18px;
+}
+
+.subjectCards {
+  gap: 14px;
+}
+
+.subjectCard {
+  position: relative;
+  min-height: 180px;
+  padding: 20px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent-soft) 48%, transparent), transparent 10rem),
+    var(--surface-raised);
+  box-shadow: var(--shadow);
+  transition: border-color 180ms ease, transform 260ms var(--summit-ease), box-shadow 220ms ease;
+}
+
+.subjectCard::after {
+  position: absolute;
+  right: -22px;
+  bottom: -35px;
+  width: 100px;
+  height: 100px;
+  border: 1px solid color-mix(in srgb, var(--line) 64%, transparent);
+  border-radius: 50%;
+  content: "";
+}
+
+.subjectCard:hover {
+  border-color: var(--accent-line);
+  box-shadow: 0 18px 40px rgba(51, 39, 24, 0.1);
+  transform: translateY(-4px);
+}
+
+.subjectCardHead b {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--bg);
+  font-family: var(--font-mono);
+}
+
+.subjectCardHead strong {
+  font-family: var(--font-serif);
+  font-size: 17px;
+}
+
+.subjectWorkbench {
+  border: 1px solid var(--line);
+  border-radius: 19px;
+  background: color-mix(in srgb, var(--surface-raised) 90%, transparent);
+  box-shadow: var(--shadow);
+}
+
+.subjectHeaderStats {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-xs);
+}
+
+.pointDetail {
+  border-radius: 0 0 13px 13px;
+  background: var(--surface-soft);
+}
+
+/* Daily execution */
+.dayHeader {
+  min-height: 104px;
+  padding: 5px 3px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.dayNav h1 {
+  font-size: clamp(25px, 3vw, 37px);
+}
+
+.dayNav > a {
+  border-radius: 10px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-xs);
+}
+
+.dayStatusBar {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-xs);
+}
+
+.dayStatusBar > div {
+  min-height: 68px;
+}
+
+.dayStatusBar strong {
+  font-family: var(--font-num);
+  font-size: 23px;
+}
+
+.dayStatusBar .due {
+  background: var(--accent-soft);
+}
+
+.dayModule {
+  border-radius: var(--radius-lg);
+}
+
+.dayModule > summary {
+  border-radius: 13px;
+}
+
+/* Insight surfaces */
+.analyticsMetricGrid {
+  gap: 13px;
+}
+
+.analyticsMetricGrid .metricCard {
+  min-height: 135px;
+  padding: 18px;
+}
+
+.analyticsMetricGrid .primaryMetric {
+  background:
+    radial-gradient(circle at 85% 0%, rgba(213, 111, 75, 0.25), transparent 14rem),
+    linear-gradient(135deg, var(--summit-chrome-soft), var(--summit-chrome));
+  color: var(--summit-chrome-ink);
+}
+
+.analyticsMetricGrid .primaryMetric small,
+.analyticsMetricGrid .primaryMetric span,
+.analyticsMetricGrid .primaryMetric em {
+  color: var(--summit-chrome-muted);
+}
+
+.weakPointRow {
+  padding: 12px 13px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+}
+
+.weakPointRow:hover {
+  border-color: var(--accent-line);
+  background: var(--surface-soft);
+}
+
+.mockExamMetrics > div {
+  border-radius: 15px;
+  box-shadow: var(--shadow-xs);
+}
+
+.mockExamMetrics > div.primary {
+  background: linear-gradient(135deg, var(--summit-chrome-soft), var(--summit-chrome));
+}
+
+.mockExamInsight {
+  overflow: hidden;
+}
+
+.mockInsightAdvice {
+  display: grid;
+  gap: 8px;
+  border-radius: 12px;
+}
+
+.mistakeActionRow {
+  border: 1px solid transparent;
+}
+
+.mistakeActionRow:hover {
+  border-color: var(--accent-line);
+}
+
+/* Settings and library */
+.settingsTabs {
+  position: sticky;
+  top: calc(var(--topbar-height) + 10px);
+  z-index: 12;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--surface-raised) 86%, transparent);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px);
+}
+
+.settingsTabs a {
+  border-radius: 8px;
+}
+
+.settingsTabs a:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.settingsGroupTitle {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.summitCountdownRow {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(135px, 0.8fr) minmax(140px, 0.8fr) minmax(100px, 0.5fr) auto;
+  gap: 8px;
+}
+
+.fileExplorer,
+.assetExplorer {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow);
+}
+
+/* Entry, onboarding and administration */
+.loginShell {
+  background: var(--bg);
+}
+
+.loginHero {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 23% 18%, rgba(221, 119, 80, 0.3), transparent 20rem),
+    radial-gradient(circle at 80% 85%, rgba(83, 123, 94, 0.22), transparent 24rem),
+    linear-gradient(145deg, #22251e, #151712);
+}
+
+.loginHero::after {
+  position: absolute;
+  right: -18%;
+  bottom: -42%;
+  width: min(58vw, 650px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  box-shadow: 0 0 0 55px rgba(255, 255, 255, 0.02), 0 0 0 118px rgba(255, 255, 255, 0.014);
+  content: "";
+}
+
+.loginHero h2 {
+  color: #fff9ed;
+  font-family: var(--font-serif);
+  font-size: clamp(34px, 5vw, 62px);
+  font-weight: 570;
+}
+
+.loginHero p {
+  max-width: 34ch;
+  color: #aeb0a4;
+  font-size: 15px;
+}
+
+.loginCard {
+  width: min(430px, calc(100vw - 32px));
+  padding: clamp(28px, 4vw, 44px);
+  border: 1px solid var(--line);
+  border-radius: 23px;
+  background: color-mix(in srgb, var(--surface-raised) 93%, transparent);
+  box-shadow: var(--shadow-lg);
+}
+
+.loginCard h1 {
+  font-family: var(--font-serif);
+}
+
+.onboardingPage {
+  background:
+    radial-gradient(circle at 80% 8%, var(--accent-soft), transparent 23rem),
+    var(--bg);
+}
+
+.onboardingCard {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-lg);
+}
+
+.onboardingPane h1 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+}
+
+.onboardingSteps {
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.onboardingSubjects button,
+.onboardingPaceBuilder > section {
+  border-radius: 14px;
+  transition: transform 180ms var(--summit-ease), border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.onboardingSubjects button:hover,
+.onboardingPaceBuilder > section:hover {
+  border-color: var(--accent-line);
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
+}
+
+.onboardingExamMilestone input,
+.onboardingExamMilestone select {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+}
+
+.homeStats .homeStat {
+  border-radius: 15px;
+  box-shadow: var(--shadow-xs);
+}
+
+/* Dense work surfaces */
+.dayLayout,
+.analyticsGrid,
+.settingsGrid,
+.subjectWorkbench,
+.assetExplorer,
+.calendarLayout {
+  gap: 22px;
+}
+
+.taskLine,
+.reviewQueueItem,
+.mistakeRow,
+.assetRow,
+.knowledgePointRow {
+  border-radius: 11px;
+  transition: background 160ms ease, border-color 160ms ease, transform 180ms var(--summit-ease);
+}
+
+.taskLine:hover,
+.reviewQueueItem:hover,
+.mistakeRow:hover,
+.knowledgePointRow:hover {
+  border-color: var(--accent-line);
+  transform: translateY(-1px);
+}
+
+.taskCheck {
+  border-radius: 7px;
+}
+
+.taskComposer {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.5fr) minmax(110px, 0.8fr) 92px 92px 105px 92px;
+  gap: 6px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.taskComposer > input,
+.taskComposer > select,
+.taskComposerField select,
+.taskComposerField input {
+  min-width: 0;
+  width: 100%;
+  height: 42px;
+  border: 1px solid transparent;
+  background: var(--surface-raised);
+}
+
+.taskComposerTitle {
+  padding-inline: 13px;
+}
+
+.taskComposerField {
+  position: relative;
+  display: block;
+}
+
+.taskComposerField > span {
+  position: absolute;
+  top: 4px;
+  left: 10px;
+  z-index: 1;
+  color: var(--quiet);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.taskComposerField select,
+.taskComposerField input {
+  padding: 14px 8px 2px;
+  font-size: 11px;
+}
+
+.taskComposerSubmit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  border: 0;
+  border-radius: 11px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.taskLine {
+  position: relative;
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-raised) 87%, transparent);
+}
+
+.dayTasks {
+  container-type: inline-size;
+}
+
+@container (max-width: 680px) {
+  .taskComposer {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .taskComposerTitle,
+  .taskComposer > select,
+  .taskComposerSubmit {
+    grid-column: 1 / -1;
+  }
+}
+
+.taskLine::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--quiet);
+  content: "";
+}
+
+.taskLine.priority1::before { background: var(--accent); }
+.taskLine.priority2::before { background: var(--summit-blue); }
+.taskLine.priority3::before { background: var(--quiet); }
+
+.taskLineMain {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto auto minmax(120px, auto) auto auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 54px;
+  padding: 8px 10px 8px 13px;
+}
+
+.taskTitle {
+  min-height: 28px;
+}
+
+.taskPriority {
+  min-width: 27px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.taskPriority.priority1 {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.taskTiming {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--quiet);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.taskExpand {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--quiet);
+}
+
+.taskExpand[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.taskLineDetails {
+  display: grid;
+  grid-template-columns: 145px 145px 145px minmax(240px, 1fr);
+  gap: 10px;
+  padding: 12px 14px 14px 45px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-soft);
+  animation: summit-details-in 200ms var(--summit-ease) both;
+}
+
+.taskLineDetails label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.taskLineDetails input,
+.taskLineDetails select,
+.taskLineDetails textarea {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  font-size: 12px;
+}
+
+.taskNotes textarea {
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+@keyframes summit-details-in {
+  from { opacity: 0; transform: translateY(-5px); }
+}
+
+.taskProgress,
+.progressTrack,
+.mockBar {
+  overflow: hidden;
+  border-radius: 99px;
+}
+
+.fc .fc-button {
+  border-radius: 9px !important;
+}
+
+.fc .fc-daygrid-day,
+.fc .fc-timegrid-slot {
+  transition: background 140ms ease;
+}
+
+.fc .fc-day-today {
+  background: color-mix(in srgb, var(--accent-soft) 52%, transparent) !important;
+}
+
+.fc-event {
+  border-radius: 7px !important;
+  box-shadow: 0 3px 10px rgba(31, 28, 20, 0.12);
+}
+
+.calendarWorkspace {
+  display: grid;
+  gap: 18px;
+}
+
+.calendarOverview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--line);
+  box-shadow: var(--shadow-xs);
+}
+
+.calendarOverview > div {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 64px;
+  padding: 11px 16px;
+  background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
+}
+
+.calendarOverview svg { color: var(--accent); }
+.calendarOverview span { color: var(--muted); font-size: 11px; }
+.calendarOverview strong { font-family: var(--font-num); font-size: 22px; }
+.calendarOverview small { color: var(--quiet); font-size: 10px; font-weight: 500; }
+
+.calendarLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  align-items: start;
+}
+
+.calendarShell {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.calendarViewSwitch {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 18px;
+}
+
+.calendarViewSwitch > div:first-child {
+  display: grid;
+  margin-right: auto;
+}
+
+.calendarViewSwitch > div:first-child strong {
+  font-family: var(--font-serif);
+  font-size: 18px;
+}
+
+.calendarViewSwitch button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.calendarViewSwitch button.active {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.calendarLegend {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 8px;
+  color: var(--quiet);
+  font-size: 9px;
+}
+
+.calendarLegend i {
+  width: 7px;
+  height: 7px;
+  margin-left: 5px;
+  border-radius: 50%;
+  background: var(--summit-blue);
+}
+
+.calendarLegend i.p1 { background: var(--accent); }
+.calendarLegend i.milestone { background: var(--warn); }
+
+.calendarInbox {
+  position: sticky;
+  top: calc(var(--topbar-height) + 20px);
+  max-height: calc(100dvh - var(--topbar-height) - 44px);
+  padding: 20px;
+  overflow: hidden;
+}
+
+.calendarInboxIntro {
+  margin: -7px 0 15px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.calendarInboxList {
+  display: grid;
+  gap: 9px;
+  max-height: calc(100dvh - 250px);
+  padding-right: 3px;
+  overflow-y: auto;
+}
+
+.calendarInboxTask {
+  position: relative;
+  display: grid;
+  gap: 7px;
+  padding: 11px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-soft);
+}
+
+.calendarInboxTask::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--quiet);
+  content: "";
+}
+
+.calendarInboxTask.priority1::before { background: var(--accent); }
+.calendarInboxTask.priority2::before { background: var(--summit-blue); }
+
+.calendarInboxTask header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--quiet);
+  font-size: 9px;
+}
+
+.calendarInboxTask header span {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.calendarInboxTask header small { margin-left: auto; }
+.calendarInboxTask > strong { font-size: 12px; line-height: 1.45; }
+
+.calendarInboxTask > div {
+  display: grid;
+  grid-template-columns: 1fr 73px auto;
+  gap: 5px;
+}
+
+.calendarInboxTask input {
+  min-width: 0;
+  height: 31px;
+  padding: 3px 5px;
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  font-size: 9px;
+}
+
+.calendarInboxTask button {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 9px;
+}
+
+.calendarInboxEmpty {
+  display: grid;
+  place-items: center;
+  gap: 5px;
+  padding: 35px 12px;
+  color: var(--ok);
+  text-align: center;
+}
+
+.calendarInboxEmpty span { color: var(--muted); font-size: 11px; }
+
+.fc .eventTask {
+  border: 0 !important;
+  background: var(--summit-blue) !important;
+  color: white !important;
+}
+
+.fc .eventPriority1 { background: var(--accent) !important; }
+.fc .eventPriority3 { background: var(--muted) !important; }
+.fc .eventTaskDone { opacity: 0.45; text-decoration: line-through; }
+.fc .eventMilestone { border: 0 !important; background: var(--warn) !important; color: white !important; }
+.fc .eventActivity { background: color-mix(in srgb, var(--ok-soft) 75%, transparent) !important; }
+
+.fc .fc-toolbar-title {
+  font-family: var(--font-serif);
+  font-size: 19px !important;
+}
+
+.fc-theme-standard td,
+.fc-theme-standard th,
+.fc-theme-standard .fc-scrollgrid {
+  border-color: var(--line) !important;
+}
+
+.fc .fc-col-header-cell-cushion,
+.fc .fc-daygrid-day-number {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.capturePanel,
+.commandPalette,
+.mobileMoreSheet,
+.accountMenuPopover {
+  border-radius: 22px;
+  box-shadow: var(--shadow-lg);
+}
+
+/* Native route transitions */
+::view-transition-group(ascend-topbar) {
+  animation-duration: 240ms;
+  animation-timing-function: var(--summit-ease);
+}
+
+::view-transition-old(ascend-page) {
+  animation: summit-page-out 150ms ease both;
+}
+
+::view-transition-new(ascend-page) {
+  animation: summit-page-in 360ms var(--summit-ease) both;
+}
+
+:active-view-transition-type(nav-forward)::view-transition-new(ascend-page) {
+  animation-name: summit-page-forward;
+}
+
+@keyframes summit-page-out {
+  to { opacity: 0; transform: translateY(-4px) scale(0.997); }
+}
+
+@keyframes summit-page-in {
+  from { opacity: 0; transform: translateY(9px) scale(0.997); }
+}
+
+@keyframes summit-page-forward {
+  from { opacity: 0; transform: translateX(12px); }
+}
+
+@media (max-width: 1100px) {
+  .topbarDate span {
+    display: none;
+  }
+
+  .commandTrigger {
+    min-width: 178px;
+  }
+
+  .homeFocus {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .homePulse {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-top: 1px solid rgba(255, 255, 255, 0.085);
+    border-left: 0;
+  }
+
+  .taskComposer {
+    grid-template-columns: minmax(160px, 1.5fr) minmax(110px, 0.8fr) 92px 92px 105px 92px;
+  }
+
+  .weakPointActionRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .weakPointActionRow > .trainingTaskButton {
+    justify-self: start;
+  }
+
+  .taskComposerField:has(input[type="time"]),
+  .taskComposerSubmit {
+    grid-column: auto;
+  }
+
+  .taskLineDetails {
+    grid-template-columns: repeat(3, minmax(110px, 1fr));
+  }
+
+  .taskNotes {
+    grid-column: 1 / -1;
+  }
+
+  .calendarLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .calendarInbox {
+    position: static;
+    max-height: none;
+  }
+
+  .calendarInboxList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: none;
+  }
+
+  .summitCountdownRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  :root {
+    --topbar-height: 64px;
+  }
+
+  .sidebar {
+    width: min(310px, calc(100vw - 44px));
+  }
+
+  .topbar {
+    padding-inline: 16px;
+  }
+
+  .mainPane {
+    padding: 20px 16px calc(106px + env(safe-area-inset-bottom));
+  }
+
+  .topbarDate,
+  .commandTrigger span,
+  .commandTrigger kbd {
+    display: none;
+  }
+
+  .commandTrigger {
+    min-width: 38px;
+    width: 38px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .mobileNav {
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: 10px;
+    width: auto;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 18px;
+    background: rgba(25, 27, 22, 0.94);
+    color: #aeb0a5;
+    box-shadow: 0 18px 42px rgba(17, 16, 12, 0.32);
+    backdrop-filter: blur(18px);
+  }
+
+  .mobileNav a.active,
+  .mobileNav button.mobileCapture {
+    color: #f08a64;
+  }
+}
+
+@media (max-width: 640px) {
+  .homeFocus {
+    border-radius: 21px;
+  }
+
+  .homeFocusMain {
+    padding: 28px 23px;
+  }
+
+  .homePulse {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .card {
+    padding: 18px;
+    border-radius: 15px;
+  }
+
+  .taskComposer {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .taskComposerTitle,
+  .taskComposer > select,
+  .taskComposerSubmit {
+    grid-column: 1 / -1;
+  }
+
+  .taskLineMain {
+    grid-template-columns: auto minmax(120px, 1fr) auto auto;
+  }
+
+  .taskTiming {
+    grid-column: 2 / 3;
+  }
+
+  .taskSubject {
+    grid-column: 2 / -1;
+    width: 100%;
+  }
+
+  .taskLineDetails {
+    grid-template-columns: 1fr 1fr;
+    padding-left: 14px;
+  }
+
+  .calendarOverview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .calendarOverview > div {
+    min-height: 57px;
+    padding: 9px 11px;
+  }
+
+  .calendarLegend {
+    display: none;
+  }
+
+  .calendarInboxList {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .summitCountdownRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mistakeActionRow {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .mistakeActionRow > .trainingTaskButton {
+    grid-column: 2;
+    grid-row: auto;
+    justify-self: start;
+  }
+
+  .topbarActions > .topbarIconButton {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 0.001ms !important;
+  }
+
+  .sidebar nav a:hover,
+  .listRow:hover,
+  .subjectProgressRow:hover,
+  .primaryButton:hover,
+  .secondaryButton:hover {
+    transform: none;
+  }
+}
+
+html[data-motion="reduce"]::view-transition-group(*),
+html[data-motion="reduce"]::view-transition-old(*),
+html[data-motion="reduce"]::view-transition-new(*) {
+  animation-duration: 0.001ms !important;
+}

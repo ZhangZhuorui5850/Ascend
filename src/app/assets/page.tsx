@@ -26,6 +26,11 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
 
   return (
     <div className="pageStack fullHeight">
+      <header className="pageHeader assetPageHeader">
+        <span className="eyebrow">CONNECTED LIBRARY · 关联资料库</span>
+        <h1>资料库</h1>
+        <p>文件通过科目、章节、知识点与日期进入学习上下文。</p>
+      </header>
       <FileExplorer explorer={explorer} hierarchy={hierarchy} searchQuery={q} searchResults={searchResults} usage={usage} />
     </div>
   );

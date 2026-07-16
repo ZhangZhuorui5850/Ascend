@@ -18,8 +18,9 @@ export default async function SubjectsPage() {
   return (
     <div className="pageStack">
       <div className="pageHeader">
-        <h1>科目</h1>
-        <p>每个科目按「章节 → 知识点」组织；笔试和机试用类型区分，机制完全一致。</p>
+        <span className="eyebrow">KNOWLEDGE SYSTEM · 知识体系</span>
+        <h1>知识体系</h1>
+        <p>沿着科目、章节、知识点逐层推进，资料、错题和复习记录会在同一上下文汇合。</p>
       </div>
 
       {groups.map((group) => (

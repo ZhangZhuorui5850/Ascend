@@ -10,6 +10,7 @@ import { getCaptureHierarchy, type CaptureSubject } from "@/lib/repo/knowledge";
 import { optionalSession } from "@/lib/request-auth";
 import { parseSessionsCookieValue } from "@/lib/session-cookies";
 import "./globals.css";
+import "../styles/summit.css";
 
 export const metadata: Metadata = {
   title: "登峰 · Ascend",

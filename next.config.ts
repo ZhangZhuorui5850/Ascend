@@ -32,6 +32,7 @@ const nextConfig: NextConfig = {
     root: process.cwd(),
   },
   experimental: {
+    viewTransition: true,
     // 客户端路由缓存：30s 内往返导航直接复用，消除重复点击的整页等待
     staleTimes: {
       dynamic: 30,

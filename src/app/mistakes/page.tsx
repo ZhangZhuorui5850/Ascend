@@ -2,6 +2,7 @@ import Link from "next/link";
 import { EmptyState } from "@/components/EmptyState";
 import { MistakeReattempt } from "@/components/MistakeReattempt";
 import { RichText } from "@/components/RichText";
+import { CreateTrainingTaskButton } from "@/components/CreateTrainingTaskButton";
 import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { requirePageWorkspace } from "@/lib/page-auth";
@@ -18,8 +19,9 @@ export default async function MistakesPage() {
   return (
     <div className="pageStack">
       <div className="pageHeader">
-        <h1>错题本</h1>
-        <p>错题会自动进入间隔复习：仍错继续排队，两次跨日答对后毕业。</p>
+        <span className="eyebrow">ERROR LOOP · 错因闭环</span>
+        <h1>错题回炉</h1>
+        <p>按间隔复习节奏重新作答，两次跨日答对后完成毕业。</p>
       </div>
 
       <section className="card" aria-label="今日待回炉">
@@ -43,7 +45,7 @@ export default async function MistakesPage() {
           <div className="sectionTitle"><h2>回炉中</h2><span className="sectionHint">{book.open.length} 道</span></div>
           <div className="list">
             {book.open.map((mistake) => (
-              <div className="listRow" key={mistake.id}>
+              <div className="listRow mistakeActionRow" key={mistake.id}>
                 <span className="rowBadge mistake">{mistake.next_review ? `下次 ${mistake.next_review}` : "待排期"}</span>
                 <strong><RichText text={mistake.title} /></strong>
                 <small>
@@ -51,6 +53,7 @@ export default async function MistakesPage() {
                   {mistake.cause_category ? `${mistake.cause_category} · ` : ""}
                   <RichText text={mistake.knowledge_title || mistake.cause || mistake.day} />
                 </small>
+                <CreateTrainingTaskButton compact day={today} notes={`错题来源：${mistake.day}；错因：${mistake.cause_category || mistake.cause || "待归因"}`} subjectCode={mistake.subject_code} title={`错题专项：${mistake.title}`} />
               </div>
             ))}
             {!book.open.length ? <p className="empty">暂无排队中的错题。</p> : null}
