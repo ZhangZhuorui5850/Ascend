@@ -126,7 +126,7 @@ body::before {
   height: 27px;
   padding: 9px 12px 3px;
   overflow: hidden;
-  color: #74786c;
+  color: var(--summit-chrome-muted);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.18em;
@@ -526,6 +526,12 @@ select {
 
 .pulseMetric {
   border-color: rgba(255, 255, 255, 0.075);
+}
+
+.homeFocus .pulseMetric {
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .pulseMetric strong,
@@ -1373,10 +1379,10 @@ select {
   color: white !important;
 }
 
-.fc .eventPriority1 { background: var(--accent) !important; }
-.fc .eventPriority3 { background: var(--muted) !important; }
-.fc .eventTaskDone { opacity: 0.45; text-decoration: line-through; }
-.fc .eventMilestone { border: 0 !important; background: var(--warn) !important; color: white !important; }
+.fc .eventPriority1 { background: var(--accent) !important; color: var(--accent-ink) !important; }
+.fc .eventPriority3 { background: var(--muted) !important; color: var(--surface) !important; }
+.fc .eventTaskDone { opacity: 1; text-decoration: line-through; }
+.fc .eventMilestone { border: 0 !important; background: var(--warn) !important; color: var(--warn-soft) !important; }
 .fc .eventActivity { background: color-mix(in srgb, var(--ok-soft) 75%, transparent) !important; }
 
 .fc .fc-toolbar-title {
@@ -1540,9 +1546,14 @@ select {
     backdrop-filter: blur(18px);
   }
 
+  .mobileNav a,
+  .mobileNav button {
+    color: #b8baae;
+  }
+
   .mobileNav a.active,
   .mobileNav button.mobileCapture {
-    color: #f08a64;
+    color: #f59a77 !important;
   }
 }
 

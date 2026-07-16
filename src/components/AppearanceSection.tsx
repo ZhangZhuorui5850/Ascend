@@ -15,9 +15,9 @@ const OPTIONS: Array<{ value: Theme; label: string; hint: string; icon: typeof S
 /** 风格包，swatch 为该风格代表色 [底色, 点色, 高光]，与 tokens.css 中 data-skin 定义一致 */
 const SKINS: Array<{ value: Skin; label: string; hint: string; swatch: [string, string, string] }> = [
   { value: "default", label: "朱砂手帐", hint: "宣纸墨色，朱砂印章红", swatch: ["#f2eee3", "#b13a20", "#262015"] },
-  { value: "aurora", label: "曜夜极光", hint: "玻璃拟态，极光渐变氛围", swatch: ["#0b0d17", "#8b7bff", "#46b8ff"] },
-  { value: "brutal", label: "新粗野", hint: "黑框硬影，酸性荧光", swatch: ["#f4f1e6", "#e04400", "#d3f524"] },
-  { value: "cloud", label: "云软", hint: "无边悬浮，奶油软阴影", swatch: ["#f2f5fb", "#2f7cd6", "#ffbdb0"] },
+  { value: "aurora", label: "曜夜极光", hint: "玻璃拟态，极光渐变氛围", swatch: ["#0b0d17", "#a095ff", "#146b9e"] },
+  { value: "brutal", label: "新粗野", hint: "黑框硬影，酸性荧光", swatch: ["#f4f1e6", "#b73500", "#d3f524"] },
+  { value: "cloud", label: "云软", hint: "无边悬浮，奶油软阴影", swatch: ["#f2f5fb", "#1f65b5", "#ffbdb0"] },
   { value: "terminal", label: "终端磷光", hint: "CRT 扫描线，等宽提示符", swatch: ["#0a0f0b", "#35d883", "#cdeed6"] },
 ];
 
