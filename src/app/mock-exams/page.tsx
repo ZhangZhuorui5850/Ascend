@@ -45,7 +45,7 @@ export default async function MockExamsPage() {
             <>
               <div className="mockWeakLead"><span>当前首要短板</span><strong>{dashboard.weakAreas[0].label}</strong><p>历史均值 {dashboard.weakAreas[0].percent}% · 来自 {dashboard.weakAreas[0].attempts} 次诊断</p></div>
               <div className="weakAreaList">
-                {dashboard.weakAreas.map((area, index) => <div className={index === 0 ? "lead" : undefined} key={area.label}><span>{area.label}</span><div><i style={{ width: `${area.percent}%` }} /></div><b>{area.percent}%</b></div>)}
+                {dashboard.weakAreas.map((area, index) => <div className={index === 0 ? "lead" : undefined} key={area.label}><span>{area.label}</span><div><i style={{ transform: `scaleX(${area.percent / 100})` }} /></div><b>{area.percent}%</b></div>)}
               </div>
               <div className="mockInsightAdvice"><strong>训练建议</strong><p>下一次模考前，将一半专项训练时间投入“{dashboard.weakAreas[0].label}”，并使用同类题验证变化。</p><CreateTrainingTaskButton day={today} notes="由模考能力诊断生成；完成同类题后进行一次小测验证。" subjectCode={latestSubject} title={`模考专项：${dashboard.weakAreas[0].label}`} /></div>
             </>
@@ -63,7 +63,7 @@ export default async function MockExamsPage() {
               <div className="mockExamHistoryScore" style={{ "--history-score": exam.percent } as React.CSSProperties}><strong>{exam.percent}<small>%</small></strong><span>{exam.score}/{exam.max_score}</span></div>
               <div className="mockExamHistoryMain">
                 <header><div><time>{exam.day}</time><h3>{exam.name}</h3></div><span>{exam.subject_code || "综合模考"} · {exam.duration_minutes} 分钟</span></header>
-                {exam.breakdown.length ? <div className="mockHistoryBreakdown">{exam.breakdown.map((item) => { const percent = Math.round(item.score / item.maxScore * 100); return <div key={item.label}><span>{item.label}</span><i><b style={{ width: `${percent}%` }} /></i><strong>{percent}%</strong></div>; })}</div> : null}
+                {exam.breakdown.length ? <div className="mockHistoryBreakdown">{exam.breakdown.map((item) => { const percent = Math.round(item.score / item.maxScore * 100); return <div key={item.label}><span>{item.label}</span><i><b style={{ transform: `scaleX(${percent / 100})` }} /></i><strong>{percent}%</strong></div>; })}</div> : null}
                 {exam.notes ? <p className="mockHistoryNote">{exam.notes}</p> : null}
               </div>
             </article>

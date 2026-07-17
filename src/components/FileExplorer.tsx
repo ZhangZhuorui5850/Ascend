@@ -333,7 +333,7 @@ export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, 
           </div>
         </div>
         {error ? <p className="formError">{error}</p> : null}
-        {uploaded || uploading ? <div className="uploadProgress"><span style={{ width: `${Math.round((uploaded / Math.max(1, uploaded + uploading)) * 100)}%` }} /><b>{uploading ? `正在并发上传 · 已完成 ${uploaded}` : `上传完成 · ${uploaded} 个文件`}</b></div> : null}
+        {uploaded || uploading ? <div className="uploadProgress"><span style={{ transform: `scaleX(${uploaded / Math.max(1, uploaded + uploading)})` }} /><b>{uploading ? `正在并发上传 · 已完成 ${uploaded}` : `上传完成 · ${uploaded} 个文件`}</b></div> : null}
         {selectedIds.size ? (
           <div className="driveBatchBar">
             <strong>已选 {selectedIds.size} 个文件</strong>
@@ -727,7 +727,7 @@ function QuotaMeter({ usedBytes, quotaBytes }: { usedBytes: number; quotaBytes: 
   return (
     <div className={tight ? "quotaMeter tight" : "quotaMeter"} title={`已用 ${formatSize(usedBytes)} / ${formatSize(quotaBytes)}`}>
       <div className="quotaTrack">
-        <span style={{ width: `${Math.max(2, percent)}%` }} />
+        <span style={{ transform: `scaleX(${Math.max(2, percent) / 100})` }} />
       </div>
       <small>
         空间 {formatSize(usedBytes)} / {formatSize(quotaBytes)}{tight ? " · 快满了" : ""}

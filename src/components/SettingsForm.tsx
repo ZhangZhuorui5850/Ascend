@@ -2,19 +2,26 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { BookOpenCheck, CalendarDays, Check, Clock3, Flag, Plus, Target, Trash2 } from "lucide-react";
 import { saveSettingsAction } from "@/app/actions/settings";
+import { usePresenceAnimation } from "@/components/usePresenceAnimation";
 import type { AppSettings, ExamCountdown } from "@/lib/repo/settings";
 
 const WEEKLY_PRESETS = [300, 600, 900, 1200];
 const REVIEW_PRESETS = [10, 20, 30, 50];
+type CountdownDraft = ExamCountdown & { clientKey: string };
 
 export function SettingsForm({ initial, subjects }: { initial: AppSettings; subjects: Array<{ code: string; name: string }> }) {
   const router = useRouter();
-  const [countdowns, setCountdowns] = useState<ExamCountdown[]>(
-    initial.examCountdowns.length ? initial.examCountdowns : [{ name: "", date: "" }],
-  );
+  const [countdowns, setCountdowns] = useState<CountdownDraft[]>(() => (
+    initial.examCountdowns.length
+      ? initial.examCountdowns.map((item, index) => ({ ...item, clientKey: `saved-${index}` }))
+      : [{ name: "", date: "", clientKey: "draft-0" }]
+  ));
+  const [enteringCountdownKeys, setEnteringCountdownKeys] = useState<Set<string>>(() => new Set());
+  const [leavingCountdownKeys, setLeavingCountdownKeys] = useState<Set<string>>(() => new Set());
+  const countdownKeyRef = useRef(1);
   const [reviewLimit, setReviewLimit] = useState(initial.dailyReviewLimit);
   const [learningGoal, setLearningGoal] = useState(initial.learningGoal);
   const [weeklyMinutes, setWeeklyMinutes] = useState(initial.weeklyMinutes);
@@ -35,7 +42,9 @@ export function SettingsForm({ initial, subjects }: { initial: AppSettings; subj
     setError("");
     setMessage("");
     const result = await saveSettingsAction({
-      examCountdowns: countdowns.filter((item) => item.name.trim() && item.date),
+      examCountdowns: countdowns
+        .filter((item) => item.name.trim() && item.date)
+        .map(({ name, date, subjectCode, targetScore }) => ({ name, date, subjectCode, targetScore })),
       dailyReviewLimit: reviewLimit,
       learningGoal,
       weeklyMinutes,
@@ -88,26 +97,29 @@ export function SettingsForm({ initial, subjects }: { initial: AppSettings; subj
         </div>
         <div className="countdownEditor">
           {countdowns.map((item, index) => (
-            <div className="countdownEditorRow summitCountdownRow" key={index}>
-              <span className="countdownIndex"><CalendarDays size={14} /></span>
-              <label><span>考试名称</span><input aria-label="考试名称" value={item.name} onChange={(event) => updateCountdown(index, { name: event.target.value })} placeholder="例如：考研初试" /></label>
-              <label><span>考试日期</span><input aria-label="考试日期" type="date" value={item.date} onChange={(event) => updateCountdown(index, { date: event.target.value })} /></label>
-              <label><span>关联科目</span><select aria-label="考试关联科目" value={item.subjectCode || ""} onChange={(event) => updateCountdown(index, { subjectCode: event.target.value || undefined })}><option value="">综合考试</option>{subjects.map((subject) => <option key={subject.code} value={subject.code}>{subject.code} · {subject.name}</option>)}</select></label>
-              <label><span>目标分数</span><input aria-label="考试目标分数" min="1" max="1000" type="number" value={item.targetScore || ""} onChange={(event) => updateCountdown(index, { targetScore: event.target.value ? Number(event.target.value) : undefined })} placeholder="120" /></label>
-              <button
-                aria-label="删除这条倒计时"
-                className="iconDanger"
-                onClick={() => setCountdowns((current) => current.filter((_, i) => i !== index))}
-                type="button"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
+            <CountdownRow
+              entering={enteringCountdownKeys.has(item.clientKey)}
+              item={item}
+              key={item.clientKey}
+              leaving={leavingCountdownKeys.has(item.clientKey)}
+              onEnterComplete={() => setEnteringCountdownKeys((current) => withoutKey(current, item.clientKey))}
+              onRemove={() => setLeavingCountdownKeys((current) => new Set(current).add(item.clientKey))}
+              onRemoveComplete={() => {
+                setCountdowns((current) => current.filter((countdown) => countdown.clientKey !== item.clientKey));
+                setLeavingCountdownKeys((current) => withoutKey(current, item.clientKey));
+              }}
+              onUpdate={(patch) => updateCountdown(index, patch)}
+              subjects={subjects}
+            />
           ))}
           {countdowns.length < 5 ? (
             <button
               className="secondaryButton"
-              onClick={() => setCountdowns((current) => [...current, { name: "", date: "", subjectCode: "" }])}
+              onClick={() => {
+                const clientKey = `draft-${countdownKeyRef.current++}`;
+                setEnteringCountdownKeys((current) => new Set(current).add(clientKey));
+                setCountdowns((current) => [...current, { name: "", date: "", subjectCode: "", clientKey }]);
+              }}
               type="button"
             >
               <Plus size={14} />
@@ -132,4 +144,39 @@ export function SettingsForm({ initial, subjects }: { initial: AppSettings; subj
       </div>
     </div>
   );
+}
+
+function CountdownRow({ item, subjects, entering, leaving, onUpdate, onRemove, onEnterComplete, onRemoveComplete }: {
+  item: CountdownDraft;
+  subjects: Array<{ code: string; name: string }>;
+  entering: boolean;
+  leaving: boolean;
+  onUpdate: (patch: Partial<ExamCountdown>) => void;
+  onRemove: () => void;
+  onEnterComplete: () => void;
+  onRemoveComplete: () => void;
+}) {
+  const [elementRef, onAnimationEnd] = usePresenceAnimation<HTMLDivElement>({ entering, leaving, onEnterComplete, onExitComplete: onRemoveComplete });
+  return (
+    <div
+      className="countdownEditorRow summitCountdownRow"
+      data-entering={entering ? "" : undefined}
+      data-leaving={leaving ? "" : undefined}
+      onAnimationEnd={onAnimationEnd}
+      ref={elementRef}
+    >
+      <span className="countdownIndex"><CalendarDays size={14} /></span>
+      <label><span>考试名称</span><input aria-label="考试名称" value={item.name} onChange={(event) => onUpdate({ name: event.target.value })} placeholder="例如：考研初试" /></label>
+      <label><span>考试日期</span><input aria-label="考试日期" type="date" value={item.date} onChange={(event) => onUpdate({ date: event.target.value })} /></label>
+      <label><span>关联科目</span><select aria-label="考试关联科目" value={item.subjectCode || ""} onChange={(event) => onUpdate({ subjectCode: event.target.value || undefined })}><option value="">综合考试</option>{subjects.map((subject) => <option key={subject.code} value={subject.code}>{subject.code} · {subject.name}</option>)}</select></label>
+      <label><span>目标分数</span><input aria-label="考试目标分数" min="1" max="1000" type="number" value={item.targetScore || ""} onChange={(event) => onUpdate({ targetScore: event.target.value ? Number(event.target.value) : undefined })} placeholder="120" /></label>
+      <button aria-label="删除这条倒计时" className="iconDanger" disabled={leaving} onClick={onRemove} type="button"><Trash2 size={14} /></button>
+    </div>
+  );
+}
+
+function withoutKey(keys: Set<string>, key: string): Set<string> {
+  const next = new Set(keys);
+  next.delete(key);
+  return next;
 }

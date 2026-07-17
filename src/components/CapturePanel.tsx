@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertCircle, Camera, CheckCircle2, FileText, FolderOpen, ImageIcon, Inbox, Loader2, Paperclip, Plus, Send, X } from "lucide-react";
 import { createPointAction } from "@/app/actions/knowledge";
 import { RichText } from "@/components/RichText";
+import { usePresenceAnimation } from "@/components/usePresenceAnimation";
 import { todayKey } from "@/lib/dates";
 import { MAX_UPLOAD_BYTES } from "@/lib/limits";
 import type { CaptureSubject } from "@/lib/repo/knowledge";
@@ -38,6 +39,8 @@ export function CapturePanel({ subjects, onClose }: { subjects: CaptureSubject[]
   const [isDragging, setIsDragging] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [enteringAttachmentIds, setEnteringAttachmentIds] = useState<Set<string>>(() => new Set());
+  const [leavingAttachmentIds, setLeavingAttachmentIds] = useState<Set<string>>(() => new Set());
   const attachmentsRef = useRef<Attachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -140,6 +143,7 @@ export function CapturePanel({ subjects, onClose }: { subjects: CaptureSubject[]
       };
     });
 
+    setEnteringAttachmentIds((current) => new Set([...current, ...next.map((attachment) => attachment.id)]));
     setAttachments((current) => [...current, ...next]);
     const oversizedCount = next.filter((item) => item.status === "error").length;
     setMessage(
@@ -150,10 +154,19 @@ export function CapturePanel({ subjects, onClose }: { subjects: CaptureSubject[]
   }
 
   function removeAttachment(id: string) {
+    setLeavingAttachmentIds((current) => new Set(current).add(id));
+  }
+
+  function finishRemoveAttachment(id: string) {
     setAttachments((current) => {
       const target = current.find((attachment) => attachment.id === id);
       if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
       return current.filter((attachment) => attachment.id !== id);
+    });
+    setLeavingAttachmentIds((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      return next;
     });
   }
 
@@ -300,14 +313,10 @@ export function CapturePanel({ subjects, onClose }: { subjects: CaptureSubject[]
       router.refresh();
       // 入库成功后短暂展示对勾，然后清场，方便连续收纳下一批
       setTimeout(() => {
-        setAttachments((current) => {
-          current
-            .filter((item) => item.status === "uploaded")
-            .forEach((item) => {
-              if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-            });
-          return current.filter((item) => item.status !== "uploaded");
-        });
+        setLeavingAttachmentIds((current) => new Set([
+          ...current,
+          ...attachmentsRef.current.filter((item) => item.status === "uploaded").map((item) => item.id),
+        ]));
       }, 1500);
     }
   }
@@ -373,36 +382,20 @@ export function CapturePanel({ subjects, onClose }: { subjects: CaptureSubject[]
         {attachments.length ? (
           <div className="attachmentGrid">
             {attachments.map((attachment) => (
-              <div className="attachmentCard" key={attachment.id}>
-                <div className="attachmentPreview">
-                  {attachment.previewUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={attachment.previewUrl} alt={attachment.name} />
-                  ) : attachment.type.startsWith("image/") ? (
-                    <ImageIcon size={20} />
-                  ) : (
-                    <FileText size={20} />
-                  )}
-                </div>
-                <div className="attachmentMeta">
-                  <strong>{attachment.name}</strong>
-                  <span>{formatSize(attachment.size)}</span>
-                </div>
-                <div className={`attachmentStatus status-${attachment.status}`}>
-                  {attachment.status === "queued" ? "待入库" : null}
-                  {attachment.status === "uploading" ? <Loader2 size={15} className="spin" /> : null}
-                  {attachment.status === "uploaded" ? <CheckCircle2 size={15} /> : null}
-                  {attachment.status === "error" ? <AlertCircle size={15} /> : null}
-                </div>
-                {attachment.status === "error" ? (
-                  <button className="attachmentLink" onClick={() => void uploadQueuedAttachment(attachment)} type="button">
-                    重试
-                  </button>
-                ) : null}
-                <button className="removeAttachment" onClick={() => removeAttachment(attachment.id)} type="button" aria-label="移除文件">
-                  <X size={14} />
-                </button>
-              </div>
+              <AttachmentCard
+                attachment={attachment}
+                entering={enteringAttachmentIds.has(attachment.id)}
+                key={attachment.id}
+                leaving={leavingAttachmentIds.has(attachment.id)}
+                onEnterComplete={() => setEnteringAttachmentIds((current) => {
+                  const next = new Set(current);
+                  next.delete(attachment.id);
+                  return next;
+                })}
+                onRemove={() => removeAttachment(attachment.id)}
+                onRemoveComplete={() => finishRemoveAttachment(attachment.id)}
+                onRetry={() => void uploadQueuedAttachment(attachment)}
+              />
             ))}
           </div>
         ) : null}
@@ -499,6 +492,52 @@ export function CapturePanel({ subjects, onClose }: { subjects: CaptureSubject[]
       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={handleFileInput} />
     </aside>
     </>
+  );
+}
+
+function AttachmentCard({ attachment, entering, leaving, onEnterComplete, onRemove, onRemoveComplete, onRetry }: {
+  attachment: Attachment;
+  entering: boolean;
+  leaving: boolean;
+  onEnterComplete: () => void;
+  onRemove: () => void;
+  onRemoveComplete: () => void;
+  onRetry: () => void;
+}) {
+  const [elementRef, onAnimationEnd] = usePresenceAnimation<HTMLDivElement>({ entering, leaving, onEnterComplete, onExitComplete: onRemoveComplete });
+  return (
+    <div
+      className="attachmentCard"
+      data-entering={entering ? "" : undefined}
+      data-leaving={leaving ? "" : undefined}
+      onAnimationEnd={onAnimationEnd}
+      ref={elementRef}
+    >
+      <div className="attachmentPreview">
+        {attachment.previewUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={attachment.previewUrl} alt={attachment.name} />
+        ) : attachment.type.startsWith("image/") ? (
+          <ImageIcon size={20} />
+        ) : (
+          <FileText size={20} />
+        )}
+      </div>
+      <div className="attachmentMeta">
+        <strong>{attachment.name}</strong>
+        <span>{formatSize(attachment.size)}</span>
+      </div>
+      <div className={`attachmentStatus status-${attachment.status}`}>
+        {attachment.status === "queued" ? "待入库" : null}
+        {attachment.status === "uploading" ? <Loader2 size={15} className="spin" /> : null}
+        {attachment.status === "uploaded" ? <CheckCircle2 size={15} /> : null}
+        {attachment.status === "error" ? <AlertCircle size={15} /> : null}
+      </div>
+      {attachment.status === "error" ? <button className="attachmentLink" onClick={onRetry} type="button">重试</button> : null}
+      <button aria-label="移除文件" className="removeAttachment" disabled={leaving} onClick={onRemove} type="button">
+        <X size={14} />
+      </button>
+    </div>
   );
 }
 

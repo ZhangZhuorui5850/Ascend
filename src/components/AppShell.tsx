@@ -72,7 +72,7 @@ export function AppShell({ user, hierarchy, children }: AppShellProps) {
       <div className="appWorkspace">
         <TopBar account={user.account} accounts={user.accounts} onCommand={() => setCommandOpen(true)} onMenu={handleMenu} role={user.role} />
         <main className="mainPane">
-          <ViewTransition key={pathname} name="ascend-page" enter="summit-page-enter" exit="summit-page-exit">
+          <ViewTransition key={pathname} name="ascend-page">
             {children}
           </ViewTransition>
         </main>

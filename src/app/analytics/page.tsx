@@ -122,7 +122,7 @@ export default async function AnalyticsPage() {
               <span className="rowBadge">{row.code ?? "—"}</span>
               <strong>{row.name}</strong>
               <div className="progressTrack">
-                <span style={{ width: `${Math.round((row.minutes / maxSubjectMinutes) * 100)}%` }} />
+                <span style={{ transform: `scaleX(${row.minutes / maxSubjectMinutes})` }} />
               </div>
               <small>{row.minutes} 分钟</small>
             </div>
@@ -182,7 +182,7 @@ export default async function AnalyticsPage() {
               <Link className="subjectProgressRow" href={`/subjects/${subject.code}`} key={subject.code}>
                 <b>{subject.code}</b>
                 <strong>{subject.name}</strong>
-                <div className="progressTrack"><span style={{ width: `${progress}%` }} /></div>
+                <div className="progressTrack"><span style={{ transform: `scaleX(${progress / 100})` }} /></div>
                 <small>{subject.masteredCount}/{subject.pointCount}</small>
                 {subject.dueCount ? <em className="flag due">{subject.dueCount} 待复习</em> : <em />}
               </Link>

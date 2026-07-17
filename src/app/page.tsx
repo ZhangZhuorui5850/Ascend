@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { ArrowRight, BookOpenCheck, CalendarDays, CheckCircle2, Clock3, Flame, FolderUp, Target } from "lucide-react";
+import { ArrowRight, Target } from "lucide-react";
+import { CountUp } from "@/components/CountUp";
 import { EmptyState } from "@/components/EmptyState";
-import { HomeClock } from "@/components/HomeClock";
 import { shiftDateKey, todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { requirePageWorkspace } from "@/lib/page-auth";
@@ -9,9 +9,11 @@ import { getTomorrowPlan } from "@/lib/repo/days";
 import { getSubjectOverviews, TRACK_NAMES } from "@/lib/repo/knowledge";
 import { listTasks } from "@/lib/repo/planner";
 import { getSettings } from "@/lib/repo/settings";
-import { getHomeSnapshot } from "@/lib/repo/stats";
+import { getHomeSnapshot, getLearningAnalytics } from "@/lib/repo/stats";
 
 export const dynamic = "force-dynamic";
+
+type HomeState = "due" | "task" | "summit" | "blank";
 
 export default async function HomePage() {
   const access = await requirePageWorkspace("/");
@@ -20,76 +22,220 @@ export default async function HomePage() {
   const today = todayKey();
   const snapshot = getHomeSnapshot(db, access, today);
   const settings = getSettings(db, access);
+  const analytics = getLearningAnalytics(db, access, today);
   const allSubjects = getSubjectOverviews(db, access, today);
   const subjects = settings.enabledSubjectCodes.length
     ? allSubjects.filter((subject) => settings.enabledSubjectCodes.includes(subject.code))
     : allSubjects;
-  const tasks = listTasks(db, access, today).filter((task) => !task.done).slice(0, 5);
+  const enabledCodes = new Set(subjects.map((subject) => subject.code));
+
+  // 已排时任务按时刻前置，未排时按优先级尾随——这是「今日时间线」的克制版
+  const openTaskList = listTasks(db, access, today)
+    .filter((task) => !task.done)
+    .sort((a, b) => {
+      if (a.scheduled_start && b.scheduled_start) {
+        return a.scheduled_start.localeCompare(b.scheduled_start) || a.priority - b.priority;
+      }
+      if (a.scheduled_start) return -1;
+      if (b.scheduled_start) return 1;
+      return a.priority - b.priority || a.sort_order - b.sort_order;
+    });
+  const tasks = openTaskList.slice(0, 5);
+  const firstTask = openTaskList[0];
+  const remainingMinutes = openTaskList.reduce((sum, task) => sum + task.estimated_minutes, 0);
+
   const pendingCount = snapshot.dueReviews + snapshot.dueMistakes;
+  // 与标题同口径的估时：复习 ~45s/个、错题 ~2min/道，均不封顶
+  const estMinutes = Math.ceil(snapshot.dueReviews * 0.75 + snapshot.dueMistakes * 2);
   const yesterdayPlan = getTomorrowPlan(db, access, shiftDateKey(today, -1));
-  const firstTask = tasks[0];
-  const heroTitle = pendingCount
-    ? `先清掉 ${pendingCount} 个到期复习。`
+
+  const state: HomeState = pendingCount
+    ? "due"
     : firstTask
-      ? `接着做：「${truncate(firstTask.title, 18)}」`
-      : "今天，从最重要的一件事开始。";
-  const heroSub = pendingCount
-    ? `复习 ${snapshot.dueReviews} 个 · 错题 ${snapshot.dueMistakes} 道，已按优先级排好，处理完再进新任务。`
-    : firstTask
-      ? `清单上还有 ${snapshot.openTasks} 个任务等着今天完成。`
-      : "工作台已经准备好，给今天一个清晰、可完成的起点。";
-  const nextLabel = pendingCount ? "去处理" : snapshot.openTasks ? "进入今日工作台" : "规划今天的第一件事";
-  const focusSubjects = [...subjects].sort(
-    (a, b) => b.dueCount + b.openMistakes - (a.dueCount + a.openMistakes),
-  );
+      ? "task"
+      : snapshot.doneTasks > 0 || snapshot.today.reviews > 0
+        ? "summit"
+        : "blank";
+
+  const upcomingExams = settings.examCountdowns
+    .map((exam) => ({ exam, days: daysUntil(today, exam.date) }))
+    .filter((item): item is { exam: (typeof settings.examCountdowns)[number]; days: number } =>
+      item.days !== null && item.days >= 0)
+    .sort((a, b) => a.days - b.days);
+  const nearestExam = upcomingExams[0];
+
+  const focusSubjects = [...subjects]
+    .sort((a, b) => b.dueCount + b.openMistakes - (a.dueCount + a.openMistakes))
+    .slice(0, 4);
+  const weakPoints = analytics.weakPoints
+    .filter((point) => enabledCodes.has(point.subjectCode))
+    .slice(0, 3);
+
+  const weekDelta = analytics.prevWeek.studyMinutes
+    ? Math.round(
+        ((analytics.week.studyMinutes - analytics.prevWeek.studyMinutes) /
+          analytics.prevWeek.studyMinutes) * 100,
+      )
+    : null;
+  const maxDailyMinutes = Math.max(...analytics.dailyMinutes.map((item) => item.minutes), 1);
 
   return (
-    <div className="pageStack homePage">
-      <section className="homeContext" aria-label="时间与目标">
-        <HomeClock />
-        {settings.learningGoal ? <span className="homeLearningGoal"><Target size={14} />{settings.learningGoal}</span> : null}
-        <div className="homeCountdowns compact">
-          {settings.examCountdowns.map((exam) => {
-            const days = daysUntil(today, exam.date);
-            return <div className={days !== null && days <= 14 ? "countdownChip urgent" : "countdownChip"} key={`${exam.name}-${exam.date}`}><Target size={14} /><span>{exam.subjectCode ? `${exam.subjectCode} · ` : ""}{exam.name}</span>{exam.targetScore ? <small>目标 {exam.targetScore}</small> : null}<strong>{days === null ? "—" : days > 0 ? `${days} 天` : days === 0 ? "今天" : "已结束"}</strong></div>;
-          })}
+    <div className="pageStack homePage" data-home-state={state}>
+      <section aria-label="目标与里程碑" className="homeMasthead">
+        <span className="homeMastheadKicker">BASE CAMP · 大本营</span>
+        {settings.learningGoal ? (
+          <Link className="homeGoal" href="/settings"><Target size={13} />{settings.learningGoal}</Link>
+        ) : null}
+        <div className="homeMastheadChips">
+          {upcomingExams.slice(0, 2).map(({ exam, days }) => (
+            <Link
+              className={days <= 14 ? "countdownChip urgent" : "countdownChip"}
+              href="/mock-exams"
+              key={`${exam.name}-${exam.date}`}
+            >
+              <span>{exam.subjectCode ? `${exam.subjectCode} · ` : ""}{exam.name}</span>
+              <strong>{days === 0 ? "今天" : `${days} 天`}</strong>
+            </Link>
+          ))}
         </div>
-        <span className="homeAssetMetric"><FolderUp size={15} />今日入库 {snapshot.today.assets}</span>
       </section>
 
-      <section className="homeFocus">
+      <section aria-label="现在做什么" className="homeFocus" data-state={state}>
         <div className="homeFocusMain">
-          <span className="eyebrow">TODAY · {today}</span>
-          <h1>{heroTitle}</h1>
-          <p>{heroSub}</p>
-          {yesterdayPlan ? (
-            <p className="homePlanEcho">昨晚你说：「{yesterdayPlan}」</p>
+          {state === "due" ? (
+            <>
+              <span className="eyebrow">NOW · 到期复习</span>
+              <h1>先清掉 <b>{pendingCount}</b> 个到期项。</h1>
+              <p className="homeFocusMeta">
+                复习 <b>{snapshot.dueReviews}</b> · 错题 <b>{snapshot.dueMistakes}</b> · 预计 ~<b>{estMinutes}</b> 分钟
+                {snapshot.dueReviews > settings.dailyReviewLimit ? `（今日上限 ${settings.dailyReviewLimit}）` : ""}
+              </p>
+              {yesterdayPlan ? <p className="homePlanEcho">昨晚你说：「{yesterdayPlan}」</p> : null}
+              <div className="homeFocusActions">
+                <Link className="primaryButton big" href={`/day/${today}#day-reviews`}>开始复习<ArrowRight size={17} /></Link>
+                <Link className="homeFocusLink" href={`/day/${today}#day-tasks`}>先看今日任务 →</Link>
+              </div>
+            </>
           ) : null}
-          <div className="homeFocusActions">
-            <Link className="primaryButton big" href={`/day/${today}`}>{nextLabel}<ArrowRight size={17} /></Link>
-            <Link className="secondaryButton" href="/calendar"><CalendarDays size={15} />查看节奏</Link>
+          {state === "task" && firstTask ? (
+            <>
+              <span className="eyebrow">NOW · 今日任务</span>
+              <h1>接着做：「{truncate(firstTask.title, 14)}」</h1>
+              <p className="homeFocusMeta">
+                P{firstTask.priority}
+                {firstTask.subject_code ? ` · ${firstTask.subject_code}` : ""}
+                {` · 预计 ${firstTask.estimated_minutes} 分钟 · ${firstTask.scheduled_start ?? "未排时"}`}
+              </p>
+              <p className="homeFocusMeta">今天还剩 <b>{openTaskList.length}</b> 项 · 共约 <b>{remainingMinutes}</b> 分钟</p>
+              <div className="homeFocusActions">
+                <Link className="primaryButton big" href={`/day/${today}#day-tasks`}>开始这件事<ArrowRight size={17} /></Link>
+                <Link className="homeFocusLink" href={`/day/${today}`}>查看全天安排 →</Link>
+              </div>
+            </>
+          ) : null}
+          {state === "summit" ? (
+            <>
+              <span className="eyebrow">SUMMIT · 今日已登顶</span>
+              <h1>今日已登顶。</h1>
+              <p className="homeFocusMeta">
+                专注 <b>{snapshot.today.studyMinutes}</b> 分钟 · 复习 <b>{snapshot.today.reviews}</b> · 错题 <b>{snapshot.today.mistakes}</b> · 连续 <b>{snapshot.streak}</b> 天
+              </p>
+              <div className="homeFocusActions">
+                <Link className="homeFocusLink" href={`/day/${today}#day-journal`}>规划明天 →</Link>
+                <Link className="homeFocusLink" href="/subjects">预习知识树 →</Link>
+              </div>
+            </>
+          ) : null}
+          {state === "blank" ? (
+            <>
+              <span className="eyebrow">START · 空白的一天</span>
+              <h1>今天还是空白。</h1>
+              <p className="homeFocusMeta">先放一件 25 分钟内能完成的事。</p>
+              {yesterdayPlan ? <p className="homePlanEcho">昨晚你说：「{yesterdayPlan}」</p> : null}
+              <div className="homeFocusActions">
+                <Link className="primaryButton big" href={`/day/${today}#day-tasks`}>写下第一件事<ArrowRight size={17} /></Link>
+              </div>
+            </>
+          ) : null}
+        </div>
+        {state === "due" ? (
+          <div className="homeFocusFigure">
+            <strong><CountUp value={pendingCount} /></strong>
+            <small>到期待清</small>
+            {nearestExam && nearestExam.days <= 14 ? (
+              <Link className="homeFocusExam" href="/mock-exams">距 {nearestExam.exam.name} <b>{nearestExam.days}</b> 天</Link>
+            ) : null}
           </div>
-        </div>
-        <div className="homePulse" aria-label="今日状态">
-          <div className={pendingCount ? "pulseMetric attention" : "pulseMetric"}><BookOpenCheck size={18} /><span>待处理</span><strong>{pendingCount}</strong><small>复习与错题</small></div>
-          <div className="pulseMetric"><CheckCircle2 size={18} /><span>任务</span><strong>{snapshot.doneTasks}<em>/{snapshot.doneTasks + snapshot.openTasks}</em></strong><small>今日完成</small></div>
-          <div className="pulseMetric"><Clock3 size={18} /><span>专注</span><strong>{snapshot.today.studyMinutes}<em> min</em></strong><small>今日记录</small></div>
-          <div className="pulseMetric"><Flame size={18} /><span>连续</span><strong>{snapshot.streak}<em> 天</em></strong><small>保持节奏</small></div>
-        </div>
+        ) : null}
+        {state === "task" ? (
+          <div className="homeFocusFigure">
+            <strong>{openTaskList.length}</strong>
+            <small>今日待办</small>
+          </div>
+        ) : null}
+        {state === "blank" && nearestExam ? (
+          <Link className="homeFocusFigure" href="/mock-exams">
+            <strong>{nearestExam.days}</strong>
+            <small>距 {nearestExam.exam.name}</small>
+          </Link>
+        ) : null}
+        {state === "summit" ? <span aria-hidden className="homeSeal">顶</span> : null}
+      </section>
+
+      <section aria-label="今日账本" className="homeLedger">
+        <Link className={pendingCount ? "homeLedgerItem due" : "homeLedgerItem zero"} href={`/day/${today}#day-reviews`}>
+          <span>待处理</span>
+          <strong>{pendingCount}</strong>
+        </Link>
+        <Link
+          className={snapshot.doneTasks + snapshot.openTasks ? "homeLedgerItem" : "homeLedgerItem zero"}
+          href={`/day/${today}#day-tasks`}
+        >
+          <span>任务</span>
+          <strong>{snapshot.doneTasks}<em>/{snapshot.doneTasks + snapshot.openTasks}</em></strong>
+        </Link>
+        <Link
+          className={snapshot.today.studyMinutes ? "homeLedgerItem" : "homeLedgerItem zero"}
+          href="/analytics"
+        >
+          <span>专注</span>
+          <strong>{snapshot.today.studyMinutes}<em> min</em></strong>
+        </Link>
+        <Link className={snapshot.streak ? "homeLedgerItem" : "homeLedgerItem zero"} href="/calendar">
+          <span>连续</span>
+          <strong>{snapshot.streak}<em> 天</em></strong>
+        </Link>
+        <Link className="homeLedgerItem homeLedgerBars" href="/analytics">
+          <span>本周专注{weekDelta === null ? "" : ` ${weekDelta >= 0 ? "+" : ""}${weekDelta}%`}</span>
+          <div aria-label="近 7 天每日专注分钟" className="weekBars" role="img">
+            {analytics.dailyMinutes.map((item, index) => (
+              <div
+                className={index === 6 ? "weekBar today" : "weekBar"}
+                key={item.day}
+                title={`${item.day} · ${item.minutes} 分钟`}
+              >
+                <i style={{ height: `${item.minutes ? Math.max(8, Math.round((item.minutes / maxDailyMinutes) * 100)) : 4}%` }} />
+              </div>
+            ))}
+          </div>
+        </Link>
       </section>
 
       <div className="homeContentGrid">
-        <section className="card homeTasksCard" aria-label="今日未完成任务">
+        <section aria-label="今日未完成任务" className="card homeTasksCard">
           <div className="sectionTitle">
             <div><span className="sectionKicker">NEXT UP</span><h2>接下来要做</h2></div>
-            <Link className="sectionLink" href={`/day/${today}`}>去处理</Link>
+            <Link className="sectionLink" href={`/day/${today}#day-tasks`}>去处理</Link>
           </div>
           <div className="list">
             {tasks.map((task) => (
-              <Link className="listRow" href={`/day/${today}`} key={task.id}>
+              <Link className="listRow" href={`/day/${today}#day-tasks`} key={task.id}>
+                <small className="homeTaskTime">{task.scheduled_start ?? "待排"}</small>
                 <span className={`homeTaskPriority priority${task.priority}`}>P{task.priority}</span>
                 {task.subject_code ? <span className="rowBadge">{task.subject_code}</span> : null}
-                <strong>{task.title}</strong><small className="homeTaskTime"><Clock3 size={11} />{task.scheduled_start || "待排"} · {task.estimated_minutes}m</small><ArrowRight size={14} />
+                <strong>{task.title}</strong>
+                <small>{task.estimated_minutes}m</small>
+                <ArrowRight size={14} />
               </Link>
             ))}
             {!tasks.length && snapshot.openTasks === 0 ? (
@@ -97,7 +243,7 @@ export default async function HomePage() {
                 <EmptyState seal="毕" text="今天的任务全部完成了，做得很好。" />
               ) : (
                 <EmptyState
-                  action={{ href: `/day/${today}`, label: "写下第一条" }}
+                  action={{ href: `/day/${today}#day-tasks`, label: "写下第一条" }}
                   seal="空"
                   text="今天还没安排任务，先写下一个 25 分钟内能完成的动作。"
                 />
@@ -109,25 +255,40 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="card homeSubjectsCard" aria-label="科目风险和进度">
+        <section aria-label="科目风险和进度" className="card homeSubjectsCard">
           <div className="sectionTitle">
             <div><span className="sectionKicker">FOCUS</span><h2>需要关注</h2></div>
             <Link className="sectionLink" href="/subjects">全部科目</Link>
           </div>
           <div className="subjectProgressList">
-            {focusSubjects.slice(0, 5).map((subject) => {
+            {focusSubjects.map((subject) => {
               const progress = subject.pointCount ? Math.round((subject.masteredCount / subject.pointCount) * 100) : 0;
               return (
                 <Link className="subjectProgressRow" href={`/subjects/${subject.code}`} key={subject.code}>
                   <b>{subject.code}</b>
                   <strong>{subject.name}</strong>
-                  <div className="progressTrack"><span style={{ width: `${progress}%` }} /></div>
+                  <div className="progressTrack"><span style={{ transform: `scaleX(${progress / 100})` }} /></div>
                   <small>{subject.masteredCount}/{subject.pointCount}</small>
                   {subject.dueCount || subject.openMistakes ? <em className="flag due">{subject.dueCount} 复习 · {subject.openMistakes} 错题</em> : <em className="flag subtle">{TRACK_NAMES[subject.track]}</em>}
                 </Link>
               );
             })}
           </div>
+          {weakPoints.length ? (
+            <div className="homeWeakList">
+              <span className="homeWeakKicker">弱点 TOP {weakPoints.length}</span>
+              {weakPoints.map((point) => (
+                <Link className="homeWeakRow" href={`/subjects/${point.subjectCode}`} key={point.id}>
+                  <strong>{point.title}</strong>
+                  <i>{point.tierName}{point.reasons[0] ? ` · ${point.reasons[0]}` : ""}</i>
+                  <small>掌握 {point.mastery.toFixed(1)}</small>
+                </Link>
+              ))}
+              <div className="homeWeakFoot">
+                <Link className="sectionLink" href="/mistakes">去回炉 →</Link>
+              </div>
+            </div>
+          ) : null}
         </section>
       </div>
     </div>

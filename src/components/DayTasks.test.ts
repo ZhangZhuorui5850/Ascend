@@ -54,3 +54,33 @@ describe("optimistic toggle wiring", () => {
     expect(source).not.toContain("router.refresh()");
   });
 });
+
+describe("optimistic task insertion", () => {
+  it("inserts a pending row inside a transition and mirrors server ordering", () => {
+    expect(source).toContain("useOptimistic(");
+    expect(source).toContain("startTransition(");
+    expect(source).toContain("sortDayTasks(");
+    expect(source).toContain("data-entering");
+    expect(source).toContain("data-leaving");
+    expect(source).toContain("draftOrderRef.current++");
+    expect(source).toContain("taskClientKeysRef.current.set(task.id, draft.clientKey!)");
+    expect(source).toContain("onAnimationEnd");
+    expect(source).toContain("exitingTasks");
+    expect(plannerActions).toContain("return { ok: true, task }");
+    // 输入框在 transition 外立即清空,回车手感零等待
+    expect(source).toMatch(/setTitle\(""\);\s*startTransition\(/);
+  });
+
+  it("starts refresh-backed mutations directly inside an event transition", () => {
+    expect(source).not.toContain(".then(report)");
+    expect(source).toContain("report(await action())");
+    expect(source).toContain("report(await updateTaskAction(input))");
+  });
+
+  it("keeps enter/exit animations on motion tokens, exit faster than enter", () => {
+    expect(styles).toContain("@keyframes taskRiseIn");
+    expect(styles).toContain("@keyframes taskFallOut");
+    expect(styles).toMatch(/\.taskLine\[data-entering\],[^{]*\{[^}]*var\(--motion-quick\)[^}]*var\(--motion-ease-enter\)/s);
+    expect(styles).toMatch(/\.taskLine\[data-leaving\],[^{]*\{[^}]*var\(--motion-fast\)[^}]*var\(--motion-ease-exit\)/s);
+  });
+});

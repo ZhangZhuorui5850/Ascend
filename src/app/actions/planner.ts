@@ -12,6 +12,8 @@ import {
   toggleTask,
   updateNote,
   updateTask,
+  type DayNote,
+  type DayTask,
 } from "@/lib/repo/planner";
 import { requireWorkspace } from "@/lib/request-auth";
 import type { ActionResult } from "./day";
@@ -28,12 +30,12 @@ export async function addTaskAction(input: {
   estimatedMinutes?: number;
   scheduledStart?: string | null;
   notes?: string;
-}): Promise<ActionResult> {
+}): Promise<ActionResult & { task?: DayTask }> {
   try {
     const access = await requireWorkspace();
-    addTask(getDb(), access, input);
+    const task = addTask(getDb(), access, input);
     refresh();
-    return { ok: true };
+    return { ok: true, task };
   } catch (error) {
     return failure(error);
   }
@@ -108,12 +110,12 @@ export async function carryOverTasksAction(input: { fromDay: string; toDay: stri
   }
 }
 
-export async function addNoteAction(input: { day: string; content: string }): Promise<ActionResult> {
+export async function addNoteAction(input: { day: string; content: string }): Promise<ActionResult & { note?: DayNote }> {
   try {
     const access = await requireWorkspace();
-    addNote(getDb(), access, input);
+    const note = addNote(getDb(), access, input);
     refresh();
-    return { ok: true };
+    return { ok: true, note };
   } catch (error) {
     return failure(error);
   }

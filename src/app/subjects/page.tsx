@@ -39,7 +39,7 @@ export default async function SubjectsPage() {
                     <strong>{subject.name}</strong>
                   </div>
                   <div className="progressTrack" role="img" aria-label={`掌握 ${progress}%`}>
-                    <span style={{ width: `${progress}%` }} />
+                    <span style={{ transform: `scaleX(${progress / 100})` }} />
                   </div>
                   <div className="subjectCardMeta">
                     <span>{subject.masteredCount}/{subject.pointCount} 已掌握</span>

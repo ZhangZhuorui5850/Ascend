@@ -107,7 +107,7 @@ export function MockExamForm({ subjects, today }: { subjects: Array<{ code: stri
             <i>/</i>
             <label><span>试卷满分</span><input aria-label="试卷满分" min="1" onChange={(event) => setMaxScore(Math.max(1, Number(event.target.value) || 1))} step="0.5" type="number" value={maxScore} /></label>
           </div>
-          <div className="mockScoreProgress"><i style={{ width: `${percent}%` }} /></div>
+          <div className="mockScoreProgress"><i style={{ transform: `scaleX(${percent / 100})` }} /></div>
           {!validScore ? <small>本次得分需要位于 0 到满分之间</small> : <small>{score}/{maxScore} · {performance}</small>}
         </div>
         <div className="mockDurationPicker">

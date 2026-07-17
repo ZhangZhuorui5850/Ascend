@@ -27,8 +27,13 @@ ZGCA_DATA_ROOT=<scratch>/verify-data APP_LOGIN_EMAIL=qa@test.local APP_LOGIN_PAS
 - 造数据最快路径：登录一次让 bootstrap 建好 workspace，然后直接用 better-sqlite3 往 `subjects` / `subject_chapters` / `knowledge_points` 插行（参考 `src/lib/repo/testing.ts` 的 seedSubjectWithChapter 字段）。
 - 原生 HTML5 拖拽用 mouse.down → 多步 mouse.move → mouse.up 可靠触发（Chromium 拖拽拦截自动生效）；中途 `page.screenshot` 可捕获指示线。
 - 坑：目标元素必须在视口内，`boundingBox()` 对视口外元素返回坐标但 mouse.move 过去不会触发 dragover——直接用超高视口（如 1440x2600）最省事。
-- 坑：headless-shell 无 CJK 字体，截图里中文是方框（不影响布局判断）。
+- 坑：headless-shell 无 CJK 字体，截图里中文是方框（可 `curl` 下载 Noto Sans CJK 到 `~/.local/share/fonts` + `fc-cache` 解决）。
+- 坑：造数据的日期必须与 `todayKey()` 同口径（Asia/Shanghai）——`new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Shanghai"}).format(d)`；用 `toISOString()` 在凌晨会差一天，表现为"今日任务/回显莫名缺失"。
+- 坑：PWA service worker 会在重复测试中用旧 build 缓存重载页面、甚至把会话踢回 /login——Playwright context 一律加 `serviceWorkers: "block"`。
+- 首页入场编排每日只播一次：重播需先 `localStorage.removeItem("zgca-intro")` 再整文档加载（`page.reload` 或 `goto`，SPA 导航不触发）。
 - 提交拖拽后等 `router.refresh()`：`waitForTimeout(900)` + `waitForLoadState("networkidle")` 足够。
+- 坑：模拟慢网络**不要用 `page.route` 拦截 + sleep 后 continue**——对 server action 的 RSC 流式响应不可靠，会随机吞响应，表现为"transition 永不结束、乐观行卡草稿态"的假阳性。用 CDP 原生模拟：`context.newCDPSession(page)` → `Network.enable` → `Network.emulateNetworkConditions({latency: 300, downloadThroughput: -1, uploadThroughput: -1, offline: false})`。
+- 坑：`nohup npx next start &` 记下的是 npx 包装进程的 PID，kill 它杀不掉真正监听端口的 `next-server` 子进程（下次起服务 EADDRINUSE）。收尾用 `ss -ltnp | grep <端口>` 找到真实 PID 再 kill。
 
 ## 收尾
 

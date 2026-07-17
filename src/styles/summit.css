@@ -14,8 +14,28 @@
   --summit-glow: rgba(186, 73, 42, 0.16);
   --summit-green: #2f6d57;
   --summit-blue: #456d8d;
-  --summit-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --summit-ease-snappy: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* 墨面（chrome）token：NowCard/loginHero 家族的深色主指标面。
+     皮肤可覆盖 chrome token，禁止覆盖 motion token；
+     --chrome-accent 由皮肤 accent 提亮派生，保证任意皮肤在墨面上的对比度 */
+  --chrome-bg-1: #20231c;
+  --chrome-bg-2: #171914;
+  --chrome-ink: #f6f1e7;
+  --chrome-muted: #a9ab9d;
+  --chrome-line: rgba(255, 255, 255, 0.09);
+  --chrome-accent: color-mix(in srgb, var(--accent) 52%, #f9dcc8);
+  /* 动效 token：皮肤只换色不换动，禁止在 [data-skin] 覆盖，禁止裸写 cubic-bezier / ms */
+  --motion-fast: 120ms; /* hover、按压、focus ring */
+  --motion-quick: 200ms; /* 组件展开、行进出 */
+  --motion-page: 360ms; /* 页面过渡 */
+  --motion-slow: 400ms; /* 入场编排单元素 */
+  --motion-reward: 550ms; /* 印章、清零等成就时刻 */
+  --motion-stagger: 45ms;
+  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-ease-exit: cubic-bezier(0.4, 0, 1, 0.8);
+  --motion-ease-snappy: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --summit-ease: var(--motion-ease);
+  --summit-ease-snappy: var(--motion-ease-snappy);
   --sidebar-width: 258px;
   --sidebar-collapsed: 78px;
   --topbar-height: 76px;
@@ -28,6 +48,37 @@
   --shadow-xs: 0 1px 2px rgba(46, 36, 22, 0.06);
   --shadow: 0 1px 2px rgba(46, 36, 22, 0.05), 0 10px 26px rgba(46, 36, 22, 0.05);
   --shadow-lg: 0 2px 5px rgba(46, 36, 22, 0.08), 0 24px 64px rgba(46, 36, 22, 0.14);
+}
+
+/* 各皮肤的墨面转调：换肤换氛围，不换物理规律（--motion-* 禁止被皮肤覆盖） */
+[data-skin="aurora"] {
+  --chrome-bg-1: #232236;
+  --chrome-bg-2: #16161f;
+  --chrome-muted: #a2a0b4;
+  --chrome-accent: color-mix(in srgb, var(--accent) 55%, #e6ddff);
+}
+
+[data-skin="brutal"] {
+  --chrome-bg-1: #1a1a1a;
+  --chrome-bg-2: #0f0f0f;
+  --chrome-ink: #f5f5f0;
+  --chrome-muted: #a3a39a;
+}
+
+[data-skin="cloud"] {
+  --chrome-bg-1: #202a3e;
+  --chrome-bg-2: #141c2c;
+  --chrome-ink: #eef2f8;
+  --chrome-muted: #9aa5b8;
+  --chrome-accent: color-mix(in srgb, var(--accent) 55%, #dcebff);
+}
+
+[data-skin="terminal"] {
+  --chrome-bg-1: #0e1712;
+  --chrome-bg-2: #080d0a;
+  --chrome-ink: #d8f0dc;
+  --chrome-muted: #7fa389;
+  --chrome-accent: color-mix(in srgb, var(--accent) 62%, #d9ffe3);
 }
 
 html,
@@ -440,119 +491,359 @@ select {
   border-radius: 999px;
 }
 
-/* Home cockpit */
+/* Home cockpit · 大本营（漏斗式：Masthead → NowCard → Ledger → 双列） */
 .homePage {
-  gap: 22px;
+  gap: 16px;
 }
 
-.homeContext {
-  min-height: 44px;
-  padding: 7px 9px 7px 15px;
-  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--surface) 72%, transparent);
-  box-shadow: var(--shadow-xs);
-  backdrop-filter: blur(14px);
+/* ① Masthead：纸面直排，无卡 */
+.homeMasthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  min-height: 40px;
+  padding-inline: 2px;
 }
 
+.homeMastheadKicker {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.homeGoal {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-serif);
+  font-size: 14px;
+  text-decoration: none;
+  transition: color var(--motion-fast) var(--motion-ease);
+}
+
+.homeGoal:hover {
+  color: var(--accent);
+}
+
+.homeMastheadChips {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  min-width: 0;
+}
+
+a.countdownChip {
+  text-decoration: none;
+  transition: transform var(--motion-quick) var(--motion-ease), background var(--motion-fast) var(--motion-ease);
+}
+
+a.countdownChip:hover {
+  transform: translateY(-1px);
+}
+
+.countdownChip strong {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+.countdownChip small {
+  color: var(--quiet);
+  font-size: 9px;
+}
+
+/* ② NowCard：全页唯一墨面，回答「现在做什么」 */
 .homeFocus {
   position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 28px;
+  align-items: center;
   overflow: hidden;
-  min-height: 330px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 27px;
+  min-height: 200px;
+  padding: clamp(22px, 2.6vw, 30px) clamp(22px, 3vw, 38px);
+  border: 1px solid var(--chrome-line);
+  border-radius: var(--radius-xl);
   background:
-    radial-gradient(circle at 84% 15%, rgba(217, 112, 73, 0.25), transparent 21rem),
-    radial-gradient(circle at 53% 115%, rgba(106, 135, 102, 0.18), transparent 25rem),
-    linear-gradient(135deg, #20231c, #171914 70%);
-  color: #f6f1e7;
-  box-shadow: 0 30px 70px rgba(28, 25, 18, 0.2);
+    radial-gradient(circle at 86% 8%, color-mix(in srgb, var(--chrome-accent) 20%, transparent), transparent 15rem),
+    radial-gradient(circle at 42% 135%, rgba(106, 135, 102, 0.14), transparent 19rem),
+    linear-gradient(145deg, var(--chrome-bg-1), var(--chrome-bg-2) 70%);
+  color: var(--chrome-ink);
+  box-shadow: var(--shadow-lg);
 }
 
 .homeFocus::after {
   position: absolute;
-  top: -56%;
-  right: -9%;
-  width: 420px;
+  top: -42%;
+  right: -5%;
+  width: 172px;
   aspect-ratio: 1;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 50%;
-  box-shadow: 0 0 0 42px rgba(255, 255, 255, 0.018), 0 0 0 88px rgba(255, 255, 255, 0.012);
+  box-shadow: 0 0 0 26px rgba(255, 255, 255, 0.02), 0 0 0 56px rgba(255, 255, 255, 0.012);
   content: "";
+  pointer-events: none;
 }
 
 .homeFocusMain {
   position: relative;
   z-index: 1;
-  padding: clamp(30px, 4vw, 52px);
-}
-
-.homeFocusMain h1 {
-  max-width: 17ch;
-  color: #fffaf0;
-  font-family: var(--font-serif);
-  font-size: clamp(30px, 4vw, 52px);
-  font-weight: 600;
-  letter-spacing: -0.025em;
-  line-height: 1.18;
-}
-
-.homeFocusMain > p {
-  color: #b9b9ad;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
 }
 
 .homeFocus .eyebrow {
-  color: #e88c69;
+  color: var(--chrome-accent);
+}
+
+.homeFocusMain h1 {
+  max-width: 24ch;
+  margin: 0;
+  color: color-mix(in srgb, var(--chrome-ink) 96%, white);
+  font-family: var(--font-serif);
+  font-size: clamp(26px, 3vw, 38px);
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.35;
+}
+
+.homeFocusMain h1 b {
+  color: var(--chrome-accent);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.homeFocusMeta {
+  margin: 0;
+  color: var(--chrome-muted);
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+
+.homeFocusMeta b {
+  color: var(--chrome-ink);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.homeFocus .homePlanEcho {
+  border-left: 2px dashed color-mix(in srgb, var(--chrome-accent) 55%, transparent);
+  color: var(--chrome-muted);
+}
+
+.homeFocusActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  margin-top: 10px;
 }
 
 .homeFocus .primaryButton {
   color: white;
 }
 
-.homeFocus .secondaryButton {
-  border-color: rgba(255, 255, 255, 0.13);
-  background: rgba(255, 255, 255, 0.065);
-  color: #e6e2d8;
+.homeFocusLink {
+  color: var(--chrome-muted);
+  font-size: 13px;
+  text-decoration: none;
+  transition: color var(--motion-fast) var(--motion-ease);
 }
 
-.homePulse {
+.homeFocusLink:hover {
+  color: var(--chrome-ink);
+}
+
+.homeFocusFigure {
   position: relative;
   z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding-inline: clamp(6px, 2vw, 24px);
+  text-align: center;
+  text-decoration: none;
+}
+
+.homeFocusFigure strong {
+  color: var(--chrome-ink);
+  font-family: var(--font-num);
+  font-size: clamp(48px, 4vw, 64px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.homeFocus[data-state="due"] .homeFocusFigure strong {
+  color: var(--chrome-accent);
+}
+
+.homeFocusFigure small {
+  color: var(--chrome-muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.homeFocusExam {
+  margin-top: 8px;
+  color: var(--chrome-muted);
+  font-size: 12px;
+  text-decoration: none;
+  transition: color var(--motion-fast) var(--motion-ease);
+}
+
+.homeFocusExam b {
+  color: var(--chrome-ink);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.homeFocusExam:hover,
+a.homeFocusFigure:hover small {
+  color: var(--chrome-ink);
+}
+
+/* 登顶态：墨面转调，全页唯一印章 */
+.homeFocus[data-state="summit"] {
+  grid-template-columns: minmax(0, 1fr);
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 26px),
+    linear-gradient(150deg, color-mix(in srgb, var(--chrome-bg-1) 86%, black), var(--chrome-bg-2) 75%);
+}
+
+.homeFocus[data-state="summit"]::after {
+  top: -26%;
+  right: 4%;
+  opacity: 0.35;
+}
+
+.homeFocus[data-state="summit"] .homeFocusMain {
+  justify-items: center;
+  gap: 10px;
+  padding-block: 8px;
+  text-align: center;
+}
+
+.homeFocus[data-state="summit"] .homeFocusMain h1 {
+  font-size: clamp(32px, 3vw + 16px, 44px);
+  letter-spacing: 0.06em;
+}
+
+.homeSeal {
+  position: absolute;
+  z-index: 1;
+  top: 18px;
+  right: 22px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--chrome-accent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--chrome-accent) 16%, transparent);
+  color: var(--chrome-accent);
+  font-family: var(--font-serif);
+  font-size: 19px;
+  opacity: 0.85;
+  transform: rotate(4deg);
+}
+
+/* ③ HomeLedger：纸面账本行 */
+.homeLedger {
+  display: flex;
+  align-items: stretch;
+  min-height: 64px;
+  padding: 10px 2px;
+  border-block: 1px dashed var(--line-strong);
+}
+
+.homeLedgerItem {
+  display: grid;
+  flex: 1;
+  align-content: center;
+  justify-items: start;
+  gap: 3px;
+  padding-inline: 16px;
+  border-left: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  color: inherit;
+  text-decoration: none;
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+
+.homeLedgerItem:first-child {
+  padding-left: 6px;
+  border-left: 0;
+}
+
+.homeLedgerItem:hover {
+  background: var(--surface-soft);
+}
+
+.homeLedgerItem > span {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+
+.homeLedgerItem > strong {
+  color: var(--ink);
+  font-family: var(--font-num);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.homeLedgerItem > strong em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.homeLedgerItem.zero > span,
+.homeLedgerItem.zero > strong,
+.homeLedgerItem.zero > strong em {
+  color: var(--quiet);
+}
+
+.homeLedgerItem.due > strong {
+  color: var(--accent);
+}
+
+.homeLedgerBars {
+  flex: 1.5;
+}
+
+.homeLedger .weekBars {
   align-self: stretch;
-  border-left-color: rgba(255, 255, 255, 0.085);
-  background: rgba(255, 255, 255, 0.022);
-  backdrop-filter: blur(14px);
+  width: 100%;
+  height: 26px;
+  margin-top: 2px;
+  gap: 4px;
 }
 
-.pulseMetric {
-  border-color: rgba(255, 255, 255, 0.075);
-}
-
-.homeFocus .pulseMetric {
-  background: rgba(255, 255, 255, 0.045);
-  box-shadow: none;
-  backdrop-filter: none;
-}
-
-.pulseMetric strong,
-.pulseMetric > svg {
-  color: #f1e9db;
-}
-
-.pulseMetric span,
-.pulseMetric small,
-.pulseMetric em {
-  color: #8f9387;
+.homeLedger .weekBar span {
+  display: none;
 }
 
 .homeContentGrid {
-  gap: 22px;
+  gap: 16px;
 }
 
 .listRow,
 .subjectProgressRow {
   border-radius: 11px;
-  transition: background 160ms ease, transform 180ms var(--summit-ease);
+  transition: background var(--motion-fast) var(--motion-ease), transform var(--motion-quick) var(--motion-ease);
 }
 
 .listRow:hover,
@@ -562,7 +853,7 @@ select {
 }
 
 .homeTasksCard .listRow {
-  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  align-items: center;
 }
 
 .homeTaskPriority {
@@ -578,15 +869,167 @@ select {
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 40px;
   color: var(--quiet);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.countdownChip small {
+/* ⑤ 弱点 TOP 3（needs-attention 卡内） */
+.homeWeakList {
+  display: grid;
+  gap: 2px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line-strong);
+}
+
+.homeWeakKicker {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.homeWeakRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  text-decoration: none;
+  transition: background var(--motion-fast) var(--motion-ease), transform var(--motion-quick) var(--motion-ease);
+}
+
+.homeWeakRow:hover {
+  background: var(--surface-soft);
+  transform: translateX(3px);
+}
+
+.homeWeakRow strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.homeWeakRow i {
+  overflow: hidden;
   color: var(--quiet);
-  font-size: 9px;
+  font-size: 11px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.homeWeakRow small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.homeWeakFoot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+/* 首页移动端：折叠线铁律——主 CTA 完整可见 + 至少 1 条真实条目露头 */
+@media (max-width: 760px) {
+  .homePage {
+    gap: 12px;
+  }
+
+  .homeMasthead {
+    flex-wrap: nowrap;
+    min-height: 32px;
+  }
+
+  .homeGoal {
+    flex: 1;
+    display: block;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 32px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .homeGoal svg {
+    display: none;
+  }
+
+  .homeMastheadChips a:nth-child(n + 2) {
+    display: none;
+  }
+
+  .homeFocus {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    min-height: 0;
+    padding: 20px 18px;
+  }
+
+  .homeFocusMain h1 {
+    font-size: 24px;
+  }
+
+  .homeFocus .homePlanEcho {
+    font-size: 13px;
+  }
+
+  .homeFocusFigure {
+    display: none;
+  }
+
+  .homeFocusActions {
+    width: 100%;
+  }
+
+  .homeFocusActions .primaryButton {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+
+  .homeLedger {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    min-height: 0;
+    padding: 8px 2px;
+  }
+
+  .homeLedgerItem {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 12px;
+    border-left: 0;
+  }
+
+  .homeLedgerItem > strong {
+    font-size: 17px;
+  }
+
+  .homeLedgerItem:nth-child(even) {
+    border-left: 1px dashed var(--line);
+  }
+
+  .homeLedgerBars {
+    grid-column: 1 / -1;
+    margin-top: 6px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--line);
+    border-left: 0;
+  }
 }
 
 .assetPageHeader {
@@ -732,16 +1175,21 @@ select {
 }
 
 .analyticsMetricGrid .primaryMetric {
+  border-color: var(--chrome-line);
   background:
-    radial-gradient(circle at 85% 0%, rgba(213, 111, 75, 0.25), transparent 14rem),
-    linear-gradient(135deg, var(--summit-chrome-soft), var(--summit-chrome));
-  color: var(--summit-chrome-ink);
+    radial-gradient(circle at 85% 0%, color-mix(in srgb, var(--chrome-accent) 22%, transparent), transparent 14rem),
+    linear-gradient(135deg, var(--chrome-bg-1), var(--chrome-bg-2));
+  color: var(--chrome-ink);
 }
 
 .analyticsMetricGrid .primaryMetric small,
 .analyticsMetricGrid .primaryMetric span,
 .analyticsMetricGrid .primaryMetric em {
-  color: var(--summit-chrome-muted);
+  color: var(--chrome-muted);
+}
+
+.analyticsMetricGrid .primaryMetric strong {
+  color: var(--chrome-accent);
 }
 
 .weakPointRow {
@@ -761,7 +1209,21 @@ select {
 }
 
 .mockExamMetrics > div.primary {
-  background: linear-gradient(135deg, var(--summit-chrome-soft), var(--summit-chrome));
+  border-color: var(--chrome-line);
+  background: linear-gradient(145deg, var(--chrome-bg-1), var(--chrome-bg-2) 70%);
+}
+
+.mockExamMetrics > div.primary span {
+  color: var(--chrome-muted);
+}
+
+.mockExamMetrics > div.primary strong {
+  color: var(--chrome-accent);
+}
+
+.mockExamMetrics > div.primary .mockMetricIcon {
+  background: color-mix(in srgb, var(--chrome-ink) 10%, transparent);
+  color: var(--chrome-accent);
 }
 
 .mockExamInsight {
@@ -1540,7 +2002,8 @@ select {
   height: 100%;
   border-radius: inherit;
   background: var(--accent);
-  transition: width 240ms var(--summit-ease);
+  transform-origin: left center;
+  transition: transform var(--motion-quick) var(--motion-ease);
 }
 
 .calendarDayProgress small {
@@ -1687,7 +2150,7 @@ select {
 
 @media (prefers-reduced-motion: reduce) {
   .calendarDayPopoverPositioner .calendarDayPopover {
-    animation-duration: 1ms;
+    animation-duration: 0.001ms;
   }
 }
 
@@ -1706,11 +2169,11 @@ select {
 }
 
 ::view-transition-old(ascend-page) {
-  animation: summit-page-out 150ms ease both;
+  animation: summit-page-out var(--motion-fast) var(--motion-ease-exit) both;
 }
 
 ::view-transition-new(ascend-page) {
-  animation: summit-page-in 360ms var(--summit-ease) both;
+  animation: summit-page-in var(--motion-page) var(--motion-ease-enter) both;
 }
 
 :active-view-transition-type(nav-forward)::view-transition-new(ascend-page) {
@@ -1725,8 +2188,135 @@ select {
   from { opacity: 0; transform: translateY(9px) scale(0.997); }
 }
 
+.commandPalette,
+.confirmDialog {
+  animation: captureMenuIn var(--motion-fast) var(--motion-ease-enter) both;
+}
+
+/* Disclosure：Chromium 渐进增强，其他浏览器保留原生开合。 */
+@supports (interpolate-size: allow-keywords) {
+  .dayModule,
+  .subjectSettings,
+  .onboardingCustomPace {
+    interpolate-size: allow-keywords;
+  }
+
+  .dayModule::details-content,
+  .subjectSettings::details-content,
+  .onboardingCustomPace::details-content {
+    block-size: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition:
+      block-size var(--motion-quick) var(--motion-ease),
+      content-visibility var(--motion-quick) allow-discrete,
+      opacity var(--motion-fast) var(--motion-ease-exit);
+    transition-behavior: allow-discrete;
+  }
+
+  .dayModule[open]::details-content,
+  .subjectSettings[open]::details-content,
+  .onboardingCustomPace[open]::details-content {
+    block-size: auto;
+    opacity: 1;
+    transition-timing-function: var(--motion-ease-enter);
+  }
+}
+
+/* 状态控件只反馈用户选择，避免高频内容重排产生噪音。 */
+.segmented button,
+.sortModeSwitch button,
+.pointPanelTabs button,
+.calendarViewSwitch button,
+.driveViewSwitch button,
+.fc .fc-button {
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    opacity var(--motion-fast) var(--motion-ease);
+}
+
+/* 所有数值进度使用完整轨道 + scaleX，端点布局保持稳定。 */
+.progressTrack span,
+.taskProgress span,
+.calendarDayProgressTrack span,
+.mockScoreProgress i,
+.uploadProgress > span,
+.quotaTrack span,
+.weakAreaList i,
+.mockHistoryBreakdown i b {
+  width: 100%;
+  transform-origin: left center;
+  transition: transform var(--motion-quick) var(--motion-ease);
+}
+
 @keyframes summit-page-forward {
   from { opacity: 0; transform: translateX(12px); }
+}
+
+/* 首页入场编排：按决策顺序错峰，每日首次冷加载播一次。
+   门控：layout.tsx pre-paint 脚本置 html[data-intro="play"]，1200ms 后翻 done；
+   SPA 导航不触发（与 ViewTransition 结构性互斥）；blank 态不演戏，直出。 */
+@keyframes summit-home-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--rise-y, 10px));
+  }
+}
+
+@keyframes summit-home-fade {
+  from { opacity: 0; }
+}
+
+@keyframes summit-track-grow {
+  from { transform: scaleX(0); }
+}
+
+/* 首页退订旧层 riseIn：编排（冷加载）与 ViewTransition（页内导航）各司其职，避免双重位移 */
+.mainPane > .pageStack.homePage > * {
+  animation: none;
+}
+
+html[data-intro="play"] .homePage:not([data-home-state="blank"]) :is(.homeFocus .eyebrow, .homeFocusMain h1) {
+  --rise-y: 12px;
+  animation: summit-home-rise 480ms var(--motion-ease-enter) both;
+}
+
+html[data-intro="play"] .homePage:not([data-home-state="blank"]) :is(.homeFocusMeta, .homeFocus .homePlanEcho) {
+  animation: summit-home-rise var(--motion-slow) var(--motion-ease-enter) var(--motion-stagger) both;
+}
+
+html[data-intro="play"] .homePage:not([data-home-state="blank"]) .homeFocusActions {
+  animation: summit-home-rise var(--motion-slow) var(--motion-ease-enter) calc(var(--motion-stagger) * 2) both;
+}
+
+html[data-intro="play"] .homePage:not([data-home-state="blank"]) .homeFocusFigure {
+  animation: summit-home-fade 360ms var(--motion-ease-enter) calc(var(--motion-stagger) * 3) both;
+}
+
+html[data-intro="play"] .homePage:not([data-home-state="blank"]) .homeLedger {
+  --rise-y: 8px;
+  animation: summit-home-rise 360ms var(--motion-ease-enter) calc(var(--motion-stagger) * 4) both;
+}
+
+html[data-intro="play"] .homePage:not([data-home-state="blank"]) .homeTasksCard {
+  animation: summit-home-rise var(--motion-slow) var(--motion-ease-enter) calc(var(--motion-stagger) * 5) both;
+}
+
+html[data-intro="play"] .homePage:not([data-home-state="blank"]) .homeSubjectsCard {
+  animation: summit-home-rise var(--motion-slow) var(--motion-ease-enter) calc(var(--motion-stagger) * 6) both;
+}
+
+/* 编排尾声：进度条生长一次（transform 而非 width） */
+html[data-intro="play"] .homePage:not([data-home-state="blank"]) .progressTrack span {
+  transform-origin: left;
+  animation: summit-track-grow 420ms var(--motion-ease-enter) 330ms both;
+}
+
+/* 印章只授予登顶态：全页唯一的仪式感动效 */
+html[data-intro="play"] .homeFocus[data-state="summit"] .homeSeal {
+  animation: sealStamp var(--motion-reward) var(--motion-ease-snappy) calc(var(--motion-stagger) * 3) both;
 }
 
 @media (max-width: 1100px) {
@@ -1736,16 +2326,6 @@ select {
 
   .commandTrigger {
     min-width: 178px;
-  }
-
-  .homeFocus {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .homePulse {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    border-top: 1px solid rgba(255, 255, 255, 0.085);
-    border-left: 0;
   }
 
   .taskComposer {
@@ -1847,18 +2427,6 @@ select {
 }
 
 @media (max-width: 640px) {
-  .homeFocus {
-    border-radius: 21px;
-  }
-
-  .homeFocusMain {
-    padding: 28px 23px;
-  }
-
-  .homePulse {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .card {
     padding: 18px;
     border-radius: 15px;
@@ -1935,11 +2503,20 @@ select {
     animation-duration: 0.001ms !important;
   }
 
+  /* 系统级减弱动效：整套首页入场编排（含进度条生长与印章）一次成型 */
+  html[data-intro] .homePage *,
+  html[data-intro] .homePage *::before,
+  html[data-intro] .homePage *::after {
+    animation: none !important;
+  }
+
   .sidebar nav a:hover,
   .listRow:hover,
   .subjectProgressRow:hover,
+  .homeWeakRow:hover,
   .primaryButton:hover,
-  .secondaryButton:hover {
+  .secondaryButton:hover,
+  a.countdownChip:hover {
     transform: none;
   }
 }

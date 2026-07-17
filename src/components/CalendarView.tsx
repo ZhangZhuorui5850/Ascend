@@ -249,7 +249,7 @@ function DaySchedulePopover({ popover, tasks, exams, onToggle, onClose, ref }: {
       <div className="calendarDayProgress">
         <div><span>当日待办</span><strong>{doneCount}/{tasks.length}</strong></div>
         <div aria-label={`已完成 ${doneCount}/${tasks.length}`} className="calendarDayProgressTrack" role="img">
-          <span style={{ width: `${tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0}%` }} />
+          <span style={{ transform: `scaleX(${tasks.length ? doneCount / tasks.length : 0})` }} />
         </div>
         <small>{tasks.length ? `${tasks.length - doneCount} 项待完成 · 预计 ${totalMinutes} 分钟` : "这一天留有完整的空白时间"}</small>
       </div>

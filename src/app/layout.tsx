@@ -45,7 +45,9 @@ var z=localStorage.getItem('zgca-zoom');if(['0.9','1.1','1.25'].includes(z))d.st
 var lh=localStorage.getItem('zgca-lh');if(lh==='compact'||lh==='loose')d.dataset.lh=lh;
 if(localStorage.getItem('zgca-font')==='serif')d.dataset.uiFont='serif';
 if(localStorage.getItem('zgca-motion')==='reduce')d.dataset.motion='reduce';
-if(localStorage.getItem('zgca-contrast')==='high')d.dataset.contrast='high'}catch(e){}`;
+if(localStorage.getItem('zgca-contrast')==='high')d.dataset.contrast='high';
+var n=new Date(),dk=n.getFullYear()+'-'+(n.getMonth()+1)+'-'+n.getDate();
+if(location.pathname==='/'&&localStorage.getItem('zgca-intro')!==dk){d.dataset.intro='play';localStorage.setItem('zgca-intro',dk);setTimeout(function(){d.dataset.intro='done'},1200)}}catch(e){}`;
 
 export default async function RootLayout({
   children,

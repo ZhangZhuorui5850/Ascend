@@ -11,6 +11,7 @@ import {
   undoReviewAction,
 } from "@/app/actions/day";
 import { RichText } from "@/components/RichText";
+import { usePresenceAnimation } from "@/components/usePresenceAnimation";
 import type { MistakeUndo, ReviewUndo } from "@/lib/repo/reviews";
 import type { DueMistake, DueReview } from "@/lib/repo/days";
 import { cacheReviewSnapshot, flushOfflineReviews, getOfflineReviewCount, queueOfflineReview } from "@/lib/offline-review";
@@ -44,10 +45,24 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
   const [recoveryBusy, setRecoveryBusy] = useState(false);
   const [offline, setOffline] = useState(false);
   const [pendingOffline, setPendingOffline] = useState(0);
+  const [leavingKeys, setLeavingKeys] = useState<Set<string>>(() => new Set());
+  const [exitedKeys, setExitedKeys] = useState<Set<string>>(() => new Set());
+  const [reviewSnapshots, setReviewSnapshots] = useState<Map<string, DueReview>>(() => new Map());
+  const [mistakeSnapshots, setMistakeSnapshots] = useState<Map<string, DueMistake>>(() => new Map());
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const exitTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const backlogTotal = (dueReviewsTotal || dueReviews.length) + dueMistakesTotal;
-
-  const empty = !dueReviews.length && !dueMistakes.length;
+  const reviewIds = new Set(dueReviews.map((point) => point.id));
+  const mistakeIds = new Set(dueMistakes.map((mistake) => mistake.id));
+  const visibleReviews = [
+    ...dueReviews,
+    ...[...reviewSnapshots.values()].filter((point) => !reviewIds.has(point.id)),
+  ].filter((point) => !exitedKeys.has(`review-${point.id}`));
+  const visibleMistakes = [
+    ...dueMistakes,
+    ...[...mistakeSnapshots.values()].filter((mistake) => !mistakeIds.has(mistake.id)),
+  ].filter((mistake) => !exitedKeys.has(`mistake-${mistake.id}`));
+  const empty = !visibleReviews.length && !visibleMistakes.length;
 
   useEffect(() => {
     void cacheReviewSnapshot(offlineScope, day, dueReviews).catch(() => undefined);
@@ -72,15 +87,42 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
     };
   }, [day, dueReviews, offlineScope, router]);
 
+  useEffect(() => {
+    const currentExitTimers = exitTimers.current;
+    return () => currentExitTimers.forEach((timer) => clearTimeout(timer));
+  }, []);
+
   function armUndo(next: LastUndo) {
     if (undoTimer.current) clearTimeout(undoTimer.current);
     setLastUndo(next);
     undoTimer.current = setTimeout(() => setLastUndo(null), 8000);
   }
 
+  function armExit(key: string) {
+    const previous = exitTimers.current.get(key);
+    if (previous) clearTimeout(previous);
+    const reduced = document.documentElement.dataset.motion === "reduce"
+      || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const duration = reduced ? 0 : motionTokenMs("--motion-reward");
+    exitTimers.current.set(key, setTimeout(() => {
+      setLeavingKeys((current) => new Set(current).add(key));
+      exitTimers.current.delete(key);
+    }, duration));
+  }
+
+  function finishExit(key: string) {
+    setLeavingKeys((current) => withoutKey(current, key));
+    setExitedKeys((current) => new Set(current).add(key));
+    setReviewSnapshots((current) => withoutMapKey(current, key));
+    setMistakeSnapshots((current) => withoutMapKey(current, key));
+    setBusyKey("");
+    router.refresh();
+  }
+
   async function handleReview(point: DueReview, score: number) {
-    if (busyKey) return;
-    setBusyKey(`review-${point.id}`);
+    const key = `review-${point.id}`;
+    if (busyKey || stamps[key]) return;
+    setBusyKey(key);
     setError("");
     const operationId = crypto.randomUUID();
     if (!navigator.onLine) {
@@ -93,42 +135,41 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
       }
       setOffline(true);
       setPendingOffline((current) => current + 1);
-      setStamps((current) => ({ ...current, [`review-${point.id}`]: SCORE_STAMPS[score] }));
+      setStamps((current) => ({ ...current, [key]: SCORE_STAMPS[score] }));
       setBusyKey("");
       return;
     }
+    setReviewSnapshots((current) => new Map(current).set(key, point));
     const result = await scoreReview({ day, knowledgePointId: point.id, score, operationId });
     if (!result.ok) {
+      setReviewSnapshots((current) => withoutMapKey(current, key));
       setError(result.error || "操作失败");
       setBusyKey("");
       return;
     }
-    setStamps((current) => ({ ...current, [`review-${point.id}`]: SCORE_STAMPS[score] }));
+    setStamps((current) => ({ ...current, [key]: SCORE_STAMPS[score] }));
     if (result.undo) armUndo({ kind: "review", label: SCORE_LABELS[score], title: point.title, payload: result.undo });
-    setTimeout(() => {
-      setBusyKey("");
-      router.refresh();
-    }, 360);
+    armExit(key);
   }
 
   async function handleMistake(mistake: DueMistake, score: number) {
-    if (busyKey) return;
-    setBusyKey(`mistake-${mistake.id}`);
+    const key = `mistake-${mistake.id}`;
+    if (busyKey || stamps[key]) return;
+    setBusyKey(key);
+    setMistakeSnapshots((current) => new Map(current).set(key, mistake));
     setError("");
     const result = await reattemptMistakeAction({ id: mistake.id, day, score });
     if (!result.ok) {
+      setMistakeSnapshots((current) => withoutMapKey(current, key));
       setError(result.error || "操作失败");
       setBusyKey("");
       return;
     }
-    setStamps((current) => ({ ...current, [`mistake-${mistake.id}`]: score >= 2 ? "会" : "错" }));
+    setStamps((current) => ({ ...current, [key]: score >= 2 ? "会" : "错" }));
     if (result.undo) {
       armUndo({ kind: "mistake", label: score >= 2 ? "已会" : "仍错", title: mistake.title, payload: result.undo });
     }
-    setTimeout(() => {
-      setBusyKey("");
-      router.refresh();
-    }, 360);
+    armExit(key);
   }
 
   async function handleUndo() {
@@ -145,6 +186,10 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
     }
     setLastUndo(null);
     setStamps({});
+    setLeavingKeys(new Set());
+    setExitedKeys(new Set());
+    setReviewSnapshots(new Map());
+    setMistakeSnapshots(new Map());
     router.refresh();
   }
 
@@ -170,13 +215,13 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
       if (target && typeof target.closest === "function" && target.closest("input, textarea, select, [contenteditable=true]")) return;
       const num = Number(event.key);
       if (!Number.isInteger(num) || num < 1 || num > 4) return;
-      const firstReview = dueReviews[0];
+      const firstReview = visibleReviews[0];
       if (firstReview && revealed[firstReview.id]) {
         event.preventDefault();
         void handleReview(firstReview, num - 1);
         return;
       }
-      const firstMistake = dueMistakes[0];
+      const firstMistake = visibleMistakes[0];
       if (firstMistake && num <= 2) {
         event.preventDefault();
         void handleMistake(firstMistake, num === 1 ? 1 : 3);
@@ -185,7 +230,7 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readOnly, empty, busyKey, dueReviews, dueMistakes, day, revealed]);
+  }, [readOnly, empty, busyKey, visibleReviews, visibleMistakes, day, revealed]);
 
   if (empty) {
     if (!readOnly && doneToday > 0) {
@@ -239,9 +284,11 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
         </div>
       ) : null}
       <div className="queueList">
-        {dueReviews.map((point, index) => (
-          <article
+        {visibleReviews.map((point, index) => (
+          <QueuePresenceCard
             className={`queueCard${!readOnly && index === 0 ? " focused" : ""}${stamps[`review-${point.id}`] ? " stamped" : ""}`}
+            leaving={leavingKeys.has(`review-${point.id}`)}
+            onExitComplete={() => finishExit(`review-${point.id}`)}
             key={point.id}
           >
             {stamps[`review-${point.id}`] ? <span className="queueStamp">{stamps[`review-${point.id}`]}</span> : null}
@@ -280,11 +327,13 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
                 </button>
               )
             ) : null}
-          </article>
+          </QueuePresenceCard>
         ))}
-        {dueMistakes.map((mistake, index) => (
-          <article
-            className={`queueCard mistake${!readOnly && !dueReviews.length && index === 0 ? " focused" : ""}${stamps[`mistake-${mistake.id}`] ? " stamped" : ""}`}
+        {visibleMistakes.map((mistake, index) => (
+          <QueuePresenceCard
+            className={`queueCard mistake${!readOnly && !visibleReviews.length && index === 0 ? " focused" : ""}${stamps[`mistake-${mistake.id}`] ? " stamped" : ""}`}
+            leaving={leavingKeys.has(`mistake-${mistake.id}`)}
+            onExitComplete={() => finishExit(`mistake-${mistake.id}`)}
             key={mistake.id}
           >
             {stamps[`mistake-${mistake.id}`] ? <span className="queueStamp">{stamps[`mistake-${mistake.id}`]}</span> : null}
@@ -303,9 +352,43 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
                 </button>
               </div>
             ) : null}
-          </article>
+          </QueuePresenceCard>
         ))}
       </div>
     </section>
   );
+}
+
+function QueuePresenceCard({ className, leaving, onExitComplete, children }: {
+  className: string;
+  leaving: boolean;
+  onExitComplete: () => void;
+  children: React.ReactNode;
+}) {
+  const [elementRef, onAnimationEnd] = usePresenceAnimation<HTMLElement>({
+    entering: false,
+    leaving,
+    onEnterComplete: () => undefined,
+    onExitComplete,
+  });
+  return <article className={className} data-leaving={leaving ? "" : undefined} onAnimationEnd={onAnimationEnd} ref={elementRef}>{children}</article>;
+}
+
+function withoutKey(keys: Set<string>, key: string): Set<string> {
+  const next = new Set(keys);
+  next.delete(key);
+  return next;
+}
+
+function withoutMapKey<T>(items: Map<string, T>, key: string): Map<string, T> {
+  const next = new Map(items);
+  next.delete(key);
+  return next;
+}
+
+function motionTokenMs(token: string): number {
+  const value = window.getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+  const amount = Number.parseFloat(value);
+  if (!Number.isFinite(amount)) return 0;
+  return value.endsWith("ms") ? amount : amount * 1000;
 }
