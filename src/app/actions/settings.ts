@@ -7,7 +7,9 @@ import {
   saveDailyReviewLimit,
   saveExamCountdowns,
   saveLearningPreferences,
+  saveModulePrefs,
   type ExamCountdown,
+  type ModulePref,
 } from "@/lib/repo/settings";
 import { requireWorkspace } from "@/lib/request-auth";
 import { revokeUserSession } from "@/lib/auth";
@@ -28,6 +30,18 @@ export async function saveSettingsAction(input: {
     if (input.learningGoal.trim() && input.enabledSubjectCodes.length) saveLearningPreferences(db, access, input);
     revalidatePath("/");
     revalidatePath("/settings");
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "保存失败" };
+  }
+}
+
+export async function saveModulePrefsAction(input: { modulePrefs: ModulePref[] }): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    saveModulePrefs(getDb(), access, input.modulePrefs);
+    // 导航（侧栏/底部栏/命令面板）渲染在根 layout，需要整棵树失效
+    revalidatePath("/", "layout");
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "保存失败" };

@@ -18,11 +18,21 @@ describe("TaskLine completion presentation", () => {
 });
 
 describe("task-row spacing", () => {
-  it("uses a multiline editor while keeping task controls in one centered row", () => {
+  it("uses a multiline editor and has no stale pre-taskLineMain mobile grid hacks", () => {
     expect(source).toContain("<textarea");
     expect(source).toContain("resizeTitle(titleRef.current)");
-    expect(styles).toMatch(/grid-template-areas:\s*"check title subject delete"/s);
-    expect(styles).toMatch(/\.dayTasks \.taskLine\s*\{[^}]*align-items:\s*center;/s);
+    // 旧版直接把 .taskLine 当 grid 布局的移动端规则会把新 .taskLineMain 结构挤坏——不允许回归
+    expect(styles).not.toMatch(/grid-template-areas:\s*"check title subject delete"/s);
+    expect(styles).not.toContain(".dayTasks .taskSubject");
+  });
+
+  it("keeps the row minimal: single detail-settings entry, meta chips only when marked", () => {
+    expect(source).toContain("TaskMetaRow");
+    expect(source).toContain("task.priority !== 2");
+    expect(source).toContain("task.estimated_minutes !== 30");
+    expect(source).toContain('aria-label="任务详细设置"');
+    // 科目改到详情面板里编辑，行内不再放下拉框
+    expect(source).not.toContain('className={task.subject_code ? "taskSubject tagged" : "taskSubject"}');
   });
 
   it("centers the checkbox icon with place-items instead of manual nudges", () => {
@@ -47,10 +57,12 @@ describe("optimistic toggle wiring", () => {
     expect(source).not.toContain("formError");
   });
 
-  it("persists completion without refreshing the current route", () => {
-    expect(plannerActions).toContain('import { refresh } from "next/cache"');
-    expect(plannerActions).not.toContain("revalidatePath");
-    expect(toggleActionSource).not.toContain("refresh()");
+  it("persists writes via revalidatePath, never refresh()", () => {
+    // Next 16.2 软导航页面会丢弃 refresh() 的 RSC 回流（见 docs/agent-development-guide.md）
+    expect(plannerActions).toContain('import { revalidatePath } from "next/cache"');
+    expect(plannerActions).not.toContain("import { refresh");
+    expect(plannerActions).toContain("function revalidateTaskViews");
+    expect(toggleActionSource).toContain("revalidateTaskViews(input.day)");
     expect(source).not.toContain("router.refresh()");
   });
 });

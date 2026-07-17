@@ -27,6 +27,7 @@ import { BrandLogo } from "@/components/BrandLogo";
 import type { DeviceAccount } from "@/lib/auth";
 import { todayKey } from "@/lib/dates";
 import { clearOfflineLearningData } from "@/lib/offline-review";
+import type { ModulePref } from "@/lib/repo/settings";
 
 async function logoutWithOfflineCleanup() {
   await clearOfflineLearningData().catch(() => undefined);
@@ -45,15 +46,27 @@ export function getNavigation(role: "admin" | "user") {
     { href: "/", match: "/", exact: true, label: "总览", group: "计划", icon: Home },
     { href: `/day/${todayKey()}`, match: "/day", exact: false, label: "今日执行", group: "计划", icon: ClipboardList },
     { href: "/calendar", match: "/calendar", exact: false, label: "学习日历", group: "计划", icon: CalendarDays },
-    { href: "/subjects", match: "/subjects", exact: false, label: "知识体系", group: "学习", icon: BookOpen },
-    { href: "/mistakes", match: "/mistakes", exact: false, label: "错题回炉", group: "学习", icon: Tag },
-    { href: "/mock-exams", match: "/mock-exams", exact: false, label: "模考冲刺", group: "学习", icon: GraduationCap },
-    { href: "/assets", match: "/assets", exact: false, label: "资料库", group: "洞察", icon: HardDrive },
-    { href: "/analytics", match: "/analytics", exact: false, label: "学习分析", group: "洞察", icon: BarChart3 },
+    { href: "/subjects", match: "/subjects", exact: false, label: "知识体系", group: "学习", icon: BookOpen, moduleKey: "subjects" as const },
+    { href: "/mistakes", match: "/mistakes", exact: false, label: "错题回炉", group: "学习", icon: Tag, moduleKey: "mistakes" as const },
+    { href: "/mock-exams", match: "/mock-exams", exact: false, label: "模考冲刺", group: "学习", icon: GraduationCap, moduleKey: "mock-exams" as const },
+    { href: "/assets", match: "/assets", exact: false, label: "资料库", group: "洞察", icon: HardDrive, moduleKey: "assets" as const },
+    { href: "/analytics", match: "/analytics", exact: false, label: "学习分析", group: "洞察", icon: BarChart3, moduleKey: "analytics" as const },
   ];
 }
 
-export type NavItem = ReturnType<typeof getNavigation>[number];
+export type NavItem = ReturnType<typeof getNavigation>[number] & { moduleKey?: string };
+
+/** 按用户板块偏好过滤并排序导航：核心项固定在前，可选板块按偏好顺序排列、关闭的隐藏 */
+export function applyModulePrefs(links: NavItem[], modulePrefs?: ModulePref[]): NavItem[] {
+  if (!modulePrefs?.length) return links;
+  const core = links.filter((item) => !item.moduleKey);
+  const optionalByKey = new Map(links.filter((item) => item.moduleKey).map((item) => [item.moduleKey!, item]));
+  const optional = modulePrefs
+    .filter((pref) => pref.enabled)
+    .map((pref) => optionalByKey.get(pref.key))
+    .filter((item): item is NavItem => Boolean(item));
+  return [...core, ...optional];
+}
 
 function isLinkActive(pathname: string, item: NavItem): boolean {
   if (item.exact) return pathname === item.match;
@@ -66,6 +79,7 @@ export function Sidebar({
   collapsed,
   displayName,
   mobileOpen = false,
+  modulePrefs,
   onNavigate,
   onToggle,
   role,
@@ -75,12 +89,13 @@ export function Sidebar({
   collapsed: boolean;
   displayName: string;
   mobileOpen?: boolean;
+  modulePrefs?: ModulePref[];
   onNavigate?: () => void;
   onToggle: () => void;
   role: "admin" | "user";
 }) {
   const pathname = usePathname();
-  const links = getNavigation(role);
+  const links = applyModulePrefs(getNavigation(role), role === "user" ? modulePrefs : undefined);
   const className = ["sidebar", collapsed ? "isCollapsed" : "", mobileOpen ? "mobileOpen" : ""].filter(Boolean).join(" ");
 
   return (
@@ -127,17 +142,19 @@ export function Sidebar({
 }
 
 export function MobileNav({
+  modulePrefs,
   onCaptureClick,
   role,
 }: {
+  modulePrefs?: ModulePref[];
   onCaptureClick?: () => void;
   role: "admin" | "user";
 }) {
   const pathname = usePathname();
-  const links = getNavigation(role);
+  const links = applyModulePrefs(getNavigation(role), role === "user" ? modulePrefs : undefined);
   const [moreOpen, setMoreOpen] = useState(false);
-  const mobileLinks = role === "admin" ? links : [links[0], links[1], links[2]];
-  const moreLinks = role === "admin" ? [] : [links[3], links[4], links[5], links[6], links[7]];
+  const mobileLinks = role === "admin" ? links : links.filter((item) => !item.moduleKey);
+  const moreLinks = role === "admin" ? [] : links.filter((item) => item.moduleKey);
 
   return (
     <nav className="mobileNav" aria-label="移动端主导航" data-testid="mobile-nav">

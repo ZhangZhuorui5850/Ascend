@@ -23,7 +23,17 @@ describe("calendar day schedule popover", () => {
     expect(source).toContain('href={`/day/${popover.day}`}');
     expect(source).toContain("进入当日详情");
     expect(source).not.toContain("router.refresh()");
-    expect(source).not.toContain("useOptimistic(");
+  });
+
+  it("supports quick task management (add/remove) inside the day card", () => {
+    expect(source).toContain("addTaskAction");
+    expect(source).toContain("deleteTaskAction");
+    expect(source).toContain("useOptimistic(");
+    expect(source).toContain("startTransition(");
+    expect(source).toContain("calendarDayComposer");
+    expect(source).toContain("calendarDayTaskRemove");
+    expect(styles).toContain(".calendarDayComposer");
+    expect(styles).toContain(".calendarDayTaskRemove");
   });
 
   it("projects schedule items without loading activity summaries", () => {

@@ -57,6 +57,10 @@ export default async function HomePage() {
         ? "summit"
         : "blank";
 
+  const disabledModules = new Set(settings.modulePrefs.filter((pref) => !pref.enabled).map((pref) => pref.key));
+  // 板块被关闭时倒计时仍展示（它属于考试节点设置），但入口退化为设置页
+  const examHref = disabledModules.has("mock-exams") ? "/settings#study" : "/mock-exams";
+
   const upcomingExams = settings.examCountdowns
     .map((exam) => ({ exam, days: daysUntil(today, exam.date) }))
     .filter((item): item is { exam: (typeof settings.examCountdowns)[number]; days: number } =>
@@ -90,7 +94,7 @@ export default async function HomePage() {
           {upcomingExams.slice(0, 2).map(({ exam, days }) => (
             <Link
               className={days <= 14 ? "countdownChip urgent" : "countdownChip"}
-              href="/mock-exams"
+              href={examHref}
               key={`${exam.name}-${exam.date}`}
             >
               <span>{exam.subjectCode ? `${exam.subjectCode} · ` : ""}{exam.name}</span>
@@ -163,7 +167,7 @@ export default async function HomePage() {
             <strong><CountUp value={pendingCount} /></strong>
             <small>到期待清</small>
             {nearestExam && nearestExam.days <= 14 ? (
-              <Link className="homeFocusExam" href="/mock-exams">距 {nearestExam.exam.name} <b>{nearestExam.days}</b> 天</Link>
+              <Link className="homeFocusExam" href={examHref}>距 {nearestExam.exam.name} <b>{nearestExam.days}</b> 天</Link>
             ) : null}
           </div>
         ) : null}
@@ -174,7 +178,7 @@ export default async function HomePage() {
           </div>
         ) : null}
         {state === "blank" && nearestExam ? (
-          <Link className="homeFocusFigure" href="/mock-exams">
+          <Link className="homeFocusFigure" href={examHref}>
             <strong>{nearestExam.days}</strong>
             <small>距 {nearestExam.exam.name}</small>
           </Link>
@@ -284,9 +288,11 @@ export default async function HomePage() {
                   <small>掌握 {point.mastery.toFixed(1)}</small>
                 </Link>
               ))}
-              <div className="homeWeakFoot">
-                <Link className="sectionLink" href="/mistakes">去回炉 →</Link>
-              </div>
+              {!disabledModules.has("mistakes") ? (
+                <div className="homeWeakFoot">
+                  <Link className="sectionLink" href="/mistakes">去回炉 →</Link>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </section>

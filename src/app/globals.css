@@ -3890,6 +3890,7 @@ kbd {
 
 .settingsTabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -3921,6 +3922,136 @@ kbd {
   .settingsStack {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.settingsModules {
+  grid-column: 1 / -1;
+}
+
+.settingsModulesIntro {
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.settingsModulesList {
+  display: grid;
+  gap: 8px;
+}
+
+.settingsModuleRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+  color: var(--accent);
+}
+
+.settingsModuleRow.off {
+  opacity: 0.55;
+}
+
+.settingsModuleRow.off strong {
+  color: var(--muted);
+}
+
+.settingsModuleRow > div:first-of-type {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settingsModuleRow strong {
+  color: var(--ink);
+  font-size: 13.5px;
+}
+
+.settingsModuleRow small {
+  color: var(--quiet);
+  font-size: 11.5px;
+}
+
+.settingsModuleTools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.settingsModuleTools > button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.settingsModuleTools > button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.settingsModuleTools > button:disabled {
+  opacity: 0.35;
+}
+
+.settingsModuleSwitch {
+  position: relative;
+  display: inline-flex;
+  margin-left: 6px;
+  cursor: pointer;
+}
+
+.settingsModuleSwitch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+}
+
+.settingsModuleSwitch span {
+  display: block;
+  width: 38px;
+  height: 22px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  transition: background var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
+}
+
+.settingsModuleSwitch span::after {
+  content: "";
+  display: block;
+  width: 16px;
+  height: 16px;
+  margin: 2px;
+  border-radius: 50%;
+  background: var(--quiet);
+  transition: transform var(--motion-fast) var(--motion-ease), background var(--motion-fast) var(--motion-ease);
+}
+
+.settingsModuleSwitch input:checked + span {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.settingsModuleSwitch input:checked + span::after {
+  background: var(--accent-ink);
+  transform: translateX(16px);
+}
+
+.settingsModuleSwitch input:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .settingsGroupTitle {
@@ -4498,9 +4629,15 @@ kbd {
 .uploadProgress { position: relative; height: 28px; margin: 6px 12px; overflow: hidden; border-radius: 8px; background: var(--surface-soft); }
 .uploadProgress > span { position: absolute; inset: 0 auto 0 0; width: 100%; background: var(--accent-soft); transform-origin: left center; transition: transform var(--motion-quick) var(--motion-ease); }
 .uploadProgress b { position: relative; display: grid; height: 100%; place-items: center; font-size: 12px; }
-.driveBatchBar { display: flex; align-items: center; gap: 8px; margin: 6px 12px; padding: 9px 12px; border: 1px solid var(--accent); border-radius: 10px; background: var(--accent-soft); }
-.driveBatchBar strong { margin-right: auto; }
-.driveBatchBar button { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border-radius: 7px; }
+/* 批量选择操作条：固定在视口底部悬浮，不参与文档流（出现时列表不下移） */
+.driveBatchBar { position: fixed; bottom: calc(22px + env(safe-area-inset-bottom)); left: 50%; z-index: 60; display: flex; align-items: center; gap: 8px; max-width: min(600px, calc(100vw - 24px)); padding: 10px 10px 10px 16px; border: 1px solid var(--line-strong); border-radius: 16px; background: var(--surface-raised); box-shadow: var(--shadow-lg); transform: translateX(-50%); }
+.driveBatchBar strong { margin-right: 6px; font-size: 13px; white-space: nowrap; }
+.driveBatchBar button { display: inline-flex; align-items: center; gap: 5px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.driveBatchBar button:hover { border-color: var(--accent-line); background: var(--surface-soft); }
+.driveBatchBar .driveBatchPrimary { border-color: transparent; background: var(--accent); color: var(--accent-ink); }
+.driveBatchBar .driveBatchPrimary:hover { border-color: transparent; background: var(--accent); filter: brightness(1.05); }
+.driveBatchBar .driveBatchDismiss { padding: 8px; border-color: transparent; background: transparent; color: var(--quiet); }
+.driveBatchBar .driveBatchDismiss:hover { border-color: transparent; color: var(--ink); }
 .driveRow.selected { box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-soft); }
 .driveName input[type="checkbox"] { flex: 0 0 auto; width: 15px; height: 15px; min-width: 15px; padding: 0; border: initial; }
 .driveTable.gridMode { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; padding: 6px; }
@@ -4534,8 +4671,7 @@ kbd {
   .calendarAgenda > button { grid-template-columns: 1fr auto; }
   .calendarAgenda > button span,
   .calendarAgenda > button small { grid-column: 1 / -1; }
-  .driveBatchBar { align-items: flex-start; flex-wrap: wrap; }
-  .driveBatchBar strong { width: 100%; }
+  .driveBatchBar { bottom: calc(96px + env(safe-area-inset-bottom)); width: calc(100vw - 20px); justify-content: center; flex-wrap: wrap; }
   .driveTable.gridMode { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .driveTable.gridMode .driveRow { min-height: 150px; }
   .analyticsMockSummary > div:last-child { grid-template-columns: repeat(2, 1fr); }
@@ -7291,10 +7427,6 @@ a,
     min-height: 54px;
   }
 
-  .dayTasks .taskLine {
-    grid-template-columns: 44px minmax(0, 1fr) clamp(82px, 22vw, 104px) 44px;
-  }
-
   /* 44px 只是手指热区；可见的勾选框画在 ::before 上保持小巧 */
   .dayTasks .taskCheck {
     position: relative;
@@ -7381,21 +7513,12 @@ a,
     gap: 6px;
   }
 
-  .dayTasks .taskLine {
-    grid-template-columns: auto minmax(0, 1fr) clamp(82px, 22vw, 104px) auto;
-    grid-template-areas: "check title subject delete";
-    align-items: center;
-    column-gap: 8px;
-    padding: 7px 0;
-  }
-
-  .dayTasks .taskCheck {
-    grid-area: check;
-    align-self: center;
+  .dayTasks .taskLineMain {
+    column-gap: 6px;
+    padding-inline: 4px 6px;
   }
 
   .dayTasks .taskTitle {
-    grid-area: title;
     padding: 9px 8px;
     overflow: hidden;
     line-height: 1.55;
@@ -7403,38 +7526,13 @@ a,
     overflow-wrap: anywhere;
   }
 
-  .dayTasks .taskSubject {
-    grid-area: subject;
-    align-self: center;
-    width: 100%;
-    padding: 7px 30px 7px 9px;
+  .dayTasks .taskExpand {
+    width: 40px;
+    height: 40px;
   }
 
   .dayTasks .taskLine .iconDanger {
-    grid-area: delete;
-    align-self: center;
     opacity: 1;
-  }
-
-  .dayTasks .taskCreate {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 48px;
-    gap: 8px;
-    margin-top: 14px;
-  }
-
-  .dayTasks .taskCreate input {
-    grid-column: 1 / -1;
-    width: 100%;
-  }
-
-  .dayTasks .taskCreate select {
-    width: 100%;
-  }
-
-  .dayTasks .taskCreate button {
-    width: 48px;
-    padding: 0;
   }
 
   .dayPlanEcho,

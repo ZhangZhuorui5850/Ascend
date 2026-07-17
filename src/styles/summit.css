@@ -1522,11 +1522,25 @@ a.homeFocusFigure:hover small {
 
 .taskLineMain {
   display: grid;
-  grid-template-columns: auto minmax(180px, 1fr) auto auto minmax(120px, auto) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 9px;
   min-height: 54px;
   padding: 8px 10px 8px 13px;
+}
+
+.taskBody {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.taskMetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding-left: 9px;
 }
 
 .taskTitle {
@@ -1534,8 +1548,7 @@ a.homeFocusFigure:hover small {
 }
 
 .taskPriority {
-  min-width: 27px;
-  padding: 3px 6px;
+  padding: 3px 7px;
   border-radius: 6px;
   background: var(--surface-soft);
   color: var(--muted);
@@ -1543,6 +1556,28 @@ a.homeFocusFigure:hover small {
   font-size: 9px;
   font-weight: 700;
   text-align: center;
+  white-space: nowrap;
+}
+
+.taskSubjectChip {
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.taskNoteFlag {
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--quiet);
+  font-size: 9px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .taskPriority.priority1 {
@@ -1578,12 +1613,16 @@ a.homeFocusFigure:hover small {
 
 .taskLineDetails {
   display: grid;
-  grid-template-columns: 145px 145px 145px minmax(240px, 1fr);
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
   gap: 10px;
   padding: 12px 14px 14px 45px;
   border-top: 1px solid var(--line);
   background: var(--surface-soft);
   animation: summit-details-in 200ms var(--summit-ease) both;
+}
+
+.taskLineDetails .taskNotes {
+  grid-column: 1 / -1;
 }
 
 .taskLineDetails label {
@@ -2023,7 +2062,7 @@ a.homeFocusFigure:hover small {
 .calendarDayMilestone {
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 9px;
   min-height: 48px;
@@ -2092,6 +2131,57 @@ a.homeFocusFigure:hover small {
   font-family: var(--font-mono);
   font-size: 8px;
   font-weight: 700;
+}
+
+.calendarDayTaskRemove {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--quiet);
+}
+
+.calendarDayTaskRemove:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.calendarDayComposer {
+  display: flex;
+  gap: 7px;
+  padding: 0 10px 10px;
+}
+
+.calendarDayComposer input {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  padding-inline: 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  font-size: 12px;
+}
+
+.calendarDayComposer button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.calendarDayComposer button:disabled {
+  opacity: 0.45;
 }
 
 .calendarDayTask.done {
@@ -2440,19 +2530,6 @@ html[data-intro="play"] .homeFocus[data-state="summit"] .homeSeal {
   .taskComposer > select,
   .taskComposerSubmit {
     grid-column: 1 / -1;
-  }
-
-  .taskLineMain {
-    grid-template-columns: auto minmax(120px, 1fr) auto auto;
-  }
-
-  .taskTiming {
-    grid-column: 2 / 3;
-  }
-
-  .taskSubject {
-    grid-column: 2 / -1;
-    width: 100%;
   }
 
   .taskLineDetails {

@@ -1,6 +1,6 @@
 "use server";
 
-import { refresh } from "next/cache";
+import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db";
 import {
   addNote,
@@ -22,6 +22,15 @@ function failure(error: unknown): ActionResult {
   return { ok: false, error: error instanceof Error ? error.message : "操作失败" };
 }
 
+// 任务同时展示在当日工作台、首页与学习日历上，三处路由缓存一起失效。
+// 注意不要用 refresh()：Next 16.2 在软导航到达的页面上会丢弃 refresh() 的 RSC 回流
+// （库写成功但 UI 直到硬刷新才更新），revalidatePath 无此问题。
+function revalidateTaskViews(...days: string[]) {
+  for (const day of new Set(days)) revalidatePath(`/day/${day}`);
+  revalidatePath("/");
+  revalidatePath("/calendar");
+}
+
 export async function addTaskAction(input: {
   day: string;
   title: string;
@@ -34,7 +43,7 @@ export async function addTaskAction(input: {
   try {
     const access = await requireWorkspace();
     const task = addTask(getDb(), access, input);
-    refresh();
+    revalidateTaskViews(input.day);
     return { ok: true, task };
   } catch (error) {
     return failure(error);
@@ -45,6 +54,8 @@ export async function toggleTaskAction(input: { id: number; day: string; done: b
   try {
     const access = await requireWorkspace();
     toggleTask(getDb(), access, input);
+    // 完成态由页面客户端状态即时呈现；这里仍失效相关路由缓存，避免 30s 内切页看到旧完成数
+    revalidateTaskViews(input.day);
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -64,7 +75,7 @@ export async function updateTaskAction(input: {
   try {
     const access = await requireWorkspace();
     updateTask(getDb(), access, input);
-    refresh();
+    revalidateTaskViews(input.day);
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -81,7 +92,7 @@ export async function scheduleTaskAction(input: {
   try {
     const access = await requireWorkspace();
     scheduleTask(getDb(), access, input);
-    refresh();
+    revalidateTaskViews(input.previousDay, input.day);
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -92,7 +103,7 @@ export async function deleteTaskAction(input: { id: number; day: string }): Prom
   try {
     const access = await requireWorkspace();
     deleteTask(getDb(), access, input.id);
-    refresh();
+    revalidateTaskViews(input.day);
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -103,7 +114,7 @@ export async function carryOverTasksAction(input: { fromDay: string; toDay: stri
   try {
     const access = await requireWorkspace();
     const moved = carryOverTasks(getDb(), access, input);
-    refresh();
+    revalidateTaskViews(input.fromDay, input.toDay);
     return { ok: true, moved };
   } catch (error) {
     return failure(error);
@@ -114,7 +125,7 @@ export async function addNoteAction(input: { day: string; content: string }): Pr
   try {
     const access = await requireWorkspace();
     const note = addNote(getDb(), access, input);
-    refresh();
+    revalidatePath(`/day/${input.day}`);
     return { ok: true, note };
   } catch (error) {
     return failure(error);
@@ -125,7 +136,7 @@ export async function updateNoteAction(input: { id: number; day: string; content
   try {
     const access = await requireWorkspace();
     updateNote(getDb(), access, input);
-    refresh();
+    revalidatePath(`/day/${input.day}`);
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -136,7 +147,7 @@ export async function deleteNoteAction(input: { id: number; day: string }): Prom
   try {
     const access = await requireWorkspace();
     deleteNote(getDb(), access, input.id);
-    refresh();
+    revalidatePath(`/day/${input.day}`);
     return { ok: true };
   } catch (error) {
     return failure(error);

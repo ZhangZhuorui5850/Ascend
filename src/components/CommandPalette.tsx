@@ -3,15 +3,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Inbox, Search } from "lucide-react";
-import { getNavigation } from "@/components/Sidebar";
+import { applyModulePrefs, getNavigation } from "@/components/Sidebar";
 import { todayKey } from "@/lib/dates";
+import type { ModulePref } from "@/lib/repo/settings";
 
 export function CommandPalette({
+  modulePrefs,
   onCapture,
   open,
   role,
   setOpen,
 }: {
+  modulePrefs?: ModulePref[];
   onCapture: () => void;
   open: boolean;
   role: "admin" | "user";
@@ -22,12 +25,13 @@ export function CommandPalette({
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const items = useMemo(() => {
-    const navigation = getNavigation(role).map((item) => ({ label: item.label, href: item.href, icon: item.icon, description: item.href }));
+    const navigation = applyModulePrefs(getNavigation(role), role === "user" ? modulePrefs : undefined)
+      .map((item) => ({ label: item.label, href: item.href, icon: item.icon, description: item.href }));
     if (role === "user") {
       navigation.unshift({ label: "打开今日工作台", href: `/day/${todayKey()}`, icon: ArrowRight, description: "计划、执行与复盘" });
     }
     return navigation;
-  }, [role]);
+  }, [modulePrefs, role]);
   const commands = useMemo(() => role === "user"
     ? [{ label: "收纳资料", href: "", icon: Inbox, description: "上传文件、截图或笔记", capture: true }, ...items]
     : items.map((item) => ({ ...item, capture: false })), [items, role]);

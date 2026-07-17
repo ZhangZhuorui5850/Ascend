@@ -10,14 +10,16 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { TopBar } from "@/components/TopBar";
 import type { DeviceAccount } from "@/lib/auth";
 import type { CaptureSubject } from "@/lib/repo/knowledge";
+import type { ModulePref } from "@/lib/repo/settings";
 
 type AppShellProps = {
   user: { displayName: string; role: "admin" | "user"; account: DeviceAccount; accounts: DeviceAccount[] } | null;
   hierarchy: CaptureSubject[];
+  modulePrefs?: ModulePref[];
   children: React.ReactNode;
 };
 
-export function AppShell({ user, hierarchy, children }: AppShellProps) {
+export function AppShell({ user, hierarchy, modulePrefs, children }: AppShellProps) {
   const pathname = usePathname();
   const [captureOpen, setCaptureOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -62,6 +64,7 @@ export function AppShell({ user, hierarchy, children }: AppShellProps) {
         collapsed={sidebarCollapsed && !mobileNavOpen}
         displayName={user.displayName}
         mobileOpen={mobileNavOpen}
+        modulePrefs={modulePrefs}
         onNavigate={() => setMobileNavOpen(false)}
         onToggle={() => setSidebarCollapsed((value) => !value)}
         role={user.role}
@@ -97,8 +100,8 @@ export function AppShell({ user, hierarchy, children }: AppShellProps) {
           ) : null}
         </>
       ) : null}
-      <MobileNav onCaptureClick={() => setCaptureOpen(true)} role={user.role} />
-      <CommandPalette onCapture={() => setCaptureOpen(true)} open={commandOpen} role={user.role} setOpen={setCommandOpen} />
+      <MobileNav modulePrefs={modulePrefs} onCaptureClick={() => setCaptureOpen(true)} role={user.role} />
+      <CommandPalette modulePrefs={modulePrefs} onCapture={() => setCaptureOpen(true)} open={commandOpen} role={user.role} setOpen={setCommandOpen} />
     </div>
   );
 }

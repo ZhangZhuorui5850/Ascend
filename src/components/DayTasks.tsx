@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition, useCallback, useEffect, useLayoutEffect, useOptimistic, useRef, useState } from "react";
-import { ArrowRight, Check, ChevronDown, Clock3, Plus, Trash2 } from "lucide-react";
+import { ArrowRight, Check, Clock3, Plus, Settings2, Trash2 } from "lucide-react";
 import { addTaskAction, carryOverTasksAction, deleteTaskAction, toggleTaskAction, updateTaskAction } from "@/app/actions/planner";
 import { sortDayTasks } from "@/components/day-tasks-sort";
 import { EmptyState } from "@/components/EmptyState";
@@ -402,45 +402,32 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
       >
         {done ? <Check size={13} /> : null}
       </button>
-      <textarea
-        aria-label="任务内容"
-        className="taskTitle"
-        defaultValue={task.title}
-        key={`${task.id}-${task.title}`}
-        onInput={(event) => resizeTitle(event.currentTarget)}
-        onBlur={(event) => {
-          const next = event.target.value.trim();
-          if (!isDraft && next && next !== task.title) {
-            update({ id: task.id, day, title: next });
-          }
-        }}
-        readOnly={isDraft}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            event.currentTarget.blur();
-          }
-        }}
-        ref={titleRef}
-        rows={1}
-      />
-      <span className={`taskPriority priority${task.priority}`}>P{task.priority}</span>
-      <span className="taskTiming"><Clock3 size={12} />{task.scheduled_start || "待排"} · {task.estimated_minutes}m</span>
-      <select
-        aria-label="科目标签"
-        className={task.subject_code ? "taskSubject tagged" : "taskSubject"}
-        disabled={isDraft}
-        onChange={(event) => update({ id: task.id, day, subjectCode: event.target.value || null })}
-        value={task.subject_code || ""}
-      >
-        <option value="">无科目</option>
-        {subjects.map((subject) => (
-          <option key={subject.code} value={subject.code}>
-            {subject.code} · {subject.name}
-          </option>
-        ))}
-      </select>
-      <button aria-expanded={expanded} aria-label="编辑任务详情" className="taskExpand" disabled={isDraft} onClick={() => setExpanded((value) => !value)} type="button"><ChevronDown size={14} /></button>
+      <div className="taskBody">
+        <textarea
+          aria-label="任务内容"
+          className="taskTitle"
+          defaultValue={task.title}
+          key={`${task.id}-${task.title}`}
+          onInput={(event) => resizeTitle(event.currentTarget)}
+          onBlur={(event) => {
+            const next = event.target.value.trim();
+            if (!isDraft && next && next !== task.title) {
+              update({ id: task.id, day, title: next });
+            }
+          }}
+          readOnly={isDraft}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              event.currentTarget.blur();
+            }
+          }}
+          ref={titleRef}
+          rows={1}
+        />
+        <TaskMetaRow task={task} />
+      </div>
+      <button aria-expanded={expanded} aria-label="任务详细设置" className="taskExpand" disabled={isDraft} onClick={() => setExpanded((value) => !value)} title="详细设置" type="button"><Settings2 size={14} /></button>
       <button
         aria-label="删除任务"
         className="iconDanger"
@@ -452,6 +439,14 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
       </button>
       </div>
       {expanded ? <div className="taskLineDetails">
+        <label><span>科目</span><select defaultValue={task.subject_code || ""} onChange={(event) => update({ id: task.id, day, subjectCode: event.target.value || null })}>
+          <option value="">无科目</option>
+          {subjects.map((subject) => (
+            <option key={subject.code} value={subject.code}>
+              {subject.code} · {subject.name}
+            </option>
+          ))}
+        </select></label>
         <label><span>优先级</span><select defaultValue={task.priority} onChange={(event) => update({ id: task.id, day, priority: Number(event.target.value) })}>
           <option value={1}>P1 · 关键</option><option value={2}>P2 · 常规</option><option value={3}>P3 · 弹性</option>
         </select></label>
@@ -461,6 +456,28 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
           if (event.target.value !== task.notes) update({ id: task.id, day, notes: event.target.value });
         }} placeholder="写下完成标准、资料位置或训练范围" rows={2} /></label>
       </div> : null}
+    </div>
+  );
+}
+
+/** 只展示用户明确标记过的信息：默认优先级 P2、默认 30 分钟、无科目、无备注时一律不渲染 */
+function TaskMetaRow({ task }: { task: OptimisticTask }) {
+  const showPriority = task.priority !== 2;
+  const timing = task.scheduled_start
+    ? `${task.scheduled_start} · ${task.estimated_minutes}m`
+    : task.estimated_minutes !== 30
+      ? `${task.estimated_minutes}m`
+      : "";
+  const hasNotes = task.notes.trim().length > 0;
+  if (!showPriority && !timing && !task.subject_code && !hasNotes) return null;
+  return (
+    <div className="taskMetaRow">
+      {showPriority ? (
+        <span className={`taskPriority priority${task.priority}`}>{task.priority === 1 ? "P1 · 关键" : "P3 · 弹性"}</span>
+      ) : null}
+      {timing ? <span className="taskTiming"><Clock3 size={11} />{timing}</span> : null}
+      {task.subject_code ? <span className="taskSubjectChip">{task.subject_code}</span> : null}
+      {hasNotes ? <span className="taskNoteFlag">备注</span> : null}
     </div>
   );
 }

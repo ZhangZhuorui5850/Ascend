@@ -7,6 +7,7 @@ import { listAccountSummaries, mergeAccountTokens, type DeviceAccount } from "@/
 import { SESSION_COOKIE, SESSIONS_COOKIE } from "@/lib/auth-constants";
 import { getDb } from "@/lib/db";
 import { getCaptureHierarchy, type CaptureSubject } from "@/lib/repo/knowledge";
+import { getSettings, type ModulePref } from "@/lib/repo/settings";
 import { optionalSession } from "@/lib/request-auth";
 import { parseSessionsCookieValue } from "@/lib/session-cookies";
 import "./globals.css";
@@ -58,6 +59,10 @@ export default async function RootLayout({
   const hierarchy: CaptureSubject[] = user?.workspaceId
     ? getCaptureHierarchy(getDb(), { workspaceId: user.workspaceId })
     : [];
+  // 功能板块开关/排序驱动侧栏、底部导航与命令面板
+  const modulePrefs: ModulePref[] | undefined = user?.workspaceId
+    ? getSettings(getDb(), { workspaceId: user.workspaceId }).modulePrefs
+    : undefined;
 
   // 本设备已登录账号列表（活跃账号排最前），驱动右上角账户菜单的免密快速切换
   let accounts: DeviceAccount[] = [];
@@ -83,6 +88,7 @@ export default async function RootLayout({
                 : null
             }
             hierarchy={hierarchy}
+            modulePrefs={modulePrefs}
           >
             {children}
           </AppShell>

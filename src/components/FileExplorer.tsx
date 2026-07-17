@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   Check,
@@ -74,6 +74,15 @@ export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, 
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortAsc, setSortAsc] = useState(true);
   const [moveTarget, setMoveTarget] = useState<MoveTarget | null>(null);
+
+  useEffect(() => {
+    if (!moveTarget) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setMoveTarget(null);
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [moveTarget]);
   const [moveDestination, setMoveDestination] = useState("");
   const dragRef = useRef<DragPayload | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -335,11 +344,11 @@ export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, 
         {error ? <p className="formError">{error}</p> : null}
         {uploaded || uploading ? <div className="uploadProgress"><span style={{ transform: `scaleX(${uploaded / Math.max(1, uploaded + uploading)})` }} /><b>{uploading ? `正在并发上传 · 已完成 ${uploaded}` : `上传完成 · ${uploaded} 个文件`}</b></div> : null}
         {selectedIds.size ? (
-          <div className="driveBatchBar">
+          <div className="driveBatchBar" role="toolbar" aria-label="批量操作">
             <strong>已选 {selectedIds.size} 个文件</strong>
-            <button onClick={() => { setMoveDestination(explorer.currentPath); setMoveTarget({ kind: "batch", ids: [...selectedIds], name: `${selectedIds.size} 个文件` }); }} type="button"><FolderInput size={14} />批量移动</button>
-            <button className="iconDanger" onClick={() => void handleBatchDelete()} type="button"><Trash2 size={14} />批量删除</button>
-            <button onClick={() => setSelectedIds(new Set())} type="button">取消选择</button>
+            <button className="driveBatchPrimary" onClick={() => { setMoveDestination(explorer.currentPath); setMoveTarget({ kind: "batch", ids: [...selectedIds], name: `${selectedIds.size} 个文件` }); }} type="button"><FolderInput size={14} />移动到…</button>
+            <button className="iconDanger" onClick={() => void handleBatchDelete()} type="button"><Trash2 size={14} />删除</button>
+            <button aria-label="取消选择" className="driveBatchDismiss" onClick={() => setSelectedIds(new Set())} title="取消选择" type="button"><X size={15} /></button>
           </div>
         ) : null}
 
@@ -586,7 +595,13 @@ export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, 
       <input hidden multiple onChange={(event) => void uploadFiles(event)} ref={fileInputRef} type="file" />
       {previewFile ? <AssetViewer file={previewFile} onClose={() => setPreviewFile(null)} /> : null}
       {moveTarget ? (
-        <div className="dialogBackdrop" role="presentation">
+        <div
+          className="dialogBackdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setMoveTarget(null);
+          }}
+          role="presentation"
+        >
           <section aria-labelledby="move-title" aria-modal="true" className="moveDialog" role="dialog">
             <div>
               <h2 id="move-title">移动“{moveTarget.name}”</h2>

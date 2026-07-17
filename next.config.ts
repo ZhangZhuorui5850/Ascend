@@ -39,7 +39,8 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     viewTransition: true,
-    // 客户端路由缓存：30s 内往返导航直接复用，消除重复点击的整页等待
+    // 客户端路由缓存：30s 内往返导航直接复用，消除重复点击的整页等待。
+    // 写操作靠 server action 里的 revalidatePath 精确失效（勿用 refresh()，见 actions/planner.ts）。
     staleTimes: {
       dynamic: 30,
       static: 180,

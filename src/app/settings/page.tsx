@@ -3,6 +3,7 @@ import { AppearanceSection } from "@/components/AppearanceSection";
 import { DisplaySection } from "@/components/DisplaySection";
 import { DeviceSessions } from "@/components/DeviceSessions";
 import { InstallAppSection } from "@/components/InstallAppSection";
+import { ModulesSection } from "@/components/ModulesSection";
 import { SettingsForm } from "@/components/SettingsForm";
 import { listUserSessions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
@@ -33,6 +34,7 @@ export default async function SettingsPage() {
       <nav aria-label="设置分类" className="settingsTabs">
         <a href="#account">账户</a>
         <a href="#study">学习</a>
+        <a href="#modules">功能板块</a>
         <a href="#appearance">外观</a>
         <a href="#display">显示</a>
         <a href="#devices">设备</a>
@@ -57,6 +59,11 @@ export default async function SettingsPage() {
       <section aria-label="学习设置" className="settingsGroup" id="study">
         <h2 className="settingsGroupTitle">学习</h2>
         <SettingsForm initial={settings} subjects={subjects} />
+      </section>
+
+      <section aria-label="功能板块" className="settingsGroup" id="modules">
+        <h2 className="settingsGroupTitle">功能板块</h2>
+        <ModulesSection initial={settings.modulePrefs} />
       </section>
 
       <section aria-label="外观设置" className="settingsGroup" id="appearance">

@@ -7,6 +7,7 @@ import {
   ArrowUp,
   ChevronDown,
   ChevronRight,
+  CornerDownRight,
   CornerUpLeft,
   Crosshair,
   FolderPlus,
@@ -558,27 +559,6 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
         }}
       >
         <button
-          aria-label={`拖拽“${chapter.title}”调整顺序，拖到其他章节标题中部可变为其子章节`}
-          className="chapterGrip"
-          draggable={!tree.treeBusy}
-          onDragEnd={() => tree.setDrag(null)}
-          onDragStart={(event) => {
-            event.dataTransfer.effectAllowed = "move";
-            event.dataTransfer.setData("text/plain", chapter.title);
-            attachDragCard(event, chapter.title, `${deepPoints} 个知识点`);
-            tree.setDrag({
-              kind: "chapter",
-              id: chapter.id,
-              title: chapter.title,
-              subtreeIds: subtreeIdsOf(chapter),
-              height: subtreeHeightOf(chapter),
-            });
-          }}
-          type="button"
-        >
-          <GripVertical size={13} />
-        </button>
-        <button
           aria-expanded={!collapsed}
           aria-label={collapsed ? "展开章节" : "折叠章节"}
           className="chapterCollapse"
@@ -627,6 +607,17 @@ function ChapterBlock({ chapter, subjectCode, first, last, today, report, sortMo
               type="button"
             >
               <CornerUpLeft size={14} />
+            </button>
+          ) : null}
+          {!first && depth + subtreeHeightOf(chapter) <= MAX_CHAPTER_DEPTH ? (
+            <button
+              aria-label={`降级为上一章节的子章节`}
+              disabled={tree.treeBusy}
+              onClick={() => void tree.nestChapter(chapter.id, siblingIds[siblingIds.indexOf(chapter.id) - 1] ?? null)}
+              title="降级为上一章节的子章节"
+              type="button"
+            >
+              <CornerDownRight size={14} />
             </button>
           ) : null}
           {canNestDeeper ? (

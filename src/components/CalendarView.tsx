@@ -7,10 +7,10 @@ import interactionPlugin, { type EventResizeDoneArg } from "@fullcalendar/intera
 import zhCnLocale from "@fullcalendar/core/locales/zh-cn";
 import type { EventDropArg, EventInput } from "@fullcalendar/core";
 import Link from "next/link";
-import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { startTransition, useEffect, useOptimistic, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { ArrowRight, CalendarClock, CalendarDays, Check, CheckCircle2, Clock3, List, Milestone, MoveRight, X } from "lucide-react";
-import { scheduleTaskAction, toggleTaskAction } from "@/app/actions/planner";
+import { ArrowRight, CalendarClock, CalendarDays, Check, CheckCircle2, Clock3, List, Milestone, MoveRight, Plus, Trash2, X } from "lucide-react";
+import { addTaskAction, deleteTaskAction, scheduleTaskAction, toggleTaskAction } from "@/app/actions/planner";
 import { useFeedback } from "@/components/FeedbackProvider";
 import type { DayTask } from "@/lib/repo/planner";
 import type { ExamCountdown } from "@/lib/repo/settings";
@@ -26,6 +26,7 @@ type DayPopoverState = {
 };
 
 type MutationResult = { ok: boolean; error?: string };
+type OptimisticCalendarTask = DayTask & { pending?: boolean };
 
 export function CalendarView({ tasks, exams }: CalendarViewProps) {
   const { notify } = useFeedback();
@@ -33,11 +34,19 @@ export function CalendarView({ tasks, exams }: CalendarViewProps) {
   const [selectedView, setSelectedView] = useState<"calendar" | "list" | null>(null);
   const [dayPopover, setDayPopover] = useState<DayPopoverState | null>(null);
   const [completionOverrides, setCompletionOverrides] = useState<Record<number, boolean>>({});
+  const [removedIds, setRemovedIds] = useState<Set<number>>(() => new Set());
+  const tempIdRef = useRef(-1);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const [optimisticTasks, addOptimisticTask] = useOptimistic(
+    tasks as OptimisticCalendarTask[],
+    (state: OptimisticCalendarTask[], task: OptimisticCalendarTask) => [...state, task],
+  );
   const view = selectedView ?? (mobile ? "list" : "calendar");
-  const displayTasks = tasks.map((task) => completionOverrides[task.id] === undefined
-    ? task
-    : { ...task, done: completionOverrides[task.id] ? 1 : 0 });
+  const displayTasks = optimisticTasks
+    .filter((task) => !removedIds.has(task.id))
+    .map((task) => completionOverrides[task.id] === undefined
+      ? task
+      : { ...task, done: completionOverrides[task.id] ? 1 : 0 });
   const openTasks = displayTasks.filter((task) => !task.done);
   const inbox = openTasks.filter((task) => !task.scheduled_start).slice(0, 12);
   const scheduledMinutes = openTasks.reduce((sum, task) => sum + (task.scheduled_start ? task.estimated_minutes : 0), 0);
@@ -104,6 +113,47 @@ export function CalendarView({ tasks, exams }: CalendarViewProps) {
       else next[id] = done;
       return next;
     });
+  }
+
+  // 弹窗内快速添加：乐观插入草稿行，action 的 revalidatePath 回流会带回真实任务
+  function addDayTask(day: string, title: string) {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    const draft: OptimisticCalendarTask = {
+      id: tempIdRef.current--,
+      day,
+      title: trimmed,
+      subject_code: null,
+      done: 0,
+      sort_order: 0,
+      priority: 2,
+      estimated_minutes: 30,
+      scheduled_start: null,
+      notes: "",
+      pending: true,
+    };
+    startTransition(async () => {
+      addOptimisticTask(draft);
+      try {
+        const result = await addTaskAction({ day, title: trimmed });
+        if (!result.ok) notify(result.error || "添加任务失败", "error");
+      } catch {
+        notify("网络异常，任务未保存", "error");
+      }
+    });
+  }
+
+  async function removeDayTask(task: DayTask): Promise<MutationResult> {
+    try {
+      const result = await deleteTaskAction({ id: task.id, day: task.day });
+      if (result.ok) setRemovedIds((current) => new Set(current).add(task.id));
+      else notify(result.error || "删除任务失败", "error");
+      return result;
+    } catch {
+      const result = { ok: false, error: "网络异常，任务未删除" };
+      notify(result.error, "error");
+      return result;
+    }
   }
 
   async function moveTask(info: EventDropArg) {
@@ -182,7 +232,10 @@ export function CalendarView({ tasks, exams }: CalendarViewProps) {
           /> : <CalendarAgenda exams={exams} tasks={displayTasks} onOpen={openDay} />}
           {dayPopover ? createPortal(<DaySchedulePopover
             exams={exams.filter((exam) => exam.date === dayPopover.day)}
+            key={dayPopover.day}
+            onAdd={(title) => addDayTask(dayPopover.day, title)}
             onClose={closePopover}
+            onRemove={removeDayTask}
             onToggle={toggleTask}
             popover={dayPopover}
             ref={popoverRef}
@@ -206,15 +259,18 @@ export function CalendarView({ tasks, exams }: CalendarViewProps) {
   );
 }
 
-function DaySchedulePopover({ popover, tasks, exams, onToggle, onClose, ref }: {
+function DaySchedulePopover({ popover, tasks, exams, onAdd, onRemove, onToggle, onClose, ref }: {
   popover: DayPopoverState;
-  tasks: DayTask[];
+  tasks: OptimisticCalendarTask[];
   exams: ExamCountdown[];
+  onAdd: (title: string) => void;
+  onRemove: (task: DayTask) => Promise<MutationResult>;
   onToggle: (task: DayTask, done: boolean) => Promise<MutationResult>;
   onClose: () => void;
   ref: React.Ref<HTMLDivElement>;
 }) {
   const [pendingTaskIds, setPendingTaskIds] = useState<Set<number>>(() => new Set());
+  const [draft, setDraft] = useState("");
   const doneCount = tasks.filter((task) => task.done).length;
   const totalMinutes = tasks.filter((task) => !task.done).reduce((sum, task) => sum + task.estimated_minutes, 0);
   const position = getPopoverPosition(popover.anchor);
@@ -234,6 +290,24 @@ function DaySchedulePopover({ popover, tasks, exams, onToggle, onClose, ref }: {
       next.delete(task.id);
       return next;
     });
+  }
+
+  async function remove(task: OptimisticCalendarTask) {
+    if (pendingTaskIds.has(task.id) || task.pending) return;
+    setPendingTaskIds((current) => new Set(current).add(task.id));
+    await onRemove(task);
+    setPendingTaskIds((current) => {
+      const next = new Set(current);
+      next.delete(task.id);
+      return next;
+    });
+  }
+
+  function submitDraft() {
+    const title = draft.trim();
+    if (!title) return;
+    onAdd(title);
+    setDraft("");
   }
 
   return <div className={`calendarDayPopoverPositioner ${position.above ? "above" : "below"}`} style={style}>
@@ -257,8 +331,9 @@ function DaySchedulePopover({ popover, tasks, exams, onToggle, onClose, ref }: {
       <div className="calendarDayTaskList">
         {tasks.map((task) => <CalendarDayTaskRow
           key={task.id}
+          onRemove={() => void remove(task)}
           onToggle={() => void toggle(task)}
-          pending={pendingTaskIds.has(task.id)}
+          pending={pendingTaskIds.has(task.id) || Boolean(task.pending)}
           task={task}
         />)}
         {exams.map((exam, index) => <article className="calendarDayMilestone" key={`${exam.name}-${index}`}>
@@ -266,6 +341,22 @@ function DaySchedulePopover({ popover, tasks, exams, onToggle, onClose, ref }: {
           <div><strong>{exam.name}</strong><small>{exam.targetScore ? `考试节点 · 目标 ${exam.targetScore}` : "考试节点"}</small></div>
         </article>)}
         {!tasks.length && !exams.length ? <div className="calendarDayEmpty"><CalendarDays size={23} /><strong>当天没有待办</strong><span>保留一段自由安排的时间。</span></div> : null}
+      </div>
+
+      <div className="calendarDayComposer">
+        <input
+          aria-label="添加当天任务"
+          maxLength={200}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") submitDraft();
+          }}
+          placeholder="添加当天任务，回车确认"
+          value={draft}
+        />
+        <button aria-label="添加任务" disabled={!draft.trim()} onClick={submitDraft} type="button">
+          <Plus size={15} />
+        </button>
       </div>
 
       <Link className="calendarDayDetailLink" href={`/day/${popover.day}`} onClick={onClose}>
@@ -276,9 +367,10 @@ function DaySchedulePopover({ popover, tasks, exams, onToggle, onClose, ref }: {
   </div>;
 }
 
-function CalendarDayTaskRow({ task, onToggle, pending }: {
+function CalendarDayTaskRow({ task, onToggle, onRemove, pending }: {
   task: DayTask;
   onToggle: () => void;
+  onRemove: () => void;
   pending: boolean;
 }) {
   const done = Boolean(task.done);
@@ -298,6 +390,16 @@ function CalendarDayTaskRow({ task, onToggle, pending }: {
       <small>{task.subject_code ? `${task.subject_code} · ` : ""}{task.scheduled_start ? `${task.scheduled_start} · ` : "待排时间 · "}{task.estimated_minutes} 分钟</small>
     </div>
     <span>P{task.priority}</span>
+    <button
+      aria-label={`删除“${task.title}”`}
+      className="calendarDayTaskRemove"
+      disabled={pending}
+      onClick={onRemove}
+      title="删除任务"
+      type="button"
+    >
+      <Trash2 size={13} />
+    </button>
   </article>;
 }
 

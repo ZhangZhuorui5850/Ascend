@@ -9,6 +9,16 @@ export type ExamCountdown = {
   targetScore?: number;
 };
 
+/** 可自定义开关与排序的功能板块（核心板块 总览/今日执行/学习日历 不在其列，始终可见） */
+export const OPTIONAL_MODULE_KEYS = ["subjects", "mistakes", "mock-exams", "assets", "analytics"] as const;
+
+export type ModuleKey = (typeof OPTIONAL_MODULE_KEYS)[number];
+
+export type ModulePref = {
+  key: ModuleKey;
+  enabled: boolean;
+};
+
 export type AppSettings = {
   examCountdowns: ExamCountdown[];
   dailyReviewLimit: number;
@@ -16,7 +26,26 @@ export type AppSettings = {
   weeklyMinutes: number;
   enabledSubjectCodes: string[];
   onboardingCompleted: boolean;
+  modulePrefs: ModulePref[];
 };
+
+/** 解析并归一化板块偏好：剔除未知项、按存储顺序去重、补齐缺失板块（默认开启） */
+export function normalizeModulePrefs(raw: unknown): ModulePref[] {
+  const known = new Set<string>(OPTIONAL_MODULE_KEYS);
+  const prefs: ModulePref[] = [];
+  const seen = new Set<string>();
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      if (!item || typeof item.key !== "string" || !known.has(item.key) || seen.has(item.key)) continue;
+      seen.add(item.key);
+      prefs.push({ key: item.key as ModuleKey, enabled: item.enabled !== false });
+    }
+  }
+  for (const key of OPTIONAL_MODULE_KEYS) {
+    if (!seen.has(key)) prefs.push({ key, enabled: true });
+  }
+  return prefs;
+}
 
 export const DEFAULT_DAILY_REVIEW_LIMIT = 12;
 
@@ -55,6 +84,12 @@ export function getSettings(db: Database.Database, scope: WorkspaceScope): AppSe
   } catch {
     enabledSubjectCodes = [];
   }
+  let modulePrefs: ModulePref[];
+  try {
+    modulePrefs = normalizeModulePrefs(JSON.parse(map.get("module_prefs") || "[]"));
+  } catch {
+    modulePrefs = normalizeModulePrefs([]);
+  }
   const workspace = db.prepare(`
     SELECT onboarding_completed FROM workspaces WHERE id = ?
   `).get(scope.workspaceId) as { onboarding_completed: number } | undefined;
@@ -65,7 +100,13 @@ export function getSettings(db: Database.Database, scope: WorkspaceScope): AppSe
     weeklyMinutes: Number.isInteger(weeklyMinutes) && weeklyMinutes >= 30 ? weeklyMinutes : 300,
     enabledSubjectCodes,
     onboardingCompleted: Boolean(workspace?.onboarding_completed),
+    modulePrefs,
   };
+}
+
+export function saveModulePrefs(db: Database.Database, scope: WorkspaceScope, prefs: ModulePref[]): void {
+  const cleaned = normalizeModulePrefs(prefs);
+  setSetting(db, scope, "module_prefs", JSON.stringify(cleaned));
 }
 
 export function saveExamCountdowns(
