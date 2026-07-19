@@ -1,16 +1,20 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { ExternalLink, FileText, Loader2, X } from "lucide-react";
+import { useEffect, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { Download, ExternalLink, FileText, Loader2, X } from "lucide-react";
 import { parseMarkdown, type Align, type BlockNode, type InlineNode } from "@/lib/markdown";
 import { MathTex } from "@/components/RichText";
 import { assetFileUrl } from "@/lib/asset-url";
+import { detectIOS } from "@/components/file-explorer/detect-ios";
 
 const TEXT_EXTENSIONS = new Set([
   "txt", "json", "csv", "log", "py", "js", "ts", "tsx", "jsx", "c", "cpp", "h", "hpp",
   "java", "sql", "sh", "bat", "yml", "yaml", "xml", "toml", "ini", "tex", "r", "go", "rs",
 ]);
 const TEXT_PREVIEW_LIMIT = 1024 * 1024;
+
+const subscribeNoop = () => () => {};
+const getServerIsIOS = () => false;
 
 export type ViewerFile = {
   id: number;
@@ -36,6 +40,10 @@ export function previewKind(file: { original_name: string; mime_type: string }):
 export function AssetViewer({ file, onClose }: { file: ViewerFile; onClose: () => void }) {
   const kind = previewKind(file);
   const url = assetFileUrl(file.id);
+  // iOS（含 iPadOS 桌面模式）的内嵌 iframe PDF 只渲染第一页且无法翻页，
+  // 无法真机逐版本验证，因此保守降级：iOS 上不渲染 iframe，主路径改为新标签页打开/下载。
+  // SSR 快照恒为 false，客户端首次渲染即读 UA（UA 不会中途变化，订阅为空操作）。
+  const isIOS = useSyncExternalStore(subscribeNoop, detectIOS, getServerIsIOS);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -65,7 +73,22 @@ export function AssetViewer({ file, onClose }: { file: ViewerFile; onClose: () =
             // eslint-disable-next-line @next/next/no-img-element
             <img alt={file.original_name} src={url} />
           ) : null}
-          {kind === "pdf" ? (
+          {kind === "pdf" && isIOS ? (
+            <div className="viewerPdfFallback iosForced">
+              <FileText aria-hidden size={44} />
+              <h3>请在新标签页打开这份 PDF</h3>
+              <p>iOS Safari 的内嵌 PDF 只能显示第一页、无法翻页，因此这里不做内嵌预览，改为直接打开或下载。</p>
+              <a className="primaryButton" href={url} rel="noopener" target="_blank">
+                <ExternalLink size={15} />
+                在新标签页打开
+              </a>
+              <a className="secondaryButton" download={file.original_name} href={url}>
+                <Download size={15} />
+                下载 PDF
+              </a>
+            </div>
+          ) : null}
+          {kind === "pdf" && !isIOS ? (
             <>
               <iframe src={url} title={file.original_name} />
               <div className="viewerPdfFallback">
@@ -105,6 +128,7 @@ function TextPreview({ url, kind, size }: { url: string; kind: "markdown" | "tex
         if (!cancelled) setContent(text);
       })
       .catch((err: unknown) => {
+        console.error("读取文本预览失败", url, err);
         if (!cancelled) setError(err instanceof Error ? err.message : "读取文件失败");
       });
     return () => {

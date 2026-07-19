@@ -52,7 +52,8 @@ export function PwaLifecycle() {
 
     navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" })
       .then(watchRegistration)
-      .catch(() => undefined);
+      // SW 注册失败（如非 HTTPS 环境）只影响离线增强，静默降级
+      .catch((error) => console.warn("Service Worker 注册失败", error));
 
     const checkForUpdates = () => {
       if (document.visibilityState === "visible") void registration?.update();

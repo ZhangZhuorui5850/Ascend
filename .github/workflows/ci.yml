@@ -24,6 +24,9 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run lint
+      - run: npm run typecheck
       - run: npm run build
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
       - name: Verify fresh and upgraded database migrations
         run: npm test -- --run src/lib/migrations.test.ts src/lib/repo/workspaces.test.ts

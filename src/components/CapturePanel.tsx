@@ -287,6 +287,7 @@ export function CapturePanel({ subjects, onClose }: { subjects: CaptureSubject[]
         ),
       );
     } catch (error) {
+      console.error("附件上传失败", error);
       setAttachments((current) =>
         current.map((item) =>
           item.id === attachment.id

@@ -52,8 +52,9 @@ export function PointDetailPanel({ point, subjectCode, today, report, onClose }:
       if (result.ok && result.detail) setDetail(result.detail);
       else notify(result.error || "详情加载失败", "error");
       setLoading(false);
-    }).catch(() => {
+    }).catch((error) => {
       if (cancelled) return;
+      console.error("知识点详情加载失败", error);
       notify("网络异常，详情加载失败", "error");
       setLoading(false);
     });
@@ -68,7 +69,8 @@ export function PointDetailPanel({ point, subjectCode, today, report, onClose }:
       const result = await updatePointAction({ id: point.id, tier: next, subjectCode });
       if (!result.ok) tierView.rollback();
       report(result);
-    } catch {
+    } catch (error) {
+      console.error("更新掌握层级失败", error);
       tierView.rollback();
       report({ ok: false, error: "网络异常，层级未保存" });
     }
@@ -81,7 +83,8 @@ export function PointDetailPanel({ point, subjectCode, today, report, onClose }:
       const result = await updatePointAction({ id: point.id, exam: next, subjectCode });
       if (!result.ok) examView.rollback();
       report(result);
-    } catch {
+    } catch (error) {
+      console.error("更新真题标记失败", error);
       examView.rollback();
       report({ ok: false, error: "网络异常，真题标记未保存" });
     }

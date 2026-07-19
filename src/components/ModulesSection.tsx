@@ -29,7 +29,8 @@ export function ModulesSection({ initial }: { initial: ModulePref[] }) {
           setPrefs(previous);
           notify(result.error || "保存失败", "error");
         }
-      } catch {
+      } catch (error) {
+        console.error("保存模块设置失败", error);
         setPrefs(previous);
         notify("网络异常，设置未保存", "error");
       }

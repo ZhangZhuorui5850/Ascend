@@ -97,7 +97,8 @@ export function CalendarView({ tasks, exams }: CalendarViewProps) {
         notify(result.error || "任务状态更新失败", "error");
       }
       return result;
-    } catch {
+    } catch (error) {
+      console.error("切换任务完成状态失败", error);
       setTaskCompletion(task.id, previousDone);
       const result = { ok: false, error: "网络异常，任务状态未保存" };
       notify(result.error, "error");
@@ -137,7 +138,8 @@ export function CalendarView({ tasks, exams }: CalendarViewProps) {
       try {
         const result = await addTaskAction({ day, title: trimmed });
         if (!result.ok) notify(result.error || "添加任务失败", "error");
-      } catch {
+      } catch (error) {
+        console.error("添加任务失败", error);
         notify("网络异常，任务未保存", "error");
       }
     });
@@ -149,7 +151,8 @@ export function CalendarView({ tasks, exams }: CalendarViewProps) {
       if (result.ok) setRemovedIds((current) => new Set(current).add(task.id));
       else notify(result.error || "删除任务失败", "error");
       return result;
-    } catch {
+    } catch (error) {
+      console.error("删除任务失败", error);
       const result = { ok: false, error: "网络异常，任务未删除" };
       notify(result.error, "error");
       return result;

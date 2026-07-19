@@ -2,6 +2,7 @@ import { AccountSection } from "@/components/AccountSection";
 import { AppearanceSection } from "@/components/AppearanceSection";
 import { DisplaySection } from "@/components/DisplaySection";
 import { DeviceSessions } from "@/components/DeviceSessions";
+import { ExportDataSection } from "@/components/ExportDataSection";
 import { InstallAppSection } from "@/components/InstallAppSection";
 import { ModulesSection } from "@/components/ModulesSection";
 import { SettingsForm } from "@/components/SettingsForm";
@@ -38,6 +39,7 @@ export default async function SettingsPage() {
         <a href="#appearance">外观</a>
         <a href="#display">显示</a>
         <a href="#devices">设备</a>
+        <a href="#data">数据</a>
         <a href="#app">应用</a>
       </nav>
 
@@ -79,6 +81,11 @@ export default async function SettingsPage() {
       <section aria-label="登录设备" className="settingsGroup" id="devices">
         <h2 className="settingsGroupTitle">设备</h2>
         <DeviceSessions sessions={sessions} />
+      </section>
+
+      <section aria-label="数据导出" className="settingsGroup" id="data">
+        <h2 className="settingsGroupTitle">数据</h2>
+        <ExportDataSection />
       </section>
 
       <section aria-label="应用与安装" className="settingsGroup" id="app">

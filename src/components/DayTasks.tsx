@@ -133,7 +133,8 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
         settleDraft(draft, result.task);
         if (result.ok) setPlanAdded(true);
         report(result);
-      } catch {
+      } catch (error) {
+        console.error("转为任务失败", error);
         settleDraft(draft);
         report({ ok: false, error: "网络异常，操作未保存" });
       } finally {
@@ -150,7 +151,8 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
     startTransition(async () => {
       try {
         report(await action());
-      } catch {
+      } catch (error) {
+        console.error("任务顺延失败", error);
         report({ ok: false, error: "网络异常，操作未保存" });
       }
     });
@@ -179,7 +181,8 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
         settleDraft(draft, result.task);
         if (!result.ok) setTitle((current) => current || trimmed);
         report(result);
-      } catch {
+      } catch (error) {
+        console.error("添加任务失败", error);
         settleDraft(draft);
         setTitle((current) => current || trimmed);
         report({ ok: false, error: "网络异常，操作未保存" });
@@ -200,7 +203,8 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
           return [{ ...entry, actionDone: true }];
         }));
         report(result);
-      } catch {
+      } catch (error) {
+        console.error("删除任务失败", error);
         setExitingTasks((current) => current.filter((entry) => entry.task.id !== task.id));
         report({ ok: false, error: "网络异常，操作未保存" });
       }
@@ -355,7 +359,8 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
     startTransition(async () => {
       try {
         report(await updateTaskAction(input));
-      } catch {
+      } catch (error) {
+        console.error("更新任务失败", error);
         report({ ok: false, error: "网络异常，操作未保存" });
       }
     });
@@ -370,7 +375,8 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
       const result = await toggleTaskAction({ id: task.id, day, done: nextDone });
       if (!result.ok) onCompletionChange(task.id, done);
       report(result);
-    } catch {
+    } catch (error) {
+      console.error("切换任务完成状态失败", error);
       onCompletionChange(task.id, done);
       report({ ok: false, error: "网络异常，操作未保存" });
     } finally {

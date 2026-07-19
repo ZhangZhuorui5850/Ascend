@@ -318,4 +318,39 @@ describe("runMigrations", () => {
     expect(blob).toMatchObject({ sha256, storage_key: storageKey, ref_count: 1 });
     expect(readFileSync(path.join(uploadRoot, storageKey), "utf8")).toBe("legacy asset");
   });
+
+  it("skips already-backfilled assets on subsequent startups", () => {
+    const db = new Database(":memory:");
+    const uploadRoot = mkdtempSync(path.join(os.tmpdir(), "zgca-assets-backfill-"));
+    dirs.push(uploadRoot);
+    const oldRelativePath = "2026/07/07/original/PCA.png";
+    const oldAbsolutePath = path.join(uploadRoot, oldRelativePath);
+    mkdirSync(path.dirname(oldAbsolutePath), { recursive: true });
+    writeFileSync(oldAbsolutePath, "legacy asset", { flush: true });
+    db.exec(`
+      CREATE TABLE assets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        day TEXT NOT NULL,
+        original_name TEXT NOT NULL,
+        safe_name TEXT NOT NULL,
+        relative_path TEXT NOT NULL,
+        mime_type TEXT NOT NULL DEFAULT '',
+        size INTEGER NOT NULL DEFAULT 0
+      );
+    `);
+    db.prepare(`
+      INSERT INTO assets (day, original_name, safe_name, relative_path, mime_type, size)
+      VALUES ('2026-07-07', 'PCA.png', 'PCA.png', ?, 'image/png', 0)
+    `).run(oldRelativePath);
+
+    runMigrations(db, { uploadRoot });
+    const first = db.prepare("SELECT relative_path, size FROM assets WHERE id = 1").get();
+
+    // 改写遗留源文件模拟磁盘变化：已迁移的 asset 不应再被读取/重哈希
+    writeFileSync(oldAbsolutePath, "tampered content that would change the hash", { flush: true });
+    runMigrations(db, { uploadRoot });
+
+    expect(db.prepare("SELECT relative_path, size FROM assets WHERE id = 1").get()).toEqual(first);
+    expect(db.prepare("SELECT COUNT(*) AS n FROM blobs").get()).toEqual({ n: 1 });
+  });
 });

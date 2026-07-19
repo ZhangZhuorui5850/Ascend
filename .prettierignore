@@ -1,0 +1,10 @@
+# 注意：本仓库暂不做全量 reformat——多处测试直接断言组件源码/样式原文
+# （如 DayTasks.test.ts 的 toContain/toMatch），全量格式化会打破这些断言。
+# prettier 用于新文件或手动指定路径：npm run format -- <路径>
+node_modules
+.next
+.ci-data
+docs
+public
+*.md
+package-lock.json

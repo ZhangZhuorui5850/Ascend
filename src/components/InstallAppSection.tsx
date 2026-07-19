@@ -20,7 +20,8 @@ export function InstallAppSection() {
       if (outcome === "accepted") setMessage("安装已开始，稍后可在桌面或启动器中找到「登峰」。");
       if (outcome === "dismissed") setMessage("已取消。想装的时候随时回来点这里。");
       if (outcome === "unavailable") setMessage("当前浏览器暂未就绪，稍后再试或刷新页面。");
-    } catch {
+    } catch (error) {
+      console.error("PWA 安装启动失败", error);
       setMessage("安装未能启动，请稍后再试。");
     }
   }
@@ -58,7 +59,7 @@ export function InstallAppSection() {
         <strong>安装到此设备</strong>
         <p>安装后可在独立窗口使用，支持离线打开。</p>
         {!state.supported && !state.canPrompt ? <p className="installHint">此浏览器不支持一键安装，可尝试 Chrome/Edge。</p> : null}
-        {state.supported && !state.canPrompt && !message ? <p className="installHint">浏览器还没就绪：如果之前装过，请直接从桌面/启动器打开；否则稍后刷新重试。</p> : null}
+        {state.supported && !state.canPrompt && !message ? <p className="installHint">浏览器还没就绪：如果之前装过，请直接从桌面/启动器打开；也可以点浏览器地址栏右端的安装图标（或菜单里的「安装应用」）。注意需通过 HTTPS 或 localhost 访问才能安装。</p> : null}
         {message ? <p className="installHint">{message}</p> : null}
       </div>
       <button className="primaryButton" disabled={!state.canPrompt} onClick={() => void install()} type="button">

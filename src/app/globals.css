@@ -11315,3 +11315,126 @@ body[data-dragging] .mapTools {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- 资料库移动端批次（2026-07-18）：触屏行工具常显 + 窄屏详情底部 sheet + iOS PDF 降级 ---------- */
+
+/* 触屏没有 hover：行内“预览 / 移动到… / 重命名 / 删除”工具常显，保证移动文件的触屏路径可达 */
+@media (pointer: coarse) {
+  .driveRowTools {
+    opacity: 1;
+  }
+}
+
+/* 窄屏（.driveDetails 被隐藏的宽度）下，选中文件改用底部 sheet 呈现详情 */
+.driveSheetBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 96;
+  background: rgba(32, 24, 12, 0.42);
+}
+
+.driveDetailSheet {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 97;
+  display: flex;
+  flex-direction: column;
+  max-height: min(78dvh, 640px);
+  border: 1px solid var(--line-strong);
+  border-bottom: 0;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-lg);
+  animation: driveSheetIn var(--motion-quick) var(--motion-ease-enter) both;
+}
+
+.driveSheetGrip {
+  position: relative;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  padding: 10px 0 6px;
+}
+
+.driveSheetGrip > span {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+
+.driveSheetGrip > button {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--quiet);
+}
+
+.driveSheetBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 4px 16px calc(18px + env(safe-area-inset-bottom));
+}
+
+.driveSheetBody h2 {
+  font-size: 14.5px;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.driveSheetBody > svg {
+  color: var(--quiet);
+}
+
+.driveSheetBody dl {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+}
+
+.driveSheetBody dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.driveSheetBody dt {
+  color: var(--quiet);
+  flex-shrink: 0;
+}
+
+.driveSheetBody dd {
+  margin: 0;
+  text-align: right;
+  word-break: break-all;
+}
+
+@keyframes driveSheetIn {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .driveDetailSheet {
+    animation-duration: 0.001ms;
+  }
+}
+
+/* iOS 上 JS 检测强制显示的 PDF 降级块（其余触屏靠上方媒体查询控制显隐） */
+.viewerPdfFallback.iosForced {
+  display: grid;
+}

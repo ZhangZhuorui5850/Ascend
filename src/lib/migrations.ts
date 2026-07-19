@@ -887,7 +887,14 @@ export function getAppliedMigrations(database: Database.Database): string[] {
 function backfillAssetBlobs(database: Database.Database, uploadRoot?: string): void {
   if (!uploadRoot || !tableExists(database, "assets") || !tableExists(database, "blobs")) return;
 
-  const assets = database.prepare("SELECT workspace_id, id, original_name, relative_path FROM assets").all() as Array<{
+  // 只处理还没有对应 blob 行的 asset：迁移完成后 relative_path 即 storage_key，
+  // 此查询命中 0 行，冷启动不再全量读文件重哈希。
+  const assets = database.prepare(`
+    SELECT a.workspace_id, a.id, a.original_name, a.relative_path
+    FROM assets a
+    LEFT JOIN blobs b ON b.workspace_id = a.workspace_id AND b.storage_key = a.relative_path
+    WHERE b.id IS NULL
+  `).all() as Array<{
     workspace_id: string;
     id: number;
     original_name: string;

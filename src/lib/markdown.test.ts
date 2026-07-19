@@ -6,6 +6,7 @@ function inlineText(nodes: InlineNode[]): string {
     .map((node) => {
       if (node.kind === "text" || node.kind === "code") return node.text;
       if (node.kind === "link") return node.label;
+      if (node.kind === "mathInline") return node.tex;
       return inlineText(node.children);
     })
     .join("");

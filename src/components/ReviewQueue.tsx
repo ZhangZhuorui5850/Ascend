@@ -65,15 +65,18 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
   const empty = !visibleReviews.length && !visibleMistakes.length;
 
   useEffect(() => {
-    void cacheReviewSnapshot(offlineScope, day, dueReviews).catch(() => undefined);
-    void getOfflineReviewCount(offlineScope).then(setPendingOffline).catch(() => undefined);
+    // 离线快照缓存与计数是后台增强能力，IndexedDB 不可用（如隐私模式）时静默降级
+    void cacheReviewSnapshot(offlineScope, day, dueReviews).catch((error) => console.warn("离线复习快照缓存失败", error));
+    void getOfflineReviewCount(offlineScope).then(setPendingOffline).catch((error) => console.warn("离线复习计数读取失败", error));
     async function handleOnline() {
       setOffline(false);
       try {
         const synced = await flushOfflineReviews(offlineScope);
         setPendingOffline(0);
         if (synced) router.refresh();
-      } catch {
+      } catch (error) {
+        // 后台补传失败不打断复习流程，待下次 online 事件重试
+        console.warn("离线复习记录补传失败", error);
         setPendingOffline(await getOfflineReviewCount(offlineScope));
       }
     }
@@ -128,7 +131,8 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
     if (!navigator.onLine) {
       try {
         await queueOfflineReview({ operationId, workspaceKey: offlineScope, day, knowledgePointId: point.id, score, createdAt: new Date().toISOString() });
-      } catch {
+      } catch (error) {
+        console.error("离线复习记录写入失败", error);
         setError("本机离线存储当前不可用");
         setBusyKey("");
         return;

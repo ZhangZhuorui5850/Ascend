@@ -36,7 +36,8 @@ function PointRecallEditorForm({ point, subjectCode, report }: {
         answer: answer.trim(),
         subjectCode,
       });
-    } catch {
+    } catch (error) {
+      console.error("保存回忆卡失败", error);
       result = { ok: false, error: "网络异常，回忆卡未保存" };
     }
     setSaving(false);

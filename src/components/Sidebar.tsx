@@ -30,7 +30,8 @@ import { clearOfflineLearningData } from "@/lib/offline-review";
 import type { ModulePref } from "@/lib/repo/settings";
 
 async function logoutWithOfflineCleanup() {
-  await clearOfflineLearningData().catch(() => undefined);
+  // 离线数据清理失败不应阻断登出（IndexedDB 在隐私模式下可能不可用）
+  await clearOfflineLearningData().catch((error) => console.warn("离线数据清理失败", error));
   await logout();
 }
 

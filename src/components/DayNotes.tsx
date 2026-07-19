@@ -67,7 +67,8 @@ export function DayNotes({ day, notes }: { day: string; notes: DayNote[] }) {
         if (result.note) setNoteClientKeys((current) => new Map(current).set(result.note!.id, clientKey));
         if (!result.ok) setDraft((current) => current || content);
         report(result);
-      } catch {
+      } catch (error) {
+        console.error("保存随笔失败", error);
         setDraft((current) => current || content);
         report({ ok: false, error: "网络异常，操作未保存" });
       }
@@ -78,7 +79,8 @@ export function DayNotes({ day, notes }: { day: string; notes: DayNote[] }) {
     startTransition(async () => {
       try {
         report(await updateNoteAction({ id, day, content }));
-      } catch {
+      } catch (error) {
+        console.error("更新随笔失败", error);
         report({ ok: false, error: "网络异常，操作未保存" });
       }
     });
@@ -100,7 +102,8 @@ export function DayNotes({ day, notes }: { day: string; notes: DayNote[] }) {
           }));
           report(result);
           if (result.ok) notify("随笔已删除");
-        } catch {
+        } catch (error) {
+          console.error("删除随笔失败", error);
           setExitingNotes((current) => current.filter((entry) => entry.note.id !== note.id));
           report({ ok: false, error: "网络异常，操作未保存" });
         }
