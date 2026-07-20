@@ -162,7 +162,7 @@ export function MobileNav({
       {mobileLinks.map((item) => {
         const Icon = item.icon;
         return (
-          <Link className={isLinkActive(pathname, item) ? "active" : ""} href={item.href} key={item.href} prefetch={true} transitionTypes={["nav-forward"]}>
+          <Link className={isLinkActive(pathname, item) ? "active" : ""} href={item.href} key={item.href} onClick={() => setMoreOpen(false)} prefetch={true} transitionTypes={["nav-forward"]}>
             <Icon size={18} />
             <span>{item.label}</span>
           </Link>

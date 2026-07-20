@@ -24,4 +24,5 @@ export type TreeControls = {
   movePointTo: (pointId: string, target: PointMoveTarget, index: number) => Promise<void>;
   treeBusy: boolean;
   focusChapter: (id: string | null) => void;
+  focusPointId: string | null;
 };

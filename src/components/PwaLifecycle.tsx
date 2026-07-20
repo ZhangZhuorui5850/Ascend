@@ -8,6 +8,19 @@ export function PwaLifecycle() {
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
 
   useEffect(() => {
+    const root = document.documentElement;
+    const query = window.matchMedia("(display-mode: standalone)");
+    const syncDisplayMode = () => {
+      const iosStandalone = (navigator as Navigator & { standalone?: boolean }).standalone === true;
+      if (query.matches || iosStandalone) root.dataset.appMode = "standalone";
+      else delete root.dataset.appMode;
+    };
+    syncDisplayMode();
+    query.addEventListener("change", syncDisplayMode);
+    return () => query.removeEventListener("change", syncDisplayMode);
+  }, []);
+
+  useEffect(() => {
     const viewport = window.visualViewport;
     if (!viewport) return;
     const root = document.documentElement;

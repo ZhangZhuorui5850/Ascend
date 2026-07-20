@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Loader2, Plus, Star, Trash2 } from "lucide-react";
 import {
   deletePointAction,
@@ -19,12 +19,13 @@ import { MasteryCell } from "./MasteryCell";
 import { TIER_OPTIONS, type Report } from "./shared";
 
 /** 单条知识点行：层级/星标/掌握度快捷编辑 + 展开后的资料、错题、复习记录详情 */
-export function PointLine({ point, subjectCode, today, report, onAddChild }: {
+export function PointLine({ point, subjectCode, today, report, onAddChild, focused = false }: {
   point: PointRow;
   subjectCode: string;
   today: string;
   report: Report;
   onAddChild?: () => void;
+  focused?: boolean;
 }) {
   const { confirm, notify } = useFeedback();
   const due = Boolean(point.next_review && point.next_review <= today);
@@ -34,6 +35,31 @@ export function PointLine({ point, subjectCode, today, report, onAddChild }: {
   const tierView = useOptimisticValue<Tier>(point.tier);
   const examView = useOptimisticValue<boolean>(Boolean(point.exam));
   const [editingTitle, setEditingTitle] = useState(false);
+  const itemRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!focused) return;
+    let cancelled = false;
+    let frame = 0;
+    const reveal = () => {
+      frame = window.requestAnimationFrame(() => {
+        if (cancelled) return;
+        const item = itemRef.current;
+        if (!item) return;
+        item.scrollIntoView({ block: "center", behavior: "auto" });
+        item.focus({ preventScroll: true });
+      });
+    };
+    const transition = (document as Document & {
+      activeViewTransition?: { finished: Promise<unknown> };
+    }).activeViewTransition;
+    if (transition) void transition.finished.then(reveal, reveal);
+    else reveal();
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+    };
+  }, [focused]);
 
   async function changeTier(next: Tier) {
     tierView.apply(next);
@@ -90,7 +116,12 @@ export function PointLine({ point, subjectCode, today, report, onAddChild }: {
   }
 
   return (
-    <div className="pointItem">
+    <div
+      className={focused ? "pointItem isFocusTarget" : "pointItem"}
+      data-focus-target={focused ? "true" : undefined}
+      ref={itemRef}
+      tabIndex={focused ? -1 : undefined}
+    >
     <div className="pointLine">
       <button
         aria-expanded={expanded}

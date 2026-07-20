@@ -213,6 +213,7 @@ function PointBranch({ point, chapterId, parentPointId, pointDepth, siblingIds, 
           </>
         ) : null}
         <PointLine
+          focused={tree.focusPointId === point.id}
           onAddChild={canNest ? () => setAddingChild((value) => !value) : undefined}
           point={point}
           report={report}

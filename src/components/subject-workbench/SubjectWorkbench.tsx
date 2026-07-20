@@ -16,7 +16,7 @@ import {
   type SubjectRow,
   type SubjectTrack,
 } from "@/lib/repo/knowledge";
-import { countChaptersDeep, findChapterPath } from "@/components/chapter-tree";
+import { countChaptersDeep, findChapterPath, findPointLocation } from "@/components/chapter-tree";
 import { useFeedback } from "@/components/FeedbackProvider";
 import { MindMapView } from "@/components/mind-map/MindMapView";
 import { POINT_SORT_MODES, sortPointsForView } from "@/components/point-sort";
@@ -61,10 +61,26 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today, focusI
     navigate(id, view);
   }
 
-  const tree: TreeControls = useTreeControls({ subjectCode: subject.code, report, focusChapter });
-
-  const focusPath = focusId ? findChapterPath(chapters, focusId) : null;
-  const focusTarget = focusPath ? focusPath[focusPath.length - 1] : null;
+  const focusChapterPath = focusId ? findChapterPath(chapters, focusId) : null;
+  const focusPointLocation = focusId && !focusChapterPath
+    ? findPointLocation(chapters, loosePoints, focusId)
+    : null;
+  const focusPointTarget = focusPointLocation?.pointPath.at(-1) ?? null;
+  const focusPath = focusChapterPath ?? focusPointLocation?.chapterPath ?? null;
+  const focusTarget = focusPath?.at(-1) ?? null;
+  const focusValid = Boolean(focusTarget || focusPointTarget);
+  const visibleChapters = focusTarget ? [focusTarget] : focusPointTarget ? [] : chapters;
+  const visibleLoosePoints = focusPointTarget && focusPointLocation?.chapterPath.length === 0
+    ? [focusPointTarget]
+    : focusTarget
+      ? []
+      : loosePoints;
+  const tree: TreeControls = useTreeControls({
+    subjectCode: subject.code,
+    report,
+    focusChapter,
+    focusPointId: focusPointTarget?.id ?? null,
+  });
 
   async function addChapter() {
     const title = chapterTitle.trim();
@@ -182,29 +198,36 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today, focusI
         </div>
       </div>
 
-      {focusTarget && focusPath ? (
+      {focusValid && focusPath ? (
         <nav aria-label="聚焦路径" className="focusBreadcrumb">
           <button onClick={() => focusChapter(null)} type="button">{subject.name}</button>
           {focusPath.map((node, index) => (
             <span key={node.id}>
               <span aria-hidden> / </span>
-              {index === focusPath.length - 1 ? (
+              {!focusPointTarget && index === focusPath.length - 1 ? (
                 <strong><RichText text={node.title} /></strong>
               ) : (
                 <button onClick={() => focusChapter(node.id)} type="button"><RichText text={node.title} /></button>
               )}
             </span>
           ))}
+          {focusPointTarget ? (
+            <span>
+              <span aria-hidden> / </span>
+              <strong><RichText text={focusPointTarget.title} /></strong>
+            </span>
+          ) : null}
         </nav>
       ) : null}
-      {focusId && !focusTarget ? <p className="empty">聚焦的章节不存在（可能已被删除），已显示完整目录。</p> : null}
+      {focusId && !focusValid ? <p className="empty">定位的章节或知识点不存在（可能已被删除），已显示完整目录。</p> : null}
 
       {view === "map" ? (
         <MindMapView
-          allowRootAdd={!focusTarget}
+          allowRootAdd={!focusValid}
           baseDepth={focusPath ? focusPath.length : 1}
-          chapters={focusTarget ? [focusTarget] : chapters}
-          loosePoints={focusTarget ? [] : loosePoints}
+          chapters={visibleChapters}
+          key={focusId ?? "all"}
+          loosePoints={visibleLoosePoints}
           report={report}
           sortMode={sortMode}
           subject={subject}
@@ -232,41 +255,48 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today, focusI
       ) : (
         <>
           <div className="chapterList">
-            {chapters.map((chapter, index) => (
+            {visibleChapters.map((chapter, index) => (
               <ChapterBlock
                 canPromote={false}
                 chapter={chapter}
                 depth={1}
                 first={index === 0}
                 key={chapter.id}
-                last={index === chapters.length - 1}
+                last={index === visibleChapters.length - 1}
                 promoteTargetId={null}
                 report={report}
-                siblingIds={chapters.map((item) => item.id)}
+                siblingIds={visibleChapters.map((item) => item.id)}
                 sortMode={sortMode}
                 subjectCode={subject.code}
                 today={today}
                 tree={tree}
               />
             ))}
-            {loosePoints.length ? (
+            {visibleLoosePoints.length ? (
               <article className="chapterBlock">
                 <div className="chapterHead">
                   <strong className="chapterLoose">未分章知识点</strong>
                 </div>
                 <div className="pointList">
-                  {sortPointsForView(flattenPointTree(loosePoints), sortMode).map((point) => (
-                    <PointLine key={point.id} point={point} report={report} subjectCode={subject.code} today={today} />
+                  {sortPointsForView(flattenPointTree(visibleLoosePoints), sortMode).map((point) => (
+                    <PointLine
+                      focused={focusPointTarget?.id === point.id}
+                      key={point.id}
+                      point={point}
+                      report={report}
+                      subjectCode={subject.code}
+                      today={today}
+                    />
                   ))}
                 </div>
               </article>
             ) : null}
-            {!chapters.length && !loosePoints.length ? (
+            {!visibleChapters.length && !visibleLoosePoints.length ? (
               <p className="empty">还没有章节。先添加一个章节，再往里挂知识点。</p>
             ) : null}
           </div>
 
-          <div className="chapterCreate">
+          {!focusPointTarget ? <div className="chapterCreate">
             <input
               value={chapterTitle}
               onChange={(event) => setChapterTitle(event.target.value)}
@@ -279,7 +309,7 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today, focusI
               <Plus size={15} />
               添加章节
             </button>
-          </div>
+          </div> : null}
         </>
       )}
     </section>

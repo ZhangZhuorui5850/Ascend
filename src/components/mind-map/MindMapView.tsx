@@ -32,7 +32,7 @@ type MindMapViewProps = {
 export function MindMapView({ subject, chapters, loosePoints, baseDepth, allowRootAdd, today, sortMode, tree, report }: MindMapViewProps) {
   const { viewportRef, canvasRef, svgRef, zoom, setZoom, startPan, movePan, endPan } = useMindMapCanvas();
   const [addingRoot, setAddingRoot] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(tree.focusPointId);
   const selectedPoint = selectedId ? findPointNode(chapters, loosePoints, selectedId) : null;
 
   return (

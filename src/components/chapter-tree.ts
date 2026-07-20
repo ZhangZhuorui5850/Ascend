@@ -34,17 +34,48 @@ export function findChapterPath(chapters: ChapterWithPoints[], id: string): Chap
   return null;
 }
 
-/** 在整个科目（章节树 + 未分章）里按 id 找知识点节点 */
-export function findPointNode(chapters: ChapterWithPoints[], loosePoints: PointNode[], id: string): PointNode | null {
-  for (const point of flattenPointTree(loosePoints)) {
-    if (point.id === id) return point;
-  }
-  for (const chapter of chapters) {
-    for (const point of flattenPointTree(chapter.points)) {
-      if (point.id === id) return point;
-    }
-    const sub = findPointNode(chapter.children, [], id);
-    if (sub) return sub;
+/** 从一组知识点根节点定位到目标的完整路径（含目标）；找不到返回 null。 */
+export function findPointPath(points: PointNode[], id: string): PointNode[] | null {
+  for (const point of points) {
+    if (point.id === id) return [point];
+    const sub = findPointPath(point.children, id);
+    if (sub) return [point, ...sub];
   }
   return null;
+}
+
+export type PointLocation = {
+  /** 空数组表示未分章知识点，否则为根章节到直属章节的路径。 */
+  chapterPath: ChapterWithPoints[];
+  /** 根知识点到目标知识点的路径。 */
+  pointPath: PointNode[];
+};
+
+/** 同时返回知识点与所属章节路径，供跨页面深链准确定位知识点。 */
+export function findPointLocation(
+  chapters: ChapterWithPoints[],
+  loosePoints: PointNode[],
+  id: string,
+): PointLocation | null {
+  const loosePath = findPointPath(loosePoints, id);
+  if (loosePath) return { chapterPath: [], pointPath: loosePath };
+
+  function visit(items: ChapterWithPoints[], parents: ChapterWithPoints[]): PointLocation | null {
+    for (const chapter of items) {
+      const chapterPath = [...parents, chapter];
+      const pointPath = findPointPath(chapter.points, id);
+      if (pointPath) return { chapterPath, pointPath };
+      const nested = visit(chapter.children, chapterPath);
+      if (nested) return nested;
+    }
+    return null;
+  }
+
+  return visit(chapters, []);
+}
+
+/** 在整个科目（章节树 + 未分章）里按 id 找知识点节点 */
+export function findPointNode(chapters: ChapterWithPoints[], loosePoints: PointNode[], id: string): PointNode | null {
+  const location = findPointLocation(chapters, loosePoints, id);
+  return location?.pointPath.at(-1) ?? null;
 }

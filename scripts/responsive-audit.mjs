@@ -34,6 +34,10 @@ try {
   await auditMobileTaskLayout();
   await auditPage("files-mobile", "/assets", 390, 844, ".driveExplorer");
   await auditPage("day-landscape", `/day/${day}`, 844, 390, ".dayHeader");
+  await auditRouteMatrix();
+  await auditNavigationPositioning();
+  await auditStandaloneSafeArea();
+  await auditWeakPointDeepLink();
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
@@ -99,6 +103,170 @@ async function auditPage(name, pathname, width, height, selector) {
   await expectVisible(selector, `${name} key content`);
   await assertNoHorizontalOverflow(name);
   if (width <= 900) await assertMobileBaseline(name);
+}
+
+async function auditRouteMatrix() {
+  const routes = [
+    ["home", "/", ".homeFocus"],
+    ["day", `/day/${day}`, ".dayHeader"],
+    ["calendar", "/calendar", ".pageStack"],
+    ["subjects", "/subjects", ".subjectCards"],
+    ["assets", "/assets", ".driveExplorer"],
+    ["mistakes", "/mistakes", ".pageStack"],
+    ["mock-exams", "/mock-exams", ".pageStack"],
+    ["analytics", "/analytics", ".analyticsMetricGrid"],
+    ["settings", "/settings", ".settingsTabs"],
+  ];
+  const viewports = [
+    ["small-phone", 320, 568],
+    ["iphone", 390, 844],
+    ["large-phone", 430, 932],
+    ["tablet-portrait", 768, 1024],
+    ["tablet-landscape", 1024, 768],
+    ["desktop", 1440, 900],
+  ];
+
+  for (const [viewportName, width, height] of viewports) {
+    for (const [routeName, pathname, selector] of routes) {
+      await page.setViewportSize({ width, height });
+      await page.goto(`${baseUrl}${pathname}`, { waitUntil: "networkidle" });
+      await expectVisible(selector, `${viewportName}/${routeName} key content`);
+      await assertNoHorizontalOverflow(`${viewportName}/${routeName}`);
+      await assertShellWithinViewport(`${viewportName}/${routeName}`, width, height);
+    }
+  }
+  console.log(`route matrix passed (${routes.length} routes × ${viewports.length} viewports)`);
+}
+
+async function auditNavigationPositioning() {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${baseUrl}/settings`, { waitUntil: "networkidle" });
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  if (await page.evaluate(() => window.scrollY) < 100) throw new Error("navigation reset test page is not scrollable");
+  await page.getByTestId("mobile-nav").getByRole("link", { name: "总览" }).click();
+  await page.waitForURL(`${baseUrl}/`, { timeout: 10_000 });
+  await page.waitForTimeout(350);
+  const resetY = await page.evaluate(() => window.scrollY);
+  if (resetY > 1) throw new Error(`cross-route navigation retained scroll position ${resetY}px`);
+
+  const taskLink = page.locator(`a[href="/day/${day}#day-tasks"]`).first();
+  await taskLink.click();
+  await page.waitForURL(`${baseUrl}/day/${day}#day-tasks`, { timeout: 10_000 });
+  await assertHashTargetClear("#day-tasks", "home → today task anchor");
+
+  await page.goto(`${baseUrl}/settings`, { waitUntil: "networkidle" });
+  await page.locator('.settingsTabs a[href="#study"]').click();
+  await assertHashTargetClear("#study", "settings study anchor");
+  console.log("route reset and sticky-header anchor positioning passed");
+}
+
+async function auditStandaloneSafeArea() {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${baseUrl}/day/${day}`, { waitUntil: "networkidle" });
+  const metrics = await page.evaluate(() => {
+    const root = document.documentElement;
+    root.dataset.appMode = "standalone";
+    root.style.setProperty("--app-safe-top", "47px");
+    root.style.setProperty("--app-safe-right", "0px");
+    root.style.setProperty("--app-safe-bottom", "34px");
+    root.style.setProperty("--app-safe-left", "0px");
+    const nav = document.querySelector(".mobileNav");
+    const topbar = document.querySelector(".topbar");
+    const main = document.querySelector(".mainPane");
+    if (!nav || !topbar || !main) throw new Error("standalone shell is incomplete");
+    const navRect = nav.getBoundingClientRect();
+    const topbarRect = topbar.getBoundingClientRect();
+    const navStyle = getComputedStyle(nav);
+    const fillStyle = getComputedStyle(nav, "::after");
+    const result = {
+      navHeight: navRect.height,
+      navBottomGap: innerHeight - navRect.bottom,
+      navPaddingBottom: Number.parseFloat(navStyle.paddingBottom),
+      safeFillDisplay: fillStyle.display,
+      safeFillHeight: Number.parseFloat(fillStyle.height),
+      topbarHeight: topbarRect.height,
+      mainPaddingBottom: Number.parseFloat(getComputedStyle(main).paddingBottom),
+    };
+    root.style.removeProperty("--app-safe-top");
+    root.style.removeProperty("--app-safe-right");
+    root.style.removeProperty("--app-safe-bottom");
+    root.style.removeProperty("--app-safe-left");
+    delete root.dataset.appMode;
+    return result;
+  });
+  if (metrics.navHeight > 72 || metrics.navPaddingBottom > 8) {
+    throw new Error(`standalone nav double-counts safe area: ${JSON.stringify(metrics)}`);
+  }
+  if (Math.abs(metrics.navBottomGap - 34) > 1 || metrics.safeFillDisplay !== "block" || Math.abs(metrics.safeFillHeight - 34) > 1) {
+    throw new Error(`standalone home-indicator area is not continuously filled: ${JSON.stringify(metrics)}`);
+  }
+  if (Math.abs(metrics.topbarHeight - 105) > 1 || metrics.mainPaddingBottom < 116) {
+    throw new Error(`standalone shell does not clear safe areas: ${JSON.stringify(metrics)}`);
+  }
+  console.log("iPhone standalone safe-area geometry passed");
+}
+
+async function auditWeakPointDeepLink() {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${baseUrl}/analytics`, { waitUntil: "networkidle" });
+  const link = page.locator(".weakPointActionRow > a").first();
+  if (!(await link.count())) {
+    console.log("weak-point deep-link skipped (isolated data has no weak point)");
+    return;
+  }
+  await link.click();
+  await page.waitForURL(/\/subjects\/[^?]+\?focus=/, { timeout: 10_000 });
+  await expectVisible('[data-focus-target="true"]', "weak-point deep-link target");
+  await page.waitForTimeout(450);
+  const shell = await page.evaluate(() => {
+    const topbar = document.querySelector(".topbar")?.getBoundingClientRect();
+    const target = document.querySelector('[data-focus-target="true"]')?.getBoundingClientRect();
+    return { topbarTop: topbar?.top ?? -1, targetTop: target?.top ?? -1, targetBottom: target?.bottom ?? -1, viewportHeight: innerHeight };
+  });
+  if (Math.abs(shell.topbarTop) > 1 || shell.targetTop < 0 || shell.targetBottom > shell.viewportHeight) {
+    throw new Error(`weak-point transition produced unstable positioning: ${JSON.stringify(shell)}`);
+  }
+  const targetText = await page.locator('[data-focus-target="true"] .pointTitleView').textContent();
+  if (!targetText?.trim()) throw new Error("weak-point deep-link target has no title");
+  console.log("analytics weak-point deep-link passed");
+}
+
+async function assertHashTargetClear(selector, label) {
+  await page.waitForTimeout(350);
+  const geometry = await page.evaluate((targetSelector) => {
+    const target = document.querySelector(targetSelector)?.getBoundingClientRect();
+    const topbar = document.querySelector(".topbar")?.getBoundingClientRect();
+    return { targetTop: target?.top ?? -1, topbarBottom: topbar?.bottom ?? 0 };
+  }, selector);
+  if (geometry.targetTop < geometry.topbarBottom + 8) {
+    throw new Error(`${label}: target ${geometry.targetTop}px is hidden by topbar ending at ${geometry.topbarBottom}px`);
+  }
+}
+
+async function assertShellWithinViewport(label, width, height) {
+  const result = await page.evaluate(() => {
+    const rect = (selector) => {
+      const element = document.querySelector(selector);
+      if (!element || getComputedStyle(element).display === "none") return null;
+      const box = element.getBoundingClientRect();
+      return { left: box.left, right: box.right, top: box.top, bottom: box.bottom, width: box.width, height: box.height };
+    };
+    const topbarControls = Array.from(document.querySelectorAll(".topbar button, .topbar a"))
+      .filter((element) => getComputedStyle(element).display !== "none")
+      .map((element) => {
+        const box = element.getBoundingClientRect();
+        return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+      });
+    return { nav: rect(".mobileNav"), sidebar: rect(".sidebar"), topbar: rect(".topbar"), topbarControls };
+  });
+  for (const [name, rect] of Object.entries({ nav: result.nav, sidebar: result.sidebar, topbar: result.topbar })) {
+    if (!rect) continue;
+    if (rect.left < -1 || rect.right > width + 1 || rect.top < -1 || rect.bottom > height + 1) {
+      throw new Error(`${label}: ${name} escapes viewport ${JSON.stringify(rect)} in ${width}x${height}`);
+    }
+  }
+  const escapedControl = result.topbarControls.find((rect) => rect.left < -1 || rect.right > width + 1);
+  if (escapedControl) throw new Error(`${label}: topbar control escapes viewport ${JSON.stringify(escapedControl)}`);
 }
 
 async function auditMobileTaskLayout() {

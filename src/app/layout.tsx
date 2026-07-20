@@ -41,6 +41,7 @@ export const viewport: Viewport = {
 };
 
 const themeScript = `try{var d=document.documentElement;const t=localStorage.getItem('zgca-theme');if(t==='light'||t==='dark')d.dataset.theme=t;const s=localStorage.getItem('zgca-skin');if(['aurora','brutal','cloud','terminal'].includes(s))d.dataset.skin=s;
+if(matchMedia('(display-mode: standalone)').matches||navigator.standalone===true)d.dataset.appMode='standalone';
 var g=parseInt(localStorage.getItem('zgca-grid'));if(!isNaN(g))d.style.setProperty('--grid-alpha',String(Math.max(0,Math.min(100,g))/100));
 var z=localStorage.getItem('zgca-zoom');if(['0.9','1.1','1.25'].includes(z))d.style.setProperty('--ui-zoom',z);
 var lh=localStorage.getItem('zgca-lh');if(lh==='compact'||lh==='loose')d.dataset.lh=lh;

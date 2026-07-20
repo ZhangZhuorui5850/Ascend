@@ -13,10 +13,11 @@ import type { PointMoveTarget, Report, TreeControls } from "./shared";
  * 章节树的共享操作状态：折叠记忆（localStorage）、全局唯一拖拽负载（body data-dragging）、
  * 树结构写操作（嵌套/移动章节、移动知识点）串行互斥（treeBusy）。
  */
-export function useTreeControls({ subjectCode, report, focusChapter }: {
+export function useTreeControls({ subjectCode, report, focusChapter, focusPointId = null }: {
   subjectCode: string;
   report: Report;
   focusChapter: (id: string | null) => void;
+  focusPointId?: string | null;
 }): TreeControls {
   const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>({});
   const [drag, setDrag] = useState<DragPayload | null>(null);
@@ -105,5 +106,6 @@ export function useTreeControls({ subjectCode, report, focusChapter }: {
     movePointTo,
     treeBusy,
     focusChapter,
+    focusPointId,
   };
 }
