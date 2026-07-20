@@ -12,6 +12,8 @@
     "node": ">=24 <25"
   },
   "scripts": {
+    "ascend": "tsx scripts/ascend-cli.ts",
+    "mcp:ascend": "tsx scripts/ascend-mcp.ts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -36,13 +38,15 @@
     "@fullcalendar/interaction": "^6.1.21",
     "@fullcalendar/react": "^6.1.21",
     "@fullcalendar/timegrid": "^6.1.21",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@types/better-sqlite3": "^7.6.13",
     "better-sqlite3": "^12.11.1",
     "katex": "^0.17.0",
     "lucide-react": "^1.23.0",
     "next": "16.2.10",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^20",
@@ -52,6 +56,7 @@
     "eslint-config-next": "16.2.10",
     "playwright": "^1.61.1",
     "prettier": "^3.9.5",
+    "tsx": "^4.23.1",
     "typescript": "^5",
     "vitest": "^4.1.9"
   }

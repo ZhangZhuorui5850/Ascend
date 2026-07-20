@@ -13,6 +13,7 @@ import {
 } from "@/lib/repo/settings";
 import { requireWorkspace } from "@/lib/request-auth";
 import { revokeUserSession } from "@/lib/auth";
+import { createAgentToken, revokeAgentToken, type AgentTokenRow } from "@/lib/repo/agent-tokens";
 import type { ActionResult } from "./day";
 
 export async function saveSettingsAction(input: {
@@ -75,5 +76,29 @@ export async function revokeDeviceSessionAction(sessionId: string): Promise<Acti
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "退出设备失败" };
+  }
+}
+
+export async function createAgentTokenAction(input: {
+  name: string;
+}): Promise<ActionResult & { token?: string; record?: AgentTokenRow }> {
+  try {
+    const access = await requireWorkspace();
+    const created = createAgentToken(getDb(), access, input);
+    revalidatePath("/settings");
+    return { ok: true, ...created };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "创建 Agent 令牌失败" };
+  }
+}
+
+export async function revokeAgentTokenAction(tokenId: string): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    revokeAgentToken(getDb(), access, tokenId);
+    revalidatePath("/settings");
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "撤销 Agent 令牌失败" };
   }
 }

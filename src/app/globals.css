@@ -251,6 +251,33 @@ p {
   padding: 26px 30px 90px;
 }
 
+.icpFooter {
+  position: fixed;
+  right: 0;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  left: var(--sidebar-width);
+  z-index: 24;
+  display: flex;
+  justify-content: center;
+  padding-inline: 12px;
+  color: var(--quiet);
+  font-size: 11px;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.icpFooter a {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  pointer-events: auto;
+}
+
+.icpFooter a:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
 /* 收纳面板：宽屏为常驻右栏，窄屏为抽屉 */
 .capturePanel {
   position: sticky;
@@ -4928,6 +4955,77 @@ kbd {
   padding: var(--card-pad-lg);
 }
 
+.agentAccess {
+  grid-column: 1 / -1;
+  padding: var(--card-pad-lg);
+}
+
+.agentAccessIntro {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.agentTokenReveal {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: var(--warn-soft);
+}
+
+.agentTokenReveal strong {
+  grid-column: 1 / -1;
+  font-size: 12.5px;
+}
+
+.agentTokenReveal code {
+  overflow: auto;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.agentTokenReveal p,
+.agentTokenReveal pre {
+  grid-column: 1 / -1;
+}
+
+.agentTokenReveal p {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+}
+
+.agentTokenReveal pre {
+  margin: 0;
+  padding: 10px;
+  overflow-x: auto;
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+@media (max-width: 620px) {
+  .agentAccess .inlineCreate,
+  .agentTokenReveal {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agentAccess .inlineCreate {
+    display: grid;
+  }
+}
+
 .deviceList {
   display: grid;
   margin-top: 6px;
@@ -7566,6 +7664,15 @@ a,
 
   .appWorkspace {
     display: block;
+  }
+
+  .icpFooter {
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    left: 0;
+  }
+
+  body:has(.loginShell) .icpFooter {
+    bottom: max(8px, env(safe-area-inset-bottom));
   }
 
   .sidebar {

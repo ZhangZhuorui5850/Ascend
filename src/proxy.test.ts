@@ -35,6 +35,11 @@ describe("proxy", () => {
     expect(proxy(new NextRequest("http://localhost/api/health")).status).toBe(200);
   });
 
+  it("lets the MCP route perform its own Bearer authentication", async () => {
+    const { proxy } = await import("../proxy");
+    expect(proxy(new NextRequest("http://localhost/api/mcp", { method: "POST" })).status).toBe(200);
+  });
+
   it("returns 401 for private API routes without a session cookie", async () => {
     const { proxy } = await import("../proxy");
 

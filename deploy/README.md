@@ -28,7 +28,10 @@ docker compose -f compose.production.yml up -d
 docker compose -f compose.production.yml ps
 docker compose -f compose.production.yml logs --tail=100 app caddy
 curl -fsS https://ascend.zhuorui.me/api/health
+curl -i -X POST https://ascend.zhuorui.me/api/mcp
 ```
+
+第二条请求应返回 `401 Unauthorized`，证明远程 MCP 已上线且不会匿名开放。普通用户登录后可在「设置 → Agent」创建令牌；无需新增 Docker 服务或开放端口，Caddy 会把 `/api/mcp` 与其他 HTTPS 请求一起转发给 Next.js。
 
 Use different emails and different high-entropy passwords for the ordinary owner and Admin. Admin is a separate control-plane account and owns no learning workspace. After confirming the ordinary login and completing the forced first Admin password change, remove both bootstrap password variables (`APP_LOGIN_PASSWORD` and `APP_ADMIN_PASSWORD`) from `.env.production`; the password hashes are already in SQLite. Then recreate only the app container.
 
@@ -46,7 +49,10 @@ docker compose -f compose.production.yml build app
 docker compose -f compose.production.yml up -d
 docker compose -f compose.production.yml exec -T app node scripts/verify-workspace-migration.mjs
 curl -fsS https://ascend.zhuorui.me/api/health
+curl -i -X POST https://ascend.zhuorui.me/api/mcp
 ```
+
+升级后的 MCP 匿名检查仍应为 `401`。不要把用户 Agent 令牌写入 `.env.production`、日志或仓库。
 
 Never upgrade without a consistent database + uploads snapshot. The migration verifier must report `ok: true`, zero invalid workspace rows, and zero missing files.
 

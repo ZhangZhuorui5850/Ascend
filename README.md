@@ -6,6 +6,8 @@
 
 > 想直接运行命令：先看 [操作速查表](./QUICKSTART.md)。完整生产运维说明见 [deploy/README.md](./deploy/README.md)。
 
+Agent、MCP 与命令行接入见 [Ascend Agent Interface 手册](./docs/agent-interface.md)。
+
 ## 主要功能
 
 - `/onboarding`：四步设置学习目标、主线科目、每周投入、考试日期和复习额度。
@@ -17,7 +19,7 @@
 - `/mistakes`：错因分类、跨日两次通过的回炉流程。
 - `/mock-exams`：模考成绩、能力拆分、趋势和薄弱项分析。
 - `/analytics`：近七天统计、弱点优先级、模考摘要和科目进度。
-- `/settings`：账户、学习目标、科目、考试倒计时、复习上限、登录设备和外观。
+- `/settings`：账户、学习目标、科目、考试倒计时、复习上限、Agent 令牌、登录设备和外观。
 - `/admin`：用户邀请、账号状态、密码重置、容量、只读工作区和审计日志。
 - `/invite/[token]`：一次性邀请激活页面。
 
@@ -33,7 +35,7 @@
 
 ## 本地开发
 
-要求 Node.js 22。开发模式未配置 `APP_ADMIN_EMAIL` / `APP_ADMIN_PASSWORD` 时，空库会自动创建管理员账号 `admin`、初始密码 `666666`，首次登录必须修改密码。该默认账号不会在生产模式启用。
+要求 Node.js 24（与 `package.json` 的 `engines` 一致）。开发模式未配置 `APP_ADMIN_EMAIL` / `APP_ADMIN_PASSWORD` 时，空库会自动创建管理员账号 `admin`、初始密码 `666666`，首次登录必须修改密码。该默认账号不会在生产模式启用。
 
 如需同时引导创建普通账号，或覆盖开发管理员账号，请复制环境变量模板并设置普通账号与独立管理员账号；两个账号必须不同。
 
@@ -125,15 +127,17 @@ npm run responsive:audit
 - `src/app/`：页面、Server Actions 和 API 路由。
 - `src/components/`：工作台、导航、资料、设置和管理端组件。
 - `src/lib/repo/`：按业务域拆分的数据访问层，所有普通业务查询带工作区边界。
+- `src/lib/agent/`：MCP 与 CLI 共用的 Agent 身份解析、操作清单、安全规则和审计入口。
 - `src/lib/db.ts`、`src/lib/migrations.ts`：数据库初始化和版本化迁移。
 - `scripts/`：备份、迁移验证、冒烟测试、响应式审计和多用户隔离审计。
 - `proxy.ts`：请求入口的会话 cookie 检查；真实授权仍在页面、Action 和数据访问边界完成。
 - `compose.production.yml`、`deploy/`：腾讯云生产部署与 Caddy 配置。
 
-主要 API 包括文件上传与下载、头像读取和健康检查；写操作主要通过 `src/app/actions/` 中的 Server Actions 完成。
+主要 API 包括远程 MCP、文件上传与下载、头像读取和健康检查；网页写操作主要通过 `src/app/actions/` 中的 Server Actions 完成。
 
 ## 进一步阅读
 
 - [操作速查表](./QUICKSTART.md)
 - [Ubuntu 生产运维手册](./deploy/README.md)
+- [Ascend Agent Interface 手册](./docs/agent-interface.md)
 - [升级说明](./docs/UPGRADE_BRIEFING.md)

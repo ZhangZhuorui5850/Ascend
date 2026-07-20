@@ -1,4 +1,5 @@
 import { AccountSection } from "@/components/AccountSection";
+import { AgentAccessSection } from "@/components/AgentAccessSection";
 import { AppearanceSection } from "@/components/AppearanceSection";
 import { DisplaySection } from "@/components/DisplaySection";
 import { DeviceSessions } from "@/components/DeviceSessions";
@@ -12,6 +13,7 @@ import { requirePageWorkspace } from "@/lib/page-auth";
 import { getUserProfile } from "@/lib/repo/profile";
 import { getSubjects } from "@/lib/repo/knowledge";
 import { getSettings } from "@/lib/repo/settings";
+import { listAgentTokens } from "@/lib/repo/agent-tokens";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +25,10 @@ export default async function SettingsPage() {
   const sessions = listUserSessions(access.userId, db);
   const profile = getUserProfile(db, access.userId)!;
   const subjects = getSubjects(db, access);
+  const agentTokens = listAgentTokens(db, access.userId);
+  const mcpUrl = process.env.APP_DOMAIN
+    ? `https://${process.env.APP_DOMAIN}/api/mcp`
+    : "http://localhost:3000/api/mcp";
 
   return (
     <div className="pageStack">
@@ -34,6 +40,7 @@ export default async function SettingsPage() {
 
       <nav aria-label="设置分类" className="settingsTabs">
         <a href="#account">账户</a>
+        <a href="#agent">Agent</a>
         <a href="#study">学习</a>
         <a href="#modules">功能板块</a>
         <a href="#appearance">外观</a>
@@ -56,6 +63,11 @@ export default async function SettingsPage() {
             avatarVersion: profile.updatedAt,
           }}
         />
+      </section>
+
+      <section aria-label="Agent 接入设置" className="settingsGroup" id="agent">
+        <h2 className="settingsGroupTitle">Agent</h2>
+        <AgentAccessSection mcpUrl={mcpUrl} tokens={agentTokens} />
       </section>
 
       <section aria-label="学习设置" className="settingsGroup" id="study">

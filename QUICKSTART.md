@@ -28,6 +28,24 @@ npm run lint
 npm run build
 ```
 
+## Ascend CLI / MCP
+
+先确保目标普通账号至少登录过一次；多账号环境必须指定邮箱：
+
+```bash
+export ASCEND_AGENT_EMAIL=owner@example.com
+npm run ascend -- status --pretty
+npm run ascend -- task.list --from 2026-07-19 --to 2026-07-26 --pretty
+```
+
+列出全部操作：
+
+```bash
+npm run ascend -- tools
+```
+
+远程接入：登录 Ascend，打开「设置 → Agent」，创建令牌，然后直接复制页面给出的 `codex mcp add` 命令。Agent 会通过 MCP 自动读取工具说明。完整权限和操作表见 [Agent Interface 手册](./docs/agent-interface.md)。
+
 只想用生产模式在本机运行：
 
 ```powershell

@@ -1,0 +1,662 @@
+import type Database from "better-sqlite3";
+import { readFile, realpath, stat } from "node:fs/promises";
+import { basename, isAbsolute, relative, resolve, sep } from "node:path";
+import { z } from "zod";
+import { getUploadRoot } from "../db";
+import { assertDateKey, shiftDateKey, todayKey } from "../dates";
+import { writeAuditLog } from "../repo/admin";
+import { getDay, updateDayEntry } from "../repo/days";
+import {
+  createChapter,
+  createPoint,
+  createSubject,
+  deleteChapter,
+  deletePoint,
+  deleteSubject,
+  getSubjectDetail,
+  getSubjectOverviews,
+  getSubjects,
+  renameChapter,
+  renameSubject,
+  reparentChapter,
+  updatePoint,
+} from "../repo/knowledge";
+import {
+  createAssetFromUpload,
+  createFolder,
+  deleteAsset,
+  deleteFolder,
+  getExplorer,
+  getStorageUsage,
+  moveAsset,
+  moveFolder,
+  renameAsset,
+  renameFolder,
+  searchAssets,
+  updateAssetMetadata,
+} from "../repo/library";
+import { createMockExam, getMockExamDashboard } from "../repo/mock-exams";
+import {
+  addNote,
+  addTask,
+  deleteNote,
+  deleteTask,
+  listCalendarTasks,
+  scheduleTask,
+  toggleTask,
+  updateNote,
+  updateTask,
+} from "../repo/planner";
+import { createMistake, createReviewEvent, createStudySession, getMistakeBook } from "../repo/reviews";
+import { getHomeSnapshot, getLearningAnalytics } from "../repo/stats";
+import type { AgentContext } from "./context";
+
+type JsonObject = Record<string, unknown>;
+type OperationSchema = z.ZodType<JsonObject>;
+
+export type AgentRuntime = {
+  db: Database.Database;
+  context: AgentContext;
+};
+
+export type AgentOperation = {
+  id: string;
+  title: string;
+  description: string;
+  schema: OperationSchema;
+  readOnly: boolean;
+  destructive?: boolean;
+  asyncWrite?: boolean;
+  entityType?: string;
+  run: (runtime: AgentRuntime, input: JsonObject) => unknown | Promise<unknown>;
+};
+
+function defineOperation<Schema extends OperationSchema>(input: {
+  id: string;
+  title: string;
+  description: string;
+  schema: Schema;
+  readOnly: boolean;
+  destructive?: boolean;
+  asyncWrite?: boolean;
+  entityType?: string;
+  run: (runtime: AgentRuntime, input: z.infer<Schema>) => unknown | Promise<unknown>;
+}): AgentOperation {
+  return input as unknown as AgentOperation;
+}
+
+function requireConfirmation(confirm: boolean | undefined, label: string): void {
+  if (!confirm) throw new Error(`${label}属于破坏性操作；请明确传入 confirm=true`);
+}
+
+function ensureRange(from: string, to: string, maxDays = 366): void {
+  assertDateKey(from);
+  assertDateKey(to);
+  if (to < from) throw new Error("to 不能早于 from");
+  if (shiftDateKey(from, maxDays) < to) throw new Error(`查询范围不能超过 ${maxDays} 天`);
+}
+
+function resultEntityId(result: unknown, input: JsonObject): string | null {
+  if (result && typeof result === "object") {
+    const record = result as JsonObject;
+    for (const key of ["id", "path", "code", "assetId", "eventId"]) {
+      if (record[key] !== undefined && record[key] !== null) return String(record[key]);
+    }
+  }
+  for (const key of ["id", "path", "code", "assetId"]) {
+    if (input[key] !== undefined && input[key] !== null) return String(input[key]);
+  }
+  return null;
+}
+
+function allowedImportRoots(): string[] {
+  const configured = process.env.ASCEND_AGENT_IMPORT_ROOTS;
+  const cwd = resolve(/* turbopackIgnore: true */ process.cwd());
+  return (configured ? configured.split(",") : [cwd]).map((value) => resolve(value.trim())).filter(Boolean);
+}
+
+async function resolveImportPath(value: string): Promise<string> {
+  const candidate = await realpath(isAbsolute(value) ? value : resolve(/* turbopackIgnore: true */ process.cwd(), value));
+  const roots = await Promise.all(allowedImportRoots().map(async (root) => realpath(root).catch(() => root)));
+  const allowed = roots.some((root) => {
+    const child = relative(root, candidate);
+    return child === "" || (!child.startsWith(`..${sep}`) && child !== ".." && !isAbsolute(child));
+  });
+  if (!allowed) throw new Error("文件不在 ASCEND_AGENT_IMPORT_ROOTS 允许的目录中");
+  const info = await stat(candidate);
+  if (!info.isFile()) throw new Error("导入路径不是普通文件");
+  return candidate;
+}
+
+const date = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .describe("日期，YYYY-MM-DD");
+const tier = z.enum(["r", "y", "g"]);
+
+export const agentOperations: AgentOperation[] = [
+  defineOperation({
+    id: "status",
+    title: "Ascend Agent 状态",
+    description: "返回当前 Agent 身份、学习空间和运行配置，不返回凭据。",
+    schema: z.object({}),
+    readOnly: true,
+    run: ({ context }) => ({
+      user: { id: context.userId, email: context.email, displayName: context.displayName },
+      workspaceId: context.workspaceId,
+      today: todayKey(),
+      dataRoot: process.env.ZGCA_DATA_ROOT || "./data",
+      importRoots: allowedImportRoots(),
+      operationCount: agentOperations.length,
+    }),
+  }),
+  defineOperation({
+    id: "dashboard.get",
+    title: "获取学习仪表盘",
+    description: "读取指定日期的首页快照、七日分析和资料容量。",
+    schema: z.object({ date: date.optional() }),
+    readOnly: true,
+    run: ({ db, context }, input) => {
+      const day = input.date || todayKey();
+      return {
+        day,
+        home: getHomeSnapshot(db, context, day),
+        analytics: getLearningAnalytics(db, context, day),
+        storage: getStorageUsage(db, context),
+      };
+    },
+  }),
+  defineOperation({
+    id: "day.get",
+    title: "获取某日工作区",
+    description: "读取某日计划、日记、任务、随笔、复习、错题、资料与学习记录。",
+    schema: z.object({ date: date.optional(), reviewLimit: z.number().int().min(1).max(100).optional() }),
+    readOnly: true,
+    run: ({ db, context }, input) => getDay(db, context, input.date || todayKey(), { reviewLimit: input.reviewLimit }),
+  }),
+  defineOperation({
+    id: "day.update",
+    title: "更新某日日志",
+    description: "局部更新某日的计划、日记、总结、阻碍或明日计划；未提供字段保持不变。",
+    schema: z.object({
+      date,
+      plan: z.string().optional(),
+      diary: z.string().optional(),
+      summary: z.string().optional(),
+      blockers: z.string().optional(),
+      tomorrow: z.string().optional(),
+    }),
+    readOnly: false,
+    entityType: "daily_entry",
+    run: ({ db, context }, input) => {
+      const { date: day, ...fields } = input;
+      if (!Object.keys(fields).length) throw new Error("至少提供一个要更新的字段");
+      updateDayEntry(db, context, day, fields);
+      return { date: day, updatedFields: Object.keys(fields) };
+    },
+  }),
+  defineOperation({
+    id: "task.list",
+    title: "查询日程任务",
+    description: "按日期范围查询日历任务；默认只查今天，最多 366 天、500 条。",
+    schema: z.object({
+      from: date.optional(),
+      to: date.optional(),
+      includeDone: z.boolean().optional().default(true),
+    }),
+    readOnly: true,
+    run: ({ db, context }, input) => {
+      const from = input.from || todayKey();
+      const to = input.to || from;
+      ensureRange(from, to);
+      return listCalendarTasks(db, context)
+        .filter((task) => task.day >= from && task.day <= to && (input.includeDone || !task.done))
+        .slice(0, 500);
+    },
+  }),
+  defineOperation({
+    id: "task.create",
+    title: "创建日程任务",
+    description: "在指定日期创建任务，可设置科目、优先级、预计时长、开始时间和备注。",
+    schema: z.object({
+      day: date,
+      title: z.string().min(1),
+      subjectCode: z.string().optional(),
+      priority: z.number().int().min(1).max(3).optional(),
+      estimatedMinutes: z.number().int().min(5).max(480).optional(),
+      scheduledStart: z
+        .string()
+        .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+        .nullable()
+        .optional(),
+      notes: z.string().max(500).optional(),
+    }),
+    readOnly: false,
+    entityType: "task",
+    run: ({ db, context }, input) => addTask(db, context, input),
+  }),
+  defineOperation({
+    id: "task.update",
+    title: "更新日程任务",
+    description: "局部更新任务内容、完成状态或排期；传入 day 可跨日移动。",
+    schema: z.object({
+      id: z.number().int().positive(),
+      title: z.string().min(1).optional(),
+      subjectCode: z.string().nullable().optional(),
+      priority: z.number().int().min(1).max(3).optional(),
+      estimatedMinutes: z.number().int().min(5).max(480).optional(),
+      scheduledStart: z
+        .string()
+        .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+        .nullable()
+        .optional(),
+      notes: z.string().max(500).optional(),
+      day: date.optional(),
+      done: z.boolean().optional(),
+    }),
+    readOnly: false,
+    entityType: "task",
+    run: ({ db, context }, input) => {
+      const { id, day, done, ...fields } = input;
+      if (Object.keys(fields).length) updateTask(db, context, { id, ...fields });
+      if (day)
+        scheduleTask(db, context, {
+          id,
+          day,
+          scheduledStart: input.scheduledStart,
+          estimatedMinutes: input.estimatedMinutes,
+        });
+      if (done !== undefined) toggleTask(db, context, { id, done });
+      if (!Object.keys(fields).length && !day && done === undefined) throw new Error("至少提供一个要更新的字段");
+      return { id, updated: true };
+    },
+  }),
+  defineOperation({
+    id: "task.delete",
+    title: "删除日程任务",
+    description: "永久删除一个任务，必须明确确认。",
+    schema: z.object({ id: z.number().int().positive(), confirm: z.boolean() }),
+    readOnly: false,
+    destructive: true,
+    entityType: "task",
+    run: ({ db, context }, input) => {
+      requireConfirmation(input.confirm, "删除任务");
+      deleteTask(db, context, input.id);
+      return { id: input.id, deleted: true };
+    },
+  }),
+  defineOperation({
+    id: "note.manage",
+    title: "管理每日随笔",
+    description: "创建、更新或删除某日随笔；读取随笔请使用 day.get，删除必须明确确认。",
+    schema: z.discriminatedUnion("action", [
+      z.object({ action: z.literal("create"), day: date, content: z.string().min(1) }),
+      z.object({ action: z.literal("update"), id: z.number().int().positive(), content: z.string().min(1) }),
+      z.object({ action: z.literal("delete"), id: z.number().int().positive(), confirm: z.boolean() }),
+    ]),
+    readOnly: false,
+    destructive: true,
+    entityType: "day_note",
+    run: ({ db, context }, input) => {
+      if (input.action === "create") return addNote(db, context, input);
+      if (input.action === "update") {
+        updateNote(db, context, input);
+        return { id: input.id, updated: true };
+      }
+      requireConfirmation(input.confirm, "删除随笔");
+      deleteNote(db, context, input.id);
+      return { id: input.id, deleted: true };
+    },
+  }),
+  defineOperation({
+    id: "subject.list",
+    title: "查询科目",
+    description: "列出科目；可附带指定日期的掌握度、到期复习、资料和错题统计。",
+    schema: z.object({ withStats: z.boolean().optional().default(true), date: date.optional() }),
+    readOnly: true,
+    run: ({ db, context }, input) =>
+      input.withStats ? getSubjectOverviews(db, context, input.date || todayKey()) : getSubjects(db, context),
+  }),
+  defineOperation({
+    id: "subject.get",
+    title: "获取科目详情",
+    description: "读取一个科目的章节树、知识点、资料和错题。",
+    schema: z.object({ code: z.string().min(1) }),
+    readOnly: true,
+    run: ({ db, context }, input) => {
+      const result = getSubjectDetail(db, context, input.code);
+      if (!result) throw new Error("科目不存在");
+      return result;
+    },
+  }),
+  defineOperation({
+    id: "subject.manage",
+    title: "管理科目",
+    description: "创建或更新科目；删除会级联删除章节和知识点，必须明确确认。",
+    schema: z.discriminatedUnion("action", [
+      z.object({
+        action: z.literal("upsert"),
+        code: z.string().min(1),
+        name: z.string().min(1),
+        description: z.string().optional(),
+        track: z.enum(["written", "machine"]).optional(),
+      }),
+      z.object({
+        action: z.literal("update"),
+        code: z.string().min(1),
+        name: z.string().min(1),
+        description: z.string().optional(),
+        track: z.enum(["written", "machine"]).optional(),
+      }),
+      z.object({ action: z.literal("delete"), code: z.string().min(1), confirm: z.boolean() }),
+    ]),
+    readOnly: false,
+    destructive: true,
+    entityType: "subject",
+    run: ({ db, context }, input) => {
+      if (input.action === "upsert") return createSubject(db, context, input);
+      if (input.action === "update") {
+        renameSubject(db, context, input);
+        return { code: input.code, updated: true };
+      }
+      requireConfirmation(input.confirm, "删除科目");
+      deleteSubject(db, context, input.code);
+      return { code: input.code, deleted: true };
+    },
+  }),
+  defineOperation({
+    id: "chapter.manage",
+    title: "管理章节",
+    description: "创建、重命名、调整父章节或删除章节；删除必须明确确认。",
+    schema: z.discriminatedUnion("action", [
+      z.object({
+        action: z.literal("create"),
+        subjectCode: z.string().min(1),
+        title: z.string().min(1),
+        parentId: z.string().nullable().optional(),
+      }),
+      z.object({
+        action: z.literal("update"),
+        id: z.string().min(1),
+        title: z.string().min(1).optional(),
+        parentId: z.string().nullable().optional(),
+      }),
+      z.object({ action: z.literal("delete"), id: z.string().min(1), confirm: z.boolean() }),
+    ]),
+    readOnly: false,
+    destructive: true,
+    entityType: "chapter",
+    run: ({ db, context }, input) => {
+      if (input.action === "create") return createChapter(db, context, input);
+      if (input.action === "update") {
+        if (input.title !== undefined) renameChapter(db, context, { id: input.id, title: input.title });
+        if (input.parentId !== undefined) reparentChapter(db, context, { id: input.id, parentId: input.parentId });
+        if (input.title === undefined && input.parentId === undefined) throw new Error("至少提供 title 或 parentId");
+        return { id: input.id, updated: true };
+      }
+      requireConfirmation(input.confirm, "删除章节");
+      deleteChapter(db, context, input.id);
+      return { id: input.id, deleted: true };
+    },
+  }),
+  defineOperation({
+    id: "knowledge.manage",
+    title: "管理知识点",
+    description: "创建或更新知识点；删除会级联删除子知识点，必须明确确认。",
+    schema: z.discriminatedUnion("action", [
+      z.object({
+        action: z.literal("create"),
+        chapterId: z.string().nullable().optional(),
+        parentPointId: z.string().nullable().optional(),
+        title: z.string().min(1),
+        tier: tier.optional(),
+        exam: z.boolean().optional(),
+      }),
+      z.object({
+        action: z.literal("update"),
+        id: z.string().min(1),
+        title: z.string().optional(),
+        tier: tier.optional(),
+        exam: z.boolean().optional(),
+        mastery: z.number().min(0).max(100).optional(),
+        prompt: z.string().optional(),
+        answer: z.string().optional(),
+      }),
+      z.object({ action: z.literal("delete"), id: z.string().min(1), confirm: z.boolean() }),
+    ]),
+    readOnly: false,
+    destructive: true,
+    entityType: "knowledge_point",
+    run: ({ db, context }, input) => {
+      if (input.action === "create") return createPoint(db, context, input);
+      if (input.action === "update") {
+        updatePoint(db, context, input);
+        return { id: input.id, updated: true };
+      }
+      requireConfirmation(input.confirm, "删除知识点");
+      deletePoint(db, context, input.id);
+      return { id: input.id, deleted: true };
+    },
+  }),
+  defineOperation({
+    id: "library.list",
+    title: "浏览资料库",
+    description: "像文件管理器一样读取指定文件夹、子文件夹、文件和目录树。",
+    schema: z.object({ path: z.string().optional().default("") }),
+    readOnly: true,
+    run: ({ db, context }, input) => getExplorer(db, context, input.path),
+  }),
+  defineOperation({
+    id: "library.search",
+    title: "搜索资料库",
+    description: "按文件名、备注、分类、目录、科目、章节或知识点搜索资料，最多 100 条。",
+    schema: z.object({ query: z.string().min(1) }),
+    readOnly: true,
+    run: ({ db, context }, input) => searchAssets(db, context, input.query),
+  }),
+  defineOperation({
+    id: "folder.manage",
+    title: "管理资料文件夹",
+    description: "创建、重命名、移动或删除空文件夹；删除必须明确确认。",
+    schema: z.discriminatedUnion("action", [
+      z.object({ action: z.literal("create"), parentPath: z.string().optional().default(""), name: z.string().min(1) }),
+      z.object({ action: z.literal("rename"), path: z.string().min(1), name: z.string().min(1) }),
+      z.object({ action: z.literal("move"), path: z.string().min(1), newParentPath: z.string() }),
+      z.object({ action: z.literal("delete"), path: z.string().min(1), confirm: z.boolean() }),
+    ]),
+    readOnly: false,
+    destructive: true,
+    entityType: "folder",
+    run: ({ db, context }, input) => {
+      if (input.action === "create") return { path: createFolder(db, context, input) };
+      if (input.action === "rename") return { path: renameFolder(db, context, input) };
+      if (input.action === "move") return { path: moveFolder(db, context, input) };
+      requireConfirmation(input.confirm, "删除文件夹");
+      deleteFolder(db, context, input.path);
+      return { path: input.path, deleted: true };
+    },
+  }),
+  defineOperation({
+    id: "asset.import",
+    title: "导入本地资料",
+    description: "从允许目录导入本地文件；允许目录由 ASCEND_AGENT_IMPORT_ROOTS 控制。",
+    schema: z.object({
+      localPath: z.string().min(1),
+      day: date.optional(),
+      folderPath: z.string().optional(),
+      category: z.string().optional(),
+      note: z.string().optional(),
+      subjectCode: z.string().optional(),
+      chapterId: z.string().optional(),
+      knowledgePointIds: z.array(z.string()).max(100).optional(),
+    }),
+    readOnly: false,
+    asyncWrite: true,
+    entityType: "asset",
+    run: async ({ db, context }, input) => {
+      const filePath = await resolveImportPath(input.localPath);
+      const bytes = await readFile(filePath);
+      const file = new File([bytes], basename(filePath));
+      return createAssetFromUpload(db, context, { ...input, file, uploadRoot: getUploadRoot() });
+    },
+  }),
+  defineOperation({
+    id: "asset.manage",
+    title: "管理资料",
+    description: "重命名、移动、更新资料元数据或删除资料；删除必须明确确认。",
+    schema: z.discriminatedUnion("action", [
+      z.object({ action: z.literal("rename"), assetId: z.number().int().positive(), name: z.string().min(1) }),
+      z.object({ action: z.literal("move"), assetId: z.number().int().positive(), folderPath: z.string() }),
+      z.object({
+        action: z.literal("metadata"),
+        assetId: z.number().int().positive(),
+        day: date,
+        category: z.string(),
+        note: z.string(),
+        subjectCode: z.string().optional(),
+        chapterId: z.string().optional(),
+        knowledgePointIds: z.array(z.string()).max(100).optional(),
+      }),
+      z.object({ action: z.literal("delete"), assetId: z.number().int().positive(), confirm: z.boolean() }),
+    ]),
+    readOnly: false,
+    destructive: true,
+    entityType: "asset",
+    run: ({ db, context }, input) => {
+      if (input.action === "rename") renameAsset(db, context, input);
+      else if (input.action === "move") moveAsset(db, context, input);
+      else if (input.action === "metadata") updateAssetMetadata(db, context, input);
+      else {
+        requireConfirmation(input.confirm, "删除资料");
+        deleteAsset(db, context, input.assetId);
+        return { assetId: input.assetId, deleted: true };
+      }
+      return { assetId: input.assetId, updated: true };
+    },
+  }),
+  defineOperation({
+    id: "activity.record",
+    title: "记录学习活动",
+    description: "记录学习时段、错题、复习评分或模考；复习评分为 0-3。",
+    schema: z.discriminatedUnion("kind", [
+      z.object({
+        kind: z.literal("study"),
+        day: date,
+        title: z.string().min(1),
+        durationMinutes: z.number().int().min(0).optional(),
+        subjectCode: z.string().optional(),
+        knowledgePointId: z.string().optional(),
+        output: z.string().optional(),
+      }),
+      z.object({
+        kind: z.literal("mistake"),
+        day: date,
+        title: z.string().min(1),
+        cause: z.string().optional(),
+        causeCategory: z.string().optional(),
+        subjectCode: z.string().optional(),
+        knowledgePointId: z.string().optional(),
+      }),
+      z.object({
+        kind: z.literal("review"),
+        day: date,
+        knowledgePointId: z.string().optional(),
+        score: z.number().int().min(0).max(3),
+        note: z.string().optional(),
+        operationId: z.string().optional(),
+      }),
+      z.object({
+        kind: z.literal("mockExam"),
+        day: date,
+        name: z.string().min(1),
+        subjectCode: z.string().optional(),
+        score: z.number().min(0),
+        maxScore: z.number().positive(),
+        durationMinutes: z.number().int().min(0).optional(),
+        notes: z.string().optional(),
+        breakdown: z
+          .array(z.object({ label: z.string(), score: z.number(), maxScore: z.number().positive() }))
+          .optional(),
+      }),
+    ]),
+    readOnly: false,
+    entityType: "learning_activity",
+    run: ({ db, context }, input) => {
+      if (input.kind === "study") {
+        createStudySession(db, context, input);
+        return { recorded: true, kind: input.kind };
+      }
+      if (input.kind === "mistake") return { kind: input.kind, ...createMistake(db, context, input) };
+      if (input.kind === "review") return { kind: input.kind, ...createReviewEvent(db, context, input) };
+      return { kind: input.kind, ...createMockExam(db, context, input) };
+    },
+  }),
+  defineOperation({
+    id: "mistake.list",
+    title: "查询错题本",
+    description: "按指定日期划分到期、待处理和已毕业错题。",
+    schema: z.object({ date: date.optional() }),
+    readOnly: true,
+    run: ({ db, context }, input) => getMistakeBook(db, context, input.date || todayKey()),
+  }),
+  defineOperation({
+    id: "mock-exam.list",
+    title: "查询模考",
+    description: "读取模考记录、平均分、最好成绩、变化与薄弱项。",
+    schema: z.object({}),
+    readOnly: true,
+    run: ({ db, context }) => getMockExamDashboard(db, context),
+  }),
+];
+
+export function getAgentOperation(id: string): AgentOperation {
+  const operation = agentOperations.find((item) => item.id === id);
+  if (!operation) throw new Error(`未知操作：${id}`);
+  return operation;
+}
+
+export async function executeAgentOperation(
+  runtime: AgentRuntime,
+  operation: AgentOperation,
+  rawInput: unknown,
+): Promise<unknown> {
+  const input = operation.schema.parse(rawInput ?? {});
+  if (operation.readOnly) return operation.run(runtime, input);
+
+  if (operation.asyncWrite) {
+    const result = await operation.run(runtime, input);
+    writeAuditLog(runtime.db, {
+      actorUserId: runtime.context.userId,
+      targetUserId: runtime.context.userId,
+      action: `agent.${operation.id}`,
+      entityType: operation.entityType || "agent_operation",
+      entityId: resultEntityId(result, input),
+    });
+    return result;
+  }
+
+  return runtime.db.transaction(() => {
+    const result = operation.run(runtime, input);
+    if (result instanceof Promise) throw new Error(`操作 ${operation.id} 被错误标记为同步写操作`);
+    writeAuditLog(runtime.db, {
+      actorUserId: runtime.context.userId,
+      targetUserId: runtime.context.userId,
+      action: `agent.${operation.id}`,
+      entityType: operation.entityType || "agent_operation",
+      entityId: resultEntityId(result, input),
+    });
+    return result;
+  })();
+}
+
+export function operationManifest(operations: AgentOperation[] = agentOperations): Array<
+  Pick<AgentOperation, "id" | "title" | "description" | "readOnly" | "destructive">
+> {
+  return operations.map(({ id, title, description, readOnly, destructive }) => ({
+    id,
+    title,
+    description,
+    readOnly,
+    destructive: Boolean(destructive),
+  }));
+}

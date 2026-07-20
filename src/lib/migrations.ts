@@ -534,6 +534,28 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: "0017_agent_tokens",
+    sql: `
+      CREATE TABLE IF NOT EXISTS agent_tokens (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL DEFAULT '',
+        token_prefix TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        expires_at TEXT NOT NULL,
+        last_used_at TEXT,
+        revoked_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_agent_tokens_user
+        ON agent_tokens(user_id, revoked_at, expires_at);
+      CREATE INDEX IF NOT EXISTS idx_agent_tokens_hash
+        ON agent_tokens(token_hash);
+    `,
+  },
 ];
 
 function addColumnIfMissing(database: Database.Database, table: string, column: string, definition: string): void {

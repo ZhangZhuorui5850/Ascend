@@ -92,6 +92,11 @@ export default async function RootLayout({
           >
             {children}
           </AppShell>
+          <footer className="icpFooter">
+            <a href="https://beian.miit.gov.cn/" rel="noreferrer" target="_blank">
+              京ICP备2026044103号-1
+            </a>
+          </footer>
           <PwaLifecycle />
         </FeedbackProvider>
       </body>

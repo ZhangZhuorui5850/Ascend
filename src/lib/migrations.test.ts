@@ -116,6 +116,16 @@ describe("runMigrations", () => {
     expect(getAppliedMigrations(db)).toContain("0016_task_schedule");
   });
 
+  it("adds revocable Agent token storage", () => {
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    runMigrations(db);
+
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'agent_tokens'").get())
+      .toMatchObject({ name: "agent_tokens" });
+    expect(getAppliedMigrations(db)).toContain("0017_agent_tokens");
+  });
+
   it("assigns legacy domain rows to the legacy workspace", () => {
     const db = new Database(":memory:");
     initializeDatabase(db);
