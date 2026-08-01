@@ -51,3 +51,6 @@ next-env.d.ts
 
 # WorkBuddy tool data (internal, do not commit)
 .workbuddy/
+
+# 本地生成的参考文档（不入库）
+docs/feature-inventory.md
