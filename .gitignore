@@ -48,3 +48,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# WorkBuddy tool data (internal, do not commit)
+.workbuddy/
