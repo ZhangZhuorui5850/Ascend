@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { actionFailure } from "@/lib/action-failure";
 import { getDb } from "@/lib/db";
 import {
   createFolder,
@@ -18,7 +19,7 @@ import { requireWorkspace } from "@/lib/request-auth";
 import type { ActionResult } from "./day";
 
 function failure(error: unknown): ActionResult {
-  return { ok: false, error: error instanceof Error ? error.message : "操作失败" };
+  return actionFailure("library", error);
 }
 
 function revalidateLibrary() {

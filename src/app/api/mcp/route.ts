@@ -2,6 +2,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { createAscendMcpServer } from "@/lib/agent/mcp-server";
 import { getDb } from "@/lib/db";
 import { logError } from "@/lib/log";
+import { safeRecordOperationalEvent } from "@/lib/observability";
 import { authenticateAgentToken } from "@/lib/repo/agent-tokens";
 
 export const dynamic = "force-dynamic";
@@ -67,6 +68,7 @@ export async function POST(request: Request): Promise<Response> {
     return await transport.handleRequest(request, { parsedBody });
   } catch (error) {
     logError("mcp.http", error, { userId: context.userId });
+    safeRecordOperationalEvent(db, "mcp_failure");
     return jsonRpcError(500, "Ascend MCP request failed");
   }
 }

@@ -1,10 +1,13 @@
 import type Database from "better-sqlite3";
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import type { AccessContext, UserRole, UserStatus } from "./access-context";
+import { writeAuditLog } from "./audit";
 import { MAX_DEVICE_ACCOUNTS, SESSION_COOKIE, SESSIONS_COOKIE } from "./auth-constants";
 import { getDbHandle } from "./db";
+import { safeRecordOperationalEvent } from "./observability";
 import type { SealColor } from "./repo/profile";
 import { ensureWorkspaceForUser } from "./repo/workspaces";
+import { revokeAllCredentials } from "./security-credentials";
 
 export { MAX_DEVICE_ACCOUNTS, SESSION_COOKIE, SESSIONS_COOKIE };
 
@@ -134,7 +137,10 @@ export function authenticateUser(
   ensureBootstrapUsers(database);
   const normalizedEmail = email.trim().toLowerCase();
   const ipHint = input.ipHint || "";
-  if (isLoginRateLimited(database, normalizedEmail, ipHint)) return null;
+  if (isLoginRateLimited(database, normalizedEmail, ipHint)) {
+    safeRecordOperationalEvent(database, "login_failure", "rate_limited");
+    return null;
+  }
 
   const user = database.prepare("SELECT * FROM users WHERE email = ?").get(normalizedEmail) as UserRow | undefined;
   const succeeded = Boolean(user && user.status === "active" && verifyPassword(password, user.password_hash));
@@ -142,7 +148,10 @@ export function authenticateUser(
     INSERT INTO login_attempts (email_hint, ip_hint, succeeded)
     VALUES (?, ?, ?)
   `).run(normalizedEmail, ipHint, succeeded ? 1 : 0);
-  if (!succeeded || !user) return null;
+  if (!succeeded || !user) {
+    safeRecordOperationalEvent(database, "login_failure", "invalid_credentials");
+    return null;
+  }
 
   database.prepare("UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?").run(user.id);
   const workspace = database.prepare("SELECT id FROM workspaces WHERE owner_user_id = ?").get(user.id) as
@@ -236,7 +245,15 @@ export function changePassword(
           password_changed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(hashPassword(newPassword), userId);
-    database.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
+    const revoked = revokeAllCredentials(database, userId);
+    writeAuditLog(database, {
+      actorUserId: userId,
+      targetUserId: userId,
+      action: "password.changed",
+      entityType: "user",
+      entityId: userId,
+      summary: revoked,
+    });
   })();
 }
 

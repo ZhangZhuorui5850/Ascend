@@ -15,10 +15,10 @@ import { useFeedback } from "@/components/FeedbackProvider";
 import { PointRecallEditor } from "@/components/PointRecallEditor";
 import { RichText } from "@/components/RichText";
 import { useOptimisticValue } from "@/components/useOptimisticValue";
-import { MasteryCell } from "./MasteryCell";
+import { ConfidenceCell } from "./ConfidenceCell";
 import { TIER_OPTIONS, type Report } from "./shared";
 
-/** 单条知识点行：层级/星标/掌握度快捷编辑 + 展开后的资料、错题、复习记录详情 */
+/** 单条知识点行：层级/星标/主观信心快捷编辑 + 展开后的资料、错题、复习记录详情 */
 export function PointLine({ point, subjectCode, today, report, onAddChild, focused = false }: {
   point: PointRow;
   subjectCode: string;
@@ -182,7 +182,7 @@ export function PointLine({ point, subjectCode, today, report, onAddChild, focus
       >
         <Star fill={examView.value ? "currentColor" : "none"} size={13} />
       </button>
-      <MasteryCell point={point} report={report} subjectCode={subjectCode} />
+      <ConfidenceCell point={point} report={report} subjectCode={subjectCode} />
       <small className={due ? "pointDue due" : "pointDue"}>
         {due ? "待复习" : point.next_review ? `下次 ${point.next_review.slice(5)}` : "未排期"}
       </small>
@@ -216,7 +216,17 @@ export function PointLine({ point, subjectCode, today, report, onAddChild, focus
           <>
             <div className="pointTrainingAction">
               <div><span className="sectionKicker">NEXT ACTION</span><strong>针对训练</strong><small>创建 45 分钟 P1 训练，带回今日工作台执行。</small></div>
-              <CreateTrainingTaskButton compact day={today} notes={`知识点专项训练：${point.title}。完成后更新掌握度并记录回忆线索。`} subjectCode={subjectCode} title={`知识点专项：${point.title}`} />
+              <CreateTrainingTaskButton
+                compact
+                day={today}
+                knowledgePointId={point.id}
+                notes={`知识点专项训练：${point.title}。完成后进行一次无提示回忆并记录结果。`}
+                sourceId={point.id}
+                sourceType="knowledge_point"
+                subjectCode={subjectCode}
+                title={`知识点专项：${point.title}`}
+                verificationMethod="无提示回忆"
+              />
             </div>
             <PointRecallEditor point={point} report={report} subjectCode={subjectCode} />
             <div className="pointDetailCol">

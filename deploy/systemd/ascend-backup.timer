@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Ascend verified backup every day
+
+[Timer]
+OnCalendar=*-*-* 03:20:00 Asia/Shanghai
+Persistent=true
+RandomizedDelaySec=5m
+Unit=ascend-backup.service
+
+[Install]
+WantedBy=timers.target

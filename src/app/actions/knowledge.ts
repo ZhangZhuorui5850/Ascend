@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { actionFailure } from "@/lib/action-failure";
 import { getDb } from "@/lib/db";
 import {
   createChapter,
@@ -27,7 +28,7 @@ import type { Tier } from "@/lib/types";
 import type { ActionResult } from "./day";
 
 function failure(error: unknown): ActionResult {
-  return { ok: false, error: error instanceof Error ? error.message : "操作失败" };
+  return actionFailure("knowledge", error);
 }
 
 function revalidateKnowledge(subjectCode?: string) {
@@ -166,7 +167,7 @@ export async function updatePointAction(input: {
   title?: string;
   tier?: Tier;
   exam?: boolean;
-  mastery?: number;
+  selfConfidence?: number | null;
   prompt?: string;
   answer?: string;
   subjectCode: string;

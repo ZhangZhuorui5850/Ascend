@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { AgentContext } from "../agent/context";
 import type { AccessContext } from "../access-context";
-import { writeAuditLog } from "./admin";
+import { writeAuditLog } from "../audit";
 
 const TOKEN_PREFIX = "ascend_mcp_";
 const MAX_ACTIVE_TOKENS = 5;

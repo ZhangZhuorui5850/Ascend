@@ -130,9 +130,9 @@ export function SettingsForm({ initial, subjects }: { initial: AppSettings; subj
       </section>
 
       <section className="card settingsReviewCard" aria-label="复习节奏">
-        <div className="settingsSectionHead"><span><BookOpenCheck size={17} /></span><div><span className="sectionKicker">DAILY CAPACITY</span><h2>复习节奏</h2><p>设置每天能够稳定完成的主动回忆数量。</p></div></div>
-        <div className="settingsReviewPicker"><div role="group" aria-label="每日复习上限预设">{REVIEW_PRESETS.map((limit) => <button aria-pressed={reviewLimit === limit} className={reviewLimit === limit ? "active" : undefined} key={limit} onClick={() => setReviewLimit(limit)} type="button"><strong>{limit}</strong><span>知识点</span></button>)}</div><label><span>自定义上限</span><input aria-label="每日复习上限" min="1" max="100" onChange={(event) => setReviewLimit(Math.max(1, Math.min(100, Number(event.target.value) || 1)))} type="number" value={reviewLimit} /></label></div>
-        <p className="settingsReviewHint"><BookOpenCheck size={14} />到期数量超过 {reviewLimit} 个时，队列按优先级安排，其余项目进入积压恢复提示。</p>
+        <div className="settingsSectionHead"><span><BookOpenCheck size={17} /></span><div><span className="sectionKicker">DAILY CAPACITY</span><h2>复习节奏</h2><p>设置每天能够稳定完成的知识点复习与错题回炉总量。</p></div></div>
+        <div className="settingsReviewPicker"><div role="group" aria-label="每日复习上限预设">{REVIEW_PRESETS.map((limit) => <button aria-pressed={reviewLimit === limit} className={reviewLimit === limit ? "active" : undefined} key={limit} onClick={() => setReviewLimit(limit)} type="button"><strong>{limit}</strong><span>项</span></button>)}</div><label><span>自定义上限</span><input aria-label="每日复习上限" min="1" max="100" onChange={(event) => setReviewLimit(Math.max(1, Math.min(100, Number(event.target.value) || 1)))} type="number" value={reviewLimit} /></label></div>
+        <p className="settingsReviewHint"><BookOpenCheck size={14} />知识点与错题的到期总数超过 {reviewLimit} 项时，队列按优先级安排，其余项目进入积压恢复提示。</p>
       </section>
 
       {error ? <p className="formError">{error}</p> : null}

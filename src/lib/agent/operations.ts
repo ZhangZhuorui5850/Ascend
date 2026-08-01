@@ -4,7 +4,18 @@ import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import { z } from "zod";
 import { getUploadRoot } from "../db";
 import { assertDateKey, shiftDateKey, todayKey } from "../dates";
-import { writeAuditLog } from "../repo/admin";
+import { writeAuditLog } from "../audit";
+import { revealAlgorithmHint } from "../repo/algorithm-hints";
+import {
+  getAlgorithmLearningState,
+  resolveAlgorithmErrorCase,
+  saveAlgorithmReflection,
+} from "../repo/algorithm-learning";
+import {
+  createAlgorithmProblem,
+  getAlgorithmDashboard,
+  recordAlgorithmAttempt,
+} from "../repo/algorithms";
 import { getDay, updateDayEntry } from "../repo/days";
 import {
   createChapter,
@@ -70,7 +81,9 @@ import {
   updatePlannerTask,
 } from "../repo/planner-tasks";
 import { createMistake, createReviewEvent, createStudySession, getMistakeBook } from "../repo/reviews";
-import { getHomeSnapshot, getLearningAnalytics } from "../repo/stats";
+import { searchWorkspace } from "../repo/search";
+import { getSettings } from "../repo/settings";
+import { getHomeSnapshot, getLearningAnalytics, getWeeklyCapacity } from "../repo/stats";
 import type { AgentContext } from "./context";
 
 type JsonObject = Record<string, unknown>;
@@ -179,15 +192,20 @@ export const agentOperations: AgentOperation[] = [
   defineOperation({
     id: "dashboard.get",
     title: "获取学习仪表盘",
-    description: "读取指定日期的首页快照、七日分析和资料容量。",
+    description: "读取指定日期的首页快照、七日分析、日历周目标容量和资料容量。",
     schema: z.object({ date: date.optional() }),
     readOnly: true,
     run: ({ db, context }, input) => {
       const day = input.date || todayKey();
+      const settings = getSettings(db, context);
       return {
         day,
         home: getHomeSnapshot(db, context, day),
         analytics: getLearningAnalytics(db, context, day),
+        weeklyCapacity: getWeeklyCapacity(db, context, {
+          today: day,
+          targetMinutes: settings.weeklyMinutes,
+        }),
         storage: getStorageUsage(db, context),
       };
     },
@@ -235,15 +253,18 @@ export const agentOperations: AgentOperation[] = [
       const from = input.from || todayKey();
       const to = input.to || from;
       ensureRange(from, to);
-      return listCalendarTasks(db, context)
-        .filter((task) => task.day >= from && task.day <= to && (input.includeDone || !task.done))
-        .slice(0, 500);
+      return listCalendarTasks(db, context, {
+        from,
+        to,
+        includeDone: input.includeDone,
+        limit: 500,
+      });
     },
   }),
   defineOperation({
     id: "task.create",
     title: "创建日程任务",
-    description: "在指定日期创建任务，可设置科目、优先级、预计时长、开始时间和备注。",
+    description: "在指定日期创建任务，可关联知识点、活动类型、完成标准和来源。",
     schema: z.object({
       day: date,
       title: z.string().min(1),
@@ -256,6 +277,14 @@ export const agentOperations: AgentOperation[] = [
         .nullable()
         .optional(),
       notes: z.string().max(500).optional(),
+      knowledgePointId: z.string().nullable().optional(),
+      activityType: z
+        .enum(["unspecified", "study", "practice", "recall", "review", "mock", "mixed"])
+        .optional(),
+      completionCriteria: z.string().max(500).optional(),
+      sourceType: z.string().max(50).optional(),
+      sourceId: z.union([z.string(), z.number()]).optional(),
+      verificationMethod: z.string().max(200).optional(),
     }),
     readOnly: false,
     entityType: "task",
@@ -277,13 +306,38 @@ export const agentOperations: AgentOperation[] = [
         .nullable()
         .optional(),
       notes: z.string().max(500).optional(),
+      knowledgePointId: z.string().nullable().optional(),
+      activityType: z
+        .enum(["unspecified", "study", "practice", "recall", "review", "mock", "mixed"])
+        .optional(),
+      completionCriteria: z.string().max(500).optional(),
+      plannedVerificationMethod: z.string().max(200).optional(),
       day: date.optional(),
       done: z.boolean().optional(),
+      actualMinutes: z.number().int().min(1).max(1440).nullable().optional(),
+      completionOutput: z.string().max(1000).optional(),
+      verificationMethod: z.string().max(200).optional(),
+      verificationResult: z.string().max(200).optional(),
+      verificationOutcome: z.enum(["improved", "unchanged", "regressed", "unknown"]).optional(),
+      recordAsStudy: z.boolean().optional(),
+      scheduleRetestAfterDays: z.union([z.literal(1), z.literal(3), z.literal(7)]).optional(),
     }),
     readOnly: false,
     entityType: "task",
     run: ({ db, context }, input) => {
-      const { id, day, done, ...fields } = input;
+      const {
+        id,
+        day,
+        done,
+        actualMinutes,
+        completionOutput,
+        verificationMethod,
+        verificationResult,
+        verificationOutcome,
+        recordAsStudy,
+        scheduleRetestAfterDays,
+        ...fields
+      } = input;
       if (Object.keys(fields).length) updateTask(db, context, { id, ...fields });
       if (day)
         scheduleTask(db, context, {
@@ -292,8 +346,32 @@ export const agentOperations: AgentOperation[] = [
           scheduledStart: input.scheduledStart,
           estimatedMinutes: input.estimatedMinutes,
         });
-      if (done !== undefined) toggleTask(db, context, { id, done });
-      if (!Object.keys(fields).length && !day && done === undefined) throw new Error("至少提供一个要更新的字段");
+      if (done !== undefined) {
+        toggleTask(db, context, {
+          id,
+          done,
+          actualMinutes,
+          completionOutput,
+          verificationMethod,
+          verificationResult,
+          verificationOutcome,
+          recordAsStudy,
+          scheduleRetestAfterDays,
+        });
+      } else if (
+        actualMinutes !== undefined
+        || completionOutput !== undefined
+        || verificationMethod !== undefined
+        || verificationResult !== undefined
+        || verificationOutcome !== undefined
+        || recordAsStudy !== undefined
+        || scheduleRetestAfterDays !== undefined
+      ) {
+        throw new Error("完成证据只能在 done=true 时写入");
+      }
+      if (!Object.keys(fields).length && !day && done === undefined) {
+        throw new Error("至少提供一个要更新的字段");
+      }
       return { id, updated: true };
     },
   }),
@@ -729,7 +807,7 @@ export const agentOperations: AgentOperation[] = [
   defineOperation({
     id: "knowledge.manage",
     title: "管理知识点",
-    description: "创建或更新知识点；删除会级联删除子知识点，必须明确确认。",
+    description: "创建或更新知识点；selfConfidence 是主观信心，不会覆盖系统证据状态；删除会级联删除子知识点，必须明确确认。",
     schema: z.discriminatedUnion("action", [
       z.object({
         action: z.literal("create"),
@@ -745,6 +823,8 @@ export const agentOperations: AgentOperation[] = [
         title: z.string().optional(),
         tier: tier.optional(),
         exam: z.boolean().optional(),
+        selfConfidence: z.number().min(0).max(100).nullable().optional(),
+        /** @deprecated 兼容旧客户端；现在写入主观信心，不再覆盖系统证据指数。 */
         mastery: z.number().min(0).max(100).optional(),
         prompt: z.string().optional(),
         answer: z.string().optional(),
@@ -757,7 +837,10 @@ export const agentOperations: AgentOperation[] = [
     run: ({ db, context }, input) => {
       if (input.action === "create") return createPoint(db, context, input);
       if (input.action === "update") {
-        updatePoint(db, context, input);
+        updatePoint(db, context, {
+          ...input,
+          selfConfidence: input.selfConfidence !== undefined ? input.selfConfidence : input.mastery,
+        });
         return { id: input.id, updated: true };
       }
       requireConfirmation(input.confirm, "删除知识点");
@@ -766,12 +849,32 @@ export const agentOperations: AgentOperation[] = [
     },
   }),
   defineOperation({
+    id: "search.all",
+    title: "全局搜索",
+    description: "跨知识点、错题、任务、随笔和资料搜索当前学习空间，返回分组与深链。",
+    schema: z.object({
+      query: z.string().trim().min(1).max(80),
+      perKindLimit: z.number().int().min(1).max(10).optional(),
+    }),
+    readOnly: true,
+    run: ({ db, context }, input) => searchWorkspace(db, context, input.query, {
+      perKindLimit: input.perKindLimit,
+    }),
+  }),
+  defineOperation({
     id: "library.list",
     title: "浏览资料库",
-    description: "像文件管理器一样读取指定文件夹、子文件夹、文件和目录树。",
-    schema: z.object({ path: z.string().optional().default("") }),
+    description: "像文件管理器一样读取指定文件夹、子文件夹、分页文件和目录树。",
+    schema: z.object({
+      path: z.string().optional().default(""),
+      page: z.number().int().min(1).optional(),
+      pageSize: z.number().int().min(1).max(200).optional(),
+    }),
     readOnly: true,
-    run: ({ db, context }, input) => getExplorer(db, context, input.path),
+    run: ({ db, context }, input) => getExplorer(db, context, input.path, {
+      page: input.page,
+      pageSize: input.pageSize,
+    }),
   }),
   defineOperation({
     id: "library.search",
@@ -864,7 +967,7 @@ export const agentOperations: AgentOperation[] = [
   defineOperation({
     id: "activity.record",
     title: "记录学习活动",
-    description: "记录学习时段、错题、复习评分或模考；复习评分为 0-3。",
+    description: "记录学习时段、错题、复习或模考；模考题组证据与主观考后感受使用不同证据类型。",
     schema: z.discriminatedUnion("kind", [
       z.object({
         kind: z.literal("study"),
@@ -891,6 +994,10 @@ export const agentOperations: AgentOperation[] = [
         score: z.number().int().min(0).max(3),
         note: z.string().optional(),
         operationId: z.string().optional(),
+        attemptMode: z.enum(["typed", "paper", "oral"]).optional(),
+        attemptText: z.string().max(1000).optional(),
+        attemptDurationSeconds: z.number().int().min(0).max(86400).optional(),
+        preConfidence: z.number().int().min(0).max(3).optional(),
       }),
       z.object({
         kind: z.literal("mockExam"),
@@ -900,10 +1007,24 @@ export const agentOperations: AgentOperation[] = [
         score: z.number().min(0),
         maxScore: z.number().positive(),
         durationMinutes: z.number().int().min(0).optional(),
+        scopeLabel: z.string().max(80).optional(),
+        difficulty: z.enum(["foundation", "standard", "challenge"]).optional(),
         notes: z.string().optional(),
         breakdown: z
-          .array(z.object({ label: z.string(), score: z.number(), maxScore: z.number().positive() }))
+          .array(z.object({
+            label: z.string().min(1).max(40),
+            score: z.number().min(0),
+            maxScore: z.number().positive(),
+            evidenceType: z.enum(["group", "self_assessment"]).optional(),
+            knowledgePointId: z.string().max(120).nullable().optional(),
+            questionType: z.string().max(60).optional(),
+            durationMinutes: z.number().int().min(0).max(1440).nullable().optional(),
+            causeCategory: z.string().max(60).optional(),
+            guessedCorrect: z.boolean().nullable().optional(),
+          }))
           .optional(),
+        diagnosisComplete: z.boolean().optional(),
+        evidenceComplete: z.boolean().optional(),
       }),
     ]),
     readOnly: false,
@@ -917,6 +1038,103 @@ export const agentOperations: AgentOperation[] = [
       if (input.kind === "review") return { kind: input.kind, ...createReviewEvent(db, context, input) };
       return { kind: input.kind, ...createMockExam(db, context, input) };
     },
+  }),
+  defineOperation({
+    id: "algorithm.dashboard",
+    title: "读取算法训练",
+    description: "读取算法题、有效尝试、到期复测与证据状态；扩展未启用时拒绝。",
+    schema: z.object({ date: date.optional() }),
+    readOnly: true,
+    run: ({ db, context }, input) => getAlgorithmDashboard(
+      db,
+      context,
+      input.date || todayKey(),
+    ),
+  }),
+  defineOperation({
+    id: "algorithm.problem.create",
+    title: "收录外部算法题",
+    description: "保存用户提供的 HTTP(S) 题目链接和元数据；不抓取题面、账号或提交历史。",
+    schema: z.object({
+      sourceUrl: z.string().url().max(2_000),
+      title: z.string().min(1).max(160),
+      externalProblemId: z.string().max(120).optional(),
+      difficultyBand: z.enum(["foundation", "standard", "challenge"]).optional(),
+      tags: z.array(z.string().max(40)).max(12).optional(),
+      notes: z.string().max(2_000).optional(),
+    }),
+    readOnly: false,
+    entityType: "algorithm_problem",
+    run: ({ db, context }, input) => createAlgorithmProblem(db, context, input),
+  }),
+  defineOperation({
+    id: "algorithm.attempt.record",
+    title: "记录外部算法结果",
+    description: "记录用户主动报告的外部平台结果；不会标记为 provider 验证。",
+    schema: z.object({
+      problemId: z.number().int().positive(),
+      day: date,
+      verdict: z.enum(["AC", "WA", "CE", "TLE", "MLE", "RE", "OTHER"]),
+      durationMinutes: z.number().int().min(0).max(1_440).optional(),
+      maxHintLevel: z.number().int().min(0).max(4).optional(),
+      preConfidence: z.number().int().min(0).max(3).nullable().optional(),
+      reviewKind: z.enum(["initial", "original_retest", "isomorphic_variant", "unseen_variant"]).optional(),
+      transferSourceProblemId: z.number().int().positive().nullable().optional(),
+      errorCategory: z.string().max(80).optional(),
+      reflection: z.string().max(2_000).optional(),
+    }),
+    readOnly: false,
+    entityType: "algorithm_attempt",
+    run: ({ db, context }, input) => recordAlgorithmAttempt(db, context, input),
+  }),
+  defineOperation({
+    id: "algorithm.hint.reveal",
+    title: "揭示算法提示",
+    description: "按 L1-L4 顺序揭示一个提示并写入权威提示证据；高阶提示会影响独立完成判定。",
+    schema: z.object({
+      problemId: z.number().int().positive(),
+      sessionId: z.string().regex(/^[A-Za-z0-9:_-]{8,160}$/),
+      level: z.number().int().min(1).max(4),
+    }),
+    readOnly: false,
+    entityType: "algorithm_hint",
+    run: ({ db, context }, input) => revealAlgorithmHint(db, context, input),
+  }),
+  defineOperation({
+    id: "algorithm.learning.get",
+    title: "读取算法复盘",
+    description: "读取一次正式训练的结构化复盘和聚合错误案例，不返回源码。",
+    schema: z.object({ attemptId: z.number().int().positive() }),
+    readOnly: true,
+    run: ({ db, context }, input) => getAlgorithmLearningState(db, context, input.attemptId),
+  }),
+  defineOperation({
+    id: "algorithm.reflection.save",
+    title: "保存算法复盘",
+    description: "保存错误类别、纠正规则、时空复杂度与迁移要点，不读取或记录源码。",
+    schema: z.object({
+      attemptId: z.number().int().positive(),
+      errorCategory: z.string().max(80).optional(),
+      correctionRule: z.string().max(2_000).optional(),
+      complexityTime: z.string().max(120).optional(),
+      complexitySpace: z.string().max(120).optional(),
+      takeaway: z.string().max(2_000).optional(),
+    }),
+    readOnly: false,
+    entityType: "algorithm_reflection",
+    run: ({ db, context }, input) => saveAlgorithmReflection(db, context, input),
+  }),
+  defineOperation({
+    id: "algorithm.error-case.resolve",
+    title: "处理算法错误案例",
+    description: "把同一会话聚合后的候选错误案例确认进入错题本，或明确忽略；确认前必须已有纠正规则。",
+    schema: z.object({
+      attemptId: z.number().int().positive(),
+      decision: z.enum(["confirm", "dismiss"]),
+    }),
+    readOnly: false,
+    entityType: "algorithm_error_case",
+    run: ({ db, context }, input) => resolveAlgorithmErrorCase(db, context, input),
   }),
   defineOperation({
     id: "mistake.list",

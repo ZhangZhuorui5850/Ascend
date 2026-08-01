@@ -13,6 +13,17 @@ function task(overrides: Partial<DayTask> & { id: number }): DayTask {
     estimated_minutes: 30,
     scheduled_start: null,
     notes: "",
+    knowledge_point_id: null,
+    activity_type: "unspecified",
+    completion_criteria: "",
+    source_type: "",
+    source_id: "",
+    actual_minutes: null,
+    completion_output: "",
+    planned_verification_method: "",
+    verification_method: "",
+    verification_result: "",
+    verification_outcome: "",
     ...overrides,
   };
 }

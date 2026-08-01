@@ -43,7 +43,7 @@ export default async function SubjectsPage() {
                   </div>
                   <div className="subjectCardMeta">
                     <span>{subject.masteredCount}/{subject.pointCount} 已掌握</span>
-                    <span>均值 {subject.avgMastery}</span>
+                    <span>{subject.dueCount ? `${subject.dueCount} 项到期` : "当前无到期"}</span>
                   </div>
                   <div className="subjectCardFlags">
                     {subject.dueCount ? <em className="flag due">{subject.dueCount} 待复习</em> : null}

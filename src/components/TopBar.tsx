@@ -17,6 +17,8 @@ const routeTitles: Array<[RegExp, string, string]> = [
   [/^\/assets/, "资料库", "文件与关联"],
   [/^\/mistakes/, "错题本", "回炉与毕业"],
   [/^\/mock-exams/, "模考", "成绩与冲刺"],
+  [/^\/practice\/algorithms/, "算法训练", "独立作答与延迟复测"],
+  [/^\/extensions/, "扩展中心", "能力、权限与连接"],
   [/^\/analytics/, "统计", "趋势与弱点"],
   [/^\/settings/, "设置", "偏好与目标"],
   [/^\/admin\/users\//, "用户详情", "Admin"],

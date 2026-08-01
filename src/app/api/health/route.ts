@@ -1,5 +1,6 @@
 import { accessSync, constants, mkdirSync, statSync, statfsSync } from "node:fs";
 import path from "node:path";
+import { getBackupFreshness, type BackupFreshness } from "@/lib/backup-status";
 import { getDataRoot, getDb, getUploadRoot } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ type HealthPayload = {
   diskFreeBytes: number | null;
   walBytes: number | null;
   uploadsWritable: boolean;
+  backup: BackupFreshness;
 };
 
 function minFreeBytes(): number {
@@ -61,11 +63,15 @@ export function GET() {
     walBytes = null;
   }
 
-  const payload: HealthPayload = { status: "ok", db, diskFreeBytes, walBytes, uploadsWritable };
+  const backup = getBackupFreshness();
+  const payload: HealthPayload = { status: "ok", db, diskFreeBytes, walBytes, uploadsWritable, backup };
   if (db !== "ok") return healthResponse({ ...payload, status: "unavailable" }, 503);
   if (diskFreeBytes !== null && diskFreeBytes < minFreeBytes()) {
     return healthResponse({ ...payload, status: "low_disk" }, 503);
   }
   if (!uploadsWritable) return healthResponse({ ...payload, status: "uploads_readonly" }, 503);
+  if (process.env.ZGCA_REQUIRE_FRESH_BACKUP === "1" && backup.status !== "fresh") {
+    return healthResponse({ ...payload, status: "backup_unverified_or_stale" }, 503);
+  }
   return healthResponse(payload);
 }

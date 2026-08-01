@@ -109,6 +109,179 @@ describe("day tasks", () => {
     expect(() => updateTask(db, legacyScope, { id: task.id, estimatedMinutes: 2 })).toThrow("预计时长");
   });
 
+  it("links a task to learning intent and stores optional completion evidence separately", () => {
+    const db = createTestDb();
+    seedSubjectWithChapter(db);
+    const task = addTask(db, legacyScope, {
+      day: "2026-07-09",
+      title: "矩阵乘法专项",
+      knowledgePointId: "kp1",
+      activityType: "practice",
+      completionCriteria: "独立完成 20 题并订正",
+      sourceType: "weak_point",
+      sourceId: "kp1",
+      verificationMethod: "闭卷小测",
+    });
+
+    expect(task).toMatchObject({
+      subject_code: "M1",
+      knowledge_point_id: "kp1",
+      activity_type: "practice",
+      completion_criteria: "独立完成 20 题并订正",
+      source_type: "weak_point",
+      source_id: "kp1",
+      planned_verification_method: "闭卷小测",
+      verification_method: "",
+      actual_minutes: null,
+      completion_output: "",
+    });
+
+    toggleTask(db, legacyScope, {
+      id: task.id,
+      done: true,
+      actualMinutes: 52,
+      completionOutput: "完成 20 题，错 2 题并订正",
+      verificationMethod: "闭卷小测",
+      verificationResult: "8/10",
+      recordAsStudy: true,
+    });
+    expect(listTasks(db, legacyScope, "2026-07-09")[0]).toMatchObject({
+      done: 1,
+      actual_minutes: 52,
+      completion_output: "完成 20 题，错 2 题并订正",
+      verification_method: "闭卷小测",
+      verification_result: "8/10",
+    });
+    expect(db.prepare(`
+      SELECT task_id, subject_code, knowledge_point_id, duration_minutes, output
+      FROM study_sessions
+      WHERE workspace_id = ? AND task_id = ?
+    `).get(legacyScope.workspaceId, task.id)).toEqual({
+      task_id: task.id,
+      subject_code: "M1",
+      knowledge_point_id: "kp1",
+      duration_minutes: 52,
+      output: "完成 20 题，错 2 题并订正",
+    });
+
+    toggleTask(db, legacyScope, {
+      id: task.id,
+      done: true,
+      actualMinutes: 55,
+      completionOutput: "补做 3 题",
+      recordAsStudy: true,
+    });
+    expect(db.prepare(`
+      SELECT COUNT(*) AS count, duration_minutes, output
+      FROM study_sessions
+      WHERE workspace_id = ? AND task_id = ?
+    `).get(legacyScope.workspaceId, task.id)).toEqual({
+      count: 1,
+      duration_minutes: 55,
+      output: "补做 3 题",
+    });
+
+    toggleTask(db, legacyScope, { id: task.id, done: false });
+    expect(listTasks(db, legacyScope, "2026-07-09")[0]).toMatchObject({
+      done: 0,
+      actual_minutes: 55,
+      completion_output: "补做 3 题",
+    });
+    expect(() => addTask(db, legacyScope, {
+      day: "2026-07-09",
+      title: "跨空间知识点",
+      knowledgePointId: "missing",
+    })).toThrow("知识点不存在");
+    expect(() => toggleTask(db, legacyScope, {
+      id: task.id,
+      done: true,
+      recordAsStudy: true,
+    })).toThrow("填写实际时长");
+
+    deleteTask(db, legacyScope, task.id);
+    expect(db.prepare(`
+      SELECT task_id FROM study_sessions
+      WHERE workspace_id = ? AND title = '矩阵乘法专项'
+    `).get(legacyScope.workspaceId)).toEqual({ task_id: null });
+  });
+
+  it("schedules one traceable short retest and records a structured improvement outcome", () => {
+    const db = createTestDb();
+    seedSubjectWithChapter(db);
+    const training = addTask(db, legacyScope, {
+      day: "2026-07-09",
+      title: "矩阵乘法专项",
+      knowledgePointId: "kp1",
+      activityType: "practice",
+      sourceType: "mock_exam",
+      sourceId: 7,
+      verificationMethod: "同类小测",
+    });
+
+    const first = toggleTask(db, legacyScope, {
+      id: training.id,
+      done: true,
+      actualMinutes: 40,
+      completionOutput: "完成 15 题",
+      scheduleRetestAfterDays: 3,
+    });
+    expect(first.retestDay).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const retest = db.prepare(`
+      SELECT id, title, knowledge_point_id, source_type, source_id, planned_verification_method
+      FROM day_tasks
+      WHERE workspace_id = ? AND source_type = 'training_retest'
+    `).get(legacyScope.workspaceId) as {
+      id: number;
+      title: string;
+      knowledge_point_id: string;
+      source_type: string;
+      source_id: string;
+      planned_verification_method: string;
+    };
+    expect(retest).toMatchObject({
+      title: "短复测：矩阵乘法专项",
+      knowledge_point_id: "kp1",
+      source_type: "training_retest",
+      source_id: String(training.id),
+      planned_verification_method: "同类小测",
+    });
+    expect(() => toggleTask(db, legacyScope, {
+      id: retest.id,
+      done: true,
+      actualMinutes: 10,
+      completionOutput: "完成复测",
+    })).toThrow("需记录相对训练前的改善结论");
+
+    toggleTask(db, legacyScope, {
+      id: training.id,
+      done: true,
+      scheduleRetestAfterDays: 3,
+    });
+    expect(db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM day_tasks
+      WHERE workspace_id = ? AND source_type = 'training_retest' AND source_id = ?
+    `).get(legacyScope.workspaceId, String(training.id))).toEqual({ count: 1 });
+
+    toggleTask(db, legacyScope, {
+      id: retest.id,
+      done: true,
+      actualMinutes: 12,
+      completionOutput: "独立完成 8/10",
+      verificationOutcome: "improved",
+    });
+    expect(db.prepare(`
+      SELECT verification_outcome
+      FROM day_tasks
+      WHERE workspace_id = ? AND id = ?
+    `).get(legacyScope.workspaceId, retest.id)).toEqual({ verification_outcome: "improved" });
+    expect(() => toggleTask(db, legacyScope, {
+      id: retest.id,
+      done: true,
+      scheduleRetestAfterDays: 1,
+    })).toThrow("训练任务才能安排复测");
+  });
+
   it("reschedules tasks across days and exposes the calendar projection", () => {
     const db = createTestDb();
     const task = addTask(db, legacyScope, { day: "2026-07-09", title: "专项训练" });
@@ -126,7 +299,10 @@ describe("day tasks", () => {
       scheduled_start: "14:00",
       estimated_minutes: 60,
     });
-    expect(listCalendarTasks(db, legacyScope).map((item) => item.id)).toContain(task.id);
+    expect(listCalendarTasks(db, legacyScope, {
+      from: "2026-07-10",
+      to: "2026-07-10",
+    }).map((item) => item.id)).toContain(task.id);
   });
 
   it("projects a completely unscheduled Planner task without crashing Calendar sorting", () => {
@@ -150,6 +326,25 @@ describe("day tasks", () => {
     toggleTask(db, legacyScope, { id: a.id, done: true });
 
     expect(listTasks(db, legacyScope, "2026-07-09").map((task) => task.title)).toEqual(["A", "B"]);
+  });
+
+  it("bounds calendar task reads in SQL and can exclude completed rows", () => {
+    const db = createTestDb();
+    addTask(db, legacyScope, { day: "2026-07-01", title: "范围外" });
+    const open = addTask(db, legacyScope, { day: "2026-07-10", title: "范围内未完成" });
+    const done = addTask(db, legacyScope, { day: "2026-07-11", title: "范围内已完成" });
+    toggleTask(db, legacyScope, { id: done.id, done: true });
+
+    expect(listCalendarTasks(db, legacyScope, {
+      from: "2026-07-10",
+      to: "2026-07-11",
+      includeDone: false,
+      limit: 500,
+    }).map((task) => task.id)).toEqual([open.id]);
+    expect(() => listCalendarTasks(db, legacyScope, {
+      from: "2026-01-01",
+      to: "2027-01-03",
+    })).toThrow("366 天");
   });
 
   it("carries open tasks over to another day", () => {
@@ -207,12 +402,14 @@ describe("settings", () => {
 });
 
 describe("study streak", () => {
-  it("counts consecutive active days and tolerates an idle today", () => {
+  it("counts only consecutive learning-evidence days and tolerates an idle today", () => {
     const db = createTestDb();
     db.prepare("INSERT INTO study_sessions (day, title, duration_minutes) VALUES ('2026-07-08', 'a', 30)").run();
     db.prepare("INSERT INTO review_events (day, score) VALUES ('2026-07-07', 2)").run();
-    const doneTask = addTask(db, legacyScope, { day: "2026-07-06", title: "task" });
-    toggleTask(db, legacyScope, { id: doneTask.id, done: true });
+    db.prepare(`
+      INSERT INTO mock_exams (workspace_id, day, name, score, max_score)
+      VALUES (?, '2026-07-06', '模拟卷', 80, 100)
+    `).run(LEGACY_WORKSPACE_ID);
 
     // 今天没学：从昨天起连续 3 天。
     expect(getStudyStreak(db, legacyScope, "2026-07-09")).toBe(3);
@@ -222,6 +419,18 @@ describe("study streak", () => {
 
     // 断档一天则重新计数。
     expect(getStudyStreak(db, legacyScope, "2026-07-11")).toBe(0);
+  });
+
+  it("does not let completed tasks or uploaded assets maintain a learning streak", () => {
+    const db = createTestDb();
+    const doneTask = addTask(db, legacyScope, { day: "2026-07-08", title: "只完成打卡任务" });
+    toggleTask(db, legacyScope, { id: doneTask.id, done: true });
+    db.prepare(`
+      INSERT INTO assets (day, original_name, safe_name, relative_path)
+      VALUES ('2026-07-09', '讲义.pdf', 'lecture.pdf', 'lecture.pdf')
+    `).run();
+
+    expect(getStudyStreak(db, legacyScope, "2026-07-09")).toBe(0);
   });
 });
 

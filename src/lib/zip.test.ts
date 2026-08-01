@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { crc32, createZip } from "./zip";
+import { crc32, createZip, createZipStream } from "./zip";
 
 const MODIFIED_AT = new Date("2026-07-18T08:30:00Z");
 
@@ -142,5 +142,112 @@ describe("createZip", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("createZipStream", () => {
+  it("streams data-descriptor entries accepted by an independent unzip implementation", async () => {
+    const probe = spawnSync("python3", ["-c", "import zipfile"], { stdio: "ignore" });
+    if (probe.error || probe.status !== 0) return;
+
+    async function* chunkedFile() {
+      yield Buffer.from("分块");
+      yield Buffer.from("附件");
+    }
+    const stream = createZipStream(
+      [
+        { name: "data.json", data: '{"streamed":true}' },
+        { name: "assets/大文件.txt", expectedSize: Buffer.byteLength("分块附件"), stream: chunkedFile },
+      ],
+      { modifiedAt: MODIFIED_AT },
+    );
+    const zip = Buffer.from(await new Response(stream).arrayBuffer());
+    const dir = mkdtempSync(path.join(tmpdir(), "ascend-stream-zip-"));
+    try {
+      const zipPath = path.join(dir, "stream.zip");
+      writeFileSync(zipPath, zip);
+      const result = spawnSync("python3", ["-c", [
+        "import json, sys, zipfile",
+        "zf = zipfile.ZipFile(sys.argv[1])",
+        "assert zf.testzip() is None",
+        "assert json.loads(zf.read('data.json')) == {'streamed': True}",
+        "assert zf.read('assets/\\u5927\\u6587\\u4ef6.txt').decode('utf-8') == '\\u5206\\u5757\\u9644\\u4ef6'",
+        "assert all(info.flag_bits & 0x08 for info in zf.infolist())",
+        "print('ok')",
+      ].join("\n"), zipPath], { encoding: "utf8" });
+      expect(result.stderr).toBe("");
+      expect(result.stdout.trim()).toBe("ok");
+      expect(result.status).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects entries without exactly one source before starting the response", () => {
+    expect(() => createZipStream([{ name: "empty.txt" }], { modifiedAt: MODIFIED_AT })).toThrow(
+      "exactly one data source",
+    );
+    expect(() => createZipStream(
+      [{ name: "ambiguous.txt", data: "", stream: async function* source() { yield Buffer.alloc(0); } }],
+      { modifiedAt: MODIFIED_AT },
+    )).toThrow("exactly one data source");
+    expect(() => createZipStream(
+      [{ name: "unknown-size.txt", stream: async function* source() { yield Buffer.from("x"); } }],
+      { modifiedAt: MODIFIED_AT },
+    )).toThrow("expectedSize");
+  });
+
+  it("rejects ZIP32 overflow before opening a stream source", () => {
+    let opened = false;
+    expect(() => createZipStream(
+      [{
+        name: "too-large.bin",
+        expectedSize: 0xffffffff,
+        stream: async function* source() {
+          opened = true;
+          yield Buffer.alloc(0);
+        },
+      }],
+      { modifiedAt: MODIFIED_AT },
+    )).toThrow("ZIP32");
+    expect(opened).toBe(false);
+  });
+
+  it("fails if a streamed file changes size after preflight", async () => {
+    const stream = createZipStream(
+      [{
+        name: "changed.txt",
+        expectedSize: 2,
+        stream: async function* source() {
+          yield Buffer.from("one");
+        },
+      }],
+      { modifiedAt: MODIFIED_AT },
+    );
+    await expect(new Response(stream).arrayBuffer()).rejects.toThrow("size changed");
+  });
+
+  it("closes the active source iterator when the client cancels", async () => {
+    let closed = false;
+    const stream = createZipStream(
+      [{
+        name: "cancelled.bin",
+        expectedSize: 1024,
+        stream: async function* source() {
+          try {
+            while (true) yield Buffer.from("x");
+          } finally {
+            closed = true;
+          }
+        },
+      }],
+      { modifiedAt: MODIFIED_AT },
+    );
+    const reader = stream.getReader();
+    await reader.read(); // local header
+    await reader.read(); // first source chunk
+    await reader.cancel();
+
+    expect(closed).toBe(true);
   });
 });

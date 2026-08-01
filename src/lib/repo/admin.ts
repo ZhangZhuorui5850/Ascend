@@ -1,14 +1,16 @@
 import type Database from "better-sqlite3";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { AccessContext, UserStatus } from "../access-context";
+import { writeAuditLog } from "../audit";
 import { hashPassword } from "../auth";
+import { revokeAllCredentials } from "../security-credentials";
 import { ensureWorkspaceForUser } from "./workspaces";
+
+export { writeAuditLog } from "../audit";
 
 const INVITATION_HOURS = 24;
 
 type AdminContext = AccessContext & { role: "admin" };
-
-type AuditSummary = Record<string, unknown>;
 
 export type AdminUserSummary = {
   id: string;
@@ -173,9 +175,9 @@ export function setUserStatus(
 
   db.transaction(() => {
     db.prepare("UPDATE users SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(status, targetUserId);
-    let revokedSessions = 0;
+    let revoked = { revokedSessions: 0, revokedAgentTokens: 0 };
     if (status === "suspended") {
-      revokedSessions = Number(db.prepare("DELETE FROM sessions WHERE user_id = ?").run(targetUserId).changes);
+      revoked = revokeAllCredentials(db, targetUserId);
     }
     writeAuditLog(db, {
       actorUserId: admin.userId,
@@ -183,7 +185,7 @@ export function setUserStatus(
       action: status === "suspended" ? "user.suspended" : "user.reactivated",
       entityType: "user",
       entityId: targetUserId,
-      summary: { fromStatus: target.status, toStatus: status, revokedSessions },
+      summary: { fromStatus: target.status, toStatus: status, ...revoked },
     });
   })();
 }
@@ -197,16 +199,16 @@ export function revokeUserSessions(
   const target = db.prepare("SELECT role FROM users WHERE id = ?").get(targetUserId) as { role: string } | undefined;
   if (!target || target.role !== "user") throw new Error("普通用户不存在");
   return db.transaction(() => {
-    const revokedSessions = Number(db.prepare("DELETE FROM sessions WHERE user_id = ?").run(targetUserId).changes);
+    const revoked = revokeAllCredentials(db, targetUserId);
     writeAuditLog(db, {
       actorUserId: admin.userId,
       targetUserId,
-      action: "sessions.revoked",
+      action: "access.revoked",
       entityType: "user",
       entityId: targetUserId,
-      summary: { revokedSessions },
+      summary: revoked,
     });
-    return revokedSessions;
+    return revoked.revokedSessions;
   })();
 }
 
@@ -227,14 +229,14 @@ export function resetUserPassword(
           password_changed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(hashPassword(temporaryPassword), targetUserId);
-    const revokedSessions = Number(db.prepare("DELETE FROM sessions WHERE user_id = ?").run(targetUserId).changes);
+    const revoked = revokeAllCredentials(db, targetUserId);
     writeAuditLog(db, {
       actorUserId: admin.userId,
       targetUserId,
       action: "password.reset",
       entityType: "user",
       entityId: targetUserId,
-      summary: { revokedSessions },
+      summary: revoked,
     });
   })();
 }
@@ -265,37 +267,6 @@ export function setWorkspaceQuota(
       summary: { quotaBytes },
     });
   })();
-}
-
-export function writeAuditLog(
-  db: Database.Database,
-  entry: {
-    actorUserId: string;
-    targetUserId?: string | null;
-    action: string;
-    entityType: string;
-    entityId?: string | null;
-    summary?: AuditSummary;
-  },
-): void {
-  const summary = sanitizeAuditSummary(entry.summary || {});
-  db.prepare(`
-    INSERT INTO audit_logs
-      (actor_user_id, target_user_id, action, entity_type, entity_id, summary_json)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(
-    entry.actorUserId,
-    entry.targetUserId ?? null,
-    entry.action,
-    entry.entityType,
-    entry.entityId ?? null,
-    JSON.stringify(summary),
-  );
-}
-
-function sanitizeAuditSummary(summary: AuditSummary): AuditSummary {
-  const allowed = new Set(["fromStatus", "toStatus", "quotaBytes", "revokedSessions", "expiresAt"]);
-  return Object.fromEntries(Object.entries(summary).filter(([key]) => allowed.has(key)));
 }
 
 export function listAdminUsers(db: Database.Database): AdminUserSummary[] {

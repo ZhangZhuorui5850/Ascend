@@ -1,13 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { actionFailure } from "@/lib/action-failure";
 import { getDb } from "@/lib/db";
 import {
   completeOnboarding,
-  saveDailyReviewLimit,
-  saveExamCountdowns,
-  saveLearningPreferences,
   saveModulePrefs,
+  saveSettings,
   type ExamCountdown,
   type ModulePref,
 } from "@/lib/repo/settings";
@@ -26,14 +25,12 @@ export async function saveSettingsAction(input: {
   try {
     const access = await requireWorkspace();
     const db = getDb();
-    saveExamCountdowns(db, access, input.examCountdowns);
-    saveDailyReviewLimit(db, access, input.dailyReviewLimit);
-    if (input.learningGoal.trim() && input.enabledSubjectCodes.length) saveLearningPreferences(db, access, input);
+    saveSettings(db, access, input);
     revalidatePath("/");
     revalidatePath("/settings");
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "保存失败" };
+    return actionFailure("settings", error, "保存失败");
   }
 }
 
@@ -45,7 +42,7 @@ export async function saveModulePrefsAction(input: { modulePrefs: ModulePref[] }
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "保存失败" };
+    return actionFailure("settings", error, "保存失败");
   }
 }
 
@@ -63,7 +60,7 @@ export async function completeOnboardingAction(input: {
     revalidatePath("/settings");
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "保存失败" };
+    return actionFailure("settings", error, "保存失败");
   }
 }
 
@@ -75,7 +72,7 @@ export async function revokeDeviceSessionAction(sessionId: string): Promise<Acti
     revalidatePath("/settings");
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "退出设备失败" };
+    return actionFailure("settings", error, "退出设备失败");
   }
 }
 
@@ -88,7 +85,7 @@ export async function createAgentTokenAction(input: {
     revalidatePath("/settings");
     return { ok: true, ...created };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "创建 Agent 令牌失败" };
+    return actionFailure("settings", error, "创建 Agent 令牌失败");
   }
 }
 
@@ -99,6 +96,6 @@ export async function revokeAgentTokenAction(tokenId: string): Promise<ActionRes
     revalidatePath("/settings");
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "撤销 Agent 令牌失败" };
+    return actionFailure("settings", error, "撤销 Agent 令牌失败");
   }
 }

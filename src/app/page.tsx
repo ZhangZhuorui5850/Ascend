@@ -5,15 +5,16 @@ import { EmptyState } from "@/components/EmptyState";
 import { shiftDateKey, todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { requirePageWorkspace } from "@/lib/page-auth";
+import { getPluginTodayRecommendations } from "@/lib/plugins/runtime";
 import { getTomorrowPlan } from "@/lib/repo/days";
 import { getSubjectOverviews, TRACK_NAMES } from "@/lib/repo/knowledge";
 import { listTasks } from "@/lib/repo/planner";
 import { getSettings } from "@/lib/repo/settings";
-import { getHomeSnapshot, getLearningAnalytics } from "@/lib/repo/stats";
+import { getHomeSnapshot, getLearningAnalytics, getWeeklyCapacity } from "@/lib/repo/stats";
 
 export const dynamic = "force-dynamic";
 
-type HomeState = "due" | "task" | "summit" | "blank";
+type HomeState = "due" | "task" | "summit" | "active" | "blank";
 
 export default async function HomePage() {
   const access = await requirePageWorkspace("/");
@@ -21,8 +22,13 @@ export default async function HomePage() {
   const db = getDb();
   const today = todayKey();
   const snapshot = getHomeSnapshot(db, access, today);
+  const pluginRecommendations = getPluginTodayRecommendations(db, access, today);
   const settings = getSettings(db, access);
   const analytics = getLearningAnalytics(db, access, today);
+  const weeklyCapacity = getWeeklyCapacity(db, access, {
+    today,
+    targetMinutes: settings.weeklyMinutes,
+  });
   const allSubjects = getSubjectOverviews(db, access, today);
   const subjects = settings.enabledSubjectCodes.length
     ? allSubjects.filter((subject) => settings.enabledSubjectCodes.includes(subject.code))
@@ -45,17 +51,23 @@ export default async function HomePage() {
   const remainingMinutes = openTaskList.reduce((sum, task) => sum + task.estimated_minutes, 0);
 
   const pendingCount = snapshot.dueReviews + snapshot.dueMistakes;
-  // 与标题同口径的估时：复习 ~45s/个、错题 ~2min/道，均不封顶
-  const estMinutes = Math.ceil(snapshot.dueReviews * 0.75 + snapshot.dueMistakes * 2);
+  const remainingReviewCapacity = Math.max(0, settings.dailyReviewLimit - snapshot.today.reviews);
+  const scheduledReviewCount = Math.min(pendingCount, remainingReviewCapacity);
   const yesterdayPlan = getTomorrowPlan(db, access, shiftDateKey(today, -1));
+  const hasLearningRecord = snapshot.today.studyMinutes > 0
+    || snapshot.today.reviews > 0
+    || snapshot.today.mistakes > 0
+    || snapshot.today.mockExams > 0;
 
   const state: HomeState = pendingCount
     ? "due"
     : firstTask
       ? "task"
-      : snapshot.doneTasks > 0 || snapshot.today.reviews > 0
+      : snapshot.doneTasks > 0
         ? "summit"
-        : "blank";
+        : hasLearningRecord
+          ? "active"
+          : "blank";
 
   const disabledModules = new Set(settings.modulePrefs.filter((pref) => !pref.enabled).map((pref) => pref.key));
   // 板块被关闭时倒计时仍展示（它属于考试节点设置），但入口退化为设置页
@@ -82,6 +94,19 @@ export default async function HomePage() {
       )
     : null;
   const maxDailyMinutes = Math.max(...analytics.dailyMinutes.map((item) => item.minutes), 1);
+  const studiedCapacityWidth = Math.min(
+    100,
+    Math.round((weeklyCapacity.studiedMinutes / weeklyCapacity.targetMinutes) * 100),
+  );
+  const plannedCapacityWidth = Math.min(
+    100 - studiedCapacityWidth,
+    Math.round((weeklyCapacity.plannedMinutes / weeklyCapacity.targetMinutes) * 100),
+  );
+  const capacityState = weeklyCapacity.overloadMinutes
+    ? "overload"
+    : weeklyCapacity.unallocatedMinutes
+      ? "open"
+      : "covered";
 
   return (
     <div className="pageStack homePage" data-home-state={state}>
@@ -109,14 +134,15 @@ export default async function HomePage() {
           {state === "due" ? (
             <>
               <span className="eyebrow">NOW · 到期复习</span>
-              <h1>先清掉 <b>{pendingCount}</b> 个到期项。</h1>
+              <h1>{scheduledReviewCount
+                ? <>还有 <b>{pendingCount}</b> 个到期项，今日先安排 <b>{scheduledReviewCount}</b> 个。</>
+                : <>还有 <b>{pendingCount}</b> 个到期项，今日容量已用完。</>}</h1>
               <p className="homeFocusMeta">
-                复习 <b>{snapshot.dueReviews}</b> · 错题 <b>{snapshot.dueMistakes}</b> · 预计 ~<b>{estMinutes}</b> 分钟
-                {snapshot.dueReviews > settings.dailyReviewLimit ? `（今日上限 ${settings.dailyReviewLimit}）` : ""}
+                复习 <b>{snapshot.dueReviews}</b> · 错题 <b>{snapshot.dueMistakes}</b> · 今日剩余容量 <b>{remainingReviewCapacity}</b>/{settings.dailyReviewLimit}
               </p>
               {yesterdayPlan ? <p className="homePlanEcho">昨晚你说：「{yesterdayPlan}」</p> : null}
               <div className="homeFocusActions">
-                <Link className="primaryButton big" href={`/day/${today}#day-reviews`}>开始复习<ArrowRight size={17} /></Link>
+                <Link className="primaryButton big" href={`/day/${today}#day-reviews`}>{scheduledReviewCount ? "开始复习" : "查看积压"}<ArrowRight size={17} /></Link>
                 <Link className="homeFocusLink" href={`/day/${today}#day-tasks`}>先看今日任务 →</Link>
               </div>
             </>
@@ -147,6 +173,19 @@ export default async function HomePage() {
               <div className="homeFocusActions">
                 <Link className="homeFocusLink" href={`/day/${today}#day-journal`}>规划明天 →</Link>
                 <Link className="homeFocusLink" href="/subjects">预习知识树 →</Link>
+              </div>
+            </>
+          ) : null}
+          {state === "active" ? (
+            <>
+              <span className="eyebrow">IN PROGRESS · 今日已开始</span>
+              <h1>今天已经有学习记录。</h1>
+              <p className="homeFocusMeta">
+                专注 <b>{snapshot.today.studyMinutes}</b> 分钟 · 复习 <b>{snapshot.today.reviews}</b> · 错题记录 <b>{snapshot.today.mistakes}</b> · 模考 <b>{snapshot.today.mockExams}</b>
+              </p>
+              <div className="homeFocusActions">
+                <Link className="primaryButton big" href={`/day/${today}`}>继续今天<ArrowRight size={17} /></Link>
+                <Link className="homeFocusLink" href="/analytics">查看学习信号 →</Link>
               </div>
             </>
           ) : null}
@@ -225,6 +264,73 @@ export default async function HomePage() {
         </Link>
       </section>
 
+      {pluginRecommendations.length ? (
+        <section aria-label="扩展到期动作" className="homePluginSignals">
+          {pluginRecommendations.map((recommendation) => (
+            <Link href={recommendation.href} key={recommendation.key}>
+              <span>{recommendation.label}</span>
+              <div><strong>{recommendation.title}</strong><small>{recommendation.description}</small></div>
+              <b>{recommendation.count}</b>
+              <ArrowRight size={16} />
+            </Link>
+          ))}
+        </section>
+      ) : null}
+
+      <section aria-label="本周学习容量" className="homeCapacity" data-state={capacityState}>
+        <div className="homeCapacityHead">
+          <div>
+            <span className="sectionKicker">WEEK CAPACITY · {weeklyCapacity.start.slice(5)}–{weeklyCapacity.end.slice(5)}</span>
+            <h2>本周容量</h2>
+          </div>
+          <Link className="sectionLink" href="/settings#study">调整目标</Link>
+        </div>
+        <div className="homeCapacityMetrics">
+          <div><span>目标</span><strong>{weeklyCapacity.targetMinutes}<small> min</small></strong></div>
+          <div><span>已学习</span><strong>{weeklyCapacity.studiedMinutes}<small> min</small></strong></div>
+          <div><span>已排未完成</span><strong>{weeklyCapacity.plannedMinutes}<small> min</small></strong></div>
+          <div className={weeklyCapacity.overloadMinutes ? "warning" : ""}>
+            <span>{weeklyCapacity.overloadMinutes ? "超出目标" : "尚未分配"}</span>
+            <strong>{weeklyCapacity.overloadMinutes || weeklyCapacity.unallocatedMinutes}<small> min</small></strong>
+          </div>
+        </div>
+        <div
+          aria-label={`本周目标 ${weeklyCapacity.targetMinutes} 分钟，已学习 ${weeklyCapacity.studiedMinutes} 分钟，已排未完成 ${weeklyCapacity.plannedMinutes} 分钟`}
+          className="homeCapacityTrack"
+          role="img"
+        >
+          <i className="studied" style={{ width: `${studiedCapacityWidth}%` }} />
+          <i className="planned" style={{ left: `${studiedCapacityWidth}%`, width: `${plannedCapacityWidth}%` }} />
+        </div>
+        <p className="homeCapacityStatus">
+          {weeklyCapacity.overloadMinutes
+            ? <>已学习与未来计划合计超出周目标 <strong>{weeklyCapacity.overloadMinutes}</strong> 分钟；预计时间不是实际学习，可删减或改期。</>
+            : weeklyCapacity.unallocatedMinutes
+              ? <>距离周目标还差 <strong>{weeklyCapacity.remainingToTarget}</strong> 分钟，其中 <strong>{weeklyCapacity.unallocatedMinutes}</strong> 分钟尚未进入计划。</>
+              : <>剩余目标已被当前计划覆盖；实际完成仍以学习记录为准。</>}
+        </p>
+        {weeklyCapacity.overdueOpenMinutes ? (
+          <p className="homeCapacityOverdue">
+            另有本周较早日期的未完成任务约 {weeklyCapacity.overdueOpenMinutes} 分钟，未计入未来容量。
+          </p>
+        ) : null}
+        {weeklyCapacity.unallocatedMinutes ? (
+          <details className="homeCapacityDraft">
+            <summary>查看剩余容量草案</summary>
+            <p>按今天至周日的当前负载均衡分配；这是只读草案，不会自动创建或移动任务。</p>
+            <div>
+              {weeklyCapacity.days.filter((day) => day.suggestedMinutes > 0).map((day) => (
+                <Link href={`/day/${day.day}#day-tasks`} key={day.day}>
+                  <span>{weekdayLabel(day.day)} · {day.day.slice(5)}</span>
+                  <strong>建议预留 {day.suggestedMinutes} 分钟</strong>
+                  <small>现有 {day.studiedMinutes + day.plannedMinutes} 分钟</small>
+                </Link>
+              ))}
+            </div>
+          </details>
+        ) : null}
+      </section>
+
       <div className="homeContentGrid">
         <section aria-label="今日未完成任务" className="card homeTasksCard">
           <div className="sectionTitle">
@@ -285,7 +391,7 @@ export default async function HomePage() {
                 <Link className="homeWeakRow" href={`/subjects/${point.subjectCode}`} key={point.id}>
                   <strong>{point.title}</strong>
                   <i>{point.tierName}{point.reasons[0] ? ` · ${point.reasons[0]}` : ""}</i>
-                  <small>掌握 {point.mastery.toFixed(1)}</small>
+                  <small>{point.recentFailures ? "近期回忆失败" : point.openMistakes ? "仍有开放错题" : "系统建议巩固"}</small>
                 </Link>
               ))}
               {!disabledModules.has("mistakes") ? (
@@ -318,4 +424,9 @@ function daysUntil(today: string, target: string): number | null {
     Number(target.slice(8, 10)),
   );
   return Math.round((to - from) / 86400000);
+}
+
+function weekdayLabel(day: string): string {
+  const labels = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  return labels[new Date(`${day}T00:00:00.000Z`).getUTCDay()];
 }

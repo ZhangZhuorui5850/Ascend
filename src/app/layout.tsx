@@ -3,14 +3,19 @@ import { cookies } from "next/headers";
 import { AppShell } from "@/components/AppShell";
 import { FeedbackProvider } from "@/components/FeedbackProvider";
 import { PwaLifecycle } from "@/components/PwaLifecycle";
+import { WebVitalsReporter } from "@/components/WebVitalsReporter";
 import { listAccountSummaries, mergeAccountTokens, type DeviceAccount } from "@/lib/auth";
 import { SESSION_COOKIE, SESSIONS_COOKIE } from "@/lib/auth-constants";
 import { getDb } from "@/lib/db";
 import { getCaptureHierarchy, type CaptureSubject } from "@/lib/repo/knowledge";
+import type { PluginId } from "@/lib/plugins/registry";
+import { listEnabledPluginIds } from "@/lib/repo/plugins";
 import { getSettings, type ModulePref } from "@/lib/repo/settings";
 import { optionalSession } from "@/lib/request-auth";
 import { parseSessionsCookieValue } from "@/lib/session-cookies";
 import "./globals.css";
+import "../styles/domains/assets-mobile.css";
+import "../styles/domains/extensions.css";
 import "../styles/summit.css";
 
 export const metadata: Metadata = {
@@ -64,6 +69,9 @@ export default async function RootLayout({
   const modulePrefs: ModulePref[] | undefined = user?.workspaceId
     ? getSettings(getDb(), { workspaceId: user.workspaceId }).modulePrefs
     : undefined;
+  const enabledPluginIds: PluginId[] | undefined = user?.workspaceId
+    ? listEnabledPluginIds(getDb(), { workspaceId: user.workspaceId })
+    : undefined;
 
   // 本设备已登录账号列表（活跃账号排最前），驱动右上角账户菜单的免密快速切换
   let accounts: DeviceAccount[] = [];
@@ -85,9 +93,10 @@ export default async function RootLayout({
           <AppShell
             user={
               user && account
-                ? { displayName: user.displayName, role: user.role, account, accounts }
+                ? { displayName: user.displayName, role: user.role, workspaceKey: user.workspaceId ?? null, account, accounts }
                 : null
             }
+            enabledPluginIds={enabledPluginIds}
             hierarchy={hierarchy}
             modulePrefs={modulePrefs}
           >
@@ -99,6 +108,7 @@ export default async function RootLayout({
             </a>
           </footer>
           <PwaLifecycle />
+          {user ? <WebVitalsReporter /> : null}
         </FeedbackProvider>
       </body>
     </html>

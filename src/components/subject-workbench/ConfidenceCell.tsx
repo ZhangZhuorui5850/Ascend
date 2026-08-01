@@ -2,38 +2,41 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { updatePointAction } from "@/app/actions/knowledge";
+import { confidenceLabel } from "@/lib/review-evidence";
 import type { PointRow } from "@/lib/repo/knowledge";
 import type { Report } from "./shared";
 
-/** 掌握度滑块：本地即时反馈 + 请求串行（在飞期间新值排队补发），失败回滚到最近确认值 */
-export function MasteryCell({ point, subjectCode, report }: {
+/** 主观信心滑块：与系统证据状态分离；未设置时只显示中性占位，不写库。 */
+export function ConfidenceCell({ point, subjectCode, report }: {
   point: PointRow;
   subjectCode: string;
   report: Report;
 }) {
-  const [value, setValue] = useState(point.mastery);
+  const [value, setValue] = useState(point.self_confidence ?? 50);
+  const [isSet, setIsSet] = useState(point.self_confidence !== null);
   const savingRef = useRef(false);
   const queuedRef = useRef<number | null>(null);
-  const lastConfirmedRef = useRef(point.mastery);
+  const lastConfirmedRef = useRef<number | null>(point.self_confidence);
   useEffect(() => {
     // setTimeout(0) 是本项目对 eslint set-state-in-effect 规则的既有惯例；
-    // 回调内再检查一次 ref，避免请求在飞期间把旧的 point.mastery 闪回滑块。
+    // 回调内再检查一次 ref，避免请求在飞期间把旧值闪回滑块。
     window.setTimeout(() => {
       if (!savingRef.current && queuedRef.current === null) {
-        lastConfirmedRef.current = point.mastery;
-        setValue(point.mastery);
+        lastConfirmedRef.current = point.self_confidence;
+        setValue(point.self_confidence ?? 50);
+        setIsSet(point.self_confidence !== null);
       }
     }, 0);
-  }, [point.mastery]);
+  }, [point.self_confidence]);
 
   async function send(next: number) {
     savingRef.current = true;
     let result: { ok: boolean; error?: string };
     try {
-      result = await updatePointAction({ id: point.id, mastery: next, subjectCode });
+      result = await updatePointAction({ id: point.id, selfConfidence: next, subjectCode });
     } catch (error) {
-      console.error("掌握度保存失败", error);
-      result = { ok: false, error: "网络异常，掌握度未保存，请重新设置" };
+      console.error("主观信心保存失败", error);
+      result = { ok: false, error: "网络异常，主观信心未保存，请重新设置" };
     } finally {
       savingRef.current = false;
     }
@@ -41,9 +44,10 @@ export function MasteryCell({ point, subjectCode, report }: {
       lastConfirmedRef.current = next;
     } else {
       // 服务端异常时补发大概率也失败，故连排队值一起丢弃；
-      // 回滚到最近一次确认成功的值（闭包的 point.mastery 可能已过期）。
+      // 回滚到最近一次确认成功的值。
       queuedRef.current = null;
-      setValue(lastConfirmedRef.current);
+      setValue(lastConfirmedRef.current ?? 50);
+      setIsSet(lastConfirmedRef.current !== null);
     }
     if (queuedRef.current !== null && queuedRef.current !== next) {
       const queued = queuedRef.current;
@@ -65,14 +69,18 @@ export function MasteryCell({ point, subjectCode, report }: {
   }
 
   return (
-    <div className="masteryCell" title={`掌握度 ${value} · 已复习 ${point.reviews} 次 · 拖动可直接设置`}>
+    <div className="masteryCell" title={`主观信心 ${isSet ? `${value} · ${confidenceLabel(value)}` : "未设置"}；系统证据状态不由此滑块改写`}>
+      <span className="confidenceCellLabel">信心</span>
       <input
-        aria-label={`设置“${point.title}”的掌握度`}
+        aria-label={`设置“${point.title}”的主观信心`}
         className="masteryRange"
         max={100}
         min={0}
         onBlur={commit}
-        onChange={(event) => setValue(Number(event.target.value))}
+        onChange={(event) => {
+          setValue(Number(event.target.value));
+          setIsSet(true);
+        }}
         onKeyUp={(event) => {
           if (event.key === "Enter" || event.key.startsWith("Arrow")) commit();
         }}
@@ -82,7 +90,7 @@ export function MasteryCell({ point, subjectCode, report }: {
         type="range"
         value={value}
       />
-      <small>{value}</small>
+      <small>{isSet ? value : "—"}</small>
     </div>
   );
 }

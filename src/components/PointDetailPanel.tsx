@@ -19,7 +19,11 @@ import { assetFileUrl } from "@/lib/asset-url";
 import { useFeedback } from "@/components/FeedbackProvider";
 import { RichText } from "@/components/RichText";
 import { useOptimisticValue } from "@/components/useOptimisticValue";
-import { MasteryCell, TIER_OPTIONS } from "@/components/SubjectWorkbench";
+import { ConfidenceCell, TIER_OPTIONS } from "@/components/SubjectWorkbench";
+import {
+  evidenceStateLabel,
+  PRE_CONFIDENCE_LABELS,
+} from "@/lib/review-evidence";
 import { PointRecallEditor } from "@/components/PointRecallEditor";
 
 type PanelTab = "recall" | "sources" | "mistakes" | "history";
@@ -148,8 +152,12 @@ export function PointDetailPanel({ point, subjectCode, today, report, onClose }:
       <section aria-label="学习状态" className="pointLearningState">
         <div className="pointLearningStateHead">
           <div>
-            <span>当前掌握度</span>
-            <strong>{point.mastery}<small>%</small></strong>
+            <span>系统证据状态</span>
+            <strong>{evidenceStateLabel({
+              evidenceSampleCount: point.evidence_sample_count,
+              lastEvidenceScore: point.last_evidence_score,
+              legacyReviewCount: point.reviews,
+            })}</strong>
           </div>
           {!point.next_review ? (
             <button className="pointStartLearning" onClick={() => void learnedToday()} type="button">
@@ -163,7 +171,7 @@ export function PointDetailPanel({ point, subjectCode, today, report, onClose }:
             </span>
           )}
         </div>
-        <MasteryCell point={point} report={report} subjectCode={subjectCode} />
+        <ConfidenceCell point={point} report={report} subjectCode={subjectCode} />
         <div aria-label="目标层级" className="pointPriorityGroup" role="group">
           {TIER_OPTIONS.map((option) => (
             <button
@@ -257,7 +265,16 @@ export function PointDetailPanel({ point, subjectCode, today, report, onClose }:
             {detail.reviews.map((review) => (
               <div className="historyEvent" key={review.id}>
                 <span className="historyScore">{review.score}<small>/3</small></span>
-                <div><strong>{review.day}</strong><p>{review.note || "完成一次主动回忆"}</p></div>
+                <div>
+                  <strong>{review.day}</strong>
+                  <p>
+                    {review.attempt_mode === "unknown"
+                      ? "历史评分 · 作答证据未知"
+                      : `${attemptModeLabel(review.attempt_mode)} · 揭晓前${PRE_CONFIDENCE_LABELS[review.pre_confidence ?? 0]} · ${review.attempt_duration_seconds} 秒`}
+                  </p>
+                  {review.attempt_text ? <p><RichText text={review.attempt_text} /></p> : null}
+                  {review.note ? <p><RichText text={review.note} /></p> : null}
+                </div>
               </div>
             ))}
             {!detail.reviews.length ? <PanelEmpty icon={<History size={20} />} title="等待首次复习" text="完成首次学习后，系统会按记忆间隔安排复习。" /> : null}
@@ -272,6 +289,13 @@ export function PointDetailPanel({ point, subjectCode, today, report, onClose }:
 
 function PanelLoading() {
   return <div aria-label="正在加载" className="pointPanelSkeleton"><span /><span /><span /></div>;
+}
+
+function attemptModeLabel(value: string): string {
+  if (value === "paper") return "纸上作答";
+  if (value === "oral") return "口述作答";
+  if (value === "typed") return "草稿作答";
+  return "方式未知";
 }
 
 function PanelEmpty({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {

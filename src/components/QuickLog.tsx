@@ -18,6 +18,7 @@ export function QuickLog({ day, subjects, recentCauses = [] }: {
   const [mode, setMode] = useState<"session" | "mistake">("session");
   const [title, setTitle] = useState("");
   const [minutes, setMinutes] = useState(50);
+  const [output, setOutput] = useState("");
   const [cause, setCause] = useState("");
   const [subjectCode, setSubjectCode] = useState("");
   const [chapterId, setChapterId] = useState("");
@@ -35,7 +36,14 @@ export function QuickLog({ day, subjects, recentCauses = [] }: {
     setError("");
     const result =
       mode === "session"
-        ? await addStudySession({ day, title: trimmed, durationMinutes: minutes, subjectCode, knowledgePointId })
+        ? await addStudySession({
+            day,
+            title: trimmed,
+            durationMinutes: minutes,
+            subjectCode,
+            knowledgePointId,
+            output: output.trim(),
+          })
         : await addMistake({
             day,
             title: trimmed,
@@ -47,6 +55,7 @@ export function QuickLog({ day, subjects, recentCauses = [] }: {
     if (result.ok) {
       setTitle("");
       setCause("");
+      setOutput("");
       setCauseCategory("");
       router.refresh();
       titleRef.current?.focus();
@@ -80,28 +89,37 @@ export function QuickLog({ day, subjects, recentCauses = [] }: {
           placeholder={mode === "session" ? "做了什么：如 PCA 推导重写" : "错在哪：如 CNN 参数量漏 bias"}
         />
         {mode === "session" ? (
-          <div className="inlineField minutePresets">
-            分钟
-            <div className="tagPicker" role="group" aria-label="常用时长">
-              {MINUTE_PRESETS.map((preset) => (
-                <button
-                  className={minutes === preset ? "active" : ""}
-                  key={preset}
-                  onClick={() => setMinutes(preset)}
-                  type="button"
-                >
-                  {preset}
-                </button>
-              ))}
+          <>
+            <div className="inlineField minutePresets">
+              分钟
+              <div className="tagPicker" role="group" aria-label="常用时长">
+                {MINUTE_PRESETS.map((preset) => (
+                  <button
+                    className={minutes === preset ? "active" : ""}
+                    key={preset}
+                    onClick={() => setMinutes(preset)}
+                    type="button"
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+              <input
+                aria-label="自定义分钟数"
+                min="0"
+                onChange={(event) => setMinutes(Math.max(0, Number(event.target.value) || 0))}
+                type="number"
+                value={minutes}
+              />
             </div>
-            <input
-              aria-label="自定义分钟数"
-              min="0"
-              onChange={(event) => setMinutes(Math.max(0, Number(event.target.value) || 0))}
-              type="number"
-              value={minutes}
+            <textarea
+              maxLength={2000}
+              onChange={(event) => setOutput(event.target.value)}
+              placeholder="学习产出（可选）：写下结论、完成题量、代码/笔记位置或下一步验证。"
+              rows={3}
+              value={output}
             />
-          </div>
+          </>
         ) : (
           <>
             <input

@@ -64,6 +64,23 @@ describe("library repo", () => {
     expect(child.files.map((file) => file.original_name)).toEqual(["notes.pdf"]);
   });
 
+  it("paginates files inside the current folder while preserving tree totals", () => {
+    const db = createTestDb();
+    for (const name of ["a.pdf", "b.pdf", "c.pdf", "d.pdf", "e.pdf"]) {
+      insertAsset(db, name, "");
+    }
+
+    const second = getExplorer(db, legacyScope, "", { page: 2, pageSize: 2 });
+    expect(second.files.map((file) => file.original_name)).toEqual(["c.pdf", "d.pdf"]);
+    expect(second).toMatchObject({
+      filePage: 2,
+      filePageSize: 2,
+      currentFolderFileCount: 5,
+      filePageCount: 3,
+      totalFiles: 5,
+    });
+  });
+
   it("renames a folder and rewrites descendant paths and files", () => {
     const db = createTestDb();
     createFolder(db, legacyScope, { parentPath: "", name: "M1" });

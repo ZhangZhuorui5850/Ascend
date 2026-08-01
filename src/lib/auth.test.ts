@@ -14,6 +14,8 @@ import {
   revokeUserSession,
   verifyPassword,
 } from "./auth";
+import { resolveAgentContext } from "./agent/context";
+import { authenticateAgentToken, createAgentToken } from "./repo/agent-tokens";
 import { MAX_DEVICE_ACCOUNTS } from "./auth-constants";
 import { assertAdmin, assertWorkspaceAccess } from "./request-auth";
 import { createTestDb, createTestWorkspace } from "./repo/testing";
@@ -283,6 +285,29 @@ describe("bootstrap users", () => {
     db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword("current-password"), userId);
 
     expect(() => changePassword(userId, "current-password", "", db)).toThrow("新密码不能为空");
+  });
+
+  it("permanently revokes Agent tokens when an ordinary user changes password", () => {
+    const db = createTestDb();
+    const { userId } = createTestWorkspace(db, { email: "token-password@example.com" });
+    db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword("current-password"), userId);
+    const context = resolveAgentContext(db, "token-password@example.com");
+    const created = createAgentToken(db, context, { name: "改密前" });
+
+    changePassword(userId, "current-password", "new-password", db);
+
+    expect(() => authenticateAgentToken(db, `Bearer ${created.token}`)).toThrow("invalid or expired");
+    expect(db.prepare("SELECT revoked_at FROM agent_tokens WHERE id = ?").get(created.record.id))
+      .toMatchObject({ revoked_at: expect.any(String) });
+    const audit = db.prepare(`
+      SELECT action, summary_json FROM audit_logs
+      WHERE target_user_id = ? ORDER BY id DESC LIMIT 1
+    `).get(userId) as { action: string; summary_json: string };
+    expect(audit.action).toBe("password.changed");
+    expect(JSON.parse(audit.summary_json)).toEqual({
+      revokedSessions: 0,
+      revokedAgentTokens: 1,
+    });
   });
 });
 

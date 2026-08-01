@@ -15,6 +15,26 @@ describe("TaskLine completion presentation", () => {
     expect(source).toContain('aria-label={done ? "标记为未完成" : "标记为完成"}');
     expect(source).toContain("{done ? <Check size={13} /> : null}");
   });
+
+  it("offers an explicit no-evidence completion path and a structured evidence path", () => {
+    expect(source).toContain('aria-label="记录任务完成证据"');
+    expect(source).toContain("仅标记完成");
+    expect(source).toContain("保存证据并完成");
+    expect(source).toContain("actualMinutes");
+    expect(source).toContain("completionOutput");
+    expect(source).toContain("verificationMethod");
+    expect(source).toContain("verificationResult");
+    expect(source).toContain("同时把实际分钟与产出记入学习活动");
+    expect(source).toContain("recordAsStudy");
+  });
+
+  it("can schedule a traceable delayed retest and record its relative outcome", () => {
+    expect(source).toContain("完成后安排短复测，验证训练是否改善");
+    expect(source).toContain("scheduleRetestAfterDays");
+    expect(source).toContain('task.source_type !== "training_retest"');
+    expect(source).toContain('<option value="improved">改善</option>');
+    expect(source).toContain('<option value="regressed">退步</option>');
+  });
 });
 
 describe("task-row spacing", () => {

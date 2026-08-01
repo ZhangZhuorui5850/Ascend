@@ -172,6 +172,26 @@ export function saveLearningPreferences(
   setSetting(db, scope, "enabled_subject_codes", JSON.stringify(enabledSubjectCodes));
 }
 
+export function saveSettings(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: {
+    examCountdowns: ExamCountdown[];
+    dailyReviewLimit: number;
+    learningGoal: string;
+    weeklyMinutes: number;
+    enabledSubjectCodes: string[];
+  },
+): void {
+  db.transaction(() => {
+    saveExamCountdowns(db, scope, input.examCountdowns);
+    saveDailyReviewLimit(db, scope, input.dailyReviewLimit);
+    if (input.learningGoal.trim() && input.enabledSubjectCodes.length) {
+      saveLearningPreferences(db, scope, input);
+    }
+  })();
+}
+
 export function completeOnboarding(
   db: Database.Database,
   scope: WorkspaceScope,

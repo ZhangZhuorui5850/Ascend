@@ -43,7 +43,7 @@ export function UserStatusActions({
               {status === "suspended" ? "恢复账号" : "停用账号"}
             </button>
           ) : <p>该用户尚未使用邀请链接。</p>}
-          <button className="secondaryButton" disabled={pending || status === "invited"} onClick={() => run(() => revokeUserSessionsAction(userId), "所有设备已退出")} type="button">退出全部设备</button>
+          <button className="secondaryButton" disabled={pending || status === "invited"} onClick={() => run(() => revokeUserSessionsAction(userId), "所有设备与 Agent 访问已撤销")} type="button">撤销全部访问</button>
         </div>
       </section>
 
@@ -57,7 +57,7 @@ export function UserStatusActions({
         <div className="sectionTitle"><h2>重置密码</h2></div>
         <p>设置临时密码后，该用户会立即退出全部设备，并在下次登录后被要求更换密码。</p>
         <label className="field"><span>临时密码</span><input onChange={(e) => setTemporaryPassword(e.target.value)} type="password" value={temporaryPassword} /></label>
-        <button className="secondaryButton" disabled={pending || status === "invited" || !temporaryPassword} onClick={() => run(() => resetUserPasswordAction(userId, temporaryPassword), "密码已重置，旧会话已失效")} type="button">重置密码</button>
+        <button className="secondaryButton" disabled={pending || status === "invited" || !temporaryPassword} onClick={() => run(() => resetUserPasswordAction(userId, temporaryPassword), "密码已重置，旧会话与 Agent 令牌已失效")} type="button">重置密码</button>
       </section>
       <section className="card" aria-live="polite">
         <div className="sectionTitle"><h2>操作结果</h2></div>

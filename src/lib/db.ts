@@ -1,9 +1,12 @@
 import Database from "better-sqlite3";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { seedManagedAlgorithmCatalogForEnabledWorkspaces } from "./algorithm-catalog";
+import { redactExpiredAlgorithmCodeBlobs } from "./algorithm-code-crypto";
 import { buildFallbackKnowledgeSeed, extractKnowledgeSeed } from "./knowledge-map";
 import { logError } from "./log";
 import { backfillKnowledgeHierarchy, runMigrations } from "./migrations";
+import { instrumentSlowQueries } from "./observability";
 import { LEGACY_WORKSPACE_ID } from "./repo/workspaces";
 import type { KnowledgeSeed } from "./types";
 
@@ -30,7 +33,10 @@ export function getDb(): Database.Database {
     db.pragma("synchronous = NORMAL");
     initializeDatabase(db);
     runMigrations(db, { uploadRoot: getUploadRoot() });
+    redactExpiredAlgorithmCodeBlobs(db);
+    seedManagedAlgorithmCatalogForEnabledWorkspaces(db);
     seedKnowledgeMapIfEmpty(db);
+    instrumentSlowQueries(db);
   } catch (error) {
     // 初始化/迁移失败必须留下结构化日志再上抛，同时重置句柄避免复用半初始化的连接。
     logError("db.init", error, { dataRoot });
@@ -192,10 +198,6 @@ export function initializeDatabase(database: Database.Database): void {
     database.exec("ALTER TABLE assets ADD COLUMN folder_path TEXT NOT NULL DEFAULT '未归档'");
   }
 
-  const assetLinkColumns = database.prepare("PRAGMA table_info(asset_links)").all() as Array<{ name: string }>;
-  if (!assetLinkColumns.some((column) => column.name === "chapter_id")) {
-    database.exec("ALTER TABLE asset_links ADD COLUMN chapter_id TEXT");
-  }
 }
 
 function loadKnowledgeSeed(): KnowledgeSeed {

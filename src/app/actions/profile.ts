@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies, headers } from "next/headers";
+import { actionFailure } from "@/lib/action-failure";
 import { changePassword, createSession, mergeAccountTokens } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import {
@@ -26,7 +27,7 @@ export async function updateProfileAction(input: { displayName: string }): Promi
     revalidateProfileEverywhere();
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "昵称更新失败" };
+    return actionFailure("profile", error, "昵称更新失败");
   }
 }
 
@@ -37,7 +38,7 @@ export async function saveSealAvatarAction(input: { char: string; color: string 
     revalidateProfileEverywhere();
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "头像更新失败" };
+    return actionFailure("profile", error, "头像更新失败");
   }
 }
 
@@ -54,7 +55,7 @@ export async function uploadAvatarImageAction(formData: FormData): Promise<Actio
     revalidateProfileEverywhere();
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "头像上传失败" };
+    return actionFailure("profile", error, "头像上传失败");
   }
 }
 
@@ -78,6 +79,6 @@ export async function changeAccountPasswordAction(input: {
     revalidatePath("/settings");
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "密码修改失败" };
+    return actionFailure("profile", error, "密码修改失败");
   }
 }

@@ -1,9 +1,53 @@
 import type Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
+import type { WorkspaceScope } from "../access-context";
 import { buildFallbackKnowledgeSeed } from "../knowledge-map";
 import { ensurePlannerDefaults } from "./planner-defaults";
 
 export const LEGACY_WORKSPACE_ID = "workspace:legacy";
+
+/**
+ * 新空间必须完成首次引导；存量空间若已有真实学习活动则视为已完成，
+ * 避免旧用户因历史 onboarding 标记缺失而被误拦截。
+ *
+ * 预置的科目/章节/知识点不算用户活动，因为每个新空间都会自动克隆它们。
+ * 空的 daily_entries 也不算活动：访问日页本身就会创建空记录。
+ */
+export function workspaceNeedsOnboarding(
+  db: Database.Database,
+  scope: WorkspaceScope,
+): boolean {
+  const row = db.prepare(`
+    SELECT
+      onboarding_completed AS onboardingCompleted,
+      (
+        EXISTS (SELECT 1 FROM study_sessions WHERE workspace_id = @workspaceId)
+        OR EXISTS (SELECT 1 FROM review_events WHERE workspace_id = @workspaceId)
+        OR EXISTS (SELECT 1 FROM mistakes WHERE workspace_id = @workspaceId)
+        OR EXISTS (SELECT 1 FROM day_tasks WHERE workspace_id = @workspaceId)
+        OR EXISTS (SELECT 1 FROM day_notes WHERE workspace_id = @workspaceId)
+        OR EXISTS (SELECT 1 FROM assets WHERE workspace_id = @workspaceId)
+        OR EXISTS (SELECT 1 FROM mock_exams WHERE workspace_id = @workspaceId)
+        OR EXISTS (
+          SELECT 1 FROM daily_entries
+          WHERE workspace_id = @workspaceId
+            AND (
+              TRIM(plan) != ''
+              OR TRIM(diary) != ''
+              OR TRIM(summary) != ''
+              OR TRIM(blockers) != ''
+              OR TRIM(tomorrow) != ''
+            )
+        )
+      ) AS hasActivity
+    FROM workspaces
+    WHERE id = @workspaceId
+  `).get({ workspaceId: scope.workspaceId }) as
+    | { onboardingCompleted: number; hasActivity: number }
+    | undefined;
+
+  return !row || (!row.onboardingCompleted && !row.hasActivity);
+}
 
 export function ensureWorkspaceForUser(
   db: Database.Database,

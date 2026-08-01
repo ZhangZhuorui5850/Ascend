@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: "15 19 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -24,9 +27,48 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run lint
+      - run: npm run css:audit
       - run: npm run typecheck
       - run: npm run build
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
       - name: Verify fresh and upgraded database migrations
         run: npm test -- --run src/lib/migrations.test.ts src/lib/repo/workspaces.test.ts
+
+  e2e:
+    if: github.event_name != 'pull_request'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      ASCEND_E2E_ISOLATED: "1"
+      CI_E2E_PORT: "3105"
+      ZGCA_DATA_ROOT: ${{ runner.temp }}/ascend-e2e-data
+      ZGCA_UPLOAD_ROOT: ${{ runner.temp }}/ascend-e2e-data/uploads
+      APP_LOGIN_EMAIL: ci-owner@example.invalid
+      APP_LOGIN_PASSWORD: CI-owner-${{ github.run_id }}-only!
+      APP_ADMIN_EMAIL: ci-admin@example.invalid
+      APP_ADMIN_PASSWORD: CI-admin-${{ github.run_id }}-only!
+      RESPONSIVE_AUDIT_MODE: ${{ github.event_name == 'schedule' && 'full' || 'critical' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Run isolated browser audits
+        run: npm run ci:e2e
+      - name: Upload E2E diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-diagnostics-${{ github.run_id }}
+          path: |
+            .ci-e2e-server.log
+            smoke-fail.png
+          if-no-files-found: ignore
+          retention-days: 7

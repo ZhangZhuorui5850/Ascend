@@ -11,6 +11,12 @@ export function CreateTrainingTaskButton({
   title,
   subjectCode,
   notes,
+  knowledgePointId,
+  activityType = "practice",
+  completionCriteria,
+  sourceType,
+  sourceId,
+  verificationMethod,
   label = "加入训练",
   compact = false,
 }: {
@@ -18,6 +24,12 @@ export function CreateTrainingTaskButton({
   title: string;
   subjectCode?: string | null;
   notes?: string;
+  knowledgePointId?: string | null;
+  activityType?: "study" | "practice" | "recall" | "review" | "mock" | "mixed";
+  completionCriteria?: string;
+  sourceType?: string;
+  sourceId?: string | number;
+  verificationMethod?: string;
   label?: string;
   compact?: boolean;
 }) {
@@ -35,6 +47,12 @@ export function CreateTrainingTaskButton({
       priority: 1,
       estimatedMinutes: 45,
       notes: notes || "由学习诊断生成，完成后回到原页面检查掌握变化。",
+      knowledgePointId,
+      activityType,
+      completionCriteria: completionCriteria || "完成训练范围，并记录产出与验证结果。",
+      sourceType,
+      sourceId,
+      verificationMethod,
     });
     setBusy(false);
     if (!result.ok) {

@@ -12,6 +12,7 @@ import { assetFileUrl } from "@/lib/asset-url";
 import { assertDateKey, shiftDateKey, todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { requirePageWorkspace } from "@/lib/page-auth";
+import { PRE_CONFIDENCE_LABELS } from "@/lib/review-evidence";
 import { getDay, getTomorrowPlan } from "@/lib/repo/days";
 import { getCaptureHierarchy, getSubjects } from "@/lib/repo/knowledge";
 import { listTasks } from "@/lib/repo/planner";
@@ -30,16 +31,24 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
   }
 
   const db = getDb();
-  const settings = getSettings(db, access);
-  const examSprint = settings.examCountdowns.some((exam) => {
-    const days = Math.round((Date.parse(`${exam.date}T00:00:00+08:00`) - Date.parse(`${date}T00:00:00+08:00`)) / 86400000);
-    return days >= 0 && days <= 14;
-  });
-  const day = getDay(db, access, date, { reviewLimit: settings.dailyReviewLimit, examSprint });
-  const subjects = getSubjects(db, access);
-  const captureHierarchy = getCaptureHierarchy(db, access);
   const today = todayKey();
   const isToday = date === today;
+  const settings = getSettings(db, access);
+  const subjects = getSubjects(db, access);
+  const enabledSubjectCodes = settings.enabledSubjectCodes.length
+    ? settings.enabledSubjectCodes
+    : subjects.map((subject) => subject.code);
+  const sprintSubjectCodes = [...new Set(settings.examCountdowns.flatMap((exam) => {
+    const days = Math.round((Date.parse(`${exam.date}T00:00:00+08:00`) - Date.parse(`${date}T00:00:00+08:00`)) / 86400000);
+    if (days < 0 || days > 14) return [];
+    return exam.subjectCode ? [exam.subjectCode] : enabledSubjectCodes;
+  }))];
+  const day = getDay(db, access, date, {
+    reviewLimit: settings.dailyReviewLimit,
+    sprintSubjectCodes,
+    includeReviewQueue: isToday,
+  });
+  const captureHierarchy = getCaptureHierarchy(db, access);
   const studyMinutes = day.sessions.reduce((total, session) => total + session.duration_minutes, 0);
   const doneTasks = day.tasks.filter((task) => task.done).length;
   const queueCount = day.dueReviews.length + day.dueMistakes.length;
@@ -69,14 +78,14 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
         <div><strong>{studyMinutes}</strong><span>分钟学习</span></div>
         <div><strong>{day.assets.length}</strong><span>份资料</span></div>
         <div><strong>{day.reviews.length}</strong><span>次复习</span></div>
-        <div className={queueCount ? "due" : ""}><strong>{queueCount}</strong><span>待处理</span></div>
+        <div className={queueCount ? "due" : ""}><strong>{isToday ? queueCount : day.reviews.length}</strong><span>{isToday ? "待处理" : "当日复习"}</span></div>
       </section>
 
       <details className="mobileDayNavigator">
         <summary>展开今日模块导航</summary>
         <nav>
           <a href="#day-tasks">任务 {doneTasks}/{day.tasks.length}</a>
-          <a href="#day-reviews">待处理 {queueCount}</a>
+          <a href="#day-reviews">{isToday ? `待处理 ${queueCount}` : `当日复习 ${day.reviews.length}`}</a>
           <a href="#day-notes">随手记 {day.notes.length}</a>
           <a href="#day-journal">复盘</a>
         </nav>
@@ -88,23 +97,39 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
             carryCount={carryCount}
             carryFrom={yesterday}
             day={date}
-            subjects={subjects}
+            subjects={captureHierarchy}
             tasks={day.tasks}
             today={today}
             yesterdayPlan={yesterdayPlan}
           /></div></details>
-          <details className="dayModule" open><summary>复习队列 · {queueCount}</summary><div id="day-reviews"><ReviewQueue
-            day={date}
-            offlineScope={access.workspaceId}
-            doneToday={day.reviews.length}
-            dueReviews={day.dueReviews}
-            dueReviewsTotal={day.dueReviewsTotal}
-            dueMistakes={day.dueMistakes}
-            dueMistakesTotal={day.dueMistakesTotal}
-            dailyLimit={settings.dailyReviewLimit}
-            examSprint={examSprint}
-            readOnly={!isToday}
-          /></div></details>
+          <details className="dayModule" open>
+            <summary>{isToday ? `复习队列 · ${queueCount}` : `当日复习记录 · ${day.reviews.length}`}</summary>
+            <div id="day-reviews">
+              {isToday ? (
+                <ReviewQueue
+                  day={date}
+                  offlineScope={access.workspaceId}
+                  doneToday={day.reviews.length}
+                  dueReviews={day.dueReviews}
+                  dueReviewsTotal={day.dueReviewsTotal}
+                  dueMistakes={day.dueMistakes}
+                  dueMistakesTotal={day.dueMistakesTotal}
+                  dailyLimit={settings.dailyReviewLimit}
+                  sprintSubjectCodes={sprintSubjectCodes}
+                />
+              ) : (
+                <section className="card">
+                  <div className="sectionTitle">
+                    <h2>历史记录</h2>
+                    <span className="sectionHint">不使用当前排期回推过去队列</span>
+                  </div>
+                  <p className="empty">
+                    当天实际完成了 {day.reviews.length} 次复习；明细见右侧“当日轨迹”。待处理队列只在今天展示。
+                  </p>
+                </section>
+              )}
+            </div>
+          </details>
           <details className="dayModule" open><summary>随手记 · {day.notes.length}</summary><div id="day-notes"><DayNotes day={date} notes={day.notes} /></div></details>
           <details className="dayModule" open><summary>当日复盘</summary><div id="day-journal"><DayJournal key={date} date={date} entry={day.entry} /></div></details>
         </div>
@@ -139,13 +164,18 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
                   <span className="rowBadge">学习</span>
                   <strong>{item.title}</strong>
                   <small>{item.duration_minutes ? `${item.duration_minutes} 分钟` : ""}</small>
+                  {item.output ? <small><RichText text={item.output} /></small> : null}
                 </div>
               ))}
               {day.reviews.map((item) => (
                 <div className="listRow" key={`r-${item.id}`}>
-                  <span className="rowBadge review">复习</span>
+                  <span className="rowBadge review">{item.event_type === "mistake_reattempt" ? "回炉" : "复习"}</span>
                   <strong><RichText text={item.knowledge_title || item.note || "复习"} /></strong>
-                  <small>{item.score}/3</small>
+                  <small>
+                    {item.attempt_mode === "unknown"
+                      ? `历史评分 ${item.score}/3`
+                      : `揭晓前${PRE_CONFIDENCE_LABELS[item.pre_confidence ?? 0]} · 结果 ${item.score}/3`}
+                  </small>
                 </div>
               ))}
               {day.mistakes.map((item) => (

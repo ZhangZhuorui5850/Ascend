@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "./testing";
-import { ensureWorkspaceForUser, LEGACY_WORKSPACE_ID } from "./workspaces";
+import {
+  ensureWorkspaceForUser,
+  LEGACY_WORKSPACE_ID,
+  workspaceNeedsOnboarding,
+} from "./workspaces";
 
 function insertUser(db: ReturnType<typeof createTestDb>, id: string, email: string, displayName: string) {
   db.prepare(`
@@ -71,5 +75,58 @@ describe("workspace provisioning", () => {
     `).get(workspaceId) as { total: number; missing: number };
     expect(stats.total).toBeGreaterThan(0);
     expect(stats.missing).toBe(0);
+  });
+});
+
+describe("workspace onboarding compatibility", () => {
+  it("requires onboarding for a newly provisioned workspace with only seeded knowledge", () => {
+    const db = createTestDb();
+    insertUser(db, "user-1", "first@example.com", "第一位用户");
+    const scope = ensureWorkspaceForUser(db, { id: "user-1", displayName: "第一位用户" });
+
+    expect(workspaceNeedsOnboarding(db, scope)).toBe(true);
+  });
+
+  it("does not require onboarding after the workspace is explicitly completed", () => {
+    const db = createTestDb();
+    insertUser(db, "user-1", "first@example.com", "第一位用户");
+    const scope = ensureWorkspaceForUser(db, { id: "user-1", displayName: "第一位用户" });
+    db.prepare("UPDATE workspaces SET onboarding_completed = 1 WHERE id = ?").run(scope.workspaceId);
+
+    expect(workspaceNeedsOnboarding(db, scope)).toBe(false);
+  });
+
+  it("treats existing learning activity as legacy onboarding completion", () => {
+    const db = createTestDb();
+    insertUser(db, "user-1", "first@example.com", "第一位用户");
+    const scope = ensureWorkspaceForUser(db, { id: "user-1", displayName: "第一位用户" });
+    db.prepare(`
+      INSERT INTO day_tasks (workspace_id, day, title, sort_order)
+      VALUES (?, '2026-07-25', '已有学习任务', 1)
+    `).run(scope.workspaceId);
+
+    expect(workspaceNeedsOnboarding(db, scope)).toBe(false);
+  });
+
+  it("does not count an automatically created empty day entry as activity", () => {
+    const db = createTestDb();
+    insertUser(db, "user-1", "first@example.com", "第一位用户");
+    const scope = ensureWorkspaceForUser(db, { id: "user-1", displayName: "第一位用户" });
+    db.prepare("INSERT INTO daily_entries (workspace_id, date) VALUES (?, '2026-07-25')")
+      .run(scope.workspaceId);
+
+    expect(workspaceNeedsOnboarding(db, scope)).toBe(true);
+  });
+
+  it("counts a written reflection as legacy activity", () => {
+    const db = createTestDb();
+    insertUser(db, "user-1", "first@example.com", "第一位用户");
+    const scope = ensureWorkspaceForUser(db, { id: "user-1", displayName: "第一位用户" });
+    db.prepare(`
+      INSERT INTO daily_entries (workspace_id, date, summary)
+      VALUES (?, '2026-07-25', '已经写过复盘')
+    `).run(scope.workspaceId);
+
+    expect(workspaceNeedsOnboarding(db, scope)).toBe(false);
   });
 });

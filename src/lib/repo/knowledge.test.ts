@@ -7,6 +7,7 @@ import {
   deletePoint,
   deleteSubject,
   getCaptureHierarchy,
+  getPointDetail,
   getSubjects,
   getSubjectDetail,
   getSubjectOverviews,
@@ -18,6 +19,7 @@ import {
   reparentChapter,
   updatePoint,
 } from "./knowledge";
+import { createReviewEvent } from "./reviews";
 import { createTestDb, createTestWorkspace, seedSubjectWithChapter } from "./testing";
 import { LEGACY_WORKSPACE_ID } from "./workspaces";
 
@@ -133,7 +135,11 @@ describe("knowledge repo", () => {
       INSERT INTO assets (day, original_name, safe_name, relative_path)
       VALUES ('2026-07-01', 'a.png', 'a.png', 'blobs/aa/a')
     `).run();
-    db.prepare("INSERT INTO asset_links (asset_id, subject_code, chapter_id, knowledge_point_id) VALUES (1, 'M1', 'chapter:M1:matrix', 'kp1')").run();
+    db.prepare(`
+      INSERT INTO asset_links
+        (workspace_id, asset_id, subject_code, chapter_id, knowledge_point_id)
+      VALUES (?, 1, 'M1', 'chapter:M1:matrix', 'kp1')
+    `).run(LEGACY_WORKSPACE_ID);
 
     deletePoint(db, legacyScope, "kp1");
 
@@ -153,26 +159,64 @@ describe("knowledge repo", () => {
     expect(point?.created_at).toMatch(/^\d{4}-\d{2}-\d{2}/);
   });
 
-  it("updates mastery manually and derives status", () => {
+  it("stores subjective confidence without overwriting system evidence state", () => {
     const db = createTestDb();
     seedSubjectWithChapter(db);
 
-    updatePoint(db, legacyScope, { id: "kp1", mastery: 85 });
-    let row = db.prepare("SELECT mastery, status FROM knowledge_points WHERE id = 'kp1'").get();
-    expect(row).toMatchObject({ mastery: 85, status: "已掌握" });
+    updatePoint(db, legacyScope, { id: "kp1", selfConfidence: 85 });
+    let row = db.prepare("SELECT mastery, status, self_confidence FROM knowledge_points WHERE id = 'kp1'").get();
+    expect(row).toMatchObject({ mastery: 0, status: "未学", self_confidence: 85 });
 
-    updatePoint(db, legacyScope, { id: "kp1", mastery: 250 });
-    row = db.prepare("SELECT mastery, status FROM knowledge_points WHERE id = 'kp1'").get();
-    expect(row).toMatchObject({ mastery: 100, status: "已掌握" });
+    updatePoint(db, legacyScope, { id: "kp1", selfConfidence: 250 });
+    row = db.prepare("SELECT mastery, status, self_confidence FROM knowledge_points WHERE id = 'kp1'").get();
+    expect(row).toMatchObject({ mastery: 0, status: "未学", self_confidence: 100 });
 
-    updatePoint(db, legacyScope, { id: "kp1", mastery: 0 });
-    row = db.prepare("SELECT mastery, status FROM knowledge_points WHERE id = 'kp1'").get();
-    expect(row).toMatchObject({ mastery: 0, status: "未学" });
+    updatePoint(db, legacyScope, { id: "kp1", selfConfidence: null });
+    row = db.prepare("SELECT mastery, status, self_confidence FROM knowledge_points WHERE id = 'kp1'").get();
+    expect(row).toMatchObject({ mastery: 0, status: "未学", self_confidence: null });
 
-    // 不传 mastery 时不得改动
+    // 不传主观信心字段时不得改动
     updatePoint(db, legacyScope, { id: "kp1", title: "矩阵乘法（改名）" });
-    row = db.prepare("SELECT mastery, status FROM knowledge_points WHERE id = 'kp1'").get();
-    expect(row).toMatchObject({ mastery: 0, status: "未学" });
+    row = db.prepare("SELECT mastery, status, self_confidence FROM knowledge_points WHERE id = 'kp1'").get();
+    expect(row).toMatchObject({ mastery: 0, status: "未学", self_confidence: null });
+  });
+
+  it("surfaces evidence-bearing and legacy review history distinctly", () => {
+    const db = createTestDb();
+    seedSubjectWithChapter(db);
+    createReviewEvent(db, legacyScope, {
+      day: "2026-07-01",
+      knowledgePointId: "kp1",
+      score: 3,
+    });
+    createReviewEvent(db, legacyScope, {
+      day: "2026-07-04",
+      knowledgePointId: "kp1",
+      score: 1,
+      attemptMode: "paper",
+      attemptDurationSeconds: 40,
+      preConfidence: 3,
+    });
+
+    const subject = getSubjectDetail(db, legacyScope, "M1");
+    const point = subject?.chapters[0]?.points[0];
+    expect(point).toMatchObject({
+      evidence_sample_count: 1,
+      last_evidence_score: 1,
+      last_evidence_day: "2026-07-04",
+    });
+    expect(getPointDetail(db, legacyScope, "kp1").reviews).toEqual([
+      expect.objectContaining({
+        day: "2026-07-04",
+        attempt_mode: "paper",
+        pre_confidence: 3,
+      }),
+      expect.objectContaining({
+        day: "2026-07-01",
+        attempt_mode: "unknown",
+        pre_confidence: null,
+      }),
+    ]);
   });
 
   it("reorders points within a chapter transactionally", () => {

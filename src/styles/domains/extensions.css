@@ -1,0 +1,1460 @@
+/* Extensions and algorithm training domain.
+   Imported after globals.css and before summit.css so skins can refine primitives. */
+
+.extensionsManager {
+  display: grid;
+  gap: 16px;
+}
+
+.extensionsManager.compact {
+  grid-column: 1 / -1;
+}
+
+.extensionsTrustNote,
+.algorithmModeNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--info);
+  border-radius: var(--radius-lg);
+  background: var(--info-soft);
+}
+
+.extensionsTrustNote > svg,
+.algorithmModeNotice .algorithmNoticeIcon {
+  flex: none;
+  color: var(--info);
+}
+
+.extensionsTrustNote strong {
+  display: block;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.extensionsTrustNote p,
+.algorithmModeNotice p {
+  margin: 3px 0 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.extensionsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 14px;
+}
+
+.extensionCard {
+  display: flex;
+  min-width: 0;
+  min-height: 248px;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.extensionCard.enabled {
+  border-color: var(--accent-line);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--accent-soft) 45%, transparent), transparent 45%),
+    var(--surface);
+}
+
+.extensionCard > header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.extensionIcon,
+.algorithmComposerIcon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  flex: none;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.extensionState {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--quiet);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.extensionCard h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.extensionCard > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.extensionPermissions,
+.algorithmTags,
+.algorithmProblemMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.extensionPermissions span,
+.algorithmTags span,
+.algorithmProblemMeta span {
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.algorithmPilotRequest {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface-soft) 82%, transparent);
+}
+
+.algorithmPilotRequest[data-status="approved"] {
+  border-color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.algorithmPilotRequest[data-status="paused"] {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.algorithmPilotRequest > header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent);
+}
+
+.algorithmPilotRequest > header strong,
+.algorithmPilotRequest > header span {
+  display: block;
+}
+
+.algorithmPilotRequest > header strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.algorithmPilotRequest > header span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.algorithmPilotRequest > label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.algorithmPilotRequest > label input {
+  margin-top: 2px;
+}
+
+.algorithmPilotRequest > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.algorithmPilotRequest > button {
+  justify-self: start;
+}
+
+.algorithmPilotAdmin {
+  display: grid;
+  gap: 14px;
+}
+
+.algorithmPilotAdmin > p,
+.algorithmPilotAdmin > div[aria-live="polite"] p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.algorithmPilotBadge {
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.algorithmPilotBadge[data-status="approved"] {
+  border-color: var(--ok);
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.algorithmPilotBadge[data-status="requested"],
+.algorithmPilotBadge[data-status="paused"] {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.algorithmPilotFacts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.algorithmPilotFacts > div {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+
+.algorithmPilotFacts dt {
+  color: var(--quiet);
+  font-size: 10px;
+}
+
+.algorithmPilotFacts dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.extensionCard > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.extensionOrder {
+  display: flex;
+  gap: 5px;
+}
+
+.extensionOrder button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.extensionOrder button:disabled {
+  opacity: 0.35;
+}
+
+.extensionCard footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.extensionCard footer small {
+  color: var(--quiet);
+  font-size: 11px;
+}
+
+.algorithmPageHeader {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.algorithmJudgeState {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 0 11px;
+  border: 1px solid var(--warn);
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.algorithmJudgeState[data-ready="true"] {
+  border-color: var(--ok);
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.algorithmBoard {
+  display: grid;
+  gap: 20px;
+}
+
+.homePluginSignals {
+  display: grid;
+  gap: 8px;
+}
+
+.homePluginSignals > a {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent-soft) 42%, var(--surface));
+}
+
+.homePluginSignals > a > span {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.homePluginSignals strong,
+.homePluginSignals small {
+  display: block;
+}
+
+.homePluginSignals strong {
+  font-size: 12px;
+}
+
+.homePluginSignals small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.homePluginSignals b {
+  color: var(--accent);
+  font-family: var(--font-num);
+  font-size: 20px;
+}
+
+.pluginAnalyticsSection {
+  display: grid;
+  gap: 13px;
+}
+
+.pluginAnalyticsSection[data-plugin="algorithms"] {
+  border-color: var(--accent-line);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--accent-soft) 24%, transparent), transparent 48%),
+    var(--surface);
+}
+
+.pluginAnalyticsGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.algorithmMetrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.algorithmMetric {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.algorithmMetric > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.algorithmMetric small,
+.algorithmMetric strong {
+  display: block;
+}
+
+.algorithmMetric small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.algorithmMetric strong {
+  margin-top: 2px;
+  font-family: var(--font-num);
+  font-size: 23px;
+  line-height: 1;
+}
+
+.algorithmMetric.danger {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.algorithmMetric.danger > span {
+  background: var(--surface);
+  color: var(--warn);
+}
+
+.algorithmDue {
+  display: grid;
+  gap: 14px;
+}
+
+.algorithmDue > div:last-child {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 8px;
+}
+
+.algorithmDue a {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--accent);
+}
+
+.algorithmDue a span {
+  min-width: 0;
+}
+
+.algorithmDue a strong,
+.algorithmDue a small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.algorithmDue a strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.algorithmDue a small {
+  margin-top: 2px;
+  color: var(--quiet);
+  font-size: 10px;
+}
+
+.algorithmWorkspaceGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(260px, 0.85fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.algorithmComposer,
+.algorithmModeNotice {
+  display: grid;
+  gap: 14px;
+}
+
+.algorithmComposer > header {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+}
+
+.algorithmComposer h2,
+.algorithmModeNotice h2,
+.algorithmProblemSection h2 {
+  margin: 1px 0 0;
+  font-size: 18px;
+}
+
+.algorithmComposer header p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.algorithmComposer label,
+.algorithmAttemptForm label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.algorithmComposer input,
+.algorithmComposer select,
+.algorithmComposer textarea,
+.algorithmAttemptForm input,
+.algorithmAttemptForm select,
+.algorithmAttemptForm textarea {
+  width: 100%;
+  min-width: 0;
+}
+
+.algorithmInputWithIcon,
+.algorithmNumberInput {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding-left: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--quiet);
+}
+
+.algorithmInputWithIcon:focus-within,
+.algorithmNumberInput:focus-within {
+  border-color: var(--accent);
+  outline: 2px solid color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.algorithmInputWithIcon input,
+.algorithmNumberInput input {
+  border: 0;
+  background: transparent;
+  outline: none;
+}
+
+.algorithmComposerRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.algorithmComposer > button {
+  justify-self: start;
+}
+
+.algorithmModeNotice {
+  grid-template-columns: auto minmax(0, 1fr);
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.algorithmModeNotice .algorithmNoticeIcon {
+  color: var(--warn);
+}
+
+.algorithmModeNotice ul {
+  display: grid;
+  gap: 7px;
+  margin: 12px 0 0;
+  padding-left: 17px;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.algorithmProblemSection {
+  display: grid;
+  gap: 12px;
+}
+
+.algorithmProblemList {
+  display: grid;
+  gap: 12px;
+}
+
+.algorithmProblemCard {
+  display: grid;
+  gap: 14px;
+  scroll-margin-top: calc(var(--topbar-height) + 18px);
+}
+
+.algorithmProblemCard > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.algorithmProblemCard h3 {
+  margin: 7px 0 8px;
+  font-size: 19px;
+}
+
+.algorithmProblemActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.algorithmProblemActions > a,
+.algorithmStartSession {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  padding: 0 10px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.algorithmStartSession {
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  cursor: pointer;
+}
+
+.algorithmEvidenceStrip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+
+.algorithmEvidenceStrip > span {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.algorithmEvidenceStrip > span[data-status="independent_completed"],
+.algorithmEvidenceStrip > span[data-status="delayed_stable"],
+.algorithmEvidenceStrip > span[data-status="transfer_verified"] {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.algorithmEvidenceStrip > span[data-status="guided_completed"] {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.algorithmEvidenceStrip small {
+  color: var(--quiet);
+  font-size: 10px;
+}
+
+.algorithmProblemNotes {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.algorithmRecordTrigger {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.algorithmAttemptForm {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent-soft) 38%, var(--surface));
+}
+
+.algorithmAttemptGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.algorithmAttemptActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.algorithmAttemptActions button {
+  min-height: 36px;
+}
+
+.algorithmAttemptHistory {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.algorithmAttemptHistory summary {
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.algorithmAttemptHistory > div {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.algorithmAttemptHistory article {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+
+.algorithmAttemptHistory article strong {
+  grid-row: 1 / span 2;
+  color: var(--accent);
+}
+
+.algorithmAttemptHistory article span,
+.algorithmAttemptHistory article small {
+  font-size: 10px;
+}
+
+.algorithmAttemptHistory article small {
+  color: var(--quiet);
+  text-align: right;
+}
+
+.algorithmAttemptHistory article p {
+  grid-column: 2 / -1;
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.managedAlgorithmWorkspace {
+  display: grid;
+  grid-template-areas:
+    "problem plan result"
+    "problem code result";
+  grid-template-columns: minmax(220px, 0.85fr) minmax(320px, 1.25fr) minmax(240px, 0.9fr);
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.algorithmSessionTabs {
+  display: none;
+}
+
+.algorithmSessionPanel {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.algorithmSessionPanel > header {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.algorithmSessionPanel > header > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.problemPanel {
+  grid-area: problem;
+}
+
+.planPanel {
+  grid-area: plan;
+}
+
+.codePanel {
+  grid-area: code;
+}
+
+.resultPanel {
+  grid-area: result;
+}
+
+.problemPanel > p,
+.problemPanel dd,
+.planPanel label,
+.algorithmResultEmpty,
+.judgeUnavailable p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.problemPanel dl {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+}
+
+.problemPanel dl > div {
+  display: grid;
+  gap: 3px;
+}
+
+.problemPanel dt,
+.algorithmExamples article > span {
+  color: var(--quiet);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.problemPanel dd {
+  margin: 0;
+}
+
+.algorithmExamples {
+  display: grid;
+  gap: 8px;
+}
+
+.algorithmExamples article,
+.judgeResult article {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.algorithmExamples pre,
+.judgeResult pre {
+  overflow: auto;
+  max-height: 180px;
+  margin: 0;
+  padding: 7px 8px;
+  border-radius: 6px;
+  background: var(--code-bg, var(--surface-strong));
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.algorithmExamples article > p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.planPanel label {
+  display: grid;
+  gap: 5px;
+}
+
+.planPanel textarea,
+.planPanel select {
+  width: 100%;
+}
+
+.algorithmHintLadder {
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.algorithmHintLadder > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.algorithmHintLadder > div:first-child small {
+  color: var(--quiet);
+  font-size: 9px;
+}
+
+.algorithmHintLadder > button,
+.algorithmJudgeActions > button,
+.codePanel footer > button,
+.judgeResult > button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.algorithmHintLadder > article {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+}
+
+.algorithmHintLadder > article > span {
+  color: var(--accent);
+  font-family: var(--font-num);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.algorithmHintLadder article strong {
+  display: block;
+  font-size: 11px;
+}
+
+.algorithmHintLadder article p {
+  margin: 3px 0 0;
+  color: var(--ink-soft);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.codePanel > header label {
+  display: inline-flex;
+}
+
+.codePanel > header select {
+  min-height: 30px;
+  padding-block: 0;
+  font-size: 10px;
+}
+
+.algorithmCodeEditor {
+  width: 100%;
+  min-height: 330px;
+  resize: vertical;
+  border-color: var(--line-strong);
+  background: var(--code-bg, var(--surface));
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  tab-size: 4;
+  white-space: pre;
+}
+
+.codePanel > footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.codePanel > footer > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-soft);
+  font-size: 10px;
+}
+
+.codePanel > footer > small {
+  min-width: 0;
+  flex: 1 1 120px;
+  color: var(--quiet);
+  font-size: 9px;
+}
+
+.judgeUnavailable {
+  display: grid;
+  gap: 5px;
+  padding: 11px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: var(--warn-soft);
+}
+
+.judgeUnavailable > svg {
+  color: var(--warn);
+}
+
+.algorithmJudgeActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.algorithmJudgeActions .primaryButton {
+  min-height: 34px;
+  font-size: 10px;
+}
+
+.judgePending,
+.judgeResult > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.judgePending {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.judgeResult {
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.judgeResult[data-status="AC"] {
+  border-color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.judgeResult[data-status="WA"],
+.judgeResult[data-status="CE"],
+.judgeResult[data-status="TLE"],
+.judgeResult[data-status="MLE"],
+.judgeResult[data-status="RE"],
+.judgeResult[data-status="JE"] {
+  border-color: var(--warn);
+}
+
+.judgeResult > div:first-child > span {
+  min-width: 0;
+  flex: 1;
+}
+
+.judgeResult > div:first-child strong,
+.judgeResult > div:first-child small {
+  display: block;
+}
+
+.judgeResult > div:first-child small,
+.judgeResult > div:first-child em {
+  color: var(--muted);
+  font-size: 9px;
+  font-style: normal;
+}
+
+.judgeResult > p {
+  margin: 0;
+  color: var(--warn);
+  font-size: 10px;
+}
+
+.algorithmReflection {
+  display: grid;
+  gap: 10px;
+  margin-top: 2px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.algorithmReflection > header,
+.algorithmReflection > footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.algorithmReflection > header > div {
+  min-width: 0;
+  flex: 1 1 240px;
+}
+
+.algorithmReflection > header strong,
+.algorithmReflection > header small {
+  display: block;
+}
+
+.algorithmReflection > header small,
+.algorithmReflection > footer small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.algorithmReflection > header > span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--surface-strong);
+  color: var(--quiet);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.algorithmReflection > label,
+.algorithmReflectionGrid > label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.algorithmReflection textarea,
+.algorithmReflection input,
+.algorithmReflection select {
+  width: 100%;
+  background: var(--surface);
+}
+
+.algorithmReflectionGrid {
+  display: grid;
+  grid-template-columns: minmax(130px, 1.15fr) repeat(2, minmax(100px, 0.85fr));
+  gap: 8px;
+}
+
+.algorithmReflection > footer > button,
+.algorithmReflection > footer > a {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.algorithmReflection > footer > .primaryButton {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: transparent;
+}
+
+.algorithmReflectionLoading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.spin {
+  animation: algorithm-spin 1s linear infinite;
+}
+
+@keyframes algorithm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.algorithmEmpty {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  align-content: center;
+  text-align: center;
+}
+
+.algorithmEmpty > svg {
+  color: var(--accent);
+}
+
+.algorithmEmpty h3 {
+  margin: 8px 0 0;
+}
+
+.algorithmEmpty p {
+  max-width: 52ch;
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+@media (max-width: 980px) {
+  .pluginAnalyticsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .algorithmMetrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .algorithmWorkspaceGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .managedAlgorithmWorkspace {
+    grid-template-areas:
+      "problem plan"
+      "code result";
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .algorithmPilotFacts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pluginAnalyticsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .algorithmPageHeader,
+  .algorithmProblemCard > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .algorithmJudgeState {
+    align-self: flex-start;
+  }
+
+  .algorithmMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .algorithmMetric:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .algorithmComposerRow,
+  .algorithmAttemptGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .algorithmProblemActions {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .algorithmProblemActions > a,
+  .algorithmProblemActions > .trainingTaskButton,
+  .algorithmProblemActions > .algorithmStartSession {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+
+  .managedAlgorithmWorkspace {
+    display: block;
+  }
+
+  .algorithmSessionTabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    margin-bottom: 8px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface-soft);
+  }
+
+  .algorithmSessionTabs button {
+    min-height: 38px;
+    padding: 0 5px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 650;
+  }
+
+  .algorithmSessionTabs button[aria-current="step"] {
+    background: var(--surface);
+    color: var(--accent);
+    box-shadow: var(--shadow-xs);
+  }
+
+  .algorithmSessionPanel {
+    display: none;
+  }
+
+  .algorithmSessionPanel[data-active="true"] {
+    display: grid;
+  }
+
+  .algorithmCodeEditor {
+    min-height: 300px;
+  }
+
+  .algorithmReflectionGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .algorithmReflection > footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .algorithmAttemptHistory article {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .algorithmAttemptHistory article small {
+    grid-column: 2;
+    text-align: left;
+  }
+}
+
+@media (max-width: 420px) {
+  .extensionsGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .extensionCard {
+    min-height: 0;
+    padding: 16px;
+  }
+
+  .extensionCard > footer {
+    align-items: flex-start;
+    flex-direction: column-reverse;
+  }
+
+  .algorithmMetric {
+    padding: 11px;
+  }
+
+  .algorithmMetric > span {
+    width: 30px;
+    height: 30px;
+  }
+
+  .algorithmMetric strong {
+    font-size: 20px;
+  }
+
+  .algorithmModeNotice {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .homePluginSignals > a {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .homePluginSignals > a > span {
+    justify-self: start;
+  }
+
+  .homePluginSignals > a > div {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+html[data-motion="reduce"] .extensionCard,
+html[data-motion="reduce"] .algorithmProblemCard {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .extensionCard,
+  .algorithmProblemCard {
+    transition: none;
+  }
+
+  .spin {
+    animation: none;
+  }
+}

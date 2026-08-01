@@ -4,6 +4,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Undo2 } from "lucide-react";
 import {
+  attemptDraftReady,
+  attemptEvidence,
+  emptyAttemptDraft,
+  ReviewAttemptEvidence,
+  type AttemptDraft,
+} from "@/components/ReviewAttemptEvidence";
+import {
   reattemptMistakeAction,
   scoreReview,
   spreadBacklogAction,
@@ -23,7 +30,7 @@ type LastUndo =
   | { kind: "review"; label: string; title: string; payload: ReviewUndo }
   | { kind: "mistake"; label: string; title: string; payload: MistakeUndo };
 
-export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, dueMistakes, dueMistakesTotal = 0, dailyLimit = 12, examSprint = false, readOnly = false, doneToday = 0 }: {
+export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, dueMistakes, dueMistakesTotal = 0, dailyLimit = 12, sprintSubjectCodes = [], readOnly = false, doneToday = 0 }: {
   day: string;
   offlineScope: string;
   dueReviews: DueReview[];
@@ -31,7 +38,7 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
   dueMistakes: DueMistake[];
   dueMistakesTotal?: number;
   dailyLimit?: number;
-  examSprint?: boolean;
+  sprintSubjectCodes?: string[];
   readOnly?: boolean;
   doneToday?: number;
 }) {
@@ -41,6 +48,8 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
   const [stamps, setStamps] = useState<Record<string, string>>({});
   const [lastUndo, setLastUndo] = useState<LastUndo | null>(null);
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  const [revealedMistakes, setRevealedMistakes] = useState<Record<number, boolean>>({});
+  const [attemptDrafts, setAttemptDrafts] = useState<Record<string, AttemptDraft>>({});
   const [undoBusy, setUndoBusy] = useState(false);
   const [recoveryBusy, setRecoveryBusy] = useState(false);
   const [offline, setOffline] = useState(false);
@@ -51,7 +60,10 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
   const [mistakeSnapshots, setMistakeSnapshots] = useState<Map<string, DueMistake>>(() => new Map());
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exitTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-  const backlogTotal = (dueReviewsTotal || dueReviews.length) + dueMistakesTotal;
+  const backlogTotal = (dueReviewsTotal ?? dueReviews.length) + dueMistakesTotal;
+  const remainingToday = Math.max(0, dailyLimit - doneToday);
+  const scheduledCount = dueReviews.length + dueMistakes.length;
+  const hiddenCount = Math.max(0, backlogTotal - scheduledCount);
   const reviewIds = new Set(dueReviews.map((point) => point.id));
   const mistakeIds = new Set(dueMistakes.map((mistake) => mistake.id));
   const visibleReviews = [
@@ -122,15 +134,50 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
     router.refresh();
   }
 
+  function updateAttempt(key: string, next: AttemptDraft) {
+    setAttemptDrafts((current) => ({ ...current, [key]: next }));
+  }
+
+  function revealWithEvidence(key: string, kind: "review" | "mistake", id: string | number) {
+    const draft = attemptDrafts[key];
+    if (!attemptDraftReady(draft)) {
+      setError("请先选择作答方式、完成必要草稿并记录揭晓前信心");
+      return;
+    }
+    const finalized = {
+      ...draft,
+      durationSeconds: Math.max(
+        1,
+        Math.round((Date.now() - (draft.startedAt || Date.now())) / 1000),
+      ),
+    };
+    setAttemptDrafts((current) => ({ ...current, [key]: finalized }));
+    setError("");
+    if (kind === "review") {
+      setRevealed((current) => ({ ...current, [String(id)]: true }));
+    } else {
+      setRevealedMistakes((current) => ({ ...current, [Number(id)]: true }));
+    }
+  }
+
   async function handleReview(point: DueReview, score: number) {
     const key = `review-${point.id}`;
     if (busyKey || stamps[key]) return;
     setBusyKey(key);
     setError("");
     const operationId = crypto.randomUUID();
+    const evidence = attemptEvidence(attemptDrafts[key]);
     if (!navigator.onLine) {
       try {
-        await queueOfflineReview({ operationId, workspaceKey: offlineScope, day, knowledgePointId: point.id, score, createdAt: new Date().toISOString() });
+        await queueOfflineReview({
+          operationId,
+          workspaceKey: offlineScope,
+          day,
+          knowledgePointId: point.id,
+          score,
+          createdAt: new Date().toISOString(),
+          ...evidence,
+        });
       } catch (error) {
         console.error("离线复习记录写入失败", error);
         setError("本机离线存储当前不可用");
@@ -144,7 +191,13 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
       return;
     }
     setReviewSnapshots((current) => new Map(current).set(key, point));
-    const result = await scoreReview({ day, knowledgePointId: point.id, score, operationId });
+    const result = await scoreReview({
+      day,
+      knowledgePointId: point.id,
+      score,
+      operationId,
+      ...evidence,
+    });
     if (!result.ok) {
       setReviewSnapshots((current) => withoutMapKey(current, key));
       setError(result.error || "操作失败");
@@ -162,7 +215,13 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
     setBusyKey(key);
     setMistakeSnapshots((current) => new Map(current).set(key, mistake));
     setError("");
-    const result = await reattemptMistakeAction({ id: mistake.id, day, score });
+    const result = await reattemptMistakeAction({
+      id: mistake.id,
+      day,
+      score,
+      operationId: crypto.randomUUID(),
+      ...attemptEvidence(attemptDrafts[key]),
+    });
     if (!result.ok) {
       setMistakeSnapshots((current) => withoutMapKey(current, key));
       setError(result.error || "操作失败");
@@ -194,6 +253,9 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
     setExitedKeys(new Set());
     setReviewSnapshots(new Map());
     setMistakeSnapshots(new Map());
+    setAttemptDrafts({});
+    setRevealed({});
+    setRevealedMistakes({});
     router.refresh();
   }
 
@@ -226,7 +288,7 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
         return;
       }
       const firstMistake = visibleMistakes[0];
-      if (firstMistake && num <= 2) {
+      if (firstMistake && revealedMistakes[firstMistake.id] && num <= 2) {
         event.preventDefault();
         void handleMistake(firstMistake, num === 1 ? 1 : 3);
       }
@@ -234,9 +296,9 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readOnly, empty, busyKey, visibleReviews, visibleMistakes, day, revealed]);
+  }, [readOnly, empty, busyKey, visibleReviews, visibleMistakes, day, revealed, revealedMistakes]);
 
-  if (empty) {
+  if (empty && backlogTotal === 0) {
     if (!readOnly && doneToday > 0) {
       return (
         <section className="card reviewQueue queueCleared" aria-label="今日复习完成">
@@ -255,20 +317,22 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
   return (
     <section className="card reviewQueue" aria-label="今日待处理队列">
       <div className="sectionTitle">
-        <h2>{readOnly ? "当日待处理（回看）" : "先处理这些"}</h2>
+        <h2>{readOnly ? "当日待处理（回看）" : empty ? "今日容量已完成" : "先处理这些"}</h2>
         <span className="sectionHint">
           {readOnly
             ? "历史日期仅供回看，回到今天再打分"
-            : dueReviewsTotal && dueReviewsTotal > dueReviews.length
-              ? `今日先安排 ${dueReviews.length} 个复习，还有 ${dueReviewsTotal - dueReviews.length} 个排在后面 · 键盘 1-4 可直接评分`
-              : "复习到期的知识点和该回炉的错题 · 键盘 1-4 可给队首评分"}
+            : empty
+              ? `今日已完成 ${doneToday} 项，剩余 ${backlogTotal} 项可分摊到后续日期`
+              : hiddenCount > 0
+                ? `今日剩余容量 ${remainingToday} 项，已安排 ${scheduledCount} 项，还有 ${hiddenCount} 项排在后面`
+                : "先无提示作答并记录揭晓前信心，再核对结果"}
         </span>
       </div>
       {offline || pendingOffline ? <p className="offlineReviewStatus">{offline ? "离线模式：评分会保存在本机" : "正在同步"} · 待同步 {pendingOffline} 条</p> : null}
-      {!readOnly && examSprint ? <p className="examSprintHint">临考冲刺已开启：考试相关知识点会优先进入队列。</p> : null}
-      {!readOnly && backlogTotal > dailyLimit ? (
+      {!readOnly && sprintSubjectCodes.length ? <p className="examSprintHint">临考冲刺已开启：仅对应科目的真题知识点会优先进入队列。</p> : null}
+      {!readOnly && backlogTotal > remainingToday ? (
         <div className="backlogRecovery">
-          <span>当前积压 {backlogTotal} 项，超过每日上限 {dailyLimit} 项。</span>
+          <span>当前积压 {backlogTotal} 项，超过今日剩余容量 {remainingToday} 项（每日上限 {dailyLimit} 项）。</span>
           <span className="backlogActions">
             <button disabled={recoveryBusy} onClick={() => void handleRecovery(3)} type="button">分摊 3 天</button>
             <button disabled={recoveryBusy} onClick={() => void handleRecovery(7)} type="button">{recoveryBusy ? "分摊中…" : "分摊 7 天"}</button>
@@ -297,7 +361,7 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
           >
             {stamps[`review-${point.id}`] ? <span className="queueStamp">{stamps[`review-${point.id}`]}</span> : null}
             <div className="queueInfo">
-              <small>{point.subject_code} · {point.tier_name} · 掌握度 {point.mastery}</small>
+              <small>{point.subject_code} · {point.tier_name} · 系统状态 {point.status}</small>
               <strong><RichText text={point.prompt || point.title} /></strong>
               {revealed[point.id] ? (
                 <div className="queueAnswer">
@@ -308,27 +372,37 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
             </div>
             {!readOnly ? (
               revealed[point.id] ? (
-                <div className="scoreButtons" aria-label={`${point.title} 复习评分`}>
-                  {[0, 1, 2, 3].map((score) => (
-                    <button
-                      disabled={busyKey === `review-${point.id}`}
-                      key={score}
-                      onClick={() => void handleReview(point, score)}
-                      title={SCORE_LABELS[score]}
-                      type="button"
-                    >
-                      {SCORE_LABELS[score]}
-                    </button>
-                  ))}
+                <div className="reviewOutcome">
+                  <p className="attemptRecorded">作答证据已锁定，下面只记录核对后的结果。</p>
+                  <div className="scoreButtons" aria-label={`${point.title} 复习评分`}>
+                    {[0, 1, 2, 3].map((score) => (
+                      <button
+                        disabled={busyKey === `review-${point.id}`}
+                        key={score}
+                        onClick={() => void handleReview(point, score)}
+                        title={SCORE_LABELS[score]}
+                        type="button"
+                      >
+                        {SCORE_LABELS[score]}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ) : (
-                <button
-                  className="primaryButton revealAnswer"
-                  onClick={() => setRevealed((current) => ({ ...current, [point.id]: true }))}
-                  type="button"
-                >
-                  显示答案
-                </button>
+                <div className="reviewAttemptStage">
+                  <ReviewAttemptEvidence
+                    draft={attemptDrafts[`review-${point.id}`] || emptyAttemptDraft()}
+                    onChange={(next) => updateAttempt(`review-${point.id}`, next)}
+                  />
+                  <button
+                    className="primaryButton revealAnswer"
+                    disabled={!attemptDraftReady(attemptDrafts[`review-${point.id}`])}
+                    onClick={() => revealWithEvidence(`review-${point.id}`, "review", point.id)}
+                    type="button"
+                  >
+                    锁定尝试并显示答案
+                  </button>
+                </div>
               )
             ) : null}
           </QueuePresenceCard>
@@ -344,17 +418,37 @@ export function ReviewQueue({ day, offlineScope, dueReviews, dueReviewsTotal, du
             <div className="queueInfo">
               <small>错题回炉{mistake.knowledge_title ? ` · ${mistake.knowledge_title}` : ""}</small>
               <strong><RichText text={mistake.title} /></strong>
-              {mistake.cause ? <em><RichText text={mistake.cause} /></em> : null}
+              {revealedMistakes[mistake.id] && mistake.cause ? <em><RichText text={mistake.cause} /></em> : null}
             </div>
             {!readOnly ? (
-              <div className="scoreButtons">
-                <button disabled={busyKey === `mistake-${mistake.id}`} onClick={() => void handleMistake(mistake, 1)} type="button">
-                  仍错
-                </button>
-                <button disabled={busyKey === `mistake-${mistake.id}`} onClick={() => void handleMistake(mistake, 3)} type="button">
-                  已会
-                </button>
-              </div>
+              revealedMistakes[mistake.id] ? (
+                <div className="reviewOutcome">
+                  <p className="attemptRecorded">已锁定无提示重做证据；现在记录核对结果。</p>
+                  <div className="scoreButtons">
+                    <button disabled={busyKey === `mistake-${mistake.id}`} onClick={() => void handleMistake(mistake, 1)} type="button">
+                      仍错
+                    </button>
+                    <button disabled={busyKey === `mistake-${mistake.id}`} onClick={() => void handleMistake(mistake, 3)} type="button">
+                      已会
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="reviewAttemptStage">
+                  <ReviewAttemptEvidence
+                    draft={attemptDrafts[`mistake-${mistake.id}`] || emptyAttemptDraft()}
+                    onChange={(next) => updateAttempt(`mistake-${mistake.id}`, next)}
+                  />
+                  <button
+                    className="primaryButton revealAnswer"
+                    disabled={!attemptDraftReady(attemptDrafts[`mistake-${mistake.id}`])}
+                    onClick={() => revealWithEvidence(`mistake-${mistake.id}`, "mistake", mistake.id)}
+                    type="button"
+                  >
+                    锁定重做并查看错因
+                  </button>
+                </div>
+              )
             ) : null}
           </QueuePresenceCard>
         ))}

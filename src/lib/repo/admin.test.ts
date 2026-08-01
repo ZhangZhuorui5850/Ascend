@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import type { AccessContext } from "../access-context";
 import { createSession, getSessionContext, verifyPassword } from "../auth";
+import { authenticateAgentToken, createAgentToken } from "./agent-tokens";
 import {
   activateInvitation,
   createInvitation,
@@ -84,16 +85,35 @@ describe("Admin user lifecycle", () => {
     const admin = createAdmin(db);
     const target = createTestWorkspace(db, { email: "target@example.com" });
     const first = createSession({ userId: target.userId }, db);
+    const firstAgentToken = createAgentToken(db, {
+      ...target,
+      email: "target@example.com",
+      displayName: "Target",
+      role: "user",
+      status: "active",
+      mustChangePassword: false,
+    }, { name: "暂停前" }).token;
 
     setUserStatus(db, admin, target.userId, "suspended");
     expect(getSessionContext(first.token, db)).toBeNull();
+    expect(() => authenticateAgentToken(db, `Bearer ${firstAgentToken}`)).toThrow("invalid or expired");
     setUserStatus(db, admin, target.userId, "active");
     expect(getSessionContext(first.token, db)).toBeNull();
+    expect(() => authenticateAgentToken(db, `Bearer ${firstAgentToken}`)).toThrow("invalid or expired");
 
     const second = createSession({ userId: target.userId }, db);
+    const secondAgentToken = createAgentToken(db, {
+      ...target,
+      email: "target@example.com",
+      displayName: "Target",
+      role: "user",
+      status: "active",
+      mustChangePassword: false,
+    }, { name: "重置前" }).token;
     expect(() => resetUserPassword(db, admin, target.userId, "")).toThrow("临时密码不能为空");
     resetUserPassword(db, admin, target.userId, "zhang...");
     expect(getSessionContext(second.token, db)).toBeNull();
+    expect(() => authenticateAgentToken(db, `Bearer ${secondAgentToken}`)).toThrow("invalid or expired");
     const user = db.prepare("SELECT password_hash, must_change_password FROM users WHERE id = ?").get(target.userId) as {
       password_hash: string;
       must_change_password: number;
@@ -108,20 +128,44 @@ describe("Admin user lifecycle", () => {
     const target = createTestWorkspace(db, { email: "sessions@example.com" });
     createSession({ userId: target.userId }, db);
     createSession({ userId: target.userId }, db);
+    const agentToken = createAgentToken(db, {
+      ...target,
+      email: "sessions@example.com",
+      displayName: "Sessions",
+      role: "user",
+      status: "active",
+      mustChangePassword: false,
+    }, { name: "管理员撤销" }).token;
 
     expect(revokeUserSessions(db, admin, target.userId)).toBe(2);
+    expect(() => authenticateAgentToken(db, `Bearer ${agentToken}`)).toThrow("invalid or expired");
+    const accessAudit = db.prepare(`
+      SELECT action, summary_json FROM audit_logs
+      WHERE target_user_id = ? ORDER BY id DESC LIMIT 1
+    `).get(target.userId) as { action: string; summary_json: string };
+    expect(accessAudit.action).toBe("access.revoked");
+    expect(JSON.parse(accessAudit.summary_json)).toEqual({
+      revokedSessions: 2,
+      revokedAgentTokens: 1,
+    });
+
     writeAuditLog(db, {
       actorUserId: admin.userId,
       targetUserId: target.userId,
       action: "security.test",
       entityType: "user",
       entityId: target.userId,
-      summary: { revokedSessions: 2, password: "must-not-leak", token: "must-not-leak" },
+      summary: {
+        revokedSessions: 2,
+        revokedAgentTokens: 1,
+        password: "must-not-leak",
+        token: "must-not-leak",
+      },
     });
 
     const summaries = db.prepare("SELECT summary_json FROM audit_logs ORDER BY id DESC LIMIT 1").get() as {
       summary_json: string;
     };
-    expect(JSON.parse(summaries.summary_json)).toEqual({ revokedSessions: 2 });
+    expect(JSON.parse(summaries.summary_json)).toEqual({ revokedSessions: 2, revokedAgentTokens: 1 });
   });
 });

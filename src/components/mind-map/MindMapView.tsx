@@ -159,11 +159,11 @@ export function MindMapView({ subject, chapters, loosePoints, baseDepth, allowRo
           <div className="pointPanelWelcomeMark"><BrainCircuit size={26} /></div>
           <span className="eyebrow">学习工作台</span>
           <h3>选择一个知识点开始</h3>
-          <p>右侧会集中显示回忆卡、掌握度、学习资料、错题证据与复习轨迹。</p>
+          <p>右侧会集中显示回忆卡、系统证据状态、主观信心、学习资料、错题与复习轨迹。</p>
           <div className="pointPanelWelcomeSteps">
             <div><span><MousePointer2 size={15} /></span><p><strong>定位</strong><small>在图谱中选择知识点</small></p></div>
             <div><span><BrainCircuit size={15} /></span><p><strong>加工</strong><small>写检索问题与答案骨架</small></p></div>
-            <div><span><Layers3 size={15} /></span><p><strong>巩固</strong><small>用错题和复习记录校准掌握度</small></p></div>
+            <div><span><Layers3 size={15} /></span><p><strong>巩固</strong><small>用真实尝试、错题和复习结果更新证据状态</small></p></div>
           </div>
         </aside>
       )}

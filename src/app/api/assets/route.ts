@@ -1,5 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db";
+import { safeRecordOperationalEvent } from "@/lib/observability";
 import { createAssetFromUpload } from "@/lib/repo/library";
 import { assertSameOrigin, authErrorResponse, requireWorkspace } from "@/lib/request-auth";
 
@@ -31,6 +32,11 @@ export async function POST(request: Request) {
     revalidatePath("/assets");
     return Response.json(asset);
   } catch (error) {
+    try {
+      safeRecordOperationalEvent(getDb(), "upload_failure");
+    } catch {
+      // Preserve the upload error when the metrics database is unavailable too.
+    }
     return authErrorResponse(error);
   }
 }

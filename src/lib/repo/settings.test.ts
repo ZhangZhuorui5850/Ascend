@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { completeOnboarding, getSettings, saveLearningPreferences } from "./settings";
+import { completeOnboarding, getSettings, saveLearningPreferences, saveSettings } from "./settings";
 import { createTestDb, seedSubjectWithChapter } from "./testing";
 import { LEGACY_WORKSPACE_ID } from "./workspaces";
 
@@ -37,5 +37,32 @@ describe("settings repo", () => {
       weeklyMinutes: 300,
       enabledSubjectCodes: ["UNKNOWN"],
     })).toThrow("请至少选择一个当前科目");
+  });
+
+  it("rolls back every ordinary setting when a later field fails validation", () => {
+    const db = createTestDb();
+    seedSubjectWithChapter(db);
+    saveSettings(db, scope, {
+      learningGoal: "旧目标",
+      weeklyMinutes: 300,
+      enabledSubjectCodes: ["M1"],
+      examCountdowns: [{ name: "旧考试", date: "2026-12-01", subjectCode: "M1" }],
+      dailyReviewLimit: 12,
+    });
+
+    expect(() => saveSettings(db, scope, {
+      learningGoal: "不应保存的新目标",
+      weeklyMinutes: 600,
+      enabledSubjectCodes: ["M1"],
+      examCountdowns: [{ name: "不应保存的新考试", date: "2026-12-20", subjectCode: "M1" }],
+      dailyReviewLimit: 0,
+    })).toThrow("每日复习上限");
+
+    expect(getSettings(db, scope)).toMatchObject({
+      learningGoal: "旧目标",
+      weeklyMinutes: 300,
+      dailyReviewLimit: 12,
+      examCountdowns: [{ name: "旧考试", date: "2026-12-01", subjectCode: "M1" }],
+    });
   });
 });

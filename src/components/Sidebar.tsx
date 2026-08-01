@@ -8,6 +8,8 @@ import {
   BookOpen,
   CalendarDays,
   ClipboardList,
+  Code2,
+  type LucideIcon,
   GraduationCap,
   HardDrive,
   Home,
@@ -21,6 +23,7 @@ import {
   Users,
   ChevronLeft,
   MoreHorizontal,
+  Puzzle,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { AccountMenu } from "@/components/AccountMenu";
@@ -28,6 +31,7 @@ import { BrandLogo } from "@/components/BrandLogo";
 import type { DeviceAccount } from "@/lib/auth";
 import { todayKey } from "@/lib/dates";
 import { clearOfflineLearningData } from "@/lib/offline-review";
+import type { PluginId } from "@/lib/plugins/registry";
 import type { ModulePref } from "@/lib/repo/settings";
 
 async function logoutWithOfflineCleanup() {
@@ -36,7 +40,19 @@ async function logoutWithOfflineCleanup() {
   await logout();
 }
 
-export function getNavigation(role: "admin" | "user") {
+export type NavItem = {
+  href: string;
+  match: string;
+  exact: boolean;
+  label: string;
+  group: string;
+  icon: LucideIcon;
+  moduleKey?: ModulePref["key"];
+  pluginId?: PluginId;
+  mobileOverflow?: boolean;
+};
+
+export function getNavigation(role: "admin" | "user", enabledPluginIds: PluginId[] = []): NavItem[] {
   if (role === "admin") {
     return [
       { href: "/admin", match: "/admin", exact: true, label: "管理概览", group: "管理", icon: ShieldCheck },
@@ -44,7 +60,7 @@ export function getNavigation(role: "admin" | "user") {
       { href: "/admin/audit", match: "/admin/audit", exact: false, label: "操作日志", group: "系统", icon: ScrollText },
     ];
   }
-  return [
+  const links: NavItem[] = [
     { href: "/", match: "/", exact: true, label: "总览", group: "计划", icon: Home },
     { href: "/tasks", match: "/tasks", exact: false, label: "任务", group: "计划", icon: ListChecks },
     { href: `/day/${todayKey()}`, match: "/day", exact: false, label: "今日执行", group: "计划", icon: ClipboardList },
@@ -55,20 +71,42 @@ export function getNavigation(role: "admin" | "user") {
     { href: "/assets", match: "/assets", exact: false, label: "资料库", group: "洞察", icon: HardDrive, moduleKey: "assets" as const },
     { href: "/analytics", match: "/analytics", exact: false, label: "学习分析", group: "洞察", icon: BarChart3, moduleKey: "analytics" as const },
   ];
+  if (enabledPluginIds.includes("algorithms")) {
+    links.push({
+      href: "/practice/algorithms",
+      match: "/practice/algorithms",
+      exact: false,
+      label: "算法训练",
+      group: "扩展",
+      icon: Code2,
+      pluginId: "algorithms",
+      mobileOverflow: true,
+    });
+  }
+  links.push({
+    href: "/extensions",
+    match: "/extensions",
+    exact: false,
+    label: "扩展中心",
+    group: "系统",
+    icon: Puzzle,
+    mobileOverflow: true,
+  });
+  return links;
 }
-
-export type NavItem = ReturnType<typeof getNavigation>[number] & { moduleKey?: string };
 
 /** 按用户板块偏好过滤并排序导航：核心项固定在前，可选板块按偏好顺序排列、关闭的隐藏 */
 export function applyModulePrefs(links: NavItem[], modulePrefs?: ModulePref[]): NavItem[] {
   if (!modulePrefs?.length) return links;
-  const core = links.filter((item) => !item.moduleKey);
+  const core = links.filter((item) => !item.moduleKey && !item.pluginId && !item.mobileOverflow);
   const optionalByKey = new Map(links.filter((item) => item.moduleKey).map((item) => [item.moduleKey!, item]));
   const optional = modulePrefs
     .filter((pref) => pref.enabled)
     .map((pref) => optionalByKey.get(pref.key))
     .filter((item): item is NavItem => Boolean(item));
-  return [...core, ...optional];
+  const plugins = links.filter((item) => item.pluginId);
+  const overflow = links.filter((item) => item.mobileOverflow && !item.pluginId);
+  return [...core, ...optional, ...plugins, ...overflow];
 }
 
 function isLinkActive(pathname: string, item: NavItem): boolean {
@@ -81,6 +119,7 @@ export function Sidebar({
   accounts,
   collapsed,
   displayName,
+  enabledPluginIds,
   mobileOpen = false,
   modulePrefs,
   onNavigate,
@@ -91,6 +130,7 @@ export function Sidebar({
   accounts: DeviceAccount[];
   collapsed: boolean;
   displayName: string;
+  enabledPluginIds?: PluginId[];
   mobileOpen?: boolean;
   modulePrefs?: ModulePref[];
   onNavigate?: () => void;
@@ -98,7 +138,10 @@ export function Sidebar({
   role: "admin" | "user";
 }) {
   const pathname = usePathname();
-  const links = applyModulePrefs(getNavigation(role), role === "user" ? modulePrefs : undefined);
+  const links = applyModulePrefs(
+    getNavigation(role, role === "user" ? enabledPluginIds : undefined),
+    role === "user" ? modulePrefs : undefined,
+  );
   const className = ["sidebar", collapsed ? "isCollapsed" : "", mobileOpen ? "mobileOpen" : ""].filter(Boolean).join(" ");
 
   return (
@@ -145,19 +188,28 @@ export function Sidebar({
 }
 
 export function MobileNav({
+  enabledPluginIds,
   modulePrefs,
   onCaptureClick,
   role,
 }: {
+  enabledPluginIds?: PluginId[];
   modulePrefs?: ModulePref[];
   onCaptureClick?: () => void;
   role: "admin" | "user";
 }) {
   const pathname = usePathname();
-  const links = applyModulePrefs(getNavigation(role), role === "user" ? modulePrefs : undefined);
+  const links = applyModulePrefs(
+    getNavigation(role, role === "user" ? enabledPluginIds : undefined),
+    role === "user" ? modulePrefs : undefined,
+  );
   const [moreOpen, setMoreOpen] = useState(false);
-  const mobileLinks = role === "admin" ? links : links.filter((item) => !item.moduleKey);
-  const moreLinks = role === "admin" ? [] : links.filter((item) => item.moduleKey);
+  const mobileLinks = role === "admin"
+    ? links
+    : links.filter((item) => !item.moduleKey && !item.pluginId && !item.mobileOverflow);
+  const moreLinks = role === "admin"
+    ? []
+    : links.filter((item) => item.moduleKey || item.pluginId || item.mobileOverflow);
 
   return (
     <nav className="mobileNav" aria-label="移动端主导航" data-testid="mobile-nav">

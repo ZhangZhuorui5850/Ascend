@@ -1,0 +1,25 @@
+services:
+  gateway:
+    build:
+      context: ..
+      dockerfile: services/judge-gateway/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - judge-gateway.env
+    ports:
+      - "127.0.0.1:4100:4100"
+    volumes:
+      - judge_gateway_state:/var/lib/ascend-judge-gateway
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 1.0
+
+volumes:
+  judge_gateway_state:

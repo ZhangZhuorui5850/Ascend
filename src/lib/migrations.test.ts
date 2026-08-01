@@ -3,9 +3,10 @@ import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import * as ts from "typescript";
 import { afterEach, describe, expect, it } from "vitest";
 import { initializeDatabase } from "./db";
-import { getAppliedMigrations, runMigrations } from "./migrations";
+import { getAppliedMigrations, MIGRATION_RUN_HASHES, runMigrations } from "./migrations";
 import { LEGACY_WORKSPACE_ID } from "./repo/workspaces";
 
 describe("runMigrations", () => {
@@ -84,7 +85,32 @@ describe("runMigrations", () => {
     const mistakeColumns = (db.prepare("PRAGMA table_info(mistakes)").all() as Array<{ name: string }>).map((row) => row.name);
     expect(mistakeColumns).toEqual(expect.arrayContaining(["pass_count", "last_pass_day", "cause_category"]));
     const reviewColumns = (db.prepare("PRAGMA table_info(review_events)").all() as Array<{ name: string }>).map((row) => row.name);
-    expect(reviewColumns).toContain("operation_id");
+    expect(reviewColumns).toEqual(expect.arrayContaining([
+      "operation_id",
+      "event_type",
+      "attempt_mode",
+      "attempt_text",
+      "attempt_duration_seconds",
+      "pre_confidence",
+    ]));
+    const pointColumnsWithEvidence = (db.prepare("PRAGMA table_info(knowledge_points)").all() as Array<{ name: string }>).map((row) => row.name);
+    expect(pointColumnsWithEvidence).toContain("self_confidence");
+    const taskColumns = (db.prepare("PRAGMA table_info(day_tasks)").all() as Array<{ name: string }>).map((row) => row.name);
+    expect(taskColumns).toEqual(expect.arrayContaining([
+      "knowledge_point_id",
+      "activity_type",
+      "completion_criteria",
+      "source_type",
+      "source_id",
+      "verification_outcome",
+      "actual_minutes",
+      "completion_output",
+      "planned_verification_method",
+      "verification_method",
+      "verification_result",
+    ]));
+    const sessionColumns = (db.prepare("PRAGMA table_info(study_sessions)").all() as Array<{ name: string }>).map((row) => row.name);
+    expect(sessionColumns).toContain("task_id");
     expect(getAppliedMigrations(db)).toContain("0013_learning_engine");
   });
 
@@ -96,7 +122,14 @@ describe("runMigrations", () => {
     const workspaceColumns = (db.prepare("PRAGMA table_info(workspaces)").all() as Array<{ name: string }>).map((row) => row.name);
     expect(workspaceColumns).toContain("onboarding_completed");
     expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'mock_exams'").get()).toMatchObject({ name: "mock_exams" });
+    const mockExamColumns = (db.prepare("PRAGMA table_info(mock_exams)").all() as Array<{ name: string }>).map((row) => row.name);
+    expect(mockExamColumns).toEqual(expect.arrayContaining([
+      "diagnosis_status",
+      "scope_label",
+      "difficulty",
+    ]));
     expect(getAppliedMigrations(db)).toContain("0014_learning_product");
+    expect(getAppliedMigrations(db)).toContain("0018_mock_exam_diagnosis_status");
     expect(getAppliedMigrations(db)).toContain("0015_recovery_audit");
     expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'review_recovery_events'").get()).toMatchObject({ name: "review_recovery_events" });
   });
@@ -124,6 +157,80 @@ describe("runMigrations", () => {
     expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'agent_tokens'").get())
       .toMatchObject({ name: "agent_tokens" });
     expect(getAppliedMigrations(db)).toContain("0017_agent_tokens");
+  });
+
+  it("adds workspace plugin and algorithm training storage", () => {
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    runMigrations(db);
+
+    for (const table of ["workspace_plugins", "algorithm_problems", "algorithm_attempts"]) {
+      expect(
+        db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table),
+      ).toMatchObject({ name: table });
+    }
+    expect(getAppliedMigrations(db)).toContain("0026_plugin_platform_algorithms");
+    const attemptColumns = (
+      db.prepare("PRAGMA table_info(algorithm_attempts)").all() as Array<{ name: string }>
+    ).map((row) => row.name);
+    expect(attemptColumns).toEqual(expect.arrayContaining([
+      "max_hint_level",
+      "pre_confidence",
+      "independent",
+      "review_kind",
+      "source_verification",
+    ]));
+    const sessionColumns = (
+      db.prepare("PRAGMA table_info(study_sessions)").all() as Array<{ name: string }>
+    ).map((row) => row.name);
+    expect(sessionColumns).toEqual(expect.arrayContaining(["source_type", "source_id"]));
+  });
+
+  it("adds the asynchronous judge, encrypted code and review evidence schema", () => {
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    runMigrations(db);
+
+    for (const table of [
+      "algorithm_provider_connections",
+      "algorithm_problem_skills",
+      "algorithm_code_blobs",
+      "algorithm_code_drafts",
+      "algorithm_hint_events",
+      "algorithm_submissions",
+      "algorithm_reflections",
+      "algorithm_reviews",
+      "algorithm_error_cases",
+    ]) {
+      expect(
+        db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table),
+      ).toMatchObject({ name: table });
+    }
+    const problemColumns = (
+      db.prepare("PRAGMA table_info(algorithm_problems)").all() as Array<{ name: string }>
+    ).map((row) => row.name);
+    expect(problemColumns).toEqual(expect.arrayContaining([
+      "problem_mode",
+      "statement_markdown",
+      "judge_problem_ref",
+      "time_limit_ms",
+      "memory_limit_kb",
+      "hint_ladder_json",
+      "license_metadata_json",
+    ]));
+    const attemptColumns = (
+      db.prepare("PRAGMA table_info(algorithm_attempts)").all() as Array<{ name: string }>
+    ).map((row) => row.name);
+    expect(attemptColumns).toEqual(expect.arrayContaining([
+      "language",
+      "started_at",
+      "ended_at",
+      "active_seconds",
+      "plan_text",
+      "outcome",
+      "session_id",
+    ]));
+    expect(getAppliedMigrations(db)).toContain("0028_algorithm_judge_foundation");
   });
 
   it("assigns legacy domain rows to the legacy workspace", () => {
@@ -226,6 +333,154 @@ describe("runMigrations", () => {
     db.prepare("UPDATE schema_migrations SET checksum = ? WHERE version = ?").run("drifted", "0001_foundation");
 
     expect(() => runMigrations(db)).toThrow("Migration checksum mismatch for 0001_foundation");
+  });
+
+  it("locks every function migration to its source hash", () => {
+    const sourcePath = path.join(process.cwd(), "src/lib/migrations.ts");
+    const sourceText = readFileSync(sourcePath, "utf8");
+    const sourceFile = ts.createSourceFile(
+      sourcePath,
+      sourceText,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const computed: Record<string, string> = {};
+
+    function property(
+      object: ts.ObjectLiteralExpression,
+      name: string,
+    ): ts.Expression | undefined {
+      const match = object.properties.find(
+        (item): item is ts.PropertyAssignment =>
+          ts.isPropertyAssignment(item) && item.name.getText(sourceFile) === name,
+      );
+      return match?.initializer;
+    }
+
+    function visit(node: ts.Node): void {
+      if (
+        ts.isVariableDeclaration(node)
+        && node.name.getText(sourceFile) === "migrations"
+        && node.initializer
+        && ts.isArrayLiteralExpression(node.initializer)
+      ) {
+        for (const element of node.initializer.elements) {
+          if (!ts.isObjectLiteralExpression(element)) continue;
+          const version = property(element, "version");
+          const run = property(element, "run");
+          if (!version || !ts.isStringLiteral(version) || !run) continue;
+          computed[version.text] = createHash("sha256").update(run.getText(sourceFile)).digest("hex");
+        }
+      }
+      ts.forEachChild(node, visit);
+    }
+
+    visit(sourceFile);
+    expect(computed).toEqual(MIGRATION_RUN_HASHES);
+  });
+
+  it("upgrades legacy version-only checksums to locked function hashes", () => {
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    runMigrations(db);
+    const version = "0016_task_schedule";
+    const legacyChecksum = createHash("sha256").update(version).digest("hex");
+    db.prepare("UPDATE schema_migrations SET checksum = ? WHERE version = ?").run(legacyChecksum, version);
+
+    runMigrations(db);
+
+    expect(db.prepare("SELECT checksum FROM schema_migrations WHERE version = ?").get(version))
+      .toEqual({ checksum: MIGRATION_RUN_HASHES[version] });
+  });
+
+  it("normalizes nullable asset links and prevents duplicate relations", () => {
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    runMigrations(db);
+    db.prepare(`
+      INSERT INTO assets
+        (workspace_id, day, original_name, safe_name, relative_path)
+      VALUES (?, '2026-07-25', '讲义.pdf', 'lecture.pdf', 'lecture.pdf')
+    `).run(LEGACY_WORKSPACE_ID);
+    db.exec(`
+      DROP TABLE asset_links;
+      CREATE TABLE asset_links (
+        workspace_id TEXT NOT NULL,
+        asset_id INTEGER NOT NULL,
+        subject_code TEXT,
+        knowledge_point_id TEXT
+      );
+    `);
+    const insertLegacy = db.prepare(`
+      INSERT INTO asset_links (workspace_id, asset_id, subject_code, knowledge_point_id)
+      VALUES (?, 1, 'M1', NULL)
+    `);
+    insertLegacy.run(LEGACY_WORKSPACE_ID);
+    insertLegacy.run(LEGACY_WORKSPACE_ID);
+    db.prepare("DELETE FROM schema_migrations WHERE version = '0019_asset_links_integrity'").run();
+
+    runMigrations(db);
+
+    expect(db.prepare("SELECT COUNT(*) AS count FROM asset_links").get()).toEqual({ count: 1 });
+    const duplicate = db.prepare(`
+      INSERT OR IGNORE INTO asset_links
+        (workspace_id, asset_id, subject_code, chapter_id, knowledge_point_id)
+      VALUES (?, 1, 'M1', NULL, NULL)
+    `).run(LEGACY_WORKSPACE_ID);
+    expect(duplicate.changes).toBe(0);
+    expect(
+      (db.prepare("PRAGMA foreign_key_list(asset_links)").all() as Array<{ table: string }>)
+        .map((row) => row.table),
+    ).toEqual(expect.arrayContaining(["assets", "workspaces"]));
+
+    db.prepare(`
+      INSERT INTO users (id, email, password_hash, display_name)
+      VALUES ('asset-link-user', 'asset-link@example.com', 'hash', '关联测试')
+    `).run();
+    db.prepare(`
+      INSERT INTO workspaces (id, owner_user_id, display_name)
+      VALUES ('asset-link-workspace', 'asset-link-user', '关联测试')
+    `).run();
+    db.pragma("foreign_keys = ON");
+    expect(() => db.prepare(`
+      INSERT INTO asset_links
+        (workspace_id, asset_id, subject_code, chapter_id, knowledge_point_id)
+      VALUES ('asset-link-workspace', 1, 'M1', NULL, NULL)
+    `).run()).toThrow(/FOREIGN KEY/);
+    expect(getAppliedMigrations(db)).toContain("0019_asset_links_integrity");
+  });
+
+  it("refuses to silently drop invalid legacy asset links", () => {
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    runMigrations(db);
+    db.prepare(`
+      INSERT INTO assets
+        (workspace_id, day, original_name, safe_name, relative_path)
+      VALUES (?, '2026-07-25', '讲义.pdf', 'lecture.pdf', 'lecture.pdf')
+    `).run(LEGACY_WORKSPACE_ID);
+    db.exec(`
+      DROP TABLE asset_links;
+      CREATE TABLE asset_links (
+        workspace_id TEXT NOT NULL,
+        asset_id INTEGER NOT NULL,
+        subject_code TEXT,
+        knowledge_point_id TEXT
+      );
+    `);
+    db.prepare(`
+      INSERT INTO asset_links
+        (workspace_id, asset_id, subject_code, knowledge_point_id)
+      VALUES (?, 1, NULL, NULL)
+    `).run(LEGACY_WORKSPACE_ID);
+    db.prepare("DELETE FROM schema_migrations WHERE version = '0019_asset_links_integrity'").run();
+
+    expect(() => runMigrations(db)).toThrow(
+      "asset_links contains 1 invalid row(s); repair them before migration",
+    );
+    expect(db.prepare("SELECT COUNT(*) AS count FROM asset_links").get()).toEqual({ count: 1 });
+    expect(getAppliedMigrations(db)).not.toContain("0019_asset_links_integrity");
   });
 
   it("unifies legacy knowledge tags into knowledge points and migrates asset links", () => {

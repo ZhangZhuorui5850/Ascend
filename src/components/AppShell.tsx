@@ -9,23 +9,32 @@ import { MobileNav, Sidebar } from "@/components/Sidebar";
 import { CommandPalette } from "@/components/CommandPalette";
 import { TopBar } from "@/components/TopBar";
 import type { DeviceAccount } from "@/lib/auth";
+import { setActiveOfflineWorkspace } from "@/lib/offline-review";
+import type { PluginId } from "@/lib/plugins/registry";
 import type { CaptureSubject } from "@/lib/repo/knowledge";
 import type { ModulePref } from "@/lib/repo/settings";
 
 type AppShellProps = {
-  user: { displayName: string; role: "admin" | "user"; account: DeviceAccount; accounts: DeviceAccount[] } | null;
+  user: { displayName: string; role: "admin" | "user"; workspaceKey: string | null; account: DeviceAccount; accounts: DeviceAccount[] } | null;
   hierarchy: CaptureSubject[];
+  enabledPluginIds?: PluginId[];
   modulePrefs?: ModulePref[];
   children: React.ReactNode;
 };
 
-export function AppShell({ user, hierarchy, modulePrefs, children }: AppShellProps) {
+export function AppShell({ user, hierarchy, enabledPluginIds, modulePrefs, children }: AppShellProps) {
   const pathname = usePathname();
   const [captureOpen, setCaptureOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const isPlannerRoute = pathname.startsWith("/tasks") || pathname.startsWith("/calendar");
+
+  useEffect(() => {
+    void setActiveOfflineWorkspace(user?.workspaceKey ?? null).catch((error) => {
+      console.warn("离线工作区标记更新失败", error);
+    });
+  }, [user?.workspaceKey]);
 
   useEffect(() => {
     function openCapture() {
@@ -64,6 +73,7 @@ export function AppShell({ user, hierarchy, modulePrefs, children }: AppShellPro
         accounts={user.accounts}
         collapsed={sidebarCollapsed && !mobileNavOpen}
         displayName={user.displayName}
+        enabledPluginIds={enabledPluginIds}
         mobileOpen={mobileNavOpen}
         modulePrefs={modulePrefs}
         onNavigate={() => setMobileNavOpen(false)}
@@ -101,8 +111,8 @@ export function AppShell({ user, hierarchy, modulePrefs, children }: AppShellPro
           ) : null}
         </>
       ) : null}
-      <MobileNav modulePrefs={modulePrefs} onCaptureClick={() => setCaptureOpen(true)} role={user.role} />
-      <CommandPalette modulePrefs={modulePrefs} onCapture={() => setCaptureOpen(true)} open={commandOpen} role={user.role} setOpen={setCommandOpen} />
+      <MobileNav enabledPluginIds={enabledPluginIds} modulePrefs={modulePrefs} onCaptureClick={() => setCaptureOpen(true)} role={user.role} />
+      <CommandPalette enabledPluginIds={enabledPluginIds} modulePrefs={modulePrefs} onCapture={() => setCaptureOpen(true)} open={commandOpen} role={user.role} setOpen={setCommandOpen} />
     </div>
   );
 }

@@ -17,6 +17,8 @@ export function FileListView({
   sortKey,
   sortAsc,
   onToggleSort,
+  pagination,
+  onFilePageChange,
   creatingFolder,
   folderName,
   onFolderNameChange,
@@ -50,6 +52,8 @@ export function FileListView({
   sortKey: SortKey;
   sortAsc: boolean;
   onToggleSort: (key: SortKey) => void;
+  pagination: { page: number; pageCount: number; pageSize: number; total: number } | null;
+  onFilePageChange: (page: number) => void;
   creatingFolder: boolean;
   folderName: string;
   onFolderNameChange: (value: string) => void;
@@ -270,6 +274,29 @@ export function FileListView({
         <p className="empty">
           {isSearch ? "没有匹配的文件。" : "这个文件夹是空的。上传文件或新建子文件夹。"}
         </p>
+      ) : null}
+      {pagination && pagination.total > pagination.pageSize ? (
+        <nav aria-label="当前文件夹分页" className="devicePager">
+          <button
+            className="devicePageBtn"
+            disabled={pagination.page <= 1}
+            onClick={() => onFilePageChange(pagination.page - 1)}
+            type="button"
+          >
+            上一页
+          </button>
+          <span>
+            第 {pagination.page}/{pagination.pageCount} 页 · 共 {pagination.total} 个文件
+          </span>
+          <button
+            className="devicePageBtn"
+            disabled={pagination.page >= pagination.pageCount}
+            onClick={() => onFilePageChange(pagination.page + 1)}
+            type="button"
+          >
+            下一页
+          </button>
+        </nav>
       ) : null}
     </div>
   );

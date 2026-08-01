@@ -1,8 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { actionFailure } from "@/lib/action-failure";
 import { getDb } from "@/lib/db";
-import { createMockExam, type MockExamBreakdown } from "@/lib/repo/mock-exams";
+import {
+  createMockExam,
+  type MockExamBreakdownInput,
+  type MockExamDifficulty,
+} from "@/lib/repo/mock-exams";
 import { requireWorkspace } from "@/lib/request-auth";
 import type { ActionResult } from "./day";
 
@@ -13,16 +18,21 @@ export async function createMockExamAction(input: {
   score: number;
   maxScore: number;
   durationMinutes?: number;
+  scopeLabel?: string;
+  difficulty?: MockExamDifficulty;
   notes?: string;
-  breakdown?: MockExamBreakdown[];
+  breakdown?: MockExamBreakdownInput[];
+  diagnosisComplete?: boolean;
+  evidenceComplete?: boolean;
 }): Promise<ActionResult> {
   try {
     const access = await requireWorkspace();
     createMockExam(getDb(), access, input);
     revalidatePath("/mock-exams");
     revalidatePath("/analytics");
+    revalidatePath("/");
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "保存失败" };
+    return actionFailure("mock-exams", error, "保存失败");
   }
 }

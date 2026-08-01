@@ -2,6 +2,7 @@
 
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { actionFailure } from "@/lib/action-failure";
 import {
   SESSION_COOKIE,
   authenticateUser,
@@ -84,7 +85,7 @@ export async function updateRequiredPassword(_previous: LoginState, formData: Fo
     setSessionCookies(cookieStore, session.token, tokens, session.expiresAt);
     destination = access.role === "admin" ? "/admin" : "/";
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "密码更新失败" };
+    return { error: actionFailure("auth", error, "密码更新失败").error };
   }
   redirect(destination);
 }

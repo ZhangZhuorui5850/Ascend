@@ -1,14 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { UserStatusActions } from "@/components/admin/UserStatusActions";
+import { AlgorithmPilotAdminActions } from "@/components/admin/AlgorithmPilotAdminActions";
 import { Eye } from "lucide-react";
 import { getDb } from "@/lib/db";
 import { getAdminUser } from "@/lib/repo/admin";
+import { getAlgorithmPilotEnrollment } from "@/lib/repo/algorithm-pilot";
 
 export default async function AdminUserPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const user = getAdminUser(getDb(), id);
+  const db = getDb();
+  const user = getAdminUser(db, id);
   if (!user || user.role !== "user") notFound();
+  const pilotEnrollment = user.workspace_id
+    ? getAlgorithmPilotEnrollment(db, { workspaceId: user.workspace_id })
+    : null;
 
   return (
     <div className="pageStack">
@@ -27,6 +33,9 @@ export default async function AdminUserPage({ params }: { params: Promise<{ id: 
         status={user.status}
         quotaBytes={user.storage_quota_bytes || 0}
       />
+      {pilotEnrollment ? (
+        <AlgorithmPilotAdminActions initial={pilotEnrollment} userId={user.id} />
+      ) : null}
     </div>
   );
 }

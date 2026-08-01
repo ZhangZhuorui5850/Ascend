@@ -101,6 +101,14 @@ export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, 
     router.push(path ? `/assets?folder=${encodeURIComponent(path)}` : "/assets");
   }
 
+  function openFilePage(page: number) {
+    setSelectedFileId(null);
+    const params = new URLSearchParams();
+    if (explorer.currentPath) params.set("folder", explorer.currentPath);
+    if (page > 1) params.set("page", String(page));
+    router.push(params.size ? `/assets?${params}` : "/assets");
+  }
+
   function report(result: ActionResult) {
     setError(result.ok ? "" : result.error || "操作失败");
     if (result.ok) router.refresh();
@@ -294,6 +302,7 @@ export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, 
             folderName={folderName}
             folders={explorer.folders}
             isSearch={isSearch}
+            onFilePageChange={openFilePage}
             onCancelNewFolder={() => { setFolderName(""); setCreatingFolder(false); }}
             onCancelRenameFile={() => setRenamingFile(null)}
             onCancelRenameFolder={() => setRenamingFolder(null)}
@@ -319,6 +328,12 @@ export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, 
             selectedIds={selectedIds}
             sortAsc={sortAsc}
             sortKey={sortKey}
+            pagination={isSearch ? null : {
+              page: explorer.filePage,
+              pageCount: explorer.filePageCount,
+              pageSize: explorer.filePageSize,
+              total: explorer.currentFolderFileCount,
+            }}
             viewMode={viewMode}
           />
 

@@ -9,6 +9,7 @@ import { attachDragCard, treeDropEdgeFromEvent, type DropEdge } from "@/componen
 import { useFeedback } from "@/components/FeedbackProvider";
 import { sortPointsForView, type PointSortMode } from "@/components/point-sort";
 import { RichText } from "@/components/RichText";
+import { evidenceStateLabel } from "@/lib/review-evidence";
 import type { PointMoveTarget, Report, TreeControls } from "@/components/subject-workbench/shared";
 import { MapAddCard } from "./MapAddCard";
 
@@ -146,7 +147,11 @@ export function MapPointNode({ point, chapterId, parentPointId, pointDepth, pare
           </span>
         )}
         {point.exam ? <Star aria-label="真题考点" className="mapExamStar" fill="currentColor" size={11} /> : null}
-        {due ? <small className="mapDue">待复习</small> : <small className="mapMastery">{point.mastery}</small>}
+        {due ? <small className="mapDue">待复习</small> : <small className="mapMastery">{evidenceStateLabel({
+          evidenceSampleCount: point.evidence_sample_count,
+          lastEvidenceScore: point.last_evidence_score,
+          legacyReviewCount: point.reviews,
+        })}</small>}
         {hasChildren ? (
           <button
             aria-expanded={!collapsed}

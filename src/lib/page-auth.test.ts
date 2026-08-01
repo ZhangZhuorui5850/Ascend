@@ -31,10 +31,22 @@ describe("workspaceRedirectTarget", () => {
   });
 
   it("sends an admin to the admin console instead of a learning workspace", () => {
-    expect(workspaceRedirectTarget(makeContext({ role: "admin", workspaceId: null }), "/")).toBe("/admin");
+    expect(workspaceRedirectTarget(makeContext({ role: "admin", workspaceId: null }), "/", true)).toBe("/admin");
   });
 
   it("returns null for an active user with a workspace", () => {
     expect(workspaceRedirectTarget(makeContext(), "/")).toBeNull();
+  });
+
+  it("sends an incomplete ordinary user to onboarding even when another path was requested", () => {
+    expect(workspaceRedirectTarget(makeContext(), "/day/2026-07-25", true)).toBe("/onboarding");
+  });
+
+  it("allows the onboarding page itself to avoid a redirect loop", () => {
+    expect(workspaceRedirectTarget(makeContext(), "/onboarding", true)).toBeNull();
+  });
+
+  it("keeps forced password changes ahead of onboarding", () => {
+    expect(workspaceRedirectTarget(makeContext({ mustChangePassword: true }), "/", true)).toBe("/change-password");
   });
 });

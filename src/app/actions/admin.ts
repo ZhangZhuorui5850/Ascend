@@ -1,7 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { actionFailure } from "@/lib/action-failure";
 import { getDb } from "@/lib/db";
+import {
+  setAlgorithmPilotStatus,
+  type AlgorithmPilotEnrollment,
+} from "@/lib/repo/algorithm-pilot";
 import {
   createInvitation,
   resetUserPassword,
@@ -19,7 +24,7 @@ export type InvitationActionResult = ActionResult & {
 };
 
 function failure(error: unknown): ActionResult {
-  return { ok: false, error: error instanceof Error ? error.message : "操作失败" };
+  return actionFailure("admin", error);
 }
 
 function refreshAdmin(targetUserId?: string): void {
@@ -93,6 +98,21 @@ export async function setWorkspaceQuotaAction(targetUserId: string, quotaBytes: 
     setWorkspaceQuota(getDb(), admin, targetUserId, quotaBytes);
     refreshAdmin(targetUserId);
     return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function setAlgorithmPilotStatusAction(
+  targetUserId: string,
+  input: { status: "approved" | "paused"; cohort?: string },
+): Promise<ActionResult & { enrollment?: AlgorithmPilotEnrollment }> {
+  try {
+    const admin = await requireAdmin();
+    const enrollment = setAlgorithmPilotStatus(getDb(), admin, targetUserId, input);
+    refreshAdmin(targetUserId);
+    revalidatePath("/practice/algorithms");
+    return { ok: true, enrollment };
   } catch (error) {
     return failure(error);
   }

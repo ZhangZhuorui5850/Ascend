@@ -1,6 +1,10 @@
 import type Database from "better-sqlite3";
 import type { WorkspaceScope } from "../access-context";
 import { assertDateKey, shiftDateKey } from "../dates";
+import {
+  normalizeReviewEvidence,
+  type ReviewEvidenceInput,
+} from "../review-evidence";
 import { nextIntervalStep, nextReviewDate } from "../review-schedule";
 import { ensureDay } from "./days";
 import { deriveStatus } from "./mastery";
@@ -191,7 +195,13 @@ function restorePointSnapshot(
 export function createReviewEvent(
   db: Database.Database,
   scope: WorkspaceScope,
-  input: { day: string; knowledgePointId?: string; score: number; note?: string; operationId?: string },
+  input: {
+    day: string;
+    knowledgePointId?: string;
+    score: number;
+    note?: string;
+    operationId?: string;
+  } & ReviewEvidenceInput,
 ): ReviewUndo {
   const day = assertDateKey(input.day);
   const knowledgePointId = input.knowledgePointId?.trim() || null;
@@ -205,11 +215,24 @@ export function createReviewEvent(
       if (existing) return { eventId: existing.id, knowledgePointId: null, pointSnapshot: null };
     }
     ensureDay(db, scope, day);
+    const evidence = normalizeReviewEvidence(input);
     const pointSnapshot = knowledgePointId ? readPointSnapshot(db, scope, knowledgePointId) : null;
     const result = db.prepare(`
-      INSERT INTO review_events (workspace_id, day, knowledge_point_id, score, note, operation_id)
-      VALUES (@workspaceId, @day, @knowledgePointId, @score, @note, @operationId)
-    `).run({ workspaceId: scope.workspaceId, day, knowledgePointId, score, note: (input.note || "").trim(), operationId });
+      INSERT INTO review_events
+        (workspace_id, day, knowledge_point_id, score, note, operation_id, event_type,
+         attempt_mode, attempt_text, attempt_duration_seconds, pre_confidence)
+      VALUES
+        (@workspaceId, @day, @knowledgePointId, @score, @note, @operationId, 'point_review',
+         @attemptMode, @attemptText, @attemptDurationSeconds, @preConfidence)
+    `).run({
+      workspaceId: scope.workspaceId,
+      day,
+      knowledgePointId,
+      score,
+      note: (input.note || "").trim(),
+      operationId,
+      ...evidence,
+    });
     if (knowledgePointId) applyReviewOutcome(db, scope, { knowledgePointId, day, score });
     return { eventId: Number(result.lastInsertRowid), knowledgePointId, pointSnapshot };
   })();
@@ -238,11 +261,49 @@ export function spreadReviewBacklog(
       AND next_review IS NOT NULL AND next_review <= @day
     ORDER BY exam_priority, tier_priority, next_review, mastery_priority
   `).all({ workspaceId: scope.workspaceId, day }) as Array<{ kind: "point" | "mistake"; id: string }>;
-  const overflow = items.slice(dailyLimit);
+  const completedToday = (db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM review_events
+    WHERE workspace_id = ? AND day = ?
+  `).get(scope.workspaceId, day) as { count: number }).count;
+  const remainingCapacity = Math.max(0, dailyLimit - completedToday);
+  const overflow = items.slice(remainingCapacity);
+  const futureDates = Array.from(
+    { length: horizonDays },
+    (_, index) => shiftDateKey(day, index + 1),
+  );
+  const futureEnd = futureDates.at(-1)!;
+  const scheduledRows = db.prepare(`
+    SELECT next_review AS day, COUNT(*) AS count
+    FROM (
+      SELECT next_review
+      FROM knowledge_points
+      WHERE workspace_id = @workspaceId
+        AND next_review BETWEEN @futureStart AND @futureEnd
+      UNION ALL
+      SELECT next_review
+      FROM mistakes
+      WHERE workspace_id = @workspaceId
+        AND graduated = 0
+        AND next_review BETWEEN @futureStart AND @futureEnd
+    )
+    GROUP BY next_review
+  `).all({
+    workspaceId: scope.workspaceId,
+    futureStart: futureDates[0],
+    futureEnd,
+  }) as Array<{ day: string; count: number }>;
+  const scheduledByDay = new Map(scheduledRows.map((row) => [row.day, row.count]));
+  const futureSlots = futureDates.flatMap((date) =>
+    Array.from(
+      { length: Math.max(0, dailyLimit - (scheduledByDay.get(date) || 0)) },
+      () => date,
+    ));
+  const assignments = overflow.slice(0, futureSlots.length);
   let throughDate = day;
   db.transaction(() => {
-    overflow.forEach((item, index) => {
-      const scheduled = shiftDateKey(day, 1 + (index % horizonDays));
+    assignments.forEach((item, index) => {
+      const scheduled = futureSlots[index];
       throughDate = scheduled > throughDate ? scheduled : throughDate;
       if (item.kind === "point") {
         db.prepare("UPDATE knowledge_points SET next_review = ? WHERE workspace_id = ? AND id = ?")
@@ -255,9 +316,9 @@ export function spreadReviewBacklog(
     db.prepare(`
       INSERT INTO review_recovery_events (workspace_id, day, moved_count, horizon_days)
       VALUES (?, ?, ?, ?)
-    `).run(scope.workspaceId, day, overflow.length, horizonDays);
+    `).run(scope.workspaceId, day, assignments.length, horizonDays);
   })();
-  return { moved: overflow.length, throughDate };
+  return { moved: assignments.length, throughDate };
 }
 
 /** 撤销一次复习评分：删除事件并回写知识点快照。 */
@@ -298,10 +359,16 @@ export function undoReattempt(db: Database.Database, scope: WorkspaceScope, undo
 export function reattemptMistake(
   db: Database.Database,
   scope: WorkspaceScope,
-  input: { id: number; day: string; score: number },
-): { id: number; graduated: number; nextReview: string | null; undo: MistakeUndo } {
+  input: {
+    id: number;
+    day: string;
+    score: number;
+    operationId?: string;
+  } & ReviewEvidenceInput,
+): { id: number; graduated: number; nextReview: string | null; undo: MistakeUndo | null } {
   const day = assertDateKey(input.day);
   return db.transaction(() => {
+    const operationId = input.operationId?.trim() || null;
     const mistake = db.prepare(`
       SELECT id, knowledge_point_id, graduated, next_review, pass_count, last_pass_day
       FROM mistakes WHERE workspace_id = ? AND id = ?
@@ -316,6 +383,26 @@ export function reattemptMistake(
         }
       | undefined;
     if (!mistake) throw new Error("错题不存在");
+    if (operationId) {
+      const existing = db.prepare(`
+        SELECT id
+        FROM review_events
+        WHERE workspace_id = ? AND operation_id = ?
+      `).get(scope.workspaceId, operationId) as { id: number } | undefined;
+      if (existing) {
+        return {
+          id: input.id,
+          graduated: mistake.graduated,
+          nextReview: mistake.next_review,
+          undo: null,
+        };
+      }
+    }
+    if (mistake.graduated) throw new Error("错题已经毕业");
+    if (mistake.next_review && day < mistake.next_review) {
+      throw new Error(`错题将在 ${mistake.next_review} 到期`);
+    }
+    const evidence = normalizeReviewEvidence(input);
 
     const mistakeSnapshot = {
       graduated: mistake.graduated,
@@ -347,14 +434,24 @@ export function reattemptMistake(
       lastPassDay,
     });
 
-    let eventId: number | null = null;
+    ensureDay(db, scope, day);
+    const inserted = db.prepare(`
+      INSERT INTO review_events
+        (workspace_id, day, knowledge_point_id, score, note, operation_id, event_type,
+         attempt_mode, attempt_text, attempt_duration_seconds, pre_confidence)
+      VALUES
+        (@workspaceId, @day, @knowledgePointId, @score, '错题回炉', @operationId, 'mistake_reattempt',
+         @attemptMode, @attemptText, @attemptDurationSeconds, @preConfidence)
+    `).run({
+      workspaceId: scope.workspaceId,
+      day,
+      knowledgePointId: mistake.knowledge_point_id,
+      score,
+      operationId,
+      ...evidence,
+    });
+    const eventId = Number(inserted.lastInsertRowid);
     if (mistake.knowledge_point_id) {
-      ensureDay(db, scope, day);
-      const inserted = db.prepare(`
-        INSERT INTO review_events (workspace_id, day, knowledge_point_id, score, note)
-        VALUES (@workspaceId, @day, @knowledgePointId, @score, '错题回炉')
-      `).run({ workspaceId: scope.workspaceId, day, knowledgePointId: mistake.knowledge_point_id, score });
-      eventId = Number(inserted.lastInsertRowid);
       applyReviewOutcome(db, scope, { knowledgePointId: mistake.knowledge_point_id, day, score });
     }
 

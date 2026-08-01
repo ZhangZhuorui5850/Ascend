@@ -1,0 +1,190 @@
+name: ascend-judge-staging
+
+x-judge0-environment: &judge0-environment
+  JUDGE0_TELEMETRY_ENABLE: "false"
+  MAINTENANCE_MODE: "false"
+  ENABLE_WAIT_RESULT: "false"
+  ENABLE_COMPILER_OPTIONS: "false"
+  ENABLE_COMMAND_LINE_ARGUMENTS: "false"
+  ENABLE_SUBMISSION_DELETE: "false"
+  ENABLE_BATCHED_SUBMISSIONS: "true"
+  MAX_SUBMISSION_BATCH_SIZE: "20"
+  ENABLE_CALLBACKS: "false"
+  ENABLE_ADDITIONAL_FILES: "false"
+  SUBMISSION_CACHE_DURATION: "0"
+  USE_DOCS_AS_HOMEPAGE: "false"
+  INTERVAL: "0.1"
+  COUNT: "2"
+  MAX_QUEUE_SIZE: "100"
+  ALLOW_ORIGIN: ""
+  DISALLOW_ORIGIN: ""
+  ALLOW_IP: ""
+  DISALLOW_IP: ""
+  AUTHN_HEADER: X-Auth-Token
+  AUTHN_TOKEN: ${JUDGE0_AUTH_TOKEN:?set JUDGE0_AUTH_TOKEN}
+  AUTHZ_HEADER: X-Auth-User
+  AUTHZ_TOKEN: ""
+  REDIS_HOST: judge0-redis
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+  POSTGRES_HOST: judge0-db
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: judge0
+  POSTGRES_USER: judge0
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+  CPU_TIME_LIMIT: "1"
+  MAX_CPU_TIME_LIMIT: "1"
+  CPU_EXTRA_TIME: "0"
+  MAX_CPU_EXTRA_TIME: "0"
+  WALL_TIME_LIMIT: "2"
+  MAX_WALL_TIME_LIMIT: "2"
+  MEMORY_LIMIT: "131072"
+  MAX_MEMORY_LIMIT: "131072"
+  STACK_LIMIT: "65536"
+  MAX_STACK_LIMIT: "65536"
+  MAX_PROCESSES_AND_OR_THREADS: "1"
+  MAX_MAX_PROCESSES_AND_OR_THREADS: "1"
+  ENABLE_PER_PROCESS_AND_THREAD_TIME_LIMIT: "true"
+  ALLOW_ENABLE_PER_PROCESS_AND_THREAD_TIME_LIMIT: "false"
+  ENABLE_PER_PROCESS_AND_THREAD_MEMORY_LIMIT: "true"
+  ALLOW_ENABLE_PER_PROCESS_AND_THREAD_MEMORY_LIMIT: "false"
+  MAX_FILE_SIZE: "64"
+  MAX_MAX_FILE_SIZE: "64"
+  NUMBER_OF_RUNS: "1"
+  MAX_NUMBER_OF_RUNS: "1"
+  REDIRECT_STDERR_TO_STDOUT: "false"
+  MAX_EXTRACT_SIZE: "0"
+  ALLOW_ENABLE_NETWORK: "false"
+  ENABLE_NETWORK: "false"
+  RAILS_ENV: production
+  RAILS_MAX_THREADS: "2"
+  RAILS_SERVER_PROCESSES: "1"
+  SECRET_KEY_BASE: ${SECRET_KEY_BASE:?set SECRET_KEY_BASE}
+
+x-judge0-common: &judge0-common
+  image: judge0/judge0:1.13.1
+  environment:
+    <<: *judge0-environment
+  networks:
+    - judge_internal
+  restart: unless-stopped
+  privileged: true
+  logging:
+    driver: json-file
+    options:
+      max-size: 20m
+      max-file: "3"
+
+services:
+  judge0-server:
+    <<: *judge0-common
+    depends_on:
+      judge0-db:
+        condition: service_healthy
+      judge0-redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:2358:2358"
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 256
+
+  judge0-workers:
+    <<: *judge0-common
+    command: ["./scripts/workers"]
+    depends_on:
+      judge0-db:
+        condition: service_healthy
+      judge0-redis:
+        condition: service_healthy
+    mem_limit: 5g
+    cpus: 3.0
+    pids_limit: 512
+
+  judge0-db:
+    image: postgres:16.2
+    environment:
+      POSTGRES_DB: judge0
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - judge0_postgres:/var/lib/postgresql/data
+    networks:
+      - judge_internal
+    restart: unless-stopped
+    mem_limit: 768m
+    cpus: 0.5
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  judge0-redis:
+    image: redis:7.2.4
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    command:
+      - bash
+      - -ec
+      - exec docker-entrypoint.sh --appendonly no --requirepass "$$REDIS_PASSWORD"
+    networks:
+      - judge_internal
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.25
+    pids_limit: 64
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -qx PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  gateway:
+    profiles: ["gateway"]
+    build:
+      context: ../..
+      dockerfile: services/judge-gateway/Dockerfile
+    environment:
+      ASCEND_JUDGE_GATEWAY_TOKEN: ${ASCEND_JUDGE_GATEWAY_TOKEN:?set ASCEND_JUDGE_GATEWAY_TOKEN}
+      ASCEND_JUDGE_GATEWAY_PORT: "4100"
+      ASCEND_JUDGE_GATEWAY_DATA: /var/lib/ascend-judge-gateway
+      ASCEND_JUDGE_PROBLEMS_FILE: /gateway/services/judge-gateway/problems.json
+      ASCEND_JUDGE_MAX_ACTIVE: "20"
+      ASCEND_JUDGE_MAX_DAILY: "500"
+      JUDGE0_URL: http://judge0-server:2358
+      JUDGE0_AUTH_TOKEN: ${JUDGE0_AUTH_TOKEN:?set JUDGE0_AUTH_TOKEN}
+      JUDGE0_LANGUAGE_IDS_JSON: ${JUDGE0_LANGUAGE_IDS_JSON:?set JUDGE0_LANGUAGE_IDS_JSON}
+    depends_on:
+      - judge0-server
+      - judge0-workers
+    ports:
+      - "127.0.0.1:4100:4100"
+    volumes:
+      - judge_gateway_state:/var/lib/ascend-judge-gateway
+    networks:
+      - judge_internal
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777,noexec,nosuid,nodev
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 1.0
+
+networks:
+  judge_internal:
+    internal: true
+
+volumes:
+  judge0_postgres:
+  judge_gateway_state:

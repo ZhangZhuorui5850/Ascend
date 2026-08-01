@@ -1,0 +1,16 @@
+[Unit]
+Description=Ascend verified backup and isolated restore check
+Documentation=file:/opt/apps/ascend/deploy/README.md
+Requires=docker.service
+After=docker.service
+ConditionPathExists=/opt/apps/ascend/compose.production.yml
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/apps/ascend
+ExecStart=/usr/bin/docker compose -f compose.production.yml exec -T app node scripts/backup-verified.mjs
+TimeoutStartSec=2h
+Nice=10
+IOSchedulingClass=idle
+IOSchedulingPriority=7
+SyslogIdentifier=ascend-backup

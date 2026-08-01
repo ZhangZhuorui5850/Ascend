@@ -184,7 +184,7 @@ function NoteCard({ note, clientKey, entering, leaving, onUpdate, onRemove, onEn
     onExitComplete: () => onExitComplete(note.id),
   });
   return (
-    <div className="noteCard" data-entering={entering ? "" : undefined} data-leaving={leaving ? "" : undefined} onAnimationEnd={onAnimationEnd} ref={elementRef}>
+    <div className="noteCard" data-entering={entering ? "" : undefined} data-leaving={leaving ? "" : undefined} id={note.id > 0 ? `note-${note.id}` : undefined} onAnimationEnd={onAnimationEnd} ref={elementRef}>
       {editing ? (
         <textarea
           aria-label="随笔内容"

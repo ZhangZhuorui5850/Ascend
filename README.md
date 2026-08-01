@@ -19,7 +19,9 @@ Agent、MCP 与命令行接入见 [Ascend Agent Interface 手册](./docs/agent-i
 - `/mistakes`：错因分类、跨日两次通过的回炉流程。
 - `/mock-exams`：模考成绩、能力拆分、趋势和薄弱项分析。
 - `/analytics`：近七天统计、弱点优先级、模考摘要和科目进度。
-- `/settings`：账户、学习目标、科目、考试倒计时、复习上限、Agent 令牌、登录设备和外观。
+- `/extensions`：启用、停用和排序经过仓库审查的内置扩展；停用保留数据并关闭入口。
+- `/practice/algorithms`：算法题外链收录、训练结果、提示级别、错因、独立完成、延迟复测与迁移证据；当前不在主应用执行用户代码。
+- `/settings`：账户、学习目标、科目、考试倒计时、复习上限、扩展、Agent 令牌、登录设备和外观。
 - `/admin`：用户邀请、账号状态、密码重置、容量、只读工作区和审计日志。
 - `/invite/[token]`：一次性邀请激活页面。
 
@@ -66,7 +68,7 @@ npm test                  # Vitest 单元测试
 npm run lint              # ESLint
 npm run build             # Next.js 生产构建
 npm run verify:migration  # 工作区归属、关系和文件完整性
-npm run verify:backup     # 备份标记、SQLite 完整性和镜像一致性
+npm run verify:backup     # 数据库/附件 hash、引用关系、镜像与隔离恢复
 ```
 
 端到端与响应式审计需要先启动测试服务：
@@ -82,8 +84,14 @@ npm run start -- -p 3105
 npm run smoke
 npm run audit:multi-user
 npm run audit:offline-review
+PLUGIN_AUDIT_URL=http://localhost:3105 npm run audit:plugin-algorithms
 RESPONSIVE_AUDIT_URL=http://localhost:3105 npm run responsive:audit
 ```
+
+CI 使用 `npm run ci:e2e` 编排同一组审计。该命令默认拒绝本地数据目录和已有数据库，必须显式设置
+`ASCEND_E2E_ISOLATED=1`、包含 `ascend-e2e` 的临时数据目录以及专用普通/管理员测试账号。
+主分支运行 smoke、多用户、离线复习和 7 路由 × 3 关键视口审计；每日夜间构建运行完整
+11 路由 × 8 视口矩阵。PR 只保留单测、lint、typecheck、build、依赖和迁移快速门禁。
 
 PowerShell 设置响应式审计地址的写法为：
 
@@ -120,13 +128,14 @@ npm run responsive:audit
 
 数据库迁移通过 `schema_migrations` 版本化。迁移后必须运行 `npm run verify:migration`，确认输出中 `ok` 为 `true`、没有无归属记录且 `missingFiles` 为 `0`。
 
-备份会生成 `backup-manifest.json` 与 `_SUCCESS`。设置 `ZGCA_BACKUP_MIRROR_ROOT` 后会把同一快照复制到主备份目录之外；使用 `npm run verify:backup` 校验 SQLite 完整性和镜像文件大小。
+`npm run backup:verified` 依次创建快照、验证数据库/逐附件 hash/引用关系、检查镜像并执行隔离恢复，全部通过后写入含应用 commit、迁移版本和检查结果的 `_VERIFIED`。设置 `ZGCA_BACKUP_SUCCESS_URL` 后只在完整成功时发送 HTTPS dead-man 心跳；生产定时任务模板见 `deploy/systemd/`。
 
 ## 代码结构
 
 - `src/app/`：页面、Server Actions 和 API 路由。
 - `src/components/`：工作台、导航、资料、设置和管理端组件。
 - `src/lib/repo/`：按业务域拆分的数据访问层，所有普通业务查询带工作区边界。
+- `src/lib/plugins/`：受信任内置扩展的静态清单、运行时推荐和分析槽位；插件业务表仍由 `repo` 层访问。
 - `src/lib/agent/`：MCP 与 CLI 共用的 Agent 身份解析、操作清单、安全规则和审计入口。
 - `src/lib/db.ts`、`src/lib/migrations.ts`：数据库初始化和版本化迁移。
 - `scripts/`：备份、迁移验证、冒烟测试、响应式审计和多用户隔离审计。

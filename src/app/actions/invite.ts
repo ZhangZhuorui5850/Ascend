@@ -2,6 +2,7 @@
 
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { actionFailure } from "@/lib/action-failure";
 import { SESSION_COOKIE, createSession } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { activateInvitation } from "@/lib/repo/admin";
@@ -34,8 +35,8 @@ export async function activateInvite(
       expires: session.expiresAt,
     });
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "邀请激活失败" };
+    return { error: actionFailure("invite", error, "邀请激活失败").error };
   }
 
-  redirect("/");
+  redirect("/onboarding");
 }

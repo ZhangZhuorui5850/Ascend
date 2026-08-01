@@ -4,6 +4,7 @@ import { AppearanceSection } from "@/components/AppearanceSection";
 import { DisplaySection } from "@/components/DisplaySection";
 import { DeviceSessions } from "@/components/DeviceSessions";
 import { ExportDataSection } from "@/components/ExportDataSection";
+import { ExtensionsManager } from "@/components/ExtensionsManager";
 import { InstallAppSection } from "@/components/InstallAppSection";
 import { ModulesSection } from "@/components/ModulesSection";
 import { SettingsForm } from "@/components/SettingsForm";
@@ -14,6 +15,7 @@ import { getUserProfile } from "@/lib/repo/profile";
 import { getSubjects } from "@/lib/repo/knowledge";
 import { getSettings } from "@/lib/repo/settings";
 import { listAgentTokens } from "@/lib/repo/agent-tokens";
+import { listWorkspacePlugins } from "@/lib/repo/plugins";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +28,7 @@ export default async function SettingsPage() {
   const profile = getUserProfile(db, access.userId)!;
   const subjects = getSubjects(db, access);
   const agentTokens = listAgentTokens(db, access.userId);
+  const plugins = listWorkspacePlugins(db, access);
   const mcpUrl = process.env.APP_DOMAIN
     ? `https://${process.env.APP_DOMAIN}/api/mcp`
     : "http://localhost:3000/api/mcp";
@@ -43,6 +46,7 @@ export default async function SettingsPage() {
         <a href="#agent">Agent</a>
         <a href="#study">学习</a>
         <a href="#modules">功能板块</a>
+        <a href="#extensions">扩展</a>
         <a href="#appearance">外观</a>
         <a href="#display">显示</a>
         <a href="#devices">设备</a>
@@ -78,6 +82,11 @@ export default async function SettingsPage() {
       <section aria-label="功能板块" className="settingsGroup" id="modules">
         <h2 className="settingsGroupTitle">功能板块</h2>
         <ModulesSection initial={settings.modulePrefs} />
+      </section>
+
+      <section aria-label="扩展设置" className="settingsGroup" id="extensions">
+        <h2 className="settingsGroupTitle">扩展</h2>
+        <ExtensionsManager compact initial={plugins} />
       </section>
 
       <section aria-label="外观设置" className="settingsGroup" id="appearance">

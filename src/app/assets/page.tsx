@@ -18,8 +18,9 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
   const query = await searchParams;
   const folder = first(query.folder);
   const q = first(query.q).trim();
+  const page = positiveInteger(first(query.page));
   const db = getDb();
-  const explorer = getExplorer(db, access, folder);
+  const explorer = getExplorer(db, access, folder, { page, pageSize: 100 });
   const searchResults = q ? searchAssets(db, access, q) : null;
   const usage = getStorageUsage(db, access);
   const hierarchy = getCaptureHierarchy(db, access);
@@ -34,4 +35,9 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
       <FileExplorer explorer={explorer} hierarchy={hierarchy} searchQuery={q} searchResults={searchResults} usage={usage} />
     </div>
   );
+}
+
+function positiveInteger(value: string): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
 }

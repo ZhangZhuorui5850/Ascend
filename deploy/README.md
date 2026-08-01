@@ -2,6 +2,8 @@
 
 Target: Tencent Lighthouse in Beijing, Docker Compose, Caddy automatic HTTPS, SQLite + uploads on a persistent host volume.
 
+Online algorithm judging is a separate security boundary and must not be added to the main application Compose. See `docs/judge-gateway-deployment.md` for the reference topology and release gates.
+
 ## Before public launch
 
 1. Finish the applicable ICP filing for the domain/website and keep the filing information available for the site footer if required.
@@ -23,6 +25,7 @@ nano .env.production
 mkdir -p data backups
 sudo chown -R 1001:1001 data backups
 
+export ASCEND_APP_COMMIT=$(git rev-parse HEAD)
 docker compose -f compose.production.yml build
 docker compose -f compose.production.yml up -d
 docker compose -f compose.production.yml ps
@@ -44,7 +47,9 @@ docker compose -f compose.production.yml up -d --force-recreate app
 ```bash
 cd /opt/apps/ascend
 docker compose -f compose.production.yml exec -T app node scripts/backup.mjs
+docker compose -f compose.production.yml exec -T app node scripts/verify-backup.mjs
 git pull --ff-only
+export ASCEND_APP_COMMIT=$(git rev-parse HEAD)
 docker compose -f compose.production.yml build app
 docker compose -f compose.production.yml up -d
 docker compose -f compose.production.yml exec -T app node scripts/verify-workspace-migration.mjs
@@ -54,17 +59,61 @@ curl -i -X POST https://ascend.zhuorui.me/api/mcp
 
 升级后的 MCP 匿名检查仍应为 `401`。不要把用户 Agent 令牌写入 `.env.production`、日志或仓库。
 
-Never upgrade without a consistent database + uploads snapshot. The migration verifier must report `ok: true`, zero invalid workspace rows, and zero missing files.
+Never upgrade without a consistent database + uploads snapshot. `verify-backup.mjs` must report `ok: true`, matching attachment hashes, zero DB—blob reference errors, and a successful isolated restore smoke. The migration verifier must report `ok: true`, zero invalid workspace rows, and zero missing files.
 
 ## Backup and restore
 
-Run a daily root cron entry (03:20 Beijing time):
+Install the versioned systemd unit and timer. This is a one-time host action; keep the source files in Git and
+reinstall them after changing the unit:
 
-```cron
-20 3 * * * cd /opt/apps/ascend && /usr/bin/docker compose -f compose.production.yml exec -T app node scripts/backup.mjs >> /var/log/ascend-backup.log 2>&1
+```bash
+cd /opt/apps/ascend
+sudo install -m 0644 deploy/systemd/ascend-backup.service /etc/systemd/system/
+sudo install -m 0644 deploy/systemd/ascend-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now ascend-backup.timer
+
+# Run once immediately and inspect machine-readable verification evidence.
+sudo systemctl start ascend-backup.service
+sudo systemctl status ascend-backup.service --no-pager
+systemctl list-timers ascend-backup.timer --all
+sudo journalctl -u ascend-backup.service -n 100 --no-pager
+docker compose -f compose.production.yml exec -T app \
+  node -e 'const fs=require("fs"),p=process.env.ZGCA_BACKUP_ROOT||"/app/backups";const n=fs.readdirSync(p).filter(x=>/^\\d{4}-/.test(x)).sort().pop();console.log(fs.readFileSync(`${p}/${n}/_VERIFIED`,"utf8"))'
 ```
 
-Copy `backups/` to a different machine or object storage; a backup on the same 40GB disk is not disaster recovery. Before restore, stop the stack, move the failed `data/` aside, restore both `workbench.sqlite` and the matching `uploads/` directory, then start the previous known-good image.
+The timer runs `backup-verified.mjs`: backup, mirror, verification and isolated restore are one ordered job.
+`_VERIFIED` now records the application commit, migrations and individual check results. If
+`ZGCA_BACKUP_SUCCESS_URL` is configured, the job POSTs to that HTTPS dead-man endpoint only after every check
+passes; the URL is never printed. A failed backup or verifier therefore produces both a failed systemd unit and a
+missing success heartbeat. `/api/health` reports the latest verified snapshot and its age; after observing the timer
+for several days, set `ZGCA_REQUIRE_FRESH_BACKUP=1` to fail readiness when no verified snapshot is newer than
+`ZGCA_BACKUP_MAX_AGE_HOURS`.
+
+Copy `backups/` to a different machine or object storage; a backup on the same 40GB disk is not disaster recovery. For the built-in mirror hook, mount a different disk/NFS path into the app container with a Compose override, set that container path as `ZGCA_BACKUP_MIRROR_ROOT`, and run `verify-backup.mjs` with the same setting. Merely pointing the variable at another directory on the same host disk is not an off-site copy.
+
+The production acceptance record must include:
+
+- `systemctl list-timers ascend-backup.timer --all`;
+- one successful `journalctl -u ascend-backup.service` run;
+- the latest `_VERIFIED` JSON and `/api/health` backup fields;
+- evidence that the mirror mount is a different failure domain;
+- a dead-man test in which an intentionally missed schedule alerts;
+- a quarterly isolated full-app restore record with snapshot, application commit, last migration, elapsed time and result.
+
+Before restore, first verify the exact snapshot, then stop the stack and restore both the database and matching upload tree:
+
+```bash
+docker compose -f compose.production.yml exec -T app node scripts/verify-backup.mjs /app/backups/<known-good-snapshot>
+docker compose -f compose.production.yml down
+mv data "data.failed.$(date +%Y%m%d-%H%M%S)"
+mkdir -p data
+cp backups/<known-good-snapshot>/workbench.sqlite data/workbench.sqlite
+cp -a backups/<known-good-snapshot>/uploads data/uploads
+sudo chown -R 1001:1001 data
+# check out/build the application commit recorded in backup-manifest.json
+docker compose -f compose.production.yml up -d
+```
 
 ## Capacity notes for this server
 
@@ -78,7 +127,10 @@ Copy `backups/` to a different machine or object storage; a backup on the same 4
 ```bash
 docker compose -f compose.production.yml down
 mv data "data.failed.$(date +%Y%m%d-%H%M%S)"
-cp -a backups/<known-good-snapshot> data
+mkdir -p data
+cp backups/<known-good-snapshot>/workbench.sqlite data/workbench.sqlite
+cp -a backups/<known-good-snapshot>/uploads data/uploads
+sudo chown -R 1001:1001 data
 # check out the previous application commit/image
 docker compose -f compose.production.yml up -d
 ```

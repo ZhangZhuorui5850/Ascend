@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { actionFailure } from "@/lib/action-failure";
 import { getDb } from "@/lib/db";
 import {
   addNote,
@@ -19,7 +20,7 @@ import { requireWorkspace } from "@/lib/request-auth";
 import type { ActionResult } from "./day";
 
 function failure(error: unknown): ActionResult {
-  return { ok: false, error: error instanceof Error ? error.message : "操作失败" };
+  return actionFailure("planner", error);
 }
 
 // 任务同时展示在当日工作台、首页与学习日历上，三处路由缓存一起失效。
@@ -39,6 +40,13 @@ export async function addTaskAction(input: {
   estimatedMinutes?: number;
   scheduledStart?: string | null;
   notes?: string;
+  knowledgePointId?: string | null;
+  activityType?: string;
+  completionCriteria?: string;
+  plannedVerificationMethod?: string;
+  sourceType?: string;
+  sourceId?: string | number;
+  verificationMethod?: string;
 }): Promise<ActionResult & { task?: DayTask }> {
   try {
     const access = await requireWorkspace();
@@ -50,12 +58,29 @@ export async function addTaskAction(input: {
   }
 }
 
-export async function toggleTaskAction(input: { id: number; day: string; done: boolean }): Promise<ActionResult> {
+export async function toggleTaskAction(input: {
+  id: number;
+  day: string;
+  done: boolean;
+  actualMinutes?: number | null;
+  completionOutput?: string;
+  verificationMethod?: string;
+  verificationResult?: string;
+  verificationOutcome?: "" | "improved" | "unchanged" | "regressed" | "unknown";
+  recordAsStudy?: boolean;
+  scheduleRetestAfterDays?: number;
+}): Promise<ActionResult> {
   try {
     const access = await requireWorkspace();
-    toggleTask(getDb(), access, input);
+    const task = toggleTask(getDb(), access, input);
     // 完成态由页面客户端状态即时呈现；这里仍失效相关路由缓存，避免 30s 内切页看到旧完成数
     revalidateTaskViews(input.day);
+    if (input.recordAsStudy) {
+      revalidatePath("/analytics");
+      revalidatePath("/subjects");
+      if (task.subjectCode) revalidatePath(`/subjects/${task.subjectCode}`);
+    }
+    if (task.retestDay) revalidateTaskViews(task.retestDay);
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -71,6 +96,10 @@ export async function updateTaskAction(input: {
   estimatedMinutes?: number;
   scheduledStart?: string | null;
   notes?: string;
+  knowledgePointId?: string | null;
+  activityType?: string;
+  completionCriteria?: string;
+  plannedVerificationMethod?: string;
 }): Promise<ActionResult> {
   try {
     const access = await requireWorkspace();

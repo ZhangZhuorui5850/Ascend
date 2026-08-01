@@ -42,7 +42,7 @@ export function AccountSection({ profile, email }: { profile: AvatarInfo; email:
     startPasswordTransition(async () => {
       const result = await changeAccountPasswordAction({ currentPassword, newPassword });
       if (result.ok) {
-        notify("密码已更新，其他设备已全部下线", "success");
+        notify("密码已更新，其他设备与已有 Agent 令牌已全部失效", "success");
         setCurrentPassword("");
         setNewPassword("");
         setConfirmation("");

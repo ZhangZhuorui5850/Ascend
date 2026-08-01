@@ -39,6 +39,10 @@ export type ExplorerState = {
   folders: ExplorerFolder[];
   files: ExplorerFile[];
   totalFiles: number;
+  filePage: number;
+  filePageSize: number;
+  currentFolderFileCount: number;
+  filePageCount: number;
 };
 
 /** 归一化文件夹路径；空串表示根目录。 */
@@ -293,7 +297,12 @@ export function deleteAsset(db: Database.Database, scope: WorkspaceScope, assetI
   remove();
 }
 
-export function getExplorer(db: Database.Database, scope: WorkspaceScope, pathValue: string): ExplorerState {
+export function getExplorer(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  pathValue: string,
+  input: { page?: number; pageSize?: number } = {},
+): ExplorerState {
   const currentPath = normalizeFolderPath(pathValue);
   const exists = !currentPath || Boolean(db.prepare("SELECT path FROM folders WHERE workspace_id = ? AND path = ?").get(scope.workspaceId, currentPath));
 
@@ -312,6 +321,10 @@ export function getExplorer(db: Database.Database, scope: WorkspaceScope, pathVa
   }>;
   const countByPath = new Map(fileCounts.map((row) => [row.path, row.count]));
   const totalFiles = fileCounts.reduce((total, row) => total + row.count, 0);
+  const currentFolderFileCount = countByPath.get(currentPath) || 0;
+  const filePageSize = Math.max(1, Math.min(200, Math.round(input.pageSize ?? 100)));
+  const filePageCount = Math.max(1, Math.ceil(currentFolderFileCount / filePageSize));
+  const filePage = Math.max(1, Math.min(filePageCount, Math.round(input.page ?? 1)));
 
   // Subtree file counts: every file contributes to each ancestor folder.
   const subtreeCount = new Map<string, number>();
@@ -359,7 +372,13 @@ export function getExplorer(db: Database.Database, scope: WorkspaceScope, pathVa
     WHERE a.workspace_id = ? AND a.folder_path = ?
     GROUP BY a.id
     ORDER BY a.original_name COLLATE NOCASE ASC
-  `).all(scope.workspaceId, currentPath) as ExplorerFile[];
+    LIMIT ? OFFSET ?
+  `).all(
+    scope.workspaceId,
+    currentPath,
+    filePageSize,
+    (filePage - 1) * filePageSize,
+  ) as ExplorerFile[];
 
   const segments = currentPath ? currentPath.split("/") : [];
   const breadcrumbs = segments.map((name, index) => ({
@@ -367,7 +386,19 @@ export function getExplorer(db: Database.Database, scope: WorkspaceScope, pathVa
     path: segments.slice(0, index + 1).join("/"),
   }));
 
-  return { currentPath, exists, breadcrumbs, tree, folders, files, totalFiles };
+  return {
+    currentPath,
+    exists,
+    breadcrumbs,
+    tree,
+    folders,
+    files,
+    totalFiles,
+    filePage,
+    filePageSize,
+    currentFolderFileCount,
+    filePageCount,
+  };
 }
 
 export function searchAssets(db: Database.Database, scope: WorkspaceScope, query: string): ExplorerFile[] {

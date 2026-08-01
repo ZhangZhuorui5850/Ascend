@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 import type { WorkspaceScope } from "../access-context";
 import { TIER_NAMES, type Tier } from "../types";
-import { clampMastery, deriveStatus } from "./mastery";
+import { clampMastery } from "./mastery";
 
 export type SubjectTrack = "written" | "machine";
 
@@ -36,6 +36,7 @@ export type PointRow = {
   tier_name: string;
   status: string;
   mastery: number;
+  self_confidence: number | null;
   exam: number;
   reviews: number;
   last_review: string | null;
@@ -45,6 +46,9 @@ export type PointRow = {
   interval_step: number;
   lapse_count: number;
   last_score: number | null;
+  evidence_sample_count: number;
+  last_evidence_score: number | null;
+  last_evidence_day: string | null;
   created_at: string;
   asset_count: number;
   mistake_count: number;
@@ -164,6 +168,7 @@ const POINT_SELECT = `
     k.tier_name,
     k.status,
     k.mastery,
+    k.self_confidence,
     k.exam,
     k.reviews,
     k.last_review,
@@ -173,6 +178,20 @@ const POINT_SELECT = `
     k.interval_step,
     k.lapse_count,
     k.last_score,
+    (SELECT COUNT(*) FROM review_events r
+     WHERE r.workspace_id = k.workspace_id
+       AND r.knowledge_point_id = k.id
+       AND r.attempt_mode != 'unknown') AS evidence_sample_count,
+    (SELECT r.score FROM review_events r
+     WHERE r.workspace_id = k.workspace_id
+       AND r.knowledge_point_id = k.id
+       AND r.attempt_mode != 'unknown'
+     ORDER BY r.day DESC, r.id DESC LIMIT 1) AS last_evidence_score,
+    (SELECT r.day FROM review_events r
+     WHERE r.workspace_id = k.workspace_id
+       AND r.knowledge_point_id = k.id
+       AND r.attempt_mode != 'unknown'
+     ORDER BY r.day DESC, r.id DESC LIMIT 1) AS last_evidence_day,
     k.created_at,
     (SELECT COUNT(DISTINCT l.asset_id) FROM asset_links l
      WHERE l.workspace_id = k.workspace_id AND l.knowledge_point_id = k.id) AS asset_count,
@@ -327,7 +346,17 @@ export function createSubject(
 export type PointDetail = {
   assets: Array<{ id: number; day: string; original_name: string; mime_type: string; folder_path: string }>;
   mistakes: Array<{ id: number; day: string; title: string; cause: string; graduated: number; next_review: string | null }>;
-  reviews: Array<{ id: number; day: string; score: number; note: string }>;
+  reviews: Array<{
+    id: number;
+    day: string;
+    score: number;
+    note: string;
+    event_type: "point_review" | "mistake_reattempt";
+    attempt_mode: "unknown" | "typed" | "paper" | "oral";
+    attempt_text: string;
+    attempt_duration_seconds: number;
+    pre_confidence: number | null;
+  }>;
 };
 
 /** 单个知识点的关联明细，用于科目页行内展开。 */
@@ -348,10 +377,11 @@ export function getPointDetail(db: Database.Database, scope: WorkspaceScope, poi
     LIMIT 20
   `).all({ workspaceId: scope.workspaceId, pointId }) as PointDetail["mistakes"];
   const reviews = db.prepare(`
-    SELECT id, day, score, note
+    SELECT id, day, score, note, event_type, attempt_mode, attempt_text,
+           attempt_duration_seconds, pre_confidence
     FROM review_events
     WHERE workspace_id = @workspaceId AND knowledge_point_id = @pointId
-    ORDER BY created_at DESC
+    ORDER BY created_at DESC, id DESC
     LIMIT 10
   `).all({ workspaceId: scope.workspaceId, pointId }) as PointDetail["reviews"];
   return { assets, mistakes, reviews };
@@ -809,7 +839,7 @@ export function updatePoint(
     title?: string;
     tier?: Tier;
     exam?: boolean;
-    mastery?: number;
+    selfConfidence?: number | null;
     prompt?: string;
     answer?: string;
   },
@@ -823,8 +853,7 @@ export function updatePoint(
         title: string;
         tier: Tier;
         exam: number;
-        mastery: number;
-        status: string;
+        self_confidence: number | null;
         prompt: string;
         answer: string;
       }
@@ -834,14 +863,17 @@ export function updatePoint(
   if (!title) throw new Error("知识点标题必填");
   const tier: Tier = input.tier && ["r", "y", "g"].includes(input.tier) ? input.tier : point.tier;
   const exam = input.exam === undefined ? point.exam : input.exam ? 1 : 0;
-  const mastery = input.mastery === undefined ? point.mastery : clampMastery(input.mastery);
-  const status = input.mastery === undefined ? point.status : deriveStatus(mastery);
+  const selfConfidence = input.selfConfidence === undefined
+    ? point.self_confidence
+    : input.selfConfidence === null
+      ? null
+      : clampMastery(input.selfConfidence);
   const prompt = input.prompt === undefined ? point.prompt : input.prompt.trim();
   const answer = input.answer === undefined ? point.answer : input.answer.trim();
   db.prepare(`
     UPDATE knowledge_points
     SET title = @title, tier = @tier, tier_name = @tierName, exam = @exam,
-        mastery = @mastery, status = @status, prompt = @prompt, answer = @answer
+        self_confidence = @selfConfidence, prompt = @prompt, answer = @answer
     WHERE workspace_id = @workspaceId AND id = @id
   `).run({
     workspaceId: scope.workspaceId,
@@ -850,8 +882,7 @@ export function updatePoint(
     tier,
     tierName: TIER_NAMES[tier],
     exam,
-    mastery,
-    status,
+    selfConfidence,
     prompt,
     answer,
   });

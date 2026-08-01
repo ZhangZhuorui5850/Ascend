@@ -45,7 +45,7 @@ export default async function MistakesPage() {
           <div className="sectionTitle"><h2>回炉中</h2><span className="sectionHint">{book.open.length} 道</span></div>
           <div className="list">
             {book.open.map((mistake) => (
-              <div className="listRow mistakeActionRow" key={mistake.id}>
+              <div className="listRow mistakeActionRow" id={`mistake-${mistake.id}`} key={mistake.id}>
                 <span className="rowBadge mistake">{mistake.next_review ? `下次 ${mistake.next_review}` : "待排期"}</span>
                 <strong><RichText text={mistake.title} /></strong>
                 <small>
@@ -53,7 +53,18 @@ export default async function MistakesPage() {
                   {mistake.cause_category ? `${mistake.cause_category} · ` : ""}
                   <RichText text={mistake.knowledge_title || mistake.cause || mistake.day} />
                 </small>
-                <CreateTrainingTaskButton compact day={today} notes={`错题来源：${mistake.day}；错因：${mistake.cause_category || mistake.cause || "待归因"}`} subjectCode={mistake.subject_code} title={`错题专项：${mistake.title}`} />
+                <CreateTrainingTaskButton
+                  compact
+                  completionCriteria="独立重做并订正该错题，再完成一道同类题"
+                  day={today}
+                  knowledgePointId={mistake.knowledge_point_id}
+                  notes={`错题来源：${mistake.day}；错因：${mistake.cause_category || mistake.cause || "待归因"}`}
+                  sourceId={mistake.id}
+                  sourceType="mistake"
+                  subjectCode={mistake.subject_code}
+                  title={`错题专项：${mistake.title}`}
+                  verificationMethod="独立重做与同类题验证"
+                />
               </div>
             ))}
             {!book.open.length ? <p className="empty">暂无排队中的错题。</p> : null}
@@ -68,7 +79,7 @@ export default async function MistakesPage() {
           </div>
           <div className="list">
             {book.graduated.slice(0, 30).map((mistake) => (
-              <div className="listRow graduated" key={mistake.id}>
+              <div className="listRow graduated" id={`mistake-${mistake.id}`} key={mistake.id}>
                 <span className="rowBadge">{mistake.day}</span>
                 <strong><RichText text={mistake.title} /></strong>
                 <small><RichText text={mistake.knowledge_title || mistake.cause} /></small>

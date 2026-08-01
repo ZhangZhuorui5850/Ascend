@@ -17,6 +17,19 @@ try {
 
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" });
   await page.goto(`${baseUrl}/day/${today}`, { waitUntil: "networkidle" });
+  await page.evaluate(async () => {
+    if ("serviceWorker" in navigator) await navigator.serviceWorker.ready;
+  });
+  if (!await page.evaluate(() => Boolean(navigator.serviceWorker?.controller))) {
+    await page.reload({ waitUntil: "networkidle" });
+  }
+  await context.setOffline(true);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.locator("#snapshot").waitFor({ state: "visible", timeout: 10_000 });
+  await page.locator(".reviewCard").first().getByText("核对答案").click();
+  await page.locator(".reviewCard details div").first().waitFor({ state: "visible" });
+  await context.setOffline(false);
+  await page.goto(`${baseUrl}/day/${today}`, { waitUntil: "networkidle" });
   const firstCard = page.locator(".queueCard").first();
   await firstCard.waitFor({ timeout: 10_000 });
   await firstCard.getByRole("button", { name: "显示答案" }).click();
@@ -42,7 +55,7 @@ try {
 
   await context.setOffline(false);
   await page.locator(".offlineReviewStatus").waitFor({ state: "detached", timeout: 15_000 });
-  console.log(JSON.stringify({ ok: true, checks: ["offline_queue", "indexeddb_outbox", "online_flush"] }, null, 2));
+  console.log(JSON.stringify({ ok: true, checks: ["offline_reopen_snapshot", "offline_queue", "indexeddb_outbox", "online_flush"] }, null, 2));
 } finally {
   await context.setOffline(false).catch(() => undefined);
   await browser.close();

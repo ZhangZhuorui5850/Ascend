@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { actionFailure } from "@/lib/action-failure";
 import { getDb } from "@/lib/db";
 import { DAY_FIELDS, updateDayEntry, type DayField } from "@/lib/repo/days";
 import {
@@ -15,13 +16,22 @@ import {
   type ReviewUndo,
 } from "@/lib/repo/reviews";
 import { requireWorkspace } from "@/lib/request-auth";
+import type { ReviewEvidenceInput } from "@/lib/review-evidence";
 
 export type ActionResult = { ok: boolean; error?: string };
 export type ScoreResult = ActionResult & { undo?: ReviewUndo };
 export type ReattemptResult = ActionResult & { undo?: MistakeUndo };
 
 function failure(error: unknown): ActionResult {
-  return { ok: false, error: error instanceof Error ? error.message : "操作失败" };
+  return actionFailure("day", error);
+}
+
+function revalidateLearningEvidence(day: string): void {
+  revalidatePath(`/day/${day}`);
+  revalidatePath("/");
+  revalidatePath("/analytics");
+  revalidatePath("/subjects");
+  revalidatePath("/subjects/[code]", "page");
 }
 
 /** 日记/计划等文本字段的自动保存；不触发整页刷新。 */
@@ -51,7 +61,7 @@ export async function addStudySession(input: {
   try {
     const access = await requireWorkspace();
     createStudySession(getDb(), access, input);
-    revalidatePath(`/day/${input.day}`);
+    revalidateLearningEvidence(input.day);
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -69,7 +79,7 @@ export async function addMistake(input: {
   try {
     const access = await requireWorkspace();
     createMistake(getDb(), access, input);
-    revalidatePath(`/day/${input.day}`);
+    revalidateLearningEvidence(input.day);
     revalidatePath("/mistakes");
     return { ok: true };
   } catch (error) {
@@ -83,11 +93,11 @@ export async function scoreReview(input: {
   score: number;
   note?: string;
   operationId?: string;
-}): Promise<ScoreResult> {
+} & ReviewEvidenceInput): Promise<ScoreResult> {
   try {
     const access = await requireWorkspace();
     const undo = createReviewEvent(getDb(), access, input);
-    revalidatePath(`/day/${input.day}`);
+    revalidateLearningEvidence(input.day);
     return { ok: true, undo };
   } catch (error) {
     return failure(error);
@@ -114,20 +124,25 @@ export async function undoReviewAction(input: { day: string; undo: ReviewUndo })
   try {
     const access = await requireWorkspace();
     undoReviewEvent(getDb(), access, input.undo);
-    revalidatePath(`/day/${input.day}`);
+    revalidateLearningEvidence(input.day);
     return { ok: true };
   } catch (error) {
     return failure(error);
   }
 }
 
-export async function reattemptMistakeAction(input: { id: number; day: string; score: number }): Promise<ReattemptResult> {
+export async function reattemptMistakeAction(input: {
+  id: number;
+  day: string;
+  score: number;
+  operationId?: string;
+} & ReviewEvidenceInput): Promise<ReattemptResult> {
   try {
     const access = await requireWorkspace();
     const result = reattemptMistake(getDb(), access, input);
-    revalidatePath(`/day/${input.day}`);
+    revalidateLearningEvidence(input.day);
     revalidatePath("/mistakes");
-    return { ok: true, undo: result.undo };
+    return { ok: true, undo: result.undo ?? undefined };
   } catch (error) {
     return failure(error);
   }
@@ -137,7 +152,7 @@ export async function undoReattemptAction(input: { day: string; undo: MistakeUnd
   try {
     const access = await requireWorkspace();
     undoReattempt(getDb(), access, input.undo);
-    revalidatePath(`/day/${input.day}`);
+    revalidateLearningEvidence(input.day);
     revalidatePath("/mistakes");
     return { ok: true };
   } catch (error) {

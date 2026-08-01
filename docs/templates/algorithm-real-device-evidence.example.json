@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "appCommit": "0000000000000000000000000000000000000000",
+  "appUrl": "https://judge-staging.example",
+  "testedAt": "2026-07-26T05:00:00.000Z",
+  "devices": [
+    {
+      "id": "phone-ios-pwa",
+      "os": "iOS 18.x",
+      "browser": "Safari / standalone PWA",
+      "viewport": { "width": 390, "height": 844, "dpr": 3 },
+      "checks": {
+        "login": false,
+        "pilotStatusVisible": false,
+        "catalog30": false,
+        "managedEditor": false,
+        "noHorizontalOverflow": false,
+        "draftRestore": false,
+        "sampleJudge": false,
+        "formalJudge": false,
+        "pollRecovery": false,
+        "reflectionRestore": false,
+        "standalonePwa": false,
+        "safeArea": false,
+        "keyboardNoOcclusion": false,
+        "relaunchRestore": false
+      },
+      "artifacts": [
+        { "path": "phone-catalog.png", "sha256": "replace" },
+        { "path": "phone-pwa-relaunch.png", "sha256": "replace" }
+      ]
+    },
+    {
+      "id": "tablet",
+      "os": "iPadOS or Android version",
+      "browser": "Safari or Chrome version",
+      "viewport": { "width": 768, "height": 1024, "dpr": 2 },
+      "checks": {
+        "login": false,
+        "pilotStatusVisible": false,
+        "catalog30": false,
+        "managedEditor": false,
+        "noHorizontalOverflow": false,
+        "draftRestore": false,
+        "sampleJudge": false,
+        "formalJudge": false,
+        "pollRecovery": false,
+        "reflectionRestore": false,
+        "portrait": false,
+        "landscape": false
+      },
+      "artifacts": [
+        { "path": "tablet-portrait.png", "sha256": "replace" },
+        { "path": "tablet-landscape.png", "sha256": "replace" }
+      ]
+    },
+    {
+      "id": "desktop",
+      "os": "macOS or Windows version",
+      "browser": "Chrome or Safari version",
+      "viewport": { "width": 1440, "height": 900, "dpr": 2 },
+      "checks": {
+        "login": false,
+        "pilotStatusVisible": false,
+        "catalog30": false,
+        "managedEditor": false,
+        "noHorizontalOverflow": false,
+        "draftRestore": false,
+        "sampleJudge": false,
+        "formalJudge": false,
+        "pollRecovery": false,
+        "reflectionRestore": false,
+        "keyboardNavigation": false
+      },
+      "artifacts": [
+        { "path": "desktop-editor.png", "sha256": "replace" },
+        { "path": "desktop-result.png", "sha256": "replace" }
+      ]
+    }
+  ]
+}
