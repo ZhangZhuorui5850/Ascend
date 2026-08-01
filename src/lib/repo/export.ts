@@ -1,5 +1,15 @@
 import type Database from "better-sqlite3";
 import type { WorkspaceScope } from "../access-context";
+import type {
+  CalendarEvent,
+  PlannerCalendar,
+  PlannerLabel,
+  PlannerNotification,
+  PlannerReminder,
+  PlannerTask,
+  TaskSeries,
+  TaskList,
+} from "../planner/types";
 import { getSettings, type AppSettings } from "./settings";
 import type { MockExamBreakdown } from "./mock-exams";
 
@@ -10,7 +20,7 @@ import type { MockExamBreakdown } from "./mock-exams";
  */
 
 export const WORKSPACE_EXPORT_SCHEMA = "ascend.workspace-export";
-export const WORKSPACE_EXPORT_SCHEMA_VERSION = 1;
+export const WORKSPACE_EXPORT_SCHEMA_VERSION = 3;
 
 export type ExportedAsset = {
   id: number;
@@ -36,20 +46,17 @@ export type WorkspaceExportData = {
   workspace: { display_name: string; created_at: string };
   settings: AppSettings;
   planner: {
-    tasks: Array<{
-      id: number;
-      day: string;
-      title: string;
-      subject_code: string | null;
-      done: number;
-      done_at: string | null;
-      sort_order: number;
-      priority: number;
-      estimated_minutes: number;
-      scheduled_start: string | null;
-      notes: string;
-      created_at: string;
-    }>;
+    schema_version: 3;
+    lists: TaskList[];
+    tasks: PlannerTask[];
+    calendars: PlannerCalendar[];
+    events: CalendarEvent[];
+    labels: PlannerLabel[];
+    task_labels: Array<{ task_id: string; label_id: string }>;
+    event_labels: Array<{ event_id: string; label_id: string }>;
+    task_series: TaskSeries[];
+    reminders: PlannerReminder[];
+    notifications: PlannerNotification[];
     notes: Array<{ id: number; day: string; content: string; created_at: string }>;
     daily_entries: Array<{
       date: string;
@@ -163,11 +170,59 @@ export function buildWorkspaceExport(
 
   const settings = getSettings(db, scope);
 
+  const lists = db.prepare(`
+    SELECT id, workspace_id, name, color_token, icon, sort_order, is_inbox,
+           archived_at, created_at, updated_at
+    FROM task_lists WHERE workspace_id = ? ORDER BY sort_order ASC, id ASC
+  `).all(scope.workspaceId) as TaskList[];
   const tasks = db.prepare(`
-    SELECT id, day, title, subject_code, done, done_at, sort_order, priority,
-           estimated_minutes, scheduled_start, notes, created_at
-    FROM day_tasks WHERE workspace_id = ? ORDER BY day ASC, sort_order ASC, id ASC
-  `).all(scope.workspaceId) as WorkspaceExportData["planner"]["tasks"];
+    SELECT id, workspace_id, list_id, parent_task_id, depth, title, notes, subject_code,
+           status, priority, due_date, due_at, due_timezone,
+           scheduled_start_at, scheduled_end_at, scheduled_timezone, scheduled_all_day,
+           estimated_minutes, series_id, occurrence_key, sort_order, deleted_at,
+           completed_at, canceled_at, version, legacy_day_task_id, created_at, updated_at
+    FROM planner_tasks WHERE workspace_id = ? ORDER BY created_at ASC, sort_order ASC, id ASC
+  `).all(scope.workspaceId) as PlannerTask[];
+  const calendars = db.prepare(`
+    SELECT id, workspace_id, name, color_token, is_default, visibility,
+           sort_order, archived_at, created_at, updated_at
+    FROM planner_calendars WHERE workspace_id = ? ORDER BY sort_order ASC, id ASC
+  `).all(scope.workspaceId) as PlannerCalendar[];
+  const events = db.prepare(`
+    SELECT id, workspace_id, calendar_id, title, description, location, url, subject_code,
+           kind, busy_status, start_at, end_at, timezone, start_date, end_date_exclusive,
+           all_day, recurrence_rule, recurrence_until, recurring_event_id, original_start_at,
+           exception_kind, migration_key, deleted_at, version, created_at, updated_at
+    FROM calendar_events WHERE workspace_id = ?
+    ORDER BY COALESCE(start_date, start_at) ASC, id ASC
+  `).all(scope.workspaceId) as CalendarEvent[];
+  const labels = db.prepare(`
+    SELECT id, workspace_id, name, color_token, created_at
+    FROM planner_labels WHERE workspace_id = ? ORDER BY name ASC, id ASC
+  `).all(scope.workspaceId) as PlannerLabel[];
+  const taskLabels = db.prepare(`
+    SELECT task_id, label_id FROM planner_task_labels
+    WHERE workspace_id = ? ORDER BY task_id ASC, label_id ASC
+  `).all(scope.workspaceId) as WorkspaceExportData["planner"]["task_labels"];
+  const eventLabels = db.prepare(`
+    SELECT event_id, label_id FROM planner_event_labels
+    WHERE workspace_id = ? ORDER BY event_id ASC, label_id ASC
+  `).all(scope.workspaceId) as WorkspaceExportData["planner"]["event_labels"];
+  const taskSeries = db.prepare(`
+    SELECT id, workspace_id, rrule, timezone, generation_mode, template_json,
+           next_occurrence_at, active, generated_count, idempotency_key, created_at, updated_at
+    FROM task_series WHERE workspace_id = ? ORDER BY created_at ASC, id ASC
+  `).all(scope.workspaceId) as TaskSeries[];
+  const reminders = db.prepare(`
+    SELECT id, workspace_id, entity_type, entity_id, anchor, offset_minutes, exact_at,
+           channel, status, next_attempt_at, attempt_count, leased_until, lease_owner,
+           sent_at, last_error, idempotency_key, created_at, updated_at
+    FROM planner_reminders WHERE workspace_id = ? ORDER BY created_at ASC, id ASC
+  `).all(scope.workspaceId) as PlannerReminder[];
+  const notifications = db.prepare(`
+    SELECT id, workspace_id, reminder_id, title, body, target_path, read_at, created_at
+    FROM planner_notifications WHERE workspace_id = ? ORDER BY created_at ASC, id ASC
+  `).all(scope.workspaceId) as PlannerNotification[];
 
   const notes = db.prepare(`
     SELECT id, day, content, created_at FROM day_notes WHERE workspace_id = ? ORDER BY day ASC, id ASC
@@ -271,7 +326,21 @@ export function buildWorkspaceExport(
     exported_at: input.exportedAt,
     workspace: { display_name: workspace.display_name, created_at: workspace.created_at },
     settings,
-    planner: { tasks, notes, daily_entries: dailyEntries },
+    planner: {
+      schema_version: 3,
+      lists,
+      tasks,
+      calendars,
+      events,
+      labels,
+      task_labels: taskLabels,
+      event_labels: eventLabels,
+      task_series: taskSeries,
+      reminders,
+      notifications,
+      notes,
+      daily_entries: dailyEntries,
+    },
     knowledge: { subjects, chapters, points },
     reviews: { events: reviewEvents, recovery_events: recoveryEvents, study_sessions: studySessions },
     mistakes,
@@ -303,7 +372,8 @@ function renderSummaryMarkdown(data: WorkspaceExportData): string {
   lines.push("");
   lines.push("| 数据 | 数量 |");
   lines.push("| --- | --- |");
-  lines.push(`| 任务 | ${data.planner.tasks.length}（已完成 ${data.planner.tasks.filter((task) => task.done).length}） |`);
+  lines.push(`| 任务 | ${data.planner.tasks.length}（已完成 ${data.planner.tasks.filter((task) => task.status === "completed").length}） |`);
+  lines.push(`| 日历事件 | ${data.planner.events.length} |`);
   lines.push(`| 随笔 | ${data.planner.notes.length} |`);
   lines.push(`| 每日记录 | ${data.planner.daily_entries.length} |`);
   lines.push(`| 科目 | ${data.knowledge.subjects.length} |`);

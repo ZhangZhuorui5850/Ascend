@@ -47,6 +47,28 @@ import {
   updateNote,
   updateTask,
 } from "../repo/planner";
+import { ensurePlannerDefaults, plannerDefaultId } from "../repo/planner-defaults";
+import { listPlannerCalendars } from "../repo/planner-calendars";
+import {
+  createCalendarEvent,
+  listCalendarEventRange,
+  softDeleteCalendarEvent,
+  updateCalendarEvent,
+} from "../repo/planner-events";
+import { listTaskLists } from "../repo/planner-lists";
+import {
+  cancelPlannerReminder,
+  createPlannerReminder,
+  listEntityReminders,
+} from "../repo/planner-reminders";
+import { createTaskSeries } from "../repo/planner-series";
+import {
+  createPlannerTask,
+  listTaskView,
+  restorePlannerTask,
+  softDeletePlannerTask,
+  updatePlannerTask,
+} from "../repo/planner-tasks";
 import { createMistake, createReviewEvent, createStudySession, getMistakeBook } from "../repo/reviews";
 import { getHomeSnapshot, getLearningAnalytics } from "../repo/stats";
 import type { AgentContext } from "./context";
@@ -101,6 +123,10 @@ function resultEntityId(result: unknown, input: JsonObject): string | null {
     const record = result as JsonObject;
     for (const key of ["id", "path", "code", "assetId", "eventId"]) {
       if (record[key] !== undefined && record[key] !== null) return String(record[key]);
+    }
+    if (record.entity && typeof record.entity === "object") {
+      const entity = record.entity as JsonObject;
+      if (entity.id !== undefined && entity.id !== null) return String(entity.id);
     }
   }
   for (const key of ["id", "path", "code", "assetId"]) {
@@ -274,7 +300,7 @@ export const agentOperations: AgentOperation[] = [
   defineOperation({
     id: "task.delete",
     title: "删除日程任务",
-    description: "永久删除一个任务，必须明确确认。",
+    description: "把一个任务移入 Planner 回收站，必须明确确认。",
     schema: z.object({ id: z.number().int().positive(), confirm: z.boolean() }),
     readOnly: false,
     destructive: true,
@@ -284,6 +310,307 @@ export const agentOperations: AgentOperation[] = [
       deleteTask(db, context, input.id);
       return { id: input.id, deleted: true };
     },
+  }),
+  defineOperation({
+    id: "planner.task.list",
+    title: "查询 Planner v2 任务",
+    description: "按智能视图查询 Planner v2 任务，同时返回可用清单。任务包含独立到期、排期、层级、状态与 version。",
+    schema: z.object({
+      view: z.enum(["inbox", "today", "upcoming", "anytime", "overdue", "waiting", "completed", "trash", "all"])
+        .optional()
+        .default("inbox"),
+      today: date.optional(),
+      listId: z.string().optional(),
+      limit: z.number().int().min(1).max(500).optional(),
+    }),
+    readOnly: true,
+    entityType: "planner_task",
+    run: ({ db, context }, input) => {
+      ensurePlannerDefaults(db, context);
+      return {
+        lists: listTaskLists(db, context),
+        tasks: listTaskView(db, context, {
+          view: input.view,
+          today: input.today ?? todayKey(),
+          listId: input.listId,
+          limit: input.limit,
+        }),
+      };
+    },
+  }),
+  defineOperation({
+    id: "planner.task.create",
+    title: "创建 Planner v2 任务",
+    description: "幂等创建 Planner v2 任务；due 与 scheduled 字段保持独立，瞬时值使用 UTC ISO 8601。",
+    schema: z.object({
+      clientMutationId: z.string().min(1).max(200),
+      listId: z.string().optional(),
+      parentTaskId: z.string().nullable().optional(),
+      title: z.string().min(1).max(500),
+      notes: z.string().max(20_000).optional(),
+      subjectCode: z.string().nullable().optional(),
+      status: z.enum(["open", "waiting", "completed", "canceled"]).optional(),
+      priority: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
+      dueDate: date.nullable().optional(),
+      dueAt: z.iso.datetime({ offset: true }).nullable().optional(),
+      dueTimezone: z.string().nullable().optional(),
+      scheduledStartAt: z.iso.datetime({ offset: true }).nullable().optional(),
+      scheduledEndAt: z.iso.datetime({ offset: true }).nullable().optional(),
+      scheduledTimezone: z.string().nullable().optional(),
+      estimatedMinutes: z.number().int().min(5).max(1440).optional(),
+    }),
+    readOnly: false,
+    entityType: "planner_task",
+    run: ({ db, context }, input) => {
+      ensurePlannerDefaults(db, context);
+      return createPlannerTask(db, context, {
+        ...input,
+        listId: input.listId ?? plannerDefaultId(context.workspaceId, "inbox"),
+      });
+    },
+  }),
+  defineOperation({
+    id: "planner.task.update",
+    title: "更新 Planner v2 任务",
+    description: "按 expectedVersion 局部更新任务；版本冲突返回最新实体。",
+    schema: z.object({
+      id: z.string().min(1),
+      expectedVersion: z.number().int().positive(),
+      listId: z.string().optional(),
+      parentTaskId: z.string().nullable().optional(),
+      title: z.string().min(1).max(500).optional(),
+      notes: z.string().max(20_000).optional(),
+      subjectCode: z.string().nullable().optional(),
+      status: z.enum(["open", "waiting", "completed", "canceled"]).optional(),
+      priority: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
+      dueDate: date.nullable().optional(),
+      dueAt: z.iso.datetime({ offset: true }).nullable().optional(),
+      dueTimezone: z.string().nullable().optional(),
+      scheduledStartAt: z.iso.datetime({ offset: true }).nullable().optional(),
+      scheduledEndAt: z.iso.datetime({ offset: true }).nullable().optional(),
+      scheduledTimezone: z.string().nullable().optional(),
+      estimatedMinutes: z.number().int().min(5).max(1440).optional(),
+    }),
+    readOnly: false,
+    entityType: "planner_task",
+    run: ({ db, context }, input) => updatePlannerTask(db, context, input),
+  }),
+  defineOperation({
+    id: "planner.task.delete",
+    title: "移动 Planner v2 任务到回收站",
+    description: "使用稳定 clientMutationId 软删除任务，必须明确确认。",
+    schema: z.object({
+      id: z.string().min(1),
+      expectedVersion: z.number().int().positive(),
+      clientMutationId: z.string().min(1).max(200),
+      confirm: z.boolean(),
+    }),
+    readOnly: false,
+    destructive: true,
+    entityType: "planner_task",
+    run: ({ db, context }, input) => {
+      requireConfirmation(input.confirm, "删除 Planner 任务");
+      return softDeletePlannerTask(db, context, input);
+    },
+  }),
+  defineOperation({
+    id: "planner.task.restore",
+    title: "恢复 Planner v2 任务",
+    description: "使用稳定 clientMutationId 从回收站恢复任务。",
+    schema: z.object({
+      id: z.string().min(1),
+      expectedVersion: z.number().int().positive(),
+      clientMutationId: z.string().min(1).max(200),
+    }),
+    readOnly: false,
+    entityType: "planner_task",
+    run: ({ db, context }, input) => restorePlannerTask(db, context, input),
+  }),
+  defineOperation({
+    id: "planner.calendar.list",
+    title: "查询 Planner 日历",
+    description: "列出当前 workspace 的可用日历容器。",
+    schema: z.object({}),
+    readOnly: true,
+    entityType: "planner_calendar",
+    run: ({ db, context }) => {
+      ensurePlannerDefaults(db, context);
+      return listPlannerCalendars(db, context);
+    },
+  }),
+  defineOperation({
+    id: "planner.event.list",
+    title: "查询 Planner 事件",
+    description: "按日期范围查询独立日历事件，包含定时、全天与多日事件。",
+    schema: z.object({ from: date, to: date }),
+    readOnly: true,
+    entityType: "calendar_event",
+    run: ({ db, context }, input) => {
+      ensureRange(input.from, input.to);
+      const endDateExclusive = shiftDateKey(input.to, 1);
+      return listCalendarEventRange(db, context, {
+        start: `${input.from}T00:00:00.000Z`,
+        end: `${endDateExclusive}T00:00:00.000Z`,
+        startDate: input.from,
+        endDateExclusive,
+      });
+    },
+  }),
+  defineOperation({
+    id: "planner.event.create",
+    title: "创建 Planner 事件",
+    description: "使用稳定 clientMutationId 幂等创建定时或全天事件。",
+    schema: z.discriminatedUnion("allDay", [
+      z.object({
+        clientMutationId: z.string().min(1).max(200),
+        calendarId: z.string().min(1),
+        title: z.string().min(1).max(500),
+        description: z.string().max(20_000).optional(),
+        location: z.string().max(500).optional(),
+        url: z.union([z.literal(""), z.url()]).optional(),
+        kind: z.enum(["event", "class", "exam", "meeting", "focus", "milestone"]).optional(),
+        busyStatus: z.enum(["busy", "free"]).optional(),
+        allDay: z.literal(true),
+        startDate: date,
+        endDateExclusive: date,
+      }),
+      z.object({
+        clientMutationId: z.string().min(1).max(200),
+        calendarId: z.string().min(1),
+        title: z.string().min(1).max(500),
+        description: z.string().max(20_000).optional(),
+        location: z.string().max(500).optional(),
+        url: z.union([z.literal(""), z.url()]).optional(),
+        kind: z.enum(["event", "class", "exam", "meeting", "focus", "milestone"]).optional(),
+        busyStatus: z.enum(["busy", "free"]).optional(),
+        allDay: z.literal(false),
+        startAt: z.iso.datetime({ offset: true }),
+        endAt: z.iso.datetime({ offset: true }),
+        timezone: z.string().min(1),
+      }),
+    ]),
+    readOnly: false,
+    entityType: "calendar_event",
+    run: ({ db, context }, input) => createCalendarEvent(db, context, input),
+  }),
+  defineOperation({
+    id: "planner.event.update",
+    title: "更新 Planner 事件",
+    description: "使用 expectedVersion 更新事件详情、日历、忙闲或时间范围。",
+    schema: z.object({
+      id: z.string().min(1),
+      expectedVersion: z.number().int().positive(),
+      calendarId: z.string().optional(),
+      title: z.string().min(1).max(500).optional(),
+      description: z.string().max(20_000).optional(),
+      location: z.string().max(500).optional(),
+      url: z.union([z.literal(""), z.url()]).optional(),
+      kind: z.enum(["event", "class", "exam", "meeting", "focus", "milestone"]).optional(),
+      busyStatus: z.enum(["busy", "free"]).optional(),
+      allDay: z.boolean().optional(),
+      startAt: z.iso.datetime({ offset: true }).optional(),
+      endAt: z.iso.datetime({ offset: true }).optional(),
+      timezone: z.string().optional(),
+      startDate: date.optional(),
+      endDateExclusive: date.optional(),
+    }),
+    readOnly: false,
+    entityType: "calendar_event",
+    run: ({ db, context }, input) => updateCalendarEvent(db, context, input),
+  }),
+  defineOperation({
+    id: "planner.event.delete",
+    title: "删除 Planner 事件",
+    description: "使用稳定 clientMutationId 软删除事件，必须明确确认。",
+    schema: z.object({
+      id: z.string().min(1),
+      expectedVersion: z.number().int().positive(),
+      clientMutationId: z.string().min(1).max(200),
+      confirm: z.boolean(),
+    }),
+    readOnly: false,
+    destructive: true,
+    entityType: "calendar_event",
+    run: ({ db, context }, input) => {
+      requireConfirmation(input.confirm, "删除 Planner 事件");
+      return softDeleteCalendarEvent(db, context, input);
+    },
+  }),
+  defineOperation({
+    id: "planner.task.series.create",
+    title: "创建重复任务系列",
+    description: "创建 fixed_schedule 或 after_completion 重复任务系列并生成首个实例。",
+    schema: z.object({
+      clientMutationId: z.string().min(1).max(200),
+      rrule: z.string().min(1),
+      timezone: z.string().min(1),
+      generationMode: z.enum(["fixed_schedule", "after_completion"]),
+      firstOccurrenceAt: z.iso.datetime({ offset: true }),
+      listId: z.string().min(1),
+      title: z.string().min(1).max(500),
+      notes: z.string().max(20_000).optional(),
+      subjectCode: z.string().nullable().optional(),
+      priority: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
+      estimatedMinutes: z.number().int().min(5).max(1440).optional(),
+    }),
+    readOnly: false,
+    entityType: "task_series",
+    run: ({ db, context }, input) => {
+      const {
+        clientMutationId,
+        rrule,
+        timezone,
+        generationMode,
+        firstOccurrenceAt,
+        ...template
+      } = input;
+      return createTaskSeries(db, context, {
+        clientMutationId,
+        rrule,
+        timezone,
+        generationMode,
+        firstOccurrenceAt,
+        template,
+      });
+    },
+  }),
+  defineOperation({
+    id: "planner.reminder.list",
+    title: "查询实体提醒",
+    description: "查询指定任务或事件的提醒状态与下次尝试时间。",
+    schema: z.object({
+      entityType: z.enum(["task", "event"]),
+      entityId: z.string().min(1),
+    }),
+    readOnly: true,
+    entityType: "planner_reminder",
+    run: ({ db, context }, input) => listEntityReminders(db, context, input),
+  }),
+  defineOperation({
+    id: "planner.reminder.create",
+    title: "创建 Planner 提醒",
+    description: "使用稳定 clientMutationId 创建应用内或 Web Push 提醒。",
+    schema: z.object({
+      clientMutationId: z.string().min(1).max(200),
+      entityType: z.enum(["task", "event"]),
+      entityId: z.string().min(1),
+      anchor: z.enum(["due", "scheduled_start", "event_start", "exact"]),
+      offsetMinutes: z.number().int().min(-43_200).max(43_200).nullable().optional(),
+      exactAt: z.iso.datetime({ offset: true }).nullable().optional(),
+      channel: z.enum(["in_app", "web_push"]),
+    }),
+    readOnly: false,
+    entityType: "planner_reminder",
+    run: ({ db, context }, input) => createPlannerReminder(db, context, input),
+  }),
+  defineOperation({
+    id: "planner.reminder.cancel",
+    title: "取消 Planner 提醒",
+    description: "取消 workspace 内指定提醒。",
+    schema: z.object({ id: z.string().min(1) }),
+    readOnly: false,
+    entityType: "planner_reminder",
+    run: ({ db, context }, input) => cancelPlannerReminder(db, context, input.id),
   }),
   defineOperation({
     id: "note.manage",

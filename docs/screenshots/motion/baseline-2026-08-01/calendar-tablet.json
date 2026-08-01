@@ -1,0 +1,18 @@
+{
+  "route": "/calendar",
+  "state": "drawer",
+  "viewport": {
+    "width": 900,
+    "height": 1000
+  },
+  "fullPage": false,
+  "browser": "chromium",
+  "theme": "system",
+  "skin": "default",
+  "scroll": {
+    "x": 0,
+    "y": 0
+  },
+  "packageVersion": "0.1.0",
+  "buildIdentifier": "0.1.0"
+}

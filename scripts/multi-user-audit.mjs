@@ -94,7 +94,7 @@ async function login(page, email, password, nextPath) {
 async function createUserContent(page, taskName, fileName) {
   const day = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" });
   await page.goto(`${baseUrl}/day/${day}`, { waitUntil: "networkidle" });
-  await page.locator(".taskCreate input").fill(taskName);
+  await page.locator(".taskCreate .taskComposerTitle").fill(taskName);
   await page.locator('.taskCreate button[aria-label="添加任务"]').click();
   await page.waitForFunction(
     (expected) => Array.from(document.querySelectorAll(".taskTitle")).some((node) => node.value === expected),

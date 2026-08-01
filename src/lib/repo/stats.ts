@@ -32,7 +32,10 @@ export function getStudyStreak(db: Database.Database, scope: WorkspaceScope, tod
       UNION SELECT day FROM review_events WHERE workspace_id = @workspaceId
       UNION SELECT day FROM mistakes WHERE workspace_id = @workspaceId
       UNION SELECT day FROM assets WHERE workspace_id = @workspaceId
-      UNION SELECT day FROM day_tasks WHERE workspace_id = @workspaceId AND done = 1
+      UNION
+      SELECT COALESCE(due_date, substr(scheduled_start_at, 1, 10)) AS day
+      FROM planner_tasks
+      WHERE workspace_id = @workspaceId AND status = 'completed' AND deleted_at IS NULL
     )
     WHERE day <= @today
     ORDER BY day DESC
@@ -69,10 +72,14 @@ export function getHomeSnapshot(db: Database.Database, scope: WorkspaceScope, to
       (SELECT COUNT(*) FROM mistakes
        WHERE workspace_id = @workspaceId AND graduated = 0
          AND next_review IS NOT NULL AND next_review <= @today) AS dueMistakes,
-      (SELECT COUNT(*) FROM day_tasks
-       WHERE workspace_id = @workspaceId AND day = @today AND done = 0) AS openTasks,
-      (SELECT COUNT(*) FROM day_tasks
-       WHERE workspace_id = @workspaceId AND day = @today AND done = 1) AS doneTasks
+      (SELECT COUNT(*) FROM planner_tasks
+       WHERE workspace_id = @workspaceId AND deleted_at IS NULL
+         AND status IN ('open', 'waiting')
+         AND COALESCE(due_date, substr(scheduled_start_at, 1, 10)) = @today) AS openTasks,
+      (SELECT COUNT(*) FROM planner_tasks
+       WHERE workspace_id = @workspaceId AND deleted_at IS NULL
+         AND status = 'completed'
+         AND COALESCE(due_date, substr(scheduled_start_at, 1, 10)) = @today) AS doneTasks
   `).get({ workspaceId: scope.workspaceId, today }) as {
     dueReviews: number;
     dueMistakes: number;

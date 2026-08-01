@@ -1,7 +1,16 @@
 import type Database from "better-sqlite3";
+import { randomUUID } from "node:crypto";
 import type { WorkspaceScope } from "../access-context";
 import { assertDateKey } from "../dates";
+import { addMinutesToInstant, localDateTimeToUtc } from "../planner/time";
 import { ensureDay } from "./days";
+import { ensurePlannerDefaults, plannerDefaultId } from "./planner-defaults";
+import {
+  createPlannerTask,
+  projectPlannerTaskToDayTask,
+  updatePlannerTask,
+} from "./planner-tasks";
+import type { PlannerTask } from "../planner/types";
 
 export type DayTask = {
   id: number;
@@ -25,29 +34,16 @@ export type DayNote = {
 
 export function listTasks(db: Database.Database, scope: WorkspaceScope, day: string): DayTask[] {
   assertDateKey(day);
-  return db.prepare(`
-    SELECT id, day, title, subject_code, done, sort_order,
-           priority, estimated_minutes, scheduled_start, notes
-    FROM day_tasks
-    WHERE workspace_id = @workspaceId AND day = @day
-    ORDER BY CASE WHEN scheduled_start IS NULL THEN 1 ELSE 0 END ASC,
-             scheduled_start ASC,
-             priority ASC,
-             sort_order ASC,
-             id ASC
-  `).all({ workspaceId: scope.workspaceId, day }) as DayTask[];
+  return listCompatibilityTasks(db, scope)
+    .map((row) => projectPlannerTaskToDayTask(row, row.compatibility_id))
+    .filter((task) => task.day === day)
+    .sort(compareDayTaskProjection);
 }
 
 export function listCalendarTasks(db: Database.Database, scope: WorkspaceScope): DayTask[] {
-  return db.prepare(`
-    SELECT id, day, title, subject_code, done, sort_order,
-           priority, estimated_minutes, scheduled_start, notes
-    FROM day_tasks
-    WHERE workspace_id = @workspaceId
-    ORDER BY day ASC,
-             CASE WHEN scheduled_start IS NULL THEN 1 ELSE 0 END ASC,
-             scheduled_start ASC, priority ASC, sort_order ASC, id ASC
-  `).all({ workspaceId: scope.workspaceId }) as DayTask[];
+  return listCompatibilityTasks(db, scope)
+    .map((row) => projectPlannerTaskToDayTask(row, row.compatibility_id))
+    .sort((a, b) => a.day.localeCompare(b.day) || compareDayTaskProjection(a, b));
 }
 
 export function addTask(
@@ -72,41 +68,39 @@ export function addTask(
   const scheduledStart = normalizeScheduledStart(input.scheduledStart);
   const notes = normalizeTaskNotes(input.notes);
   ensureDay(db, scope, day);
-  const maxOrder = db.prepare(`
-    SELECT COALESCE(MAX(sort_order), 0) AS value
-    FROM day_tasks WHERE workspace_id = ? AND day = ?
-  `).get(scope.workspaceId, day) as { value: number };
-  const result = db.prepare(`
-    INSERT INTO day_tasks
-      (workspace_id, day, title, subject_code, sort_order, priority, estimated_minutes, scheduled_start, notes)
-    VALUES
-      (@workspaceId, @day, @title, @subjectCode, @sortOrder, @priority, @estimatedMinutes, @scheduledStart, @notes)
-  `).run({
-    workspaceId: scope.workspaceId,
-    day,
+  ensurePlannerDefaults(db, scope);
+  const sortOrder = listTasks(db, scope, day)
+    .reduce((maximum, task) => Math.max(maximum, task.sort_order), 0) + 1;
+  const workspace = getWorkspaceTimeZone(db, scope);
+  const scheduledStartAt = scheduledStart
+    ? localDateTimeToUtc({ date: day, time: scheduledStart, timeZone: workspace })
+    : null;
+  const created = createPlannerTask(db, scope, {
+    clientMutationId: randomUUID(),
+    listId: plannerDefaultId(scope.workspaceId, "inbox"),
     title,
-    subjectCode,
-    sortOrder: maxOrder.value + 1,
+    notes,
+    subjectCode: subjectCode ?? undefined,
     priority,
     estimatedMinutes,
-    scheduledStart,
-    notes,
+    dueDate: scheduledStartAt ? null : day,
+    scheduledStartAt,
+    scheduledEndAt: scheduledStartAt ? addMinutesToInstant(scheduledStartAt, estimatedMinutes) : null,
+    scheduledTimezone: scheduledStartAt ? workspace : null,
+    sortOrder,
   });
-  return db.prepare(`
-    SELECT id, day, title, subject_code, done, sort_order,
-           priority, estimated_minutes, scheduled_start, notes
-    FROM day_tasks WHERE workspace_id = ? AND id = ?
-  `).get(scope.workspaceId, Number(result.lastInsertRowid)) as DayTask;
+  const compatibilityId = getCompatibilityId(db, scope, created.id);
+  return projectPlannerTaskToDayTask(created, compatibilityId);
 }
 
 export function toggleTask(db: Database.Database, scope: WorkspaceScope, input: { id: number; done: boolean }): void {
-  const result = db.prepare(`
-    UPDATE day_tasks
-    SET done = @done,
-        done_at = CASE WHEN @done = 1 THEN CURRENT_TIMESTAMP ELSE NULL END
-    WHERE workspace_id = @workspaceId AND id = @id
-  `).run({ workspaceId: scope.workspaceId, id: input.id, done: input.done ? 1 : 0 });
-  if (!result.changes) throw new Error("任务不存在");
+  const task = getCompatibilityTask(db, scope, input.id);
+  const result = updatePlannerTask(db, scope, {
+    id: task.id,
+    expectedVersion: task.version,
+    status: input.done ? "completed" : "open",
+  });
+  if (result.conflict) throw new Error("任务版本冲突");
 }
 
 export function updateTask(
@@ -122,20 +116,7 @@ export function updateTask(
     notes?: string;
   },
 ): void {
-  const task = db.prepare(`
-    SELECT title, subject_code, priority, estimated_minutes, scheduled_start, notes
-    FROM day_tasks WHERE workspace_id = ? AND id = ?
-  `).get(scope.workspaceId, input.id) as
-    | {
-        title: string;
-        subject_code: string | null;
-        priority: number;
-        estimated_minutes: number;
-        scheduled_start: string | null;
-        notes: string;
-      }
-    | undefined;
-  if (!task) throw new Error("任务不存在");
+  const task = getCompatibilityTask(db, scope, input.id);
   const title = input.title === undefined ? task.title : input.title.trim();
   if (!title) throw new Error("任务内容必填");
   const subjectCode = input.subjectCode === undefined
@@ -145,15 +126,29 @@ export function updateTask(
   const estimatedMinutes = input.estimatedMinutes === undefined
     ? task.estimated_minutes
     : normalizeEstimatedMinutes(input.estimatedMinutes);
+  const currentProjection = projectPlannerTaskToDayTask(task, input.id);
   const scheduledStart = input.scheduledStart === undefined
-    ? task.scheduled_start
+    ? currentProjection.scheduled_start
     : normalizeScheduledStart(input.scheduledStart);
   const notes = input.notes === undefined ? task.notes : normalizeTaskNotes(input.notes);
-  db.prepare(`
-    UPDATE day_tasks
-    SET title = ?, subject_code = ?, priority = ?, estimated_minutes = ?, scheduled_start = ?, notes = ?
-    WHERE workspace_id = ? AND id = ?
-  `).run(title, subjectCode, priority, estimatedMinutes, scheduledStart, notes, scope.workspaceId, input.id);
+  const workspace = getWorkspaceTimeZone(db, scope);
+  const scheduledStartAt = scheduledStart
+    ? localDateTimeToUtc({ date: currentProjection.day, time: scheduledStart, timeZone: workspace })
+    : null;
+  const result = updatePlannerTask(db, scope, {
+    id: task.id,
+    expectedVersion: task.version,
+    title,
+    subjectCode,
+    priority,
+    estimatedMinutes,
+    notes,
+    dueDate: scheduledStartAt ? null : currentProjection.day,
+    scheduledStartAt,
+    scheduledEndAt: scheduledStartAt ? addMinutesToInstant(scheduledStartAt, estimatedMinutes) : null,
+    scheduledTimezone: scheduledStartAt ? workspace : null,
+  });
+  if (result.conflict) throw new Error("任务版本冲突");
 }
 
 export function scheduleTask(
@@ -162,39 +157,38 @@ export function scheduleTask(
   input: { id: number; day: string; scheduledStart?: string | null; estimatedMinutes?: number },
 ): { previousDay: string; day: string } {
   const day = assertDateKey(input.day);
-  const task = db.prepare(`
-    SELECT day, estimated_minutes FROM day_tasks WHERE workspace_id = ? AND id = ?
-  `).get(scope.workspaceId, input.id) as { day: string; estimated_minutes: number } | undefined;
-  if (!task) throw new Error("任务不存在");
+  const task = getCompatibilityTask(db, scope, input.id);
+  const currentProjection = projectPlannerTaskToDayTask(task, input.id);
   const scheduledStart = normalizeScheduledStart(input.scheduledStart);
   const estimatedMinutes = input.estimatedMinutes === undefined
     ? task.estimated_minutes
     : normalizeEstimatedMinutes(input.estimatedMinutes);
   ensureDay(db, scope, day);
-  const maxOrder = db.prepare(`
-    SELECT COALESCE(MAX(sort_order), 0) AS value
-    FROM day_tasks WHERE workspace_id = ? AND day = ? AND id != ?
-  `).get(scope.workspaceId, day, input.id) as { value: number };
-  db.prepare(`
-    UPDATE day_tasks
-    SET day = @day,
-        scheduled_start = @scheduledStart,
-        estimated_minutes = @estimatedMinutes,
-        sort_order = CASE WHEN day = @day THEN sort_order ELSE @sortOrder END
-    WHERE workspace_id = @workspaceId AND id = @id
-  `).run({
-    workspaceId: scope.workspaceId,
-    id: input.id,
-    day,
-    scheduledStart,
+  const workspace = getWorkspaceTimeZone(db, scope);
+  const scheduledStartAt = scheduledStart
+    ? localDateTimeToUtc({ date: day, time: scheduledStart, timeZone: workspace })
+    : null;
+  const result = updatePlannerTask(db, scope, {
+    id: task.id,
+    expectedVersion: task.version,
+    dueDate: scheduledStartAt ? null : day,
+    scheduledStartAt,
+    scheduledEndAt: scheduledStartAt ? addMinutesToInstant(scheduledStartAt, estimatedMinutes) : null,
+    scheduledTimezone: scheduledStartAt ? workspace : null,
     estimatedMinutes,
-    sortOrder: maxOrder.value + 1,
   });
-  return { previousDay: task.day, day };
+  if (result.conflict) throw new Error("任务版本冲突");
+  return { previousDay: currentProjection.day, day };
 }
 
 export function deleteTask(db: Database.Database, scope: WorkspaceScope, id: number): void {
-  db.prepare("DELETE FROM day_tasks WHERE workspace_id = ? AND id = ?").run(scope.workspaceId, id);
+  const task = getCompatibilityTask(db, scope, id);
+  const result = db.prepare(`
+    UPDATE planner_tasks
+    SET deleted_at = ?, version = version + 1, updated_at = ?
+    WHERE workspace_id = ? AND id = ? AND version = ?
+  `).run(new Date().toISOString(), new Date().toISOString(), scope.workspaceId, task.id, task.version);
+  if (!result.changes) throw new Error("任务版本冲突");
 }
 
 /** 未完成的任务顺延到目标日期（跨天迁移）。 */
@@ -207,20 +201,82 @@ export function carryOverTasks(
   const toDay = assertDateKey(input.toDay);
   if (fromDay === toDay) return 0;
   ensureDay(db, scope, toDay);
-  const open = db.prepare(`
-    SELECT id FROM day_tasks WHERE workspace_id = ? AND day = ? AND done = 0
-  `).all(scope.workspaceId, fromDay) as Array<{ id: number }>;
+  const open = listTasks(db, scope, fromDay).filter((task) => !task.done);
   if (!open.length) return 0;
-  const maxOrder = db.prepare(`
-    SELECT COALESCE(MAX(sort_order), 0) AS value
-    FROM day_tasks WHERE workspace_id = ? AND day = ?
-  `).get(scope.workspaceId, toDay) as { value: number };
-  const move = db.prepare("UPDATE day_tasks SET day = ?, scheduled_start = NULL, sort_order = ? WHERE workspace_id = ? AND id = ?");
+  const maxSortOrder = listTasks(db, scope, toDay)
+    .reduce((maximum, task) => Math.max(maximum, task.sort_order), 0);
   const run = db.transaction(() => {
-    open.forEach((task, index) => move.run(toDay, maxOrder.value + index + 1, scope.workspaceId, task.id));
+    open.forEach((item, index) => {
+      const task = getCompatibilityTask(db, scope, item.id);
+      const result = updatePlannerTask(db, scope, {
+        id: task.id,
+        expectedVersion: task.version,
+        dueDate: toDay,
+        scheduledStartAt: null,
+        scheduledEndAt: null,
+        scheduledTimezone: null,
+        sortOrder: maxSortOrder + index + 1,
+      });
+      if (result.conflict) throw new Error("任务版本冲突");
+    });
   });
   run();
   return open.length;
+}
+
+type CompatibilityPlannerTask = PlannerTask & { compatibility_id: number };
+
+function listCompatibilityTasks(
+  db: Database.Database,
+  scope: WorkspaceScope,
+): CompatibilityPlannerTask[] {
+  return db.prepare(`
+    SELECT rowid AS compatibility_id, *
+    FROM planner_tasks
+    WHERE workspace_id = ? AND deleted_at IS NULL
+  `).all(scope.workspaceId) as CompatibilityPlannerTask[];
+}
+
+function getCompatibilityTask(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  compatibilityId: number,
+): CompatibilityPlannerTask {
+  const task = db.prepare(`
+    SELECT rowid AS compatibility_id, *
+    FROM planner_tasks
+    WHERE workspace_id = ? AND rowid = ? AND deleted_at IS NULL
+  `).get(scope.workspaceId, compatibilityId) as CompatibilityPlannerTask | undefined;
+  if (!task) throw new Error("任务不存在");
+  return task;
+}
+
+function getCompatibilityId(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  id: string,
+): number {
+  const row = db.prepare(`
+    SELECT rowid AS compatibility_id FROM planner_tasks
+    WHERE workspace_id = ? AND id = ?
+  `).get(scope.workspaceId, id) as { compatibility_id: number };
+  return row.compatibility_id;
+}
+
+function getWorkspaceTimeZone(db: Database.Database, scope: WorkspaceScope): string {
+  const workspace = db.prepare("SELECT timezone FROM workspaces WHERE id = ?")
+    .get(scope.workspaceId) as { timezone: string } | undefined;
+  if (!workspace) throw new Error("学习空间不存在");
+  return workspace.timezone;
+}
+
+function compareDayTaskProjection(a: DayTask, b: DayTask): number {
+  if (a.scheduled_start && !b.scheduled_start) return -1;
+  if (!a.scheduled_start && b.scheduled_start) return 1;
+  return (a.scheduled_start ?? "").localeCompare(b.scheduled_start ?? "")
+    || a.priority - b.priority
+    || a.sort_order - b.sort_order
+    || a.id - b.id;
 }
 
 function normalizePriority(value: number | undefined): 1 | 2 | 3 {

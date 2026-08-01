@@ -24,6 +24,10 @@
   --chrome-line: rgba(255, 255, 255, 0.09);
   --chrome-accent: color-mix(in srgb, var(--accent) 52%, #f9dcc8);
   /* 动效 token：皮肤只换色不换动，禁止在 [data-skin] 覆盖，禁止裸写 cubic-bezier / ms */
+  --motion-instant: var(--motion-fast);
+  --motion-base: var(--motion-quick);
+  --motion-panel: var(--motion-quick);
+  --motion-ease-standard: var(--motion-ease);
   --motion-fast: 120ms; /* hover、按压、focus ring */
   --motion-quick: 200ms; /* 组件展开、行进出 */
   --motion-page: 360ms; /* 页面过渡 */
@@ -1408,8 +1412,7 @@ a.homeFocusFigure:hover small {
 .analyticsGrid,
 .settingsGrid,
 .subjectWorkbench,
-.assetExplorer,
-.calendarLayout {
+.assetExplorer {
   gap: 22px;
 }
 
@@ -1670,249 +1673,6 @@ a.homeFocusFigure:hover small {
   border-radius: 99px;
 }
 
-.fc .fc-button {
-  border-radius: 9px !important;
-}
-
-.fc .fc-daygrid-day,
-.fc .fc-timegrid-slot {
-  transition: background 140ms ease;
-}
-
-.fc .fc-day-today {
-  background: color-mix(in srgb, var(--accent-soft) 52%, transparent) !important;
-}
-
-.fc-event {
-  border-radius: 7px !important;
-  box-shadow: 0 3px 10px rgba(31, 28, 20, 0.12);
-}
-
-.calendarWorkspace {
-  display: grid;
-  gap: 18px;
-}
-
-.calendarOverview {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1px;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 15px;
-  background: var(--line);
-  box-shadow: var(--shadow-xs);
-}
-
-.calendarOverview > div {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 9px;
-  min-height: 64px;
-  padding: 11px 16px;
-  background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
-}
-
-.calendarOverview svg { color: var(--accent); }
-.calendarOverview span { color: var(--muted); font-size: 11px; }
-.calendarOverview strong { font-family: var(--font-num); font-size: 22px; }
-.calendarOverview small { color: var(--quiet); font-size: 10px; font-weight: 500; }
-
-.calendarLayout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 310px;
-  align-items: start;
-}
-
-.calendarShell {
-  min-width: 0;
-  overflow: hidden;
-}
-
-.calendarViewSwitch {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-bottom: 18px;
-}
-
-.calendarViewSwitch > div:first-child {
-  display: grid;
-  margin-right: auto;
-}
-
-.calendarViewSwitch > div:first-child strong {
-  font-family: var(--font-serif);
-  font-size: 18px;
-}
-
-.calendarViewSwitch button {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  height: 34px;
-  padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.calendarViewSwitch button.active {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.calendarLegend {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-right: 8px;
-  color: var(--quiet);
-  font-size: 9px;
-}
-
-.calendarLegend i {
-  width: 7px;
-  height: 7px;
-  margin-left: 5px;
-  border-radius: 50%;
-  background: var(--summit-blue);
-}
-
-.calendarLegend i.p1 { background: var(--accent); }
-.calendarLegend i.milestone { background: var(--warn); }
-
-.calendarInbox {
-  position: sticky;
-  top: calc(var(--topbar-height) + 20px);
-  max-height: calc(100dvh - var(--topbar-height) - 44px);
-  padding: 20px;
-  overflow: hidden;
-}
-
-.calendarInboxIntro {
-  margin: -7px 0 15px;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.55;
-}
-
-.calendarInboxList {
-  display: grid;
-  gap: 9px;
-  max-height: calc(100dvh - 250px);
-  padding-right: 3px;
-  overflow-y: auto;
-}
-
-.calendarInboxTask {
-  position: relative;
-  display: grid;
-  gap: 7px;
-  padding: 11px;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  background: var(--surface-soft);
-}
-
-.calendarInboxTask::before {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--quiet);
-  content: "";
-}
-
-.calendarInboxTask.priority1::before { background: var(--accent); }
-.calendarInboxTask.priority2::before { background: var(--summit-blue); }
-
-.calendarInboxTask header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--quiet);
-  font-size: 9px;
-}
-
-.calendarInboxTask header span {
-  color: var(--accent);
-  font-family: var(--font-mono);
-  font-weight: 700;
-}
-
-.calendarInboxTask header small { margin-left: auto; }
-.calendarInboxTask > strong { font-size: 12px; line-height: 1.45; }
-
-.calendarInboxTask > div {
-  display: grid;
-  grid-template-columns: 1fr 73px auto;
-  gap: 5px;
-}
-
-.calendarInboxTask input {
-  min-width: 0;
-  height: 31px;
-  padding: 3px 5px;
-  border: 1px solid var(--line);
-  background: var(--surface-raised);
-  font-size: 9px;
-}
-
-.calendarInboxTask button {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 0 7px;
-  border: 0;
-  border-radius: 7px;
-  background: var(--ink);
-  color: var(--bg);
-  font-size: 9px;
-}
-
-.calendarInboxEmpty {
-  display: grid;
-  place-items: center;
-  gap: 5px;
-  padding: 35px 12px;
-  color: var(--ok);
-  text-align: center;
-}
-
-.calendarInboxEmpty span { color: var(--muted); font-size: 11px; }
-
-.fc .eventTask {
-  border: 0 !important;
-  background: var(--summit-blue) !important;
-  color: white !important;
-}
-
-.fc .eventPriority1 { background: var(--accent) !important; color: var(--accent-ink) !important; }
-.fc .eventPriority3 { background: var(--muted) !important; color: var(--surface) !important; }
-.fc .eventTaskDone { opacity: 1; text-decoration: line-through; }
-.fc .eventMilestone { border: 0 !important; background: var(--warn) !important; color: var(--warn-soft) !important; }
-
-.fc .fc-toolbar-title {
-  font-family: var(--font-serif);
-  font-size: 19px !important;
-}
-
-.fc-theme-standard td,
-.fc-theme-standard th,
-.fc-theme-standard .fc-scrollgrid {
-  border-color: var(--line) !important;
-}
-
-.fc .fc-col-header-cell-cushion,
-.fc .fc-daygrid-day-number {
-  color: var(--muted);
-  font-size: 11px;
-}
 
 .calendarDayPopoverPositioner {
   position: fixed;
@@ -2329,9 +2089,7 @@ a.homeFocusFigure:hover small {
 .segmented button,
 .sortModeSwitch button,
 .pointPanelTabs button,
-.calendarViewSwitch button,
-.driveViewSwitch button,
-.fc .fc-button {
+.driveViewSwitch button {
   transition:
     background-color var(--motion-fast) var(--motion-ease),
     color var(--motion-fast) var(--motion-ease),
@@ -2455,20 +2213,6 @@ html[data-intro="play"] .homeFocus[data-state="summit"] .homeSeal {
     grid-column: 1 / -1;
   }
 
-  .calendarLayout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .calendarInbox {
-    position: static;
-    max-height: none;
-  }
-
-  .calendarInboxList {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    max-height: none;
-  }
-
   .summitCountdownRow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2578,23 +2322,6 @@ html[data-intro="play"] .homeFocus[data-state="summit"] .homeSeal {
   .taskLineDetails {
     grid-template-columns: 1fr 1fr;
     padding-left: 14px;
-  }
-
-  .calendarOverview {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .calendarOverview > div {
-    min-height: 57px;
-    padding: 9px 11px;
-  }
-
-  .calendarLegend {
-    display: none;
-  }
-
-  .calendarInboxList {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .summitCountdownRow {

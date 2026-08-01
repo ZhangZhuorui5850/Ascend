@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 import { buildFallbackKnowledgeSeed } from "../knowledge-map";
+import { ensurePlannerDefaults } from "./planner-defaults";
 
 export const LEGACY_WORKSPACE_ID = "workspace:legacy";
 
@@ -11,13 +12,19 @@ export function ensureWorkspaceForUser(
   const existing = db.prepare("SELECT id FROM workspaces WHERE owner_user_id = ?").get(user.id) as
     | { id: string }
     | undefined;
-  if (existing) return { workspaceId: existing.id };
+  if (existing) {
+    ensurePlannerDefaults(db, { workspaceId: existing.id });
+    return { workspaceId: existing.id };
+  }
 
   return db.transaction(() => {
     const current = db.prepare("SELECT id FROM workspaces WHERE owner_user_id = ?").get(user.id) as
       | { id: string }
       | undefined;
-    if (current) return { workspaceId: current.id };
+    if (current) {
+      ensurePlannerDefaults(db, { workspaceId: current.id });
+      return { workspaceId: current.id };
+    }
 
     const legacy = db.prepare("SELECT owner_user_id FROM workspaces WHERE id = ?").get(LEGACY_WORKSPACE_ID) as
       | { owner_user_id: string | null }
@@ -28,6 +35,7 @@ export function ensureWorkspaceForUser(
         SET owner_user_id = ?, display_name = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND owner_user_id IS NULL
       `).run(user.id, user.displayName, LEGACY_WORKSPACE_ID);
+      ensurePlannerDefaults(db, { workspaceId: LEGACY_WORKSPACE_ID });
       return { workspaceId: LEGACY_WORKSPACE_ID };
     }
 
@@ -37,6 +45,7 @@ export function ensureWorkspaceForUser(
       VALUES (?, ?, ?)
     `).run(workspaceId, user.id, user.displayName);
     cloneKnowledgeSeedForWorkspace(db, workspaceId);
+    ensurePlannerDefaults(db, { workspaceId });
     return { workspaceId };
   })();
 }

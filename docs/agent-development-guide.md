@@ -7,6 +7,15 @@
 4. **第 10 天测试**：新首页元素合入前回答——"连续看它 10 天后，它是信息还是墙纸？"墙纸不合入（固定格言、>14 天的倒计时常驻主卡、值驱动的位置漂移均属墙纸）。
 - 首页入场编排由 `layout.tsx` 的 pre-paint 门控脚本（`zgca-intro` localStorage 日期戳 → `html[data-intro]`）驱动，每日首次冷加载播一次；SPA 导航只走 ViewTransition。已知且接受的降级：登录 redirect 后首次到达不播编排；低端机水合晚于 1200ms 时 CountUp 静默直出终值。
 
+## Planner 前端守门规则（2026-07 重设计定稿）
+1. **响应式表面**：Tasks 在 `>=1180px` 使用三栏，`761–1179px` 使用右侧 Drawer，`<=760px` 使用底部 Sheet；Calendar 使用同一断点与弹层语义，手机主视图为议程。
+2. **弹层与焦点**：Drawer、Sheet、Dialog、Popover、Collapsible 和 Toast 使用 `src/components/ui/` 的 Base UI 原语。打开时焦点进入首个主要字段，Escape 关闭后焦点归还触发器，移动表单接入 `Drawer.VirtualKeyboardProvider`。
+3. **动画所有权**：Motion 管理任务行重排、进入、退出与选择背景；FullCalendar 管理事件定位、拖拽与缩放；Base UI 管理弹层状态；View Transition 管理路由。所有 Motion 位移经 `MotionProvider` 响应系统与应用内 reduce 设置。
+4. **样式边界**：Planner 皮肤位于 `src/styles/planner/*.module.css`，共享颜色与动效读取 `tokens.css`。`globals.css` 与 `summit.css` 保存跨页面基础规则，Planner 模块类保持单一来源。
+5. **写入恢复**：客户端先提交乐观状态，再在原始事件上下文启动 Server Action。`runPlannerMutation()` 统一处理传输失败；版本冲突恢复实体、选择、排序与输入，FullCalendar 的失败改期调用 `revert()`，删除撤销调用 restore Action。
+6. **可操作性**：主要触控目标保持至少 44×44px；任务列表支持上下键移动、空格完成、Enter 打开；拖拽与缩放同时提供日期时间字段路径；状态消息使用 `aria-live`，图标按钮提供稳定可访问名称。
+7. **验证证据**：Planner 改动覆盖 1440px、900px、390px、Light、Dark、系统 reduced motion、应用内 reduce、键盘焦点、水平溢出、运行时错误、workspace 隔离与生产构建。稳定审计入口为 `npm run responsive:audit`、`npm run smoke` 和 verify skill。
+
 ## 架构速览
 - Next.js 16 App Router + React 19，源码在 `src/`；无 tailwind，样式为 `src/app/globals.css` + `src/styles/tokens.css` CSS 变量（多套 `data-skin` 皮肤，颜色一律走 token）。
 - 数据库 better-sqlite3（同步、无 ORM）：建表 `src/lib/db.ts`（服务全新库），版本化迁移 `src/lib/migrations.ts`（服务存量库，带 checksum，只能追加不能改旧迁移）。查询集中在 `src/lib/repo/*.ts` 手写 prepared statements，多租户按 `workspace_id` 隔离。

@@ -26,3 +26,39 @@ self.addEventListener("fetch", (event) => {
   // are never written to Cache Storage.
   event.respondWith(fetch(request).catch(() => caches.match("/offline.html")));
 });
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = { title: "Ascend 提醒", body: event.data?.text() || "" };
+  }
+  const title = typeof payload.title === "string" ? payload.title : "Ascend 提醒";
+  const body = typeof payload.body === "string" ? payload.body : "打开 Ascend 查看详情";
+  const targetPath = typeof payload.targetPath === "string" && payload.targetPath.startsWith("/")
+    ? payload.targetPath
+    : "/";
+  event.waitUntil(self.registration.showNotification(title, {
+    body,
+    data: { targetPath },
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    tag: typeof payload.tag === "string" ? payload.tag : undefined,
+  }));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetPath = event.notification.data?.targetPath || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const existing = clients.find((client) => new URL(client.url).origin === self.location.origin);
+      if (existing) {
+        existing.navigate(targetPath);
+        return existing.focus();
+      }
+      return self.clients.openWindow(targetPath);
+    }),
+  );
+});

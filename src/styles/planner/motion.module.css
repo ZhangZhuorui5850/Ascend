@@ -1,0 +1,43 @@
+.panelContent {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity var(--motion-panel) var(--motion-ease-standard),
+    transform var(--motion-panel) var(--motion-ease-standard);
+}
+
+.panelContent[data-entering="true"] {
+  opacity: 0;
+  transform: translateY(var(--space-2));
+}
+
+.listItem {
+  transition:
+    opacity var(--motion-base) var(--motion-ease-standard),
+    transform var(--motion-base) var(--motion-ease-standard),
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard);
+}
+
+:global(html[data-motion="reduce"]) .panelContent,
+:global(html[data-motion="reduce"]) .listItem {
+  transform: none;
+  transition-property: opacity, background-color, border-color;
+  transition-duration: var(--motion-instant);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panelContent,
+  .listItem {
+    transform: none;
+    transition-property: opacity, background-color, border-color;
+    transition-duration: var(--motion-instant);
+  }
+}
+
+:global(html:active-view-transition) .panelContent,
+:global(html:active-view-transition) .listItem {
+  animation: none;
+  transform: none;
+  transition: none;
+}

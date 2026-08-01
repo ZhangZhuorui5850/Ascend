@@ -59,7 +59,7 @@ describe("Ascend Agent operations", () => {
     })) as Array<{ id: number; title: string }>;
 
     expect(listed).toContainEqual(expect.objectContaining({ id: created.id, title: "Agent 创建的任务" }));
-    expect(db.prepare("SELECT COUNT(*) AS count FROM day_tasks WHERE workspace_id = ?").get(other.workspaceId)).toEqual(
+    expect(db.prepare("SELECT COUNT(*) AS count FROM planner_tasks WHERE workspace_id = ?").get(other.workspaceId)).toEqual(
       { count: 0 },
     );
     expect(db.prepare("SELECT action, entity_type FROM audit_logs ORDER BY id DESC LIMIT 1").get()).toEqual({
@@ -79,8 +79,129 @@ describe("Ascend Agent operations", () => {
       executeAgentOperation({ db, context }, getAgentOperation("task.delete"), { id: created.id, confirm: false }),
     ).rejects.toThrow("confirm=true");
     expect(
-      db.prepare("SELECT title FROM day_tasks WHERE workspace_id = ? AND id = ?").get(context.workspaceId, created.id),
+      db.prepare("SELECT title FROM planner_tasks WHERE workspace_id = ? AND rowid = ?").get(context.workspaceId, created.id),
     ).toEqual({ title: "不能误删" });
+  });
+
+  it("supports idempotent Planner v2 task writes, conflicts, restore, and workspace isolation", async () => {
+    const { db, context } = setup();
+    const other = createTestWorkspace(db, { email: "planner-other@example.com" });
+    const createInput = {
+      clientMutationId: "agent-planner-create-1",
+      title: "Agent Planner 任务",
+      dueDate: "2026-07-31",
+      scheduledStartAt: "2026-07-31T01:00:00.000Z",
+      scheduledEndAt: "2026-07-31T02:00:00.000Z",
+      scheduledTimezone: "Asia/Shanghai",
+    };
+
+    const created = (await executeAgentOperation(
+      { db, context },
+      getAgentOperation("planner.task.create"),
+      createInput,
+    )) as { id: string; version: number };
+    const replay = (await executeAgentOperation(
+      { db, context },
+      getAgentOperation("planner.task.create"),
+      { ...createInput, title: "重试标题" },
+    )) as { id: string; version: number };
+    expect(replay.id).toBe(created.id);
+
+    const updated = (await executeAgentOperation(
+      { db, context },
+      getAgentOperation("planner.task.update"),
+      { id: created.id, expectedVersion: created.version, title: "Agent Planner 已更新" },
+    )) as { entity: { id: string; version: number; title: string } };
+    expect(updated.entity).toMatchObject({ id: created.id, title: "Agent Planner 已更新", version: 2 });
+    const conflict = (await executeAgentOperation(
+      { db, context },
+      getAgentOperation("planner.task.update"),
+      { id: created.id, expectedVersion: 1, title: "过期写入" },
+    )) as { conflict: { actualVersion: number } };
+    expect(conflict.conflict.actualVersion).toBe(2);
+
+    const removed = (await executeAgentOperation(
+      { db, context },
+      getAgentOperation("planner.task.delete"),
+      {
+        id: created.id,
+        expectedVersion: 2,
+        clientMutationId: "agent-planner-delete-1",
+        confirm: true,
+      },
+    )) as { entity: { version: number; deleted_at: string } };
+    expect(removed.entity.deleted_at).toBeTruthy();
+    const restored = (await executeAgentOperation(
+      { db, context },
+      getAgentOperation("planner.task.restore"),
+      {
+        id: created.id,
+        expectedVersion: removed.entity.version,
+        clientMutationId: "agent-planner-restore-1",
+      },
+    )) as { entity: { deleted_at: null } };
+    expect(restored.entity.deleted_at).toBeNull();
+
+    expect(
+      db.prepare("SELECT COUNT(*) AS count FROM planner_tasks WHERE workspace_id = ?").get(other.workspaceId),
+    ).toEqual({ count: 0 });
+    expect(
+      db.prepare("SELECT entity_id FROM audit_logs WHERE action = 'agent.planner.task.update' ORDER BY id DESC LIMIT 1").get(),
+    ).toEqual({ entity_id: created.id });
+  });
+
+  it("supports Planner calendar discovery and idempotent event lifecycle operations", async () => {
+    const { db, context } = setup();
+    const calendars = (await executeAgentOperation(
+      { db, context },
+      getAgentOperation("planner.calendar.list"),
+      {},
+    )) as Array<{ id: string }>;
+    const input = {
+      clientMutationId: "agent-event-create-1",
+      calendarId: calendars[0].id,
+      title: "Agent 日历事件",
+      location: "自习室",
+      allDay: false,
+      startAt: "2026-08-01T01:00:00.000Z",
+      endAt: "2026-08-01T02:00:00.000Z",
+      timezone: "Asia/Shanghai",
+    };
+    const created = (await executeAgentOperation(
+      { db, context },
+      getAgentOperation("planner.event.create"),
+      input,
+    )) as { id: string; version: number };
+    const replay = (await executeAgentOperation(
+      { db, context },
+      getAgentOperation("planner.event.create"),
+      { ...input, title: "重试标题" },
+    )) as { id: string };
+    expect(replay.id).toBe(created.id);
+    const listed = (await executeAgentOperation(
+      { db, context },
+      getAgentOperation("planner.event.list"),
+      { from: "2026-08-01", to: "2026-08-01" },
+    )) as Array<{ id: string; title: string }>;
+    expect(listed).toContainEqual(expect.objectContaining({ id: created.id, title: "Agent 日历事件" }));
+
+    const updated = (await executeAgentOperation(
+      { db, context },
+      getAgentOperation("planner.event.update"),
+      { id: created.id, expectedVersion: created.version, busyStatus: "free" },
+    )) as { entity: { version: number; busy_status: string } };
+    expect(updated.entity).toMatchObject({ version: 2, busy_status: "free" });
+    const deleted = (await executeAgentOperation(
+      { db, context },
+      getAgentOperation("planner.event.delete"),
+      {
+        id: created.id,
+        expectedVersion: 2,
+        clientMutationId: "agent-event-delete-1",
+        confirm: true,
+      },
+    )) as { entity: { deleted_at: string } };
+    expect(deleted.entity.deleted_at).toBeTruthy();
   });
 
   it("imports assets only from an explicitly allowed local root", async () => {

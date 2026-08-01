@@ -1,7 +1,7 @@
 # Ascend Agent Interface：MCP 与 CLI 操作手册
 
-状态：v0.2（远程 Streamable HTTP MCP + 本地 stdio MCP + 本地 CLI）  
-最后核对：2026-07-19
+状态：v0.2.1（远程 Streamable HTTP MCP + 本地 stdio MCP + 本地 CLI）
+最后核对：2026-07-31
 
 ## 结论
 
@@ -184,6 +184,20 @@ MCP 名称把 CLI 的点号替换为下划线，例如 `task.create` 对应 `tas
 | `task.create` | `task_create` | 写 | 创建日程任务 |
 | `task.update` | `task_update` | 写 | 内容、完成状态、跨日排期 |
 | `task.delete` | `task_delete` | 删除 | 删除任务 |
+| `planner.task.list` | `planner_task_list` | 读 | 按 Inbox、Today、Upcoming、Anytime、Overdue、Completed、Trash 等视图查询 Planner v2 任务与清单 |
+| `planner.task.create` | `planner_task_create` | 写 | 使用 `clientMutationId` 幂等创建含独立到期、排期、层级与状态的任务 |
+| `planner.task.update` | `planner_task_update` | 写 | 使用 `expectedVersion` 更新 Planner v2 任务并返回冲突 |
+| `planner.task.delete` | `planner_task_delete` | 删除 | 使用稳定幂等键把任务移入回收站 |
+| `planner.task.restore` | `planner_task_restore` | 写 | 使用稳定幂等键从回收站恢复任务 |
+| `planner.calendar.list` | `planner_calendar_list` | 读 | 查询当前 workspace 的日历容器 |
+| `planner.event.list` | `planner_event_list` | 读 | 按范围查询定时、全天与多日事件 |
+| `planner.event.create` | `planner_event_create` | 写 | 使用稳定幂等键创建独立事件 |
+| `planner.event.update` | `planner_event_update` | 写 | 使用版本号更新事件详情、时间和忙闲 |
+| `planner.event.delete` | `planner_event_delete` | 删除 | 使用稳定幂等键软删除事件 |
+| `planner.task.series.create` | `planner_task_series_create` | 写 | 创建固定排期或完成后生成的 RFC 5545 重复任务 |
+| `planner.reminder.list` | `planner_reminder_list` | 读 | 查询任务或事件提醒 |
+| `planner.reminder.create` | `planner_reminder_create` | 写 | 使用稳定幂等键创建应用内或 Web Push 提醒 |
+| `planner.reminder.cancel` | `planner_reminder_cancel` | 写 | 取消提醒 |
 | `note.manage` | `note_manage` | 写/删除 | 创建、更新、删除每日随笔 |
 | `subject.list` | `subject_list` | 读 | 科目与统计 |
 | `subject.get` | `subject_get` | 读 | 章节树、知识点和关联数据 |
@@ -218,7 +232,9 @@ MCP 名称把 CLI 的点号替换为下划线，例如 `task.create` 对应 `tas
 
 ## 已知边界
 
-- [KNOWN] 当前“日历”实体实际是 `day_tasks`，支持日期、开始时间、优先级和预计时长；还没有重复规则、结束时间、参会人、提醒或外部日历同步。不要把它描述成完整会议日历。
+- [COMPUTED] 任务存储已迁移到 Planner v2 `planner_tasks`；现有 Agent task 参数继续通过 DayTask 兼容投影提供日期、开始时间、优先级和预计时长。`day_tasks` 已完成字段一致性迁移并由数据库触发器保持只读。
+- [COMPUTED] 独立 `calendar_events`、`planner_calendars`、`task_series` 与 `planner_reminders` 数据层已经建立，Agent 提供日历、事件、重复任务与提醒操作。
+- [KNOWN] 重复、提醒、离线同步与外部日历连接器位于后续 Phase。
 - [KNOWN] 资料支持查询、移动、重命名、元数据更新和删除；本地可按白名单路径导入。远程 MCP 暂不提供文件上传或二进制下载，上传请使用网页。
 - [KNOWN] 错题、复习事件、学习时段和模考当前支持新增与查询，但原 repo 层尚无统一的更新/删除 API，因此 v0.2 没有绕过 repo 用裸 SQL 补“伪 CRUD”。
 - [KNOWN] stdio 进程启动后身份固定；要切换账号需停止并以新的 `ASCEND_AGENT_EMAIL` 重启。

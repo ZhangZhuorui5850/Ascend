@@ -60,6 +60,23 @@
   --font-num: Georgia, "Times New Roman", "Noto Serif SC", "SimSun", serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --paper-grid: color-mix(in srgb, var(--line) 42%, transparent);
+  --planner-surface-raised: var(--surface-raised);
+  --planner-canvas: var(--bg);
+  --planner-panel: var(--surface);
+  --planner-panel-subtle: var(--surface-soft);
+  --planner-field: color-mix(in srgb, var(--surface-soft) 72%, var(--surface));
+  --planner-field-hover: color-mix(in srgb, var(--surface-soft) 86%, var(--surface));
+  --planner-field-focus: color-mix(in srgb, var(--accent-soft) 44%, var(--surface));
+  --planner-field-line: var(--line);
+  --planner-row-hover: color-mix(in srgb, var(--surface-soft) 76%, transparent);
+  --planner-row-selected: color-mix(in srgb, var(--accent) 6%, transparent);
+  --planner-row-divider: var(--line);
+  --planner-shadow-overlay: var(--shadow-lg);
+  --planner-z-popover: 70;
+  --planner-z-drawer: 80;
+  --planner-z-dialog: 90;
+  --planner-z-toast: 100;
+  --mobile-nav-height: 72px;
 }
 
 @media (prefers-color-scheme: dark) {

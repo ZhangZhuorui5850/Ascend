@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Planner 安静计划台 · Tasks 桌面原型</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --planner-canvas: #f2eee3;
+      --planner-panel: #faf7ef;
+      --planner-panel-subtle: #f3efe2;
+      --planner-field: #f6f1e6;
+      --planner-field-hover: #f2ecdf;
+      --planner-field-focus: #f5e8dc;
+      --planner-field-line: #ddd5c1;
+      --planner-row-hover: #f4efe3;
+      --planner-row-selected: #f5e9df;
+      --planner-row-divider: #ddd5c1;
+      --ink: #262015;
+      --ink-soft: #4a4232;
+      --muted: #6f654f;
+      --accent: #b13a20;
+      --accent-soft: #f3e2d6;
+      --accent-line: #e2c3ae;
+      --line-strong: #c8bda2;
+      --radius-sm: 3px;
+      --radius-lg: 6px;
+      --shadow-xs: 0 1px 0 rgba(92, 76, 50, .09);
+      --font: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+      --serif: "Noto Serif SC", "Songti SC", SimSun, serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 1180px;
+      min-height: 100vh;
+      background: var(--planner-canvas);
+      color: var(--ink);
+      font-family: var(--font);
+    }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: default; }
+
+    .app {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+    .shell-nav {
+      display: flex;
+      min-height: 100vh;
+      flex-direction: column;
+      padding: 24px 16px 18px;
+      background: #20231d;
+      color: #e8e2d4;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; padding: 0 8px 22px; border-bottom: 1px solid #373a31; }
+    .brand-mark { position: relative; display: block; width: 35px; height: 35px; }
+    .brand-mark::before { position: absolute; inset: 4px 5px 3px; border-right: 12px solid transparent; border-bottom: 25px solid #3d4037; border-left: 12px solid transparent; content: ""; }
+    .brand-mark::after { position: absolute; top: 8px; left: 17px; width: 3px; height: 22px; background: #ef6d45; content: ""; transform: rotate(25deg); }
+    .brand strong { display: block; font-family: var(--serif); font-size: 20px; }
+    .brand small { color: #8f9586; font-size: 9px; letter-spacing: .18em; }
+    .nav-label { margin: 24px 10px 8px; color: #8f9586; font-size: 10px; letter-spacing: .12em; }
+    .shell-link { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 9px 12px; border-radius: 8px; color: #bfc3b6; font-size: 14px; }
+    .shell-link.active { box-shadow: inset 3px 0 0 #ef6d45; background: #3b2c24; color: #fff8ed; font-weight: 700; }
+    .account { margin-top: auto; padding: 16px 8px 2px; border-top: 1px solid #373a31; color: #a9ad9f; font-size: 12px; }
+
+    .page { min-width: 0; }
+    .topbar { display: flex; height: 68px; align-items: center; justify-content: space-between; padding: 0 34px; border-bottom: 1px solid var(--planner-field-line); background: rgba(250,247,239,.92); }
+    .topbar strong { font-family: var(--serif); font-size: 17px; }
+    .top-actions { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+    .top-pill { padding: 8px 12px; border: 1px solid var(--planner-field-line); border-radius: 999px; background: var(--planner-panel); }
+
+    .content { padding: 26px 36px 30px; }
+    .eyebrow { margin: 0 0 7px; color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: .16em; }
+    h1 { margin: 0; font-family: var(--serif); font-size: 34px; line-height: 1.15; }
+    .lede { margin: 8px 0 18px; color: var(--muted); font-size: 13px; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 232px minmax(430px, 1fr) 380px;
+      height: 760px;
+      overflow: hidden;
+      border: 1px solid var(--planner-field-line);
+      border-radius: var(--radius-lg);
+      background: var(--planner-panel);
+      box-shadow: var(--shadow-xs);
+    }
+
+    .planner-sidebar { padding: 14px 12px; border-right: 1px solid var(--planner-row-divider); background: var(--planner-panel-subtle); }
+    .smart-link { display: flex; min-height: 38px; align-items: center; gap: 9px; padding: 8px 10px; border-radius: var(--radius-sm); color: var(--ink-soft); font-size: 12px; }
+    .smart-link.active { box-shadow: inset 3px 0 0 var(--accent); background: var(--planner-panel); color: var(--ink); font-weight: 700; }
+    .side-title { margin: 20px 8px 6px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+    .create-link { display: flex; gap: 7px; padding: 9px 10px; color: var(--ink-soft); font-size: 12px; }
+
+    .task-stage { min-width: 0; overflow: hidden; background: var(--planner-panel); }
+    .stage-toolbar { display: flex; min-height: 44px; align-items: center; justify-content: flex-end; padding: 7px 14px 0; }
+    .quiet-button { min-height: 34px; border: 1px solid transparent; border-radius: var(--radius-sm); padding: 0 10px; background: transparent; color: var(--ink-soft); }
+    .quick-capture { margin: 4px 14px 0; }
+    .capture-form { display: grid; grid-template-columns: minmax(0,1fr) 42px; gap: 8px; padding: 7px; border: 1px solid var(--planner-field-line); border-radius: var(--radius-lg); background: var(--planner-panel); }
+    .capture-form input { min-width: 0; height: 40px; border: 1px solid transparent; border-radius: var(--radius-sm); padding: 8px 10px; appearance: none; background: transparent; color: var(--ink); outline: none; }
+    .capture-form button { display: grid; width: 40px; border: 1px solid var(--accent-line); border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent); place-items: center; font-size: 21px; }
+    details.capture-options { margin-top: 4px; border-top: 1px solid var(--planner-row-divider); }
+    details.capture-options summary { display: flex; min-height: 46px; align-items: center; justify-content: space-between; padding: 6px 5px; color: var(--ink-soft); font-size: 12px; list-style: none; }
+    details.capture-options summary::-webkit-details-marker { display: none; }
+    details.capture-options small { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; font-weight: 400; }
+
+    .groups { padding: 4px 14px 28px; }
+    .group { margin-top: 10px; }
+    .group-title { display: flex; align-items: center; justify-content: space-between; min-height: 30px; color: var(--ink-soft); font-size: 11px; font-weight: 800; }
+    .mode-note { color: var(--muted); font-size: 10px; font-weight: 500; }
+    .batch-strip { display: flex; min-height: 38px; align-items: center; justify-content: space-between; margin-bottom: 2px; padding: 0 8px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 700; }
+    .task-row { position: relative; display: grid; grid-template-columns: 34px minmax(0,1fr) auto 34px; min-height: 58px; align-items: center; gap: 5px; padding: 7px 6px; border-bottom: 1px solid var(--planner-row-divider); background: transparent; }
+    .task-row.selected { box-shadow: inset 2px 0 0 var(--accent); background: var(--planner-row-selected); }
+    .complete { display: grid; width: 27px; height: 27px; border: 1px solid var(--line-strong); border-radius: 50%; background: transparent; place-items: center; color: var(--accent); }
+    .batch-check { width: 18px; height: 18px; margin-left: 4px; accent-color: var(--accent); }
+    .task-copy strong { display: block; overflow: hidden; color: var(--ink); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+    .task-copy small { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; }
+    .priority { color: var(--accent); font-size: 10px; font-weight: 800; }
+    .more { border: 0; background: transparent; color: var(--muted); font-size: 18px; }
+
+    .inspector { min-width: 0; overflow: auto; border-left: 1px solid var(--planner-row-divider); background: color-mix(in srgb, var(--planner-panel-subtle) 42%, var(--planner-panel)); }
+    .inspector-header { display: flex; min-height: 58px; align-items: center; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--planner-row-divider); background: var(--planner-panel); }
+    .inspector-header h2 { margin: 0; font-size: 14px; }
+    .dirty-state { color: var(--accent); font-size: 10px; font-weight: 700; }
+    .inspector-body { padding: 12px 15px; }
+    .title-field { display: grid; gap: 4px; color: var(--muted); font-size: 10px; }
+    .title-field input { min-height: 46px; border: 1px solid transparent; border-bottom-color: var(--accent); border-radius: 0; padding: 6px 2px; appearance: none; background: var(--planner-field-focus); color: var(--ink); font-size: 17px; font-weight: 720; outline: 2px solid var(--accent); outline-offset: 1px; }
+    .properties { margin-top: 10px; }
+    .property { display: grid; grid-template-columns: 92px minmax(0,1fr); min-height: 43px; align-items: center; gap: 10px; border-bottom: 1px solid var(--planner-row-divider); color: var(--muted); font-size: 11px; }
+    .property output { color: var(--ink); font-size: 12px; }
+    .property output.placeholder { color: var(--muted); font-family: Georgia, serif; }
+    .inspector-section { display: flex; min-height: 49px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--planner-row-divider); }
+    .inspector-section strong { display: block; font-size: 12px; }
+    .inspector-section small { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
+    .save-row { display: flex; justify-content: flex-end; padding-top: 14px; }
+    .save { min-height: 38px; border: 0; border-radius: var(--radius-sm); padding: 0 16px; background: var(--accent); color: #fff8ef; font-weight: 700; }
+    .inspector-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 11px 15px; border-top: 1px solid var(--planner-row-divider); color: var(--muted); font-size: 9px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="shell-nav">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span><strong>登峰</strong><small>ASCEND</small></span></div>
+      <div class="nav-label">计划</div>
+      <div class="shell-link">⌂　总览</div>
+      <div class="shell-link active">☷　任务</div>
+      <div class="shell-link">▣　今日执行</div>
+      <div class="shell-link">▦　学习日历</div>
+      <div class="nav-label">学习</div>
+      <div class="shell-link">▤　知识体系</div>
+      <div class="shell-link">◇　错题回炉</div>
+      <div class="account">P　planner prototype</div>
+    </aside>
+
+    <main class="page">
+      <header class="topbar"><strong>登峰</strong><div class="top-actions"><span class="top-pill">8月1日 周六</span><span class="top-pill">搜索或快速操作　⌘K</span><span class="top-pill">设置</span></div></header>
+      <section class="content">
+        <p class="eyebrow">PLANNER · 任务静态原型</p>
+        <h1>安静的计划台</h1>
+        <p class="lede">内容优先，操作按需出现；单一前导控件区分完成与批量选择。</p>
+
+        <div class="workspace">
+          <aside class="planner-sidebar">
+            <div class="smart-link active">▱　收集箱</div>
+            <div class="smart-link">☷　今天</div>
+            <div class="smart-link">☷　近期</div>
+            <div class="smart-link">☷　随时</div>
+            <div class="smart-link">☷　逾期</div>
+            <div class="smart-link">☷　等待</div>
+            <div class="smart-link">☷　已完成</div>
+            <div class="smart-link">☷　回收站</div>
+            <div class="side-title">清单</div>
+            <div class="smart-link">●　Inbox</div>
+            <div class="create-link">＋ 新建清单</div>
+            <div class="side-title">标签</div>
+            <div class="create-link">＋ 新建标签</div>
+          </aside>
+
+          <section class="task-stage">
+            <div class="stage-toolbar"><button class="quiet-button">选择</button></div>
+            <div class="quick-capture">
+              <div class="capture-form"><input aria-label="任务标题" placeholder="收集一件要做的事…" /><button aria-label="添加任务">＋</button></div>
+              <details class="capture-options">
+                <summary><span><strong>设置清单与日期</strong><small>Inbox · 未设日期</small></span><span>⌄</span></summary>
+              </details>
+            </div>
+
+            <div class="groups">
+              <section class="group">
+                <div class="group-title"><span>默认模式</span><span class="mode-note">唯一前导：完成</span></div>
+                <article class="task-row selected">
+                  <button class="complete" aria-label="完成 编写视觉验收清单"></button>
+                  <div class="task-copy"><strong>编写视觉验收清单</strong><small>进行中 · 30 分钟</small></div><span class="priority">P2</span><button class="more">…</button>
+                </article>
+                <article class="task-row">
+                  <button class="complete" aria-label="完成 整理本周复盘"></button>
+                  <div class="task-copy"><strong>整理本周复盘</strong><small>到期 2026-08-02 · 45 分钟</small></div><span class="priority">P1</span><button class="more">…</button>
+                </article>
+              </section>
+
+              <section class="group">
+                <div class="group-title"><span>批量模式</span><span class="mode-note">唯一前导：选择</span></div>
+                <div class="batch-strip"><span>已选 2 项</span><span>完成　移动到…　删除　　退出选择</span></div>
+                <article class="task-row">
+                  <input class="batch-check" aria-label="选择 校对 Planner 文案" checked type="checkbox" />
+                  <div class="task-copy"><strong>校对 Planner 文案</strong><small>等待 · 20 分钟</small></div><span class="priority">P3</span><button class="more">…</button>
+                </article>
+                <article class="task-row">
+                  <input class="batch-check" aria-label="选择 检查移动端安全区" checked type="checkbox" />
+                  <div class="task-copy"><strong>检查移动端安全区</strong><small>进行中 · 25 分钟</small></div><span class="priority">P2</span><button class="more">…</button>
+                </article>
+              </section>
+            </div>
+          </section>
+
+          <aside class="inspector">
+            <header class="inspector-header"><h2>任务详情</h2><span class="dirty-state">● 有未保存更改</span></header>
+            <div class="inspector-body">
+              <label class="title-field">标题<input data-planner-field-variant="underline" value="编写视觉验收清单（终稿）" /></label>
+              <div class="properties">
+                <div class="property"><span>清单</span><output>Inbox</output></div>
+                <div class="property"><span>状态</span><output>进行中</output></div>
+                <div class="property"><span>优先级</span><output>P2</output></div>
+                <div class="property"><span>预计</span><output>30 分钟</output></div>
+                <div class="property"><span>到期</span><output class="placeholder">YYYY-MM-DD</output></div>
+                <div class="property"><span>计划</span><output>2026-08-01</output></div>
+                <div class="property"><span>开始时间</span><output>09:30</output></div>
+              </div>
+              <div class="inspector-section"><span><strong>备注</strong><small>已有内容</small></span><span>⌄</span></div>
+              <div class="inspector-section"><span><strong>标签</strong><small>2 个标签</small></span><span>⌄</span></div>
+              <div class="inspector-section"><span><strong>提醒</strong><small>未设置</small></span><span>⌄</span></div>
+              <div class="inspector-section"><span><strong>重复</strong><small>单次任务</small></span><span>⌄</span></div>
+              <div class="inspector-section"><span><strong>子任务</strong><small>0 项</small></span><span>⌄</span></div>
+              <div class="save-row"><button class="save">保存任务</button></div>
+            </div>
+            <footer class="inspector-footer"><span>未保存 · 可重试</span><span>当前学习空间时区</span></footer>
+          </aside>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

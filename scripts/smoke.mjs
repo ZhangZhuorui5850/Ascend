@@ -47,8 +47,7 @@ try {
     ok("onboarding completes", true);
   }
   await page.waitForSelector(".homeFocus");
-  await page.waitForFunction(() => /\d{2}:\d{2}:\d{2}/.test(document.querySelector(".homeClock strong")?.textContent || ""));
-  ok("home renders live clock", true);
+  ok("home renders focus workspace", true);
 
   await page.goto(`${BASE}/settings`);
   await page.fill('.countdownEditorRow input[aria-label="考试名称"] >> nth=0', "冒烟考试");
@@ -97,8 +96,10 @@ try {
   ok("unscheduled task created", true);
 
   // 4b. notes: add a tip card
-  await page.fill(".noteCard.composer textarea", "冒烟随笔：一个小想法");
-  await page.click(".noteCard.composer .noteAdd");
+  const noteComposer = page.locator(".noteCard.composer textarea");
+  await noteComposer.click();
+  await noteComposer.pressSequentially("冒烟随笔：一个小想法");
+  await page.locator(".noteCard.composer .noteAdd").click();
   await page.waitForFunction(() => document.querySelectorAll(".noteGrid .noteCard").length >= 2, { timeout: 10000 });
   ok("note card created", true);
 
@@ -142,7 +143,7 @@ try {
 
   // 9. delete the chapter again (cascade)
   await block.locator(".chapterTools .iconDanger").click();
-  await page.locator(".confirmDialog .dangerButton").click();
+  await page.getByRole("dialog").getByRole("button", { name: "删除章节" }).click();
   await page.waitForSelector(`.chapterHead input[value="${chapterName}"]`, { state: "detached", timeout: 10000 });
   ok("chapter cascade delete", true);
 
@@ -181,7 +182,7 @@ try {
   const fileRow = page.locator(`.driveRow:has-text("${uploadName}")`);
   await fileRow.hover();
   await fileRow.locator('button[aria-label="删除文件"]').click();
-  await page.locator(".confirmDialog .dangerButton").click();
+  await page.getByRole("dialog").getByRole("button", { name: "删除文件" }).click();
   await page.waitForSelector(`.driveRow:has-text("${uploadName}")`, { state: "detached", timeout: 10000 });
   ok("file deleted", true);
 
@@ -189,7 +190,7 @@ try {
   const folderRow = page.locator(`.driveRow:has(.driveName:has-text("${folderName}"))`);
   await folderRow.hover();
   await folderRow.locator('button[aria-label="删除文件夹"]').click();
-  await page.locator(".confirmDialog .dangerButton").click();
+  await page.getByRole("dialog").getByRole("button", { name: "删除文件夹" }).click();
   await page.waitForSelector(`.driveName:has-text("${folderName}")`, { state: "detached", timeout: 10000 });
   ok("empty folder deleted", true);
 
@@ -208,7 +209,7 @@ try {
   await page.goto(`${BASE}/calendar`);
   await page.waitForSelector(".fc-daygrid", { timeout: 10000 });
   ok("calendar renders", true);
-  await page.waitForSelector(`.calendarInboxTask:has-text("${inboxTaskName}")`, { timeout: 10000 });
+  await page.getByRole("button", { name: `排入 ${inboxTaskName}` }).waitFor({ timeout: 10000 });
   ok("calendar inbox receives unscheduled task", true);
 
   // 14. capture panel: upload via panel with subject binding

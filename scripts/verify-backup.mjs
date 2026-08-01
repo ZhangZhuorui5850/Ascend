@@ -19,8 +19,16 @@ if (!existsSync(manifestPath) || !existsSync(successPath) || !existsSync(databas
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 const db = new Database(databasePath, { readonly: true, fileMustExist: true });
 let integrity;
+let plannerMigration;
+let plannerReminderMigration;
 try {
   integrity = db.pragma("integrity_check").map((row) => row.integrity_check);
+  plannerMigration = Boolean(db.prepare(`
+    SELECT 1 FROM schema_migrations WHERE version = '0018_planner_core'
+  `).get());
+  plannerReminderMigration = Boolean(db.prepare(`
+    SELECT 1 FROM schema_migrations WHERE version = '0019_planner_recurrence_reminders'
+  `).get());
 } finally {
   db.close();
 }
@@ -35,8 +43,18 @@ const ok = integrity.length === 1
   && integrity[0] === "ok"
   && manifest.status === "ok"
   && manifest.databaseBytes === databaseBytes
+  && plannerMigration
+  && plannerReminderMigration
   && mirrorComplete !== false;
-console.log(JSON.stringify({ ok, snapshot, integrity, databaseBytes, mirrorComplete }, null, 2));
+console.log(JSON.stringify({
+  ok,
+  snapshot,
+  integrity,
+  plannerMigration,
+  plannerReminderMigration,
+  databaseBytes,
+  mirrorComplete,
+}, null, 2));
 if (!ok) process.exitCode = 1;
 
 function latestSnapshot(root) {

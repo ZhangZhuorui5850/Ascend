@@ -1,0 +1,650 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "Ascend × 飞书日历与任务可行性评估",
+    "description": "基于飞书开放平台与帮助中心官方资料，评估 Ascend 接入飞书日历、任务及两者联动的产品与工程可行性。",
+    "generatedAt": "2026-07-29T16:00:00+08:00",
+    "charts": [
+      {
+        "id": "feishu_effort_chart",
+        "title": "飞书连接器分阶段工程量",
+        "subtitle": "单工程师周；柱长采用区间中点，复用 Ascend 任务与事件内核",
+        "showDescription": true,
+        "intent": "comparison",
+        "question": "飞书连接器各阶段的相对工程投入如何分布？",
+        "rationale": "五个离散交付阶段共享同一工程周单位，分类柱状图适合比较相对投入。",
+        "comparisonContext": {
+          "grain": "交付阶段",
+          "unit": "单工程师周",
+          "semanticFamily": "engineering effort estimate"
+        },
+        "type": "bar",
+        "dataset": "engineering_effort",
+        "sourceId": "engineering_estimate",
+        "encodings": {
+          "x": {
+            "field": "phase",
+            "type": "ordinal",
+            "label": "交付阶段"
+          },
+          "y": {
+            "field": "midpoint_weeks",
+            "type": "quantitative",
+            "label": "估算中点",
+            "format": "number",
+            "unit": "周"
+          },
+          "tooltip": [
+            {
+              "field": "low_weeks",
+              "type": "quantitative",
+              "label": "下界",
+              "format": "number",
+              "unit": "周"
+            },
+            {
+              "field": "high_weeks",
+              "type": "quantitative",
+              "label": "上界",
+              "format": "number",
+              "unit": "周"
+            },
+            {
+              "field": "scope",
+              "type": "text",
+              "label": "范围"
+            }
+          ]
+        },
+        "xAxisTitle": "阶段",
+        "yAxisTitle": "单工程师周（区间中点）",
+        "valueFormat": "number",
+        "unit": "周",
+        "layout": "full",
+        "maxRows": 5,
+        "surface": {
+          "surface": "card",
+          "interactiveLegend": false,
+          "showControls": false,
+          "viewMode": "visualization"
+        }
+      }
+    ],
+    "tables": [
+      {
+        "id": "capability_map",
+        "title": "飞书公开能力地图",
+        "subtitle": "按 Ascend 需要的同步能力审视 Calendar v4、Task v2、OAuth 与事件订阅",
+        "dataset": "capability_map",
+        "sourceId": "feishu_open_platform",
+        "defaultSort": {
+          "field": "order",
+          "direction": "asc"
+        },
+        "density": "spacious",
+        "layout": "full",
+        "columns": [
+          {
+            "field": "order",
+            "label": "序",
+            "type": "number"
+          },
+          {
+            "field": "area",
+            "label": "能力域",
+            "type": "text"
+          },
+          {
+            "field": "public_capability",
+            "label": "公开能力",
+            "type": "text"
+          },
+          {
+            "field": "identity",
+            "label": "调用身份",
+            "type": "text"
+          },
+          {
+            "field": "ascend_value",
+            "label": "对 Ascend 的价值",
+            "type": "text"
+          }
+        ]
+      },
+      {
+        "id": "object_mapping",
+        "title": "Ascend 与飞书对象映射",
+        "subtitle": "任务、事件各自维持原生语义，飞书日历负责组合展示",
+        "dataset": "object_mapping",
+        "sourceId": "feishu_product_features",
+        "defaultSort": {
+          "field": "order",
+          "direction": "asc"
+        },
+        "density": "spacious",
+        "layout": "full",
+        "columns": [
+          {
+            "field": "order",
+            "label": "序",
+            "type": "number"
+          },
+          {
+            "field": "ascend",
+            "label": "Ascend 对象",
+            "type": "text"
+          },
+          {
+            "field": "feishu",
+            "label": "飞书映射",
+            "type": "text"
+          },
+          {
+            "field": "sync_fields",
+            "label": "核心同步字段",
+            "type": "text"
+          },
+          {
+            "field": "behavior",
+            "label": "联动行为",
+            "type": "text"
+          }
+        ]
+      },
+      {
+        "id": "platform_comparison",
+        "title": "Apple 与飞书接入对比",
+        "subtitle": "两条连接器共同服务 Ascend 内核，覆盖个人系统体验与组织协作体验",
+        "dataset": "platform_comparison",
+        "sourceId": "platform_comparison_evidence",
+        "defaultSort": {
+          "field": "order",
+          "direction": "asc"
+        },
+        "density": "spacious",
+        "layout": "full",
+        "columns": [
+          {
+            "field": "order",
+            "label": "序",
+            "type": "number"
+          },
+          {
+            "field": "dimension",
+            "label": "维度",
+            "type": "text"
+          },
+          {
+            "field": "feishu",
+            "label": "飞书",
+            "type": "text"
+          },
+          {
+            "field": "apple",
+            "label": "Apple",
+            "type": "text"
+          },
+          {
+            "field": "decision",
+            "label": "产品决策",
+            "type": "text"
+          }
+        ]
+      },
+      {
+        "id": "delivery_plan",
+        "title": "建议实施路线",
+        "subtitle": "单名熟悉代码库与飞书开放平台的全职工程师量级估算",
+        "dataset": "delivery_plan",
+        "sourceId": "engineering_estimate",
+        "defaultSort": {
+          "field": "order",
+          "direction": "asc"
+        },
+        "density": "spacious",
+        "layout": "full",
+        "columns": [
+          {
+            "field": "order",
+            "label": "序",
+            "type": "number"
+          },
+          {
+            "field": "phase",
+            "label": "阶段",
+            "type": "text"
+          },
+          {
+            "field": "scope",
+            "label": "交付范围",
+            "type": "text"
+          },
+          {
+            "field": "estimate",
+            "label": "工程量",
+            "type": "text"
+          },
+          {
+            "field": "exit",
+            "label": "验收条件",
+            "type": "text"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "feishu_open_platform",
+        "label": "飞书 Calendar v4、Task v2、OAuth 与事件订阅官方资料",
+        "href": "https://open.feishu.cn/document/task-v2/overview"
+      },
+      {
+        "id": "feishu_product_features",
+        "label": "飞书日历与任务产品功能官方资料",
+        "href": "https://www.feishu.cn/hc/zh-CN/articles/360049067484/"
+      },
+      {
+        "id": "platform_comparison_evidence",
+        "label": "飞书与 Apple 官方公开能力对比",
+        "href": "https://open.feishu.cn/document/best-practices/calendarsync"
+      },
+      {
+        "id": "engineering_estimate",
+        "label": "基于共享产品内核与飞书连接器范围的工程估算",
+        "path": "docs/agent-development-guide.md"
+      }
+    ],
+    "blocks": [
+      {
+        "id": "title",
+        "type": "markdown",
+        "body": "# Ascend × 飞书日历与任务可行性评估"
+      },
+      {
+        "id": "executive_summary",
+        "type": "markdown",
+        "body": "## Executive Summary\n\n- **接入可行性高，飞书适合成为 Ascend 的首个云端组织协作连接器。** 飞书提供 OAuth、Calendar v4、Task v2、事件订阅、增量同步和官方 SDK；Ascend 后端可以持续完成日历与任务的双向读写。\n\n- **飞书产品已经完成任务与日历的基础联动。** 飞书日历支持展示当前用户负责且带日期的任务，并允许直接查看和编辑。Ascend 任务同步成飞书 Task 后可自然进入日历视图；会议、考试和专注时间继续使用 Calendar Event。\n\n- **推荐采用每用户 OAuth 作为主模式，应用身份作为团队自动化模式。** `user_access_token + offline_access` 对应用户自己的日历和任务；`tenant_access_token` 适合应用创建的共享日历、任务和参与者分配。权限、租户和对象所有权共同决定数据范围。\n\n- **建议把飞书与 Apple 做成共享内核上的两条连接器。** 飞书负责团队、群组、参与人、忙闲、清单、负责人、关注人和评论；Apple 负责个人设备、系统日历、提醒事项与离线体验。完成共享内核后，飞书生产连接器预计需要 9–16 个单工程师周。"
+      },
+      {
+        "id": "decision",
+        "type": "markdown",
+        "body": "## 结论：飞书值得接，优先级取决于 Ascend 的首批用户\n\n**面向学习小组、班级、导师团队和组织客户时，飞书连接器应进入高优先级。** 它的优势集中在成员协作、群组参与、忙闲协调、任务指派、清单、评论和应用自动化。个人学生场景由 Apple 提供更强的系统级日常触达。\n\n**推荐产品结构是“一套 Ascend 内核、两条外部连接器”。** Ascend 保存任务与事件的主语义；Feishu Adapter 负责 OAuth、对象映射、Webhook 和增量对账；Apple Adapter 负责 CalDAV 与 EventKit。连接器共享账户、映射、变更日志、冲突和审计基础设施。"
+      },
+      {
+        "id": "capabilities",
+        "type": "markdown",
+        "body": "## 飞书公开接口覆盖核心双向同步\n\n**Calendar v4 提供完整的日历业务接口。** 能力包含主日历和共享日历、日程 CRUD、参与者、会议室、重复规则、提醒、附件、忙闲、访问控制与订阅。创建日程支持 `idempotency_key`，列表接口支持 `sync_token` 增量拉取。参考：[日历资源介绍](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/calendar-v4/calendar/introduction)、[创建日程](https://open.feishu.cn/document/server-docs/calendar-v4/calendar-event/create?lang=zh-CN)、[日历同步最佳实践](https://open.feishu.cn/document/best-practices/calendarsync)。\n\n**Task v2 提供任务协作所需的主要对象。** 能力包含任务、子任务、清单、负责人、关注人、评论、自定义分组、自定义字段和附件的增删改查。创建任务支持 `client_token` 幂等键；任务权限按成员、清单和调用身份生效。参考：[Task v2 概述](https://open.feishu.cn/document/task-v2/overview)、[列取任务列表](https://open.feishu.cn/document/task-v2/task/list?lang=zh-CN)。\n\n**OAuth 和事件订阅构成持续同步基础。** 用户授权可申请 `offline_access` 并获得刷新令牌；飞书日历事件仅采用用户身份订阅，Webhook 到达后再通过用户令牌执行增量拉取。任务开放平台提供任务变更事件权限，生产实现仍需配合周期对账。参考：[OAuth 授权](https://open.feishu.cn/document/authentication-management/access-token/obtain-oauth-code?lang=zh-CN)、[用户访问令牌](https://open.feishu.cn/document/authentication-management/access-token/get-user-access-token?lang=zh-CN)、[事件订阅概述](https://open.feishu.cn/document/server-docs/event-subscription-guide/overview?lang=zh-CN)。"
+      },
+      {
+        "id": "capability_table",
+        "type": "table",
+        "tableId": "capability_map"
+      },
+      {
+        "id": "native_linkage",
+        "type": "markdown",
+        "body": "## 飞书已经具备任务进入日历的产品闭环\n\n飞书在 2024 年 4 月加入“在日历中查看、编辑任务”，日历会展示用户负责的任务，并支持查看和编辑。参考：[飞书日历功能更新日志](https://www.feishu.cn/hc/zh-CN/articles/360049067484/)。\n\n**Ascend 可以直接复用这层联动。** 普通待办同步成 Feishu Task，并设置负责人和到期时间；飞书客户端负责把它显示在日历。会议、课程、考试、预约和专注时间同步成 Feishu Calendar Event。这样每个对象保留单一外部身份，完成状态与日程占用也保持清晰。\n\n**可选的“安排任务时间块”需要独立产品动作。** 用户把任务拖入具体时间段时，Ascend 可以创建一个关联的专注事件，并保存 `task_guid ↔ event_id` 关系；完成任务可保留历史时间块，取消安排可删除时间块。该规则适合由用户显式触发。"
+      },
+      {
+        "id": "mapping_table",
+        "type": "table",
+        "tableId": "object_mapping"
+      },
+      {
+        "id": "auth_modes",
+        "type": "markdown",
+        "body": "## 两种身份模式覆盖个人同步与组织自动化\n\n**个人同步模式：** 每名用户完成 OAuth，Ascend 加密保存 access token、单次轮换 refresh token、过期时间、scope、open_id 和 tenant_key。该模式等价于用户在飞书内操作自己的日历与任务，适合“把我的 Ascend 计划带进飞书”。\n\n**组织自动化模式：** Ascend 应用以 tenant token 创建应用拥有的共享日历和任务，再添加用户、群组、参与者、负责人或关注人。该模式适合班级公共日历、课程安排、项目清单和导师分配。\n\n**数据边界需要在设置页直观呈现。** 用户选择要同步的日历和清单；显示已授权 scope、租户、上次同步、错误和断开入口；所有外部写入记录调用身份、外部 ID 和幂等键。"
+      },
+      {
+        "id": "sync_architecture",
+        "type": "markdown",
+        "body": "## 建议的同步架构\n\n**新增连接器基础对象：** `connector_accounts`、`connector_scopes`、`external_mappings`、`sync_cursors`、`sync_jobs`、`sync_conflicts`、`webhook_receipts` 和删除墓碑。令牌采用应用层加密，workspace、tenant_key 与 Ascend user_id 联合隔离。\n\n**同步循环采用“Webhook 唤醒 + 增量拉取 + 周期对账”。** 日历变更事件只提供发生变化的用户信息，Worker 随后用 `sync_token` 获取差量；任务事件进入同一队列，并按任务 GUID 拉取最新对象；周期对账覆盖漏送、令牌失效和人工权限变化。\n\n**写入统一幂等。** 日历使用 `idempotency_key`，任务使用 `client_token`；`external_mappings` 保存 Ascend ID、飞书资源类型、外部 ID、租户和最近版本。字段冲突优先保护标题、日期、完成状态、负责人和删除动作，并在 Ascend 显示可恢复记录。"
+      },
+      {
+        "id": "comparison",
+        "type": "markdown",
+        "body": "## 飞书与 Apple 形成互补覆盖\n\n飞书的服务端 OpenAPI 让 Web 产品可以直接完成持续同步，也让多人和组织流程自然进入 Ascend。Apple 的 CalDAV 与 EventKit 更贴近个人设备与系统体验。共享数据内核可以把两条路线的重复工程集中到任务、事件、重复规则、提醒、外部映射、冲突和审计层。"
+      },
+      {
+        "id": "comparison_table",
+        "type": "table",
+        "tableId": "platform_comparison"
+      },
+      {
+        "id": "roadmap",
+        "type": "markdown",
+        "body": "## 推荐以五个闸门交付\n\n工程量按共享任务与事件内核已经具备稳定接口估算。前四个阶段形成个人双向同步，协作增强阶段补齐群组、忙闲和组织模板。整体区间为 9–16 个单工程师周，飞书应用审核、企业管理员审批和真实租户测试可能影响日历时间。"
+      },
+      {
+        "id": "effort_chart_block",
+        "type": "chart",
+        "chartId": "feishu_effort_chart"
+      },
+      {
+        "id": "delivery_table",
+        "type": "table",
+        "tableId": "delivery_plan"
+      },
+      {
+        "id": "recommended_next_steps",
+        "type": "markdown",
+        "body": "## Recommended Next Steps\n\n1. **先做 1–2 周飞书开放平台尖峰。** 用两个测试用户和一个测试群组验证 OAuth 刷新、主日历、共享日历、日程增量、任务 CRUD、完成状态、日历内任务展示和 Webhook。\n\n2. **冻结统一对象映射。** 任务映射 Feishu Task；课程、考试、会议和专注块映射 Calendar Event；任务拖入时间轴时创建可选关联专注块。\n\n3. **建立连接器公共基础设施。** Apple 与飞书共享账户、scope、外部映射、幂等、变更日志、冲突、删除墓碑和可观测性。\n\n4. **用用户结构决定发布顺序。** 学习小组、班级与组织协作用户占主导时先发布飞书；个人 Apple 设备用户占主导时先发布 Apple；两条路线共用首阶段的产品内核建设。"
+      },
+      {
+        "id": "further_questions",
+        "type": "markdown",
+        "body": "## Further Questions\n\n- 首批用户是否处于同一飞书租户？跨租户用户会增加应用发布、授权、成员身份映射和支持成本。\n\n- Ascend 内容进入用户主日历，还是进入独立的“Ascend”共享日历？主日历触达更直接，独立日历提供更清晰的开关与权限边界。\n\n- 任务协作需要覆盖到哪一层？负责人、关注人和清单适合首版；评论、附件、自定义字段和群组模板适合增强版。\n\n- 任务时间块是否计入忙闲？专注事件标记为 busy 会影响同事邀约，用户设置应提供默认规则与单次覆盖。"
+      },
+      {
+        "id": "caveats",
+        "type": "markdown",
+        "body": "## Caveats and Assumptions\n\n- 本评估基于 2026 年 7 月 29 日可见的飞书开放平台与帮助中心资料；Task v2 官方文档最后更新于 2026 年 5 月 29 日。\n\n- 飞书 API 的实际数据范围由应用类型、scope、调用身份、租户管理员审批、成员关系和对象访问权限共同决定。生产排期应包含自建应用与商店应用两种发布流程评估。\n\n- 工程量按一名熟悉 Ascend、OAuth、Webhook 和飞书 OpenAPI 的工程师估算，复用已完成的任务与事件内核。企业 SSO、商店审核、跨租户支持和大规模历史回填会增加投入。\n\n- 任务变更事件的粒度与可用范围需要在测试租户实测；周期对账属于生产可靠性的固定组成。"
+      }
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "generatedAt": "2026-07-29T16:00:00+08:00",
+    "status": "ready",
+    "datasets": {
+      "capability_map": [
+        {
+          "order": 1,
+          "area": "身份与授权",
+          "public_capability": "OAuth 授权、user_access_token、refresh token、offline_access 与 scope",
+          "identity": "用户身份",
+          "ascend_value": "持续访问用户自己的飞书日历与任务"
+        },
+        {
+          "order": 2,
+          "area": "日历与日程",
+          "public_capability": "日历/日程 CRUD、参与者、会议室、重复、提醒、附件、访问控制",
+          "identity": "用户身份或应用身份",
+          "ascend_value": "会议、课程、考试与专注时间双向同步"
+        },
+        {
+          "order": 3,
+          "area": "忙闲与协作",
+          "public_capability": "查询用户忙闲、邀请用户/群组/外部邮箱、参与者回复",
+          "identity": "用户身份或应用身份",
+          "ascend_value": "学习小组、导师会议与团队排期"
+        },
+        {
+          "order": 4,
+          "area": "任务",
+          "public_capability": "任务/子任务 CRUD、负责人、关注人、完成、到期、重复与提醒",
+          "identity": "用户身份或应用身份",
+          "ascend_value": "个人待办与协作任务双向同步"
+        },
+        {
+          "order": 5,
+          "area": "任务组织",
+          "public_capability": "清单、分组、自定义字段、评论与附件",
+          "identity": "用户身份或应用身份",
+          "ascend_value": "项目、课程和学习计划的协作管理"
+        },
+        {
+          "order": 6,
+          "area": "变化捕获",
+          "public_capability": "Webhook 事件、日历 sync_token 增量拉取、任务变更事件权限",
+          "identity": "日历采用用户身份；任务按事件权限",
+          "ascend_value": "实时唤醒同步与增量对账"
+        },
+        {
+          "order": 7,
+          "area": "写入可靠性",
+          "public_capability": "日程 idempotency_key、任务 client_token、速率限制与错误码",
+          "identity": "随资源调用身份",
+          "ascend_value": "安全重试、去重与可观测同步"
+        }
+      ],
+      "object_mapping": [
+        {
+          "order": 1,
+          "ascend": "普通任务",
+          "feishu": "Feishu Task",
+          "sync_fields": "标题、描述、到期、完成、重复、提醒、负责人、关注人",
+          "behavior": "进入任务中心；带日期的负责中任务可显示在飞书日历"
+        },
+        {
+          "order": 2,
+          "ascend": "子任务",
+          "feishu": "Task v2 Subtask",
+          "sync_fields": "标题、到期、完成、成员与父任务",
+          "behavior": "维持任务拆解和完成进度"
+        },
+        {
+          "order": 3,
+          "ascend": "任务列表 / 学习计划",
+          "feishu": "Tasklist + Section",
+          "sync_fields": "名称、成员、角色、分组与任务归属",
+          "behavior": "形成课程、项目或小组协作清单"
+        },
+        {
+          "order": 4,
+          "ascend": "课程、会议与考试",
+          "feishu": "Calendar Event",
+          "sync_fields": "开始、结束、全天、时区、地点、重复、提醒、参与者",
+          "behavior": "进入日历并参与忙闲计算"
+        },
+        {
+          "order": 5,
+          "ascend": "安排后的任务时间块",
+          "feishu": "关联 Task + Calendar Event",
+          "sync_fields": "任务 GUID、日程 ID、开始、结束与忙闲状态",
+          "behavior": "用户显式安排时创建专注块，任务仍保存完成语义"
+        },
+        {
+          "order": 6,
+          "ascend": "团队公共计划",
+          "feishu": "应用拥有的共享日历 + Tasklist",
+          "sync_fields": "成员、群组、权限、参与者与负责人",
+          "behavior": "班级、导师组或项目团队共享"
+        }
+      ],
+      "platform_comparison": [
+        {
+          "order": 1,
+          "dimension": "后端接入",
+          "feishu": "官方 OAuth 与服务端 OpenAPI，适合持续云端同步",
+          "apple": "CalDAV 账户与原生 EventKit 两条路线",
+          "decision": "连接器接口保持统一，协议适配各自实现"
+        },
+        {
+          "order": 2,
+          "dimension": "核心优势",
+          "feishu": "组织协作、成员、群组、忙闲、会议室、清单与评论",
+          "apple": "个人设备、系统日历、提醒事项、离线和系统通知",
+          "decision": "飞书服务团队场景，Apple 服务个人系统场景"
+        },
+        {
+          "order": 3,
+          "dimension": "任务进入日历",
+          "feishu": "飞书日历原生展示和编辑用户负责的任务",
+          "apple": "Apple Calendar 原生展示安排日期的 Reminders",
+          "decision": "任务保持任务对象，时间块作为可选事件"
+        },
+        {
+          "order": 4,
+          "dimension": "授权与治理",
+          "feishu": "scope、租户管理员、调用身份和对象成员共同治理",
+          "apple": "设备权限、账户凭据和 CalDAV 账户设置共同治理",
+          "decision": "设置页明确展示账户、范围、租户和同步状态"
+        },
+        {
+          "order": 5,
+          "dimension": "优先用户",
+          "feishu": "学习小组、班级、导师团队、机构与企业",
+          "apple": "个人学生、重度 iPhone/Mac 用户",
+          "decision": "首批用户结构决定连接器发布顺序"
+        },
+        {
+          "order": 6,
+          "dimension": "工程复用",
+          "feishu": "复用任务、事件、账户、映射、冲突与审计内核",
+          "apple": "复用同一内核，增加 CalDAV 与 EventKit 适配",
+          "decision": "先完成共享内核，再并行扩展连接器"
+        }
+      ],
+      "delivery_plan": [
+        {
+          "order": 1,
+          "phase": "0｜开放平台尖峰",
+          "scope": "测试租户、OAuth、令牌刷新、主日历、任务 CRUD、Webhook 与日历内任务展示",
+          "estimate": "1–2 周",
+          "exit": "两个用户完成日历与任务双向 CRUD，形成权限和事件矩阵"
+        },
+        {
+          "order": 2,
+          "phase": "1｜连接器基础",
+          "scope": "账户、加密令牌、scope、租户、映射、队列、Webhook 验签与设置页",
+          "estimate": "2–3 周",
+          "exit": "授权、续期、断开、重试和审计形成稳定基础"
+        },
+        {
+          "order": 3,
+          "phase": "2｜日历双向同步",
+          "scope": "日历选择、日程 CRUD、参与者、重复、提醒、sync_token、冲突和对账",
+          "estimate": "2–4 周",
+          "exit": "连续 14 天日程同步，漏送和冲突可观测、可恢复"
+        },
+        {
+          "order": 4,
+          "phase": "3｜任务双向同步",
+          "scope": "任务、子任务、清单、成员、完成、重复、提醒、评论基础与事件对账",
+          "estimate": "2–4 周",
+          "exit": "Ascend 与飞书任务中心双向编辑，日历展示行为通过验收"
+        },
+        {
+          "order": 5,
+          "phase": "4｜协作增强",
+          "scope": "群组、忙闲、共享日历、会议室、组织模板、跨成员分配与运营工具",
+          "estimate": "2–3 周",
+          "exit": "一个真实班级或团队完成端到端试点"
+        }
+      ],
+      "engineering_effort": [
+        {
+          "phase": "0 平台尖峰",
+          "scope": "OAuth、日历、任务、事件与权限实测",
+          "low_weeks": 1,
+          "high_weeks": 2,
+          "midpoint_weeks": 1.5
+        },
+        {
+          "phase": "1 连接器基础",
+          "scope": "令牌、scope、租户、映射、队列和设置",
+          "low_weeks": 2,
+          "high_weeks": 3,
+          "midpoint_weeks": 2.5
+        },
+        {
+          "phase": "2 日历同步",
+          "scope": "日程、参与者、增量、冲突和对账",
+          "low_weeks": 2,
+          "high_weeks": 4,
+          "midpoint_weeks": 3
+        },
+        {
+          "phase": "3 任务同步",
+          "scope": "任务、子任务、清单、成员和完成",
+          "low_weeks": 2,
+          "high_weeks": 4,
+          "midpoint_weeks": 3
+        },
+        {
+          "phase": "4 协作增强",
+          "scope": "群组、忙闲、共享日历、会议室和试点",
+          "low_weeks": 2,
+          "high_weeks": 3,
+          "midpoint_weeks": 2.5
+        }
+      ]
+    }
+  },
+  "sources": [
+    {
+      "id": "feishu_open_platform",
+      "label": "飞书 Calendar v4、Task v2、OAuth 与事件订阅官方资料",
+      "query": {
+        "engine": "SQLite",
+        "sql": "WITH capabilities(order_no, area, public_capability, identity, ascend_value) AS (VALUES (1, '身份与授权', 'OAuth 授权、user_access_token、refresh token、offline_access 与 scope', '用户身份', '持续访问用户自己的飞书日历与任务'), (2, '日历与日程', '日历/日程 CRUD、参与者、会议室、重复、提醒、附件、访问控制', '用户身份或应用身份', '会议、课程、考试与专注时间双向同步'), (3, '忙闲与协作', '查询用户忙闲、邀请用户/群组/外部邮箱、参与者回复', '用户身份或应用身份', '学习小组、导师会议与团队排期'), (4, '任务', '任务/子任务 CRUD、负责人、关注人、完成、到期、重复与提醒', '用户身份或应用身份', '个人待办与协作任务双向同步'), (5, '任务组织', '清单、分组、自定义字段、评论与附件', '用户身份或应用身份', '项目、课程和学习计划的协作管理'), (6, '变化捕获', 'Webhook 事件、日历 sync_token 增量拉取、任务变更事件权限', '日历采用用户身份；任务按事件权限', '实时唤醒同步与增量对账'), (7, '写入可靠性', '日程 idempotency_key、任务 client_token、速率限制与错误码', '随资源调用身份', '安全重试、去重与可观测同步')) SELECT order_no AS 'order', area, public_capability, identity, ascend_value FROM capabilities ORDER BY order_no",
+        "description": "核对飞书 OAuth、Calendar v4、Task v2、事件订阅、增量同步和幂等写入能力。",
+        "executed_at": "2026-07-29T15:00:00+08:00",
+        "language": "Feishu Open Platform Documentation",
+        "tables_used": [
+          "https://open.feishu.cn/document/task-v2/overview",
+          "https://open.feishu.cn/document/task-v2/task/list?lang=zh-CN",
+          "https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/calendar-v4/calendar/introduction",
+          "https://open.feishu.cn/document/server-docs/calendar-v4/calendar-event/create?lang=zh-CN",
+          "https://open.feishu.cn/document/server-docs/calendar-v4/calendar-faq?lang=zh-CN",
+          "https://open.feishu.cn/document/authentication-management/access-token/obtain-oauth-code?lang=zh-CN",
+          "https://open.feishu.cn/document/authentication-management/access-token/get-user-access-token?lang=zh-CN",
+          "https://open.feishu.cn/document/server-docs/event-subscription-guide/overview?lang=zh-CN",
+          "https://open.feishu.cn/document/server-docs/application-scope/scope-list?lang=zh-CN"
+        ]
+      }
+    },
+    {
+      "id": "feishu_product_features",
+      "label": "飞书日历与任务产品功能官方资料",
+      "query": {
+        "engine": "SQLite",
+        "sql": "WITH mappings(order_no, ascend_object, feishu_object, sync_fields, behavior) AS (VALUES (1, '普通任务', 'Feishu Task', '标题、描述、到期、完成、重复、提醒、负责人、关注人', '进入任务中心；带日期的负责中任务可显示在飞书日历'), (2, '子任务', 'Task v2 Subtask', '标题、到期、完成、成员与父任务', '维持任务拆解和完成进度'), (3, '任务列表 / 学习计划', 'Tasklist + Section', '名称、成员、角色、分组与任务归属', '形成课程、项目或小组协作清单'), (4, '课程、会议与考试', 'Calendar Event', '开始、结束、全天、时区、地点、重复、提醒、参与者', '进入日历并参与忙闲计算'), (5, '安排后的任务时间块', '关联 Task + Calendar Event', '任务 GUID、日程 ID、开始、结束与忙闲状态', '用户显式安排时创建专注块，任务仍保存完成语义'), (6, '团队公共计划', '应用拥有的共享日历 + Tasklist', '成员、群组、权限、参与者与负责人', '班级、导师组或项目团队共享')) SELECT order_no AS 'order', ascend_object AS ascend, feishu_object AS feishu, sync_fields, behavior FROM mappings ORDER BY order_no",
+        "description": "核对飞书日历展示和编辑任务、飞书任务协作模型，以及日程产品字段。",
+        "executed_at": "2026-07-29T15:15:00+08:00",
+        "language": "Feishu Help Center and Open Platform Documentation",
+        "tables_used": [
+          "https://www.feishu.cn/hc/zh-CN/articles/360049067484/",
+          "https://www.feishu.cn/hc/zh-CN/articles/360024861134-%E5%88%9B%E5%BB%BA%E6%97%A5%E7%A8%8B%E5%B9%B6%E9%82%80%E8%AF%B7%E5%8F%82%E4%B8%8E%E8%80%85",
+          "https://open.feishu.cn/document/task-v2/overview",
+          "https://open.feishu.cn/document/best-practices/calendarsync"
+        ]
+      }
+    },
+    {
+      "id": "platform_comparison_evidence",
+      "label": "飞书与 Apple 官方公开能力对比",
+      "query": {
+        "engine": "SQLite",
+        "sql": "WITH comparisons(order_no, dimension, feishu, apple, decision) AS (VALUES (1, '后端接入', '官方 OAuth 与服务端 OpenAPI，适合持续云端同步', 'CalDAV 账户与原生 EventKit 两条路线', '连接器接口保持统一，协议适配各自实现'), (2, '核心优势', '组织协作、成员、群组、忙闲、会议室、清单与评论', '个人设备、系统日历、提醒事项、离线和系统通知', '飞书服务团队场景，Apple 服务个人系统场景'), (3, '任务进入日历', '飞书日历原生展示和编辑用户负责的任务', 'Apple Calendar 原生展示安排日期的 Reminders', '任务保持任务对象，时间块作为可选事件'), (4, '授权与治理', 'scope、租户管理员、调用身份和对象成员共同治理', '设备权限、账户凭据和 CalDAV 账户设置共同治理', '设置页明确展示账户、范围、租户和同步状态'), (5, '优先用户', '学习小组、班级、导师团队、机构与企业', '个人学生、重度 iPhone/Mac 用户', '首批用户结构决定连接器发布顺序'), (6, '工程复用', '复用任务、事件、账户、映射、冲突与审计内核', '复用同一内核，增加 CalDAV 与 EventKit 适配', '先完成共享内核，再并行扩展连接器')) SELECT order_no AS 'order', dimension, feishu, apple, decision FROM comparisons ORDER BY order_no",
+        "description": "将飞书官方服务端能力与 Apple 官方 CalDAV/EventKit 能力按同一产品口径比较。",
+        "executed_at": "2026-07-29T15:30:00+08:00",
+        "language": "Feishu and Apple Official Documentation",
+        "tables_used": [
+          "https://open.feishu.cn/document/best-practices/calendarsync",
+          "https://open.feishu.cn/document/task-v2/overview",
+          "https://www.feishu.cn/hc/zh-CN/articles/360049067484/",
+          "https://developer.apple.com/documentation/eventkit/accessing-the-event-store",
+          "https://support.apple.com/guide/iphone/add-or-remove-accounts-iph8739025dd/26/ios/26"
+        ]
+      }
+    },
+    {
+      "id": "engineering_estimate",
+      "label": "基于共享产品内核与飞书连接器范围的工程估算",
+      "query": {
+        "engine": "SQLite",
+        "sql": "WITH estimates(phase, scope, low_weeks, high_weeks) AS (VALUES ('0 平台尖峰', 'OAuth、日历、任务、事件与权限实测', 1, 2), ('1 连接器基础', '令牌、scope、租户、映射、队列和设置', 2, 3), ('2 日历同步', '日程、参与者、增量、冲突和对账', 2, 4), ('3 任务同步', '任务、子任务、清单、成员和完成', 2, 4), ('4 协作增强', '群组、忙闲、共享日历、会议室和试点', 2, 3)) SELECT phase, scope, low_weeks, high_weeks, (low_weeks + high_weeks) / 2.0 AS midpoint_weeks FROM estimates ORDER BY phase",
+        "description": "按一名熟悉 Ascend、OAuth、Webhook 和飞书 OpenAPI 的全职工程师估算；复用稳定的任务与事件内核，范围包含实现、自动化测试和测试租户验证。",
+        "executed_at": "2026-07-29T16:00:00+08:00",
+        "language": "SQL",
+        "filters": [
+          "包含 OAuth、日历、任务、事件订阅、增量对账、冲突与测试",
+          "复用 Ascend 已完成的任务与事件领域模型"
+        ],
+        "metric_definitions": [
+          "下界与上界为工程判断区间；中点 = (下界 + 上界) / 2，用于比较阶段相对投入。"
+        ],
+        "tables_used": [
+          "docs/agent-development-guide.md",
+          "https://open.feishu.cn/document/task-v2/overview",
+          "https://open.feishu.cn/document/best-practices/calendarsync",
+          "https://open.feishu.cn/document/server-docs/event-subscription-guide/overview?lang=zh-CN"
+        ]
+      }
+    }
+  ]
+}

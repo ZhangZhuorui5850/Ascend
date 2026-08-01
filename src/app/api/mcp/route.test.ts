@@ -98,7 +98,7 @@ describe("POST /api/mcp", () => {
     await expect(response.json()).resolves.toMatchObject({
       result: { structuredContent: { result: { title: "远程 Agent 任务" } } },
     });
-    expect(testDb!.prepare("SELECT title FROM day_tasks").get()).toEqual({ title: "远程 Agent 任务" });
+    expect(testDb!.prepare("SELECT title FROM planner_tasks").get()).toEqual({ title: "远程 Agent 任务" });
     expect(testDb!.prepare("SELECT action FROM audit_logs ORDER BY id DESC LIMIT 1").get())
       .toEqual({ action: "agent.task.create" });
   });

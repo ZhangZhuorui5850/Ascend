@@ -25,6 +25,7 @@ export function AppShell({ user, hierarchy, modulePrefs, children }: AppShellPro
   const [commandOpen, setCommandOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const isPlannerRoute = pathname.startsWith("/tasks") || pathname.startsWith("/calendar");
 
   useEffect(() => {
     function openCapture() {
@@ -92,7 +93,7 @@ export function AppShell({ user, hierarchy, modulePrefs, children }: AppShellPro
             type="button"
           />
           <CapturePanel subjects={hierarchy} onClose={() => setCaptureOpen(false)} />
-          {!captureOpen ? (
+          {!captureOpen && !isPlannerRoute ? (
             <button className="captureFab" onClick={() => setCaptureOpen(true)} type="button">
               <Inbox size={17} />
               收纳

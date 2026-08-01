@@ -11,6 +11,7 @@ import {
   GraduationCap,
   HardDrive,
   Home,
+  ListChecks,
   LogOut,
   PlusCircle,
   Settings,
@@ -45,6 +46,7 @@ export function getNavigation(role: "admin" | "user") {
   }
   return [
     { href: "/", match: "/", exact: true, label: "总览", group: "计划", icon: Home },
+    { href: "/tasks", match: "/tasks", exact: false, label: "任务", group: "计划", icon: ListChecks },
     { href: `/day/${todayKey()}`, match: "/day", exact: false, label: "今日执行", group: "计划", icon: ClipboardList },
     { href: "/calendar", match: "/calendar", exact: false, label: "学习日历", group: "计划", icon: CalendarDays },
     { href: "/subjects", match: "/subjects", exact: false, label: "知识体系", group: "学习", icon: BookOpen, moduleKey: "subjects" as const },

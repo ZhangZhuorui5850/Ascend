@@ -1,0 +1,16 @@
+{
+  "artifact": "docs/prototypes/2026-08-01-planner-quiet-workbench.html",
+  "screenshot": "docs/screenshots/planner/prototype/2026-08-01-planner-quiet-workbench.png",
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "fullPage": false,
+  "browser": "Chromium 149.0.7827.55 via Playwright 1.61.1",
+  "state": "Summit light; Quick Capture collapsed; default completion rows and batch-selection rows shown together; Inspector dirty with save action visible",
+  "scrollPosition": {
+    "x": 0,
+    "y": 0
+  },
+  "buildIdentifier": "static-prototype-2026-08-01-r0-quiet-workbench"
+}

@@ -1,0 +1,615 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "Ascend × Apple 日历与提醒事项可行性评估",
+    "description": "基于 Ascend 当前实现与 Apple 官方公开能力，对完整日历、待办联动及 Apple 集成路线进行评估。",
+    "generatedAt": "2026-07-29T10:00:00+08:00",
+    "charts": [
+      {
+        "id": "engineering_effort_chart",
+        "title": "各阶段工程量估算",
+        "subtitle": "单工程师周；柱长采用区间中点，明细保留估算上下界",
+        "showDescription": true,
+        "intent": "comparison",
+        "question": "四个交付阶段的相对工程投入如何分布？",
+        "rationale": "四个离散阶段共享同一工程周单位，分类柱状图最便于比较相对投入。",
+        "comparisonContext": {
+          "grain": "交付阶段",
+          "unit": "单工程师周",
+          "semanticFamily": "engineering effort estimate"
+        },
+        "type": "bar",
+        "dataset": "engineering_effort",
+        "sourceId": "engineering_estimate",
+        "encodings": {
+          "x": {
+            "field": "phase",
+            "type": "ordinal",
+            "label": "交付阶段"
+          },
+          "y": {
+            "field": "midpoint_weeks",
+            "type": "quantitative",
+            "label": "估算中点",
+            "format": "number",
+            "unit": "周"
+          },
+          "tooltip": [
+            {
+              "field": "low_weeks",
+              "type": "quantitative",
+              "label": "下界",
+              "format": "number",
+              "unit": "周"
+            },
+            {
+              "field": "high_weeks",
+              "type": "quantitative",
+              "label": "上界",
+              "format": "number",
+              "unit": "周"
+            },
+            {
+              "field": "scope",
+              "type": "text",
+              "label": "范围"
+            }
+          ]
+        },
+        "xAxisTitle": "阶段",
+        "yAxisTitle": "单工程师周（区间中点）",
+        "valueFormat": "number",
+        "unit": "周",
+        "layout": "full",
+        "maxRows": 4,
+        "surface": {
+          "surface": "card",
+          "interactiveLegend": false,
+          "showControls": false,
+          "viewMode": "visualization"
+        }
+      }
+    ],
+    "tables": [
+      {
+        "id": "current_gap",
+        "title": "当前能力与目标差距",
+        "subtitle": "按用户可感知的产品能力审视现有实现",
+        "dataset": "current_gap",
+        "sourceId": "ascend_current_implementation",
+        "defaultSort": {
+          "field": "order",
+          "direction": "asc"
+        },
+        "density": "spacious",
+        "layout": "full",
+        "columns": [
+          {
+            "field": "order",
+            "label": "序",
+            "type": "number"
+          },
+          {
+            "field": "area",
+            "label": "能力域",
+            "type": "text"
+          },
+          {
+            "field": "current",
+            "label": "当前状态",
+            "type": "text"
+          },
+          {
+            "field": "gap",
+            "label": "达到完整体验所需补充",
+            "type": "text"
+          }
+        ]
+      },
+      {
+        "id": "route_comparison",
+        "title": "Apple 接入路线对比",
+        "subtitle": "从联动范围、产品摩擦、技术风险和长期价值比较四条路径",
+        "dataset": "route_comparison",
+        "sourceId": "apple_integration_evidence",
+        "defaultSort": {
+          "field": "order",
+          "direction": "asc"
+        },
+        "density": "spacious",
+        "layout": "full",
+        "columns": [
+          {
+            "field": "order",
+            "label": "序",
+            "type": "number"
+          },
+          {
+            "field": "route",
+            "label": "路线",
+            "type": "text"
+          },
+          {
+            "field": "coverage",
+            "label": "联动范围",
+            "type": "text"
+          },
+          {
+            "field": "feasibility",
+            "label": "可行性",
+            "type": "text"
+          },
+          {
+            "field": "cost",
+            "label": "相对投入",
+            "type": "text"
+          },
+          {
+            "field": "decision",
+            "label": "决策建议",
+            "type": "text"
+          }
+        ]
+      },
+      {
+        "id": "product_mapping",
+        "title": "建议的产品语义映射",
+        "subtitle": "维持任务与事件的独立语义，由统一时间轴完成展示联动",
+        "dataset": "product_mapping",
+        "sourceId": "apple_product_features",
+        "defaultSort": {
+          "field": "order",
+          "direction": "asc"
+        },
+        "density": "spacious",
+        "layout": "full",
+        "columns": [
+          {
+            "field": "order",
+            "label": "序",
+            "type": "number"
+          },
+          {
+            "field": "ascend",
+            "label": "Ascend 对象",
+            "type": "text"
+          },
+          {
+            "field": "apple",
+            "label": "Apple 映射",
+            "type": "text"
+          },
+          {
+            "field": "shared_behavior",
+            "label": "联动行为",
+            "type": "text"
+          },
+          {
+            "field": "boundary",
+            "label": "范围边界",
+            "type": "text"
+          }
+        ]
+      },
+      {
+        "id": "delivery_plan",
+        "title": "建议实施路线",
+        "subtitle": "单名熟悉代码库的全职工程师量级估算，包含实现与自动化测试",
+        "dataset": "delivery_plan",
+        "sourceId": "engineering_estimate",
+        "defaultSort": {
+          "field": "order",
+          "direction": "asc"
+        },
+        "density": "spacious",
+        "layout": "full",
+        "columns": [
+          {
+            "field": "order",
+            "label": "序",
+            "type": "number"
+          },
+          {
+            "field": "phase",
+            "label": "阶段",
+            "type": "text"
+          },
+          {
+            "field": "scope",
+            "label": "交付范围",
+            "type": "text"
+          },
+          {
+            "field": "estimate",
+            "label": "工程量",
+            "type": "text"
+          },
+          {
+            "field": "exit",
+            "label": "验收条件",
+            "type": "text"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "id": "ascend_current_implementation",
+        "label": "Ascend 当前日历、任务与 PWA 实现",
+        "path": "src/components/CalendarView.tsx"
+      },
+      {
+        "id": "apple_integration_evidence",
+        "label": "Apple EventKit、CalDAV、账户授权与 Web Push 官方资料",
+        "href": "https://developer.apple.com/documentation/eventkit/accessing-the-event-store"
+      },
+      {
+        "id": "apple_product_features",
+        "label": "Apple 日历与提醒事项官方功能说明",
+        "href": "https://support.apple.com/en-gb/guide/iphone/iph14f1d32a5/ios"
+      },
+      {
+        "id": "engineering_estimate",
+        "label": "基于当前代码边界与目标协议范围的工程估算",
+        "path": "docs/agent-development-guide.md"
+      }
+    ],
+    "blocks": [
+      {
+        "id": "title",
+        "type": "markdown",
+        "body": "# Ascend × Apple 日历与提醒事项可行性评估"
+      },
+      {
+        "id": "executive_summary",
+        "type": "markdown",
+        "body": "## Executive Summary\n\n- **整体方向可行，推荐采用“完整产品内核 + CalDAV 双向账户 + 原生 EventKit 增强”的分层方案。** Ascend 先成为 Apple 日历与提醒事项可添加的 CalDAV 账户，用户能在系统应用里查看、创建、改期和完成 Ascend 内容；原生客户端随后负责读取用户已有的 iCloud、Exchange 与本机日历/提醒事项。\n\n- **当前实现已经形成可复用的交互与写路径底座。** 月、周、日视图、任务拖拽改期、拉伸调整时长、完成状态和按日快速添加已经存在。领域模型仍以“某天的一条任务”为中心，完整体验需要独立的任务、事件、列表、日历、重复规则、提醒和同步元数据。\n\n- **Apple 公开接口支持核心联动，功能对等范围有限。** EventKit 覆盖事件和基础提醒事项的读取、创建、编辑、删除、完成、优先级、日期、闹钟与重复规则；Apple 提醒事项的标签、分区、智能列表、附件、信息触发等高级体验缺少完整的公开字段映射。外部 CalDAV 账户也处于基础功能范围。\n\n- **建议先投入 12–18 个工程周完成产品与 CalDAV 主线，再决定原生客户端。** 这条主线形成跨平台、开放协议、可测试的长期底座。原生 EventKit 客户端通常再增加 6–10 个工程周；邀请协作、附件、位置提醒、Siri、Widget 等高级能力适合进入后续季度。"
+      },
+      {
+        "id": "decision",
+        "type": "markdown",
+        "body": "## 结论：先把 Ascend 做成一个 Apple 可添加的日历与待办账户\n\n**推荐架构有三层。** 第一层是 Ascend 自己的任务与事件内核，负责跨平台一致性；第二层是 CalDAV 服务端，让 Apple 日历和提醒事项直接成为 Ascend 的系统级客户端；第三层是可选的 Swift 原生伴侣应用，通过 EventKit 读取用户设备上的其他账户并提供更顺滑的授权、导入和快捷操作。\n\nApple 官方明确支持在 iPhone 的提醒事项账户中添加 CalDAV 账户，并开启该账户的 Reminders；日历同样支持 CalDAV 账户。因此，Ascend 提供 CalDAV 服务可以直接实现系统应用内的双向交互，用户无需把 Apple Account 凭据交给 Ascend。参考：[在提醒事项中添加 CalDAV 账户](https://support.apple.com/guide/iphone/add-or-remove-accounts-iph8739025dd/26/ios/26)、[在日历中添加 CalDAV 账户](https://support.apple.com/en-ca/guide/iphone/-ipha0d932e96/ios)。"
+      },
+      {
+        "id": "current_state",
+        "type": "markdown",
+        "body": "## 现有实现适合继续演进，数据模型需要一次结构升级\n\n**UI 与写路径已经具备可复用价值。** FullCalendar 已提供月、周、日三种视图，支持拖拽、缩放时长、全天任务、完成状态和乐观更新；Server Action、workspace 隔离与 SQLite repo 边界也适合承载新领域对象。\n\n**主要制约来自数据语义。** 当前任务必须归属某一天，时间仅保存 `HH:mm`，考试节点来自设置 JSON，系统内还没有独立事件、日历/列表容器、时区、重复规则、闹钟、同步版本和删除墓碑。直接在现表上叠加 Apple 字段会快速形成高耦合结构。"
+      },
+      {
+        "id": "current_gap_table",
+        "type": "table",
+        "tableId": "current_gap"
+      },
+      {
+        "id": "integration_routes",
+        "type": "markdown",
+        "body": "## 四条接入路径解决四种不同需求\n\n**CalDAV 服务端最适合成为第一条生产路线。** 它解决“让 Ascend 内容进入 Apple 系统应用并双向编辑”的需求，覆盖 iPhone、iPad 和 Mac，也保留未来接入其他 CalDAV 客户端的空间。\n\n**EventKit 原生客户端解决“读取用户已有 Apple 数据”的需求。** Apple 的完整访问授权允许原生应用读取和修改设备事件与提醒事项，保存后由对应账户继续同步。EventKit 入口属于 iOS、iPadOS、macOS 与 Mac Catalyst 原生环境，当前 PWA 需要通过 Swift 客户端或原生壳获得这项能力。参考：[EventKit 访问级别](https://developer.apple.com/documentation/eventkit/accessing-the-event-store)、[EventKit 日历示例](https://developer.apple.com/documentation/EventKit/accessing-calendar-using-eventkit-and-eventkitui)。\n\n**后端直连 iCloud 适合受控验证。** Apple 支持应用专用密码，也在 2025 年公布了“受支持第三方应用”的 Apple Account 数据授权；公开开发者资料尚未给出任意 Web 应用的接入申请和协议细节。该路径包含凭据托管、撤销、2FA、兼容性和客服成本。参考：[第三方应用访问 iCloud](https://support.apple.com/en-us/121539)、[应用专用密码](https://support.apple.com/en-us/102654)。"
+      },
+      {
+        "id": "route_comparison_table",
+        "type": "table",
+        "tableId": "route_comparison"
+      },
+      {
+        "id": "product_model",
+        "type": "markdown",
+        "body": "## 任务保持任务语义，事件保持时间占用语义\n\n**任务与事件适合使用独立表和统一投影视图。** 任务具有完成、优先级、列表、到期时间、子任务和标签；事件具有开始、结束、全天、时区、参与者、忙闲和会议属性。统一日历页面将两类对象投影到同一时间轴，Apple Calendar 自身也采用“显示已安排提醒事项”的组合方式。\n\nApple Calendar 已能直接显示、创建、编辑和完成安排了日期的提醒事项；全天提醒显示在全天区，带时间的提醒显示在日程时间位置。参考：[在 Calendar 中使用 Reminders](https://support.apple.com/en-gb/guide/iphone/iph14f1d32a5/ios)。这意味着 Ascend 任务映射成 VTODO/EKReminder 后，Apple 系统已经负责日历与待办之间的视觉联动，Ascend 只需维护一份任务事实。"
+      },
+      {
+        "id": "product_mapping_table",
+        "type": "table",
+        "tableId": "product_mapping"
+      },
+      {
+        "id": "sync_architecture",
+        "type": "markdown",
+        "body": "## 同步层决定长期可靠性\n\n**建议新增六类基础对象：** `task_lists`、`tasks`、`calendars`、`events`、`sync_accounts`、`external_mappings`，再配套 `change_log`、`sync_conflicts` 与删除墓碑。时间统一保存 UTC 瞬时值与 IANA 时区；全天日期保留日期语义；重复规则使用可往返 iCalendar 的 RRULE 表达。\n\n**CalDAV MVP 需要实现协议发现与增量同步。** 核心包含 principal discovery、calendar-home-set、PROPFIND、REPORT、GET、PUT、DELETE、ETag、CTag/sync-token、VEVENT、VTODO 与账户级应用密码。会议邀请与服务器调度属于 CalDAV Scheduling 扩展，可在核心双向同步稳定后进入后续版本。\n\n**冲突策略从可解释方案起步。** 每次写入携带版本号或 ETag，字段冲突生成冲突副本与审计记录；完成状态、日期与标题属于优先保护字段。同步适配器只读写领域服务，避免协议代码直接修改 repo 表。\n\n**通知继续走 Web Push。** iOS/iPadOS 16.4 起，添加到主屏幕的 Web App 可以请求 Web Push 权限，通知会进入锁屏、通知中心和配对的 Apple Watch。Ascend 当前已注册 Service Worker，仍需补 Push 订阅、服务端定时队列、可见通知处理和失效订阅清理。参考：[Apple Web Push 文档](https://developer.apple.com/documentation/usernotifications/sending-web-push-notifications-in-web-apps-and-browsers)。"
+      },
+      {
+        "id": "feature_ceiling",
+        "type": "markdown",
+        "body": "## “完整苹果功能”适合定义为核心对等与系统联动\n\n**Apple 公开能力覆盖日历核心与基础提醒。** EventKit 提供事件的开始/结束、全天、日历、闹钟、重复、地点、URL、参与者读取和状态；提醒事项提供开始/到期日期、优先级、完成状态、闹钟与重复。参考：[EKEvent](https://developer.apple.com/documentation/eventkit/ekevent)、[EKReminder](https://developer.apple.com/documentation/eventkit/ekreminder)、[EKCalendarItem](https://developer.apple.com/documentation/eventkit/ekcalendaritem)。\n\n**Apple 应用层还有更宽的专属体验。** 当前提醒事项支持标签、智能列表、附件、照片扫描、信息触发、紧急提醒、旗标等功能；EventKit 的公开提醒字段集中在日期、优先级和完成状态，外部账户也只获得一部分提醒事项功能。参考：[提醒事项详情能力](https://support.apple.com/en-gb/guide/iphone/iphec7a1de82/ios)、[提醒事项账户能力边界](https://support.apple.com/guide/iphone/add-or-remove-accounts-iph8739025dd/26/ios/26)。\n\n因此，首个版本的“完整”建议定义为：多列表、多日历、任务与事件统一时间轴、全天/定时、重复、闹钟、优先级、完成、拖拽、搜索、基础离线、Web Push、CalDAV 双向同步与可恢复冲突。附件、共享协作、会议邀请、位置提醒、Siri、Widget 和 Apple 专属高级字段进入增强范围。"
+      },
+      {
+        "id": "roadmap",
+        "type": "markdown",
+        "body": "## 推荐用四个闸门逐步交付\n\n**每个阶段都形成独立可用价值。** 先完成内部领域模型和 UI，再交付只读订阅与通知，然后开放 CalDAV 双向写入，最后用真实 Apple 设备决定 EventKit 客户端的投入。这个顺序让协议复杂度建立在稳定产品语义上，也让用户反馈提前验证“系统日历与待办联动”的价值。"
+      },
+      {
+        "id": "engineering_effort_chart_block",
+        "type": "chart",
+        "chartId": "engineering_effort_chart"
+      },
+      {
+        "id": "delivery_plan_table",
+        "type": "table",
+        "tableId": "delivery_plan"
+      },
+      {
+        "id": "next_steps",
+        "type": "markdown",
+        "body": "## Recommended Next Steps\n\n1. **冻结 V1 语义范围。** 采用“任务映射 Reminder、会议/考试映射 Event、统一时间轴展示”的产品定义，确定 V1 包含重复、提醒、列表/日历、搜索、完成和双向同步。\n\n2. **先做两周协议验证。** 用隔离测试账户搭建最小 CalDAV 服务，验证 Apple Calendar 与 Reminders 对 VEVENT、VTODO、ETag、删除、完成、重复规则和时区的真实往返结果，并记录 Apple 端生成的属性与边界。\n\n3. **随后启动领域模型迁移。** 新表通过追加迁移引入，保留 `day_tasks` 兼容读或一次性迁移路径；日历页面改为组合查询，所有写入仍走 workspace 鉴权和 repo 层。\n\n4. **在 CalDAV MVP 达标后评审原生客户端。** 评审依据包括现有 iCloud 数据导入需求、Apple 设备占比、App Store 分发意愿、后台同步时效要求和高级系统能力价值。"
+      },
+      {
+        "id": "further_questions",
+        "type": "markdown",
+        "body": "## Further Questions\n\n- 首批用户更看重“Ascend 内容出现在 Apple 应用”，还是“把现有 iCloud 内容导入 Ascend”？前者强化 CalDAV 优先级，后者提高 EventKit 优先级。\n\n- 任务的 `scheduled_start + estimated_minutes` 表达计划时间块，Apple Reminder 主要表达到期时点。V1 可以在 Ascend 时间轴保留时长，在 Apple 端显示提醒时点；真实测试将决定是否增加可选的专注事件投影。\n\n- 产品是否需要多人共享、会议邀请与参与者回复？这会引入 CalDAV Scheduling、邮件投递、权限模型和反垃圾策略，适合单独立项。\n\n- 部署形态是否继续以本机/自托管为主？公网 CalDAV 与 Web Push 需要稳定 HTTPS 域名、后台任务和可达服务。"
+      },
+      {
+        "id": "caveats",
+        "type": "markdown",
+        "body": "## Caveats and Assumptions\n\n- 本评估基于 2026 年 7 月 29 日可见的 Apple 官方文档与当前仓库实现；Apple “受支持第三方应用”账户授权缺少公开开发者接入细节，因此按伙伴级、不确定能力处理。\n\n- 工程量按一名熟悉 Next.js、SQLite、iCalendar/CalDAV 与 Swift 的工程师估算。协议兼容、真实设备矩阵、App Review、共享邀请和后台同步会显著改变工期。\n\n- CalDAV 外部账户可以进入 Apple Calendar 与 Reminders，Apple 专属 iCloud Reminders 高级体验具有账户和公开 API 边界。\n\n- 报告评估的是技术与产品可行性；真实用户价值仍需通过协议原型和 5–10 名 Apple 设备用户的任务完成、同步可靠性与留存反馈验证。"
+      }
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "generatedAt": "2026-07-29T10:00:00+08:00",
+    "status": "ready",
+    "datasets": {
+      "current_gap": [
+        {
+          "order": 1,
+          "area": "日历视图",
+          "current": "月、周、日与列表视图；拖拽改期；拉伸时长；全天任务",
+          "gap": "多日事件、日历筛选、时区、重复规则、搜索、冲突提示"
+        },
+        {
+          "order": 2,
+          "area": "任务",
+          "current": "标题、某天、开始时间、预计时长、优先级、备注、完成",
+          "gap": "独立收集箱、独立到期时间、列表、重复、提醒、子任务、标签、旗标"
+        },
+        {
+          "order": 3,
+          "area": "事件",
+          "current": "任务被投影成事件；考试节点存于设置 JSON",
+          "gap": "独立事件实体、开始/结束、全天、多日、地点、参与者、忙闲与会议属性"
+        },
+        {
+          "order": 4,
+          "area": "通知",
+          "current": "已有 PWA manifest 与 Service Worker 生命周期",
+          "gap": "Push 订阅、服务端调度、提醒规则、重试、时区与失效订阅清理"
+        },
+        {
+          "order": 5,
+          "area": "离线",
+          "current": "导航失败回退到公共离线页，复习模块另有离线缓存",
+          "gap": "任务/事件离线读写、操作队列、重放幂等与冲突合并"
+        },
+        {
+          "order": 6,
+          "area": "同步",
+          "current": "产品内部单库写入与 workspace 隔离",
+          "gap": "账户、外部 ID、ETag、sync-token、墓碑、变更日志、冲突与审计"
+        },
+        {
+          "order": 7,
+          "area": "Apple 系统能力",
+          "current": "Web/PWA 形态",
+          "gap": "CalDAV 服务端；可选 Swift EventKit 客户端；App Store 与隐私授权流程"
+        }
+      ],
+      "route_comparison": [
+        {
+          "order": 1,
+          "route": "Ascend 提供 CalDAV 账户",
+          "coverage": "Ascend 事件与任务进入 Apple Calendar / Reminders，支持系统应用双向操作",
+          "feasibility": "高",
+          "cost": "中高",
+          "decision": "推荐主线；先做基础 VEVENT/VTODO 与增量同步"
+        },
+        {
+          "order": 2,
+          "route": "Swift 原生 EventKit 客户端",
+          "coverage": "读取和写入设备上获授权的 iCloud、Exchange、本机及其他账户",
+          "feasibility": "高",
+          "cost": "高",
+          "decision": "作为第二阶段；用于导入现有数据与系统级体验"
+        },
+        {
+          "order": 3,
+          "route": "后端直连 iCloud CalDAV",
+          "coverage": "服务端持续同步用户 iCloud Calendar；Reminders 高级字段覆盖待实测",
+          "feasibility": "中低",
+          "cost": "高",
+          "decision": "限技术验证；等待公开账户授权接入规则"
+        },
+        {
+          "order": 4,
+          "route": "ICS / webcal 订阅",
+          "coverage": "Ascend 日程以只读订阅显示在 Apple Calendar",
+          "feasibility": "很高",
+          "cost": "低",
+          "decision": "适合快速预览；范围为只读日程"
+        }
+      ],
+      "product_mapping": [
+        {
+          "order": 1,
+          "ascend": "任务",
+          "apple": "VTODO / EKReminder",
+          "shared_behavior": "标题、日期/时间、优先级、备注、重复、闹钟、完成状态双向同步",
+          "boundary": "预计时长保留为 Ascend 计划属性"
+        },
+        {
+          "order": 2,
+          "ascend": "会议与普通日程",
+          "apple": "VEVENT / EKEvent",
+          "shared_behavior": "开始、结束、全天、时区、地点、重复、提醒双向同步",
+          "boundary": "邀请与参与者回复进入增强版本"
+        },
+        {
+          "order": 3,
+          "ascend": "考试节点",
+          "apple": "全天或定时 VEVENT",
+          "shared_behavior": "考试日期、名称、关联科目和提醒进入日历",
+          "boundary": "目标分数作为 Ascend 元数据或描述"
+        },
+        {
+          "order": 4,
+          "ascend": "任务列表",
+          "apple": "VTODO Calendar / Reminder List",
+          "shared_behavior": "列表名称、颜色与任务归属",
+          "boundary": "智能列表由 Ascend 查询视图生成"
+        },
+        {
+          "order": 5,
+          "ascend": "日历",
+          "apple": "VEVENT Calendar",
+          "shared_behavior": "日历名称、颜色、可见性与事件归属",
+          "boundary": "共享权限与订阅关系进入增强版本"
+        }
+      ],
+      "delivery_plan": [
+        {
+          "order": 1,
+          "phase": "0｜协议尖峰",
+          "scope": "最小 CalDAV 服务；Apple 真机往返 VEVENT/VTODO、完成、删除、重复、时区",
+          "estimate": "2 周",
+          "exit": "iPhone 与 Mac 通过同一测试账户完成双向 CRUD，形成兼容矩阵"
+        },
+        {
+          "order": 2,
+          "phase": "1｜完整产品内核",
+          "scope": "任务/事件/列表/日历模型、统一时间轴、重复、提醒、搜索、迁移与测试",
+          "estimate": "6–8 周",
+          "exit": "Web 端核心功能闭环，旧任务完整迁移，领域层拥有稳定契约"
+        },
+        {
+          "order": 3,
+          "phase": "2｜Apple 双向账户",
+          "scope": "生产 CalDAV、账户密码、ETag/sync-token、墓碑、冲突、审计、Web Push",
+          "estimate": "4–8 周",
+          "exit": "Apple Calendar 与 Reminders 连续 14 天同步，重试与冲突可观测"
+        },
+        {
+          "order": 4,
+          "phase": "3｜原生增强",
+          "scope": "Swift EventKit 授权、选择性导入/同步、深链、快捷操作与 App Store",
+          "estimate": "6–10 周",
+          "exit": "现有设备日历与提醒事项按用户选择进入 Ascend，并通过隐私与商店审核"
+        }
+      ],
+      "engineering_effort": [
+        {
+          "phase": "0 协议尖峰",
+          "scope": "Apple 真机 CalDAV 往返验证",
+          "low_weeks": 2,
+          "high_weeks": 2,
+          "midpoint_weeks": 2
+        },
+        {
+          "phase": "1 产品内核",
+          "scope": "任务、事件、列表、日历、重复与提醒",
+          "low_weeks": 6,
+          "high_weeks": 8,
+          "midpoint_weeks": 7
+        },
+        {
+          "phase": "2 双向账户",
+          "scope": "生产 CalDAV、冲突、审计与 Web Push",
+          "low_weeks": 4,
+          "high_weeks": 8,
+          "midpoint_weeks": 6
+        },
+        {
+          "phase": "3 原生增强",
+          "scope": "Swift EventKit、选择性同步与 App Store",
+          "low_weeks": 6,
+          "high_weeks": 10,
+          "midpoint_weeks": 8
+        }
+      ]
+    }
+  },
+  "sources": [
+    {
+      "id": "ascend_current_implementation",
+      "label": "Ascend 当前日历、任务与 PWA 实现",
+      "query": {
+        "engine": "SQLite",
+        "sql": "WITH assessed(order_no, area, current_state, target_gap) AS (VALUES (1, '日历视图', '月、周、日与列表视图；拖拽改期；拉伸时长；全天任务', '多日事件、日历筛选、时区、重复规则、搜索、冲突提示'), (2, '任务', '标题、某天、开始时间、预计时长、优先级、备注、完成', '独立收集箱、独立到期时间、列表、重复、提醒、子任务、标签、旗标'), (3, '事件', '任务被投影成事件；考试节点存于设置 JSON', '独立事件实体、开始/结束、全天、多日、地点、参与者、忙闲与会议属性'), (4, '通知', '已有 PWA manifest 与 Service Worker 生命周期', 'Push 订阅、服务端调度、提醒规则、重试、时区与失效订阅清理'), (5, '离线', '导航失败回退到公共离线页，复习模块另有离线缓存', '任务/事件离线读写、操作队列、重放幂等与冲突合并'), (6, '同步', '产品内部单库写入与 workspace 隔离', '账户、外部 ID、ETag、sync-token、墓碑、变更日志、冲突与审计'), (7, 'Apple 系统能力', 'Web/PWA 形态', 'CalDAV 服务端；可选 Swift EventKit 客户端；App Store 与隐私授权流程')) SELECT order_no AS 'order', area, current_state AS current, target_gap AS gap FROM assessed ORDER BY order_no",
+        "description": "审阅当前日历 UI、任务 repo、迁移、Server Action 与 Service Worker，界定已实现能力和结构缺口。",
+        "executed_at": "2026-07-29T09:00:00+08:00",
+        "language": "TypeScript, SQL, JavaScript",
+        "tables_used": [
+          "src/components/CalendarView.tsx",
+          "src/lib/repo/planner.ts",
+          "src/lib/migrations.ts",
+          "src/app/actions/planner.ts",
+          "public/sw.js"
+        ]
+      }
+    },
+    {
+      "id": "apple_integration_evidence",
+      "label": "Apple EventKit、CalDAV、账户授权与 Web Push 官方资料",
+      "query": {
+        "engine": "SQLite",
+        "sql": "WITH routes(order_no, route, coverage, feasibility, cost, decision) AS (VALUES (1, 'Ascend 提供 CalDAV 账户', 'Ascend 事件与任务进入 Apple Calendar / Reminders，支持系统应用双向操作', '高', '中高', '推荐主线；先做基础 VEVENT/VTODO 与增量同步'), (2, 'Swift 原生 EventKit 客户端', '读取和写入设备上获授权的 iCloud、Exchange、本机及其他账户', '高', '高', '作为第二阶段；用于导入现有数据与系统级体验'), (3, '后端直连 iCloud CalDAV', '服务端持续同步用户 iCloud Calendar；Reminders 高级字段覆盖待实测', '中低', '高', '限技术验证；等待公开账户授权接入规则'), (4, 'ICS / webcal 订阅', 'Ascend 日程以只读订阅显示在 Apple Calendar', '很高', '低', '适合快速预览；范围为只读日程')) SELECT order_no AS 'order', route, coverage, feasibility, cost, decision FROM routes ORDER BY order_no",
+        "description": "核对原生 EventKit 权限、Apple 系统对 CalDAV 账户的支持、iCloud 第三方授权与 Web Push 能力。",
+        "executed_at": "2026-07-29T09:30:00+08:00",
+        "language": "Apple Developer Documentation and Apple Support",
+        "tables_used": [
+          "https://developer.apple.com/documentation/eventkit/accessing-the-event-store",
+          "https://developer.apple.com/documentation/EventKit/accessing-calendar-using-eventkit-and-eventkitui",
+          "https://support.apple.com/guide/iphone/add-or-remove-accounts-iph8739025dd/26/ios/26",
+          "https://support.apple.com/en-ca/guide/iphone/-ipha0d932e96/ios",
+          "https://support.apple.com/en-us/121539",
+          "https://support.apple.com/en-us/102654",
+          "https://developer.apple.com/documentation/usernotifications/sending-web-push-notifications-in-web-apps-and-browsers"
+        ]
+      }
+    },
+    {
+      "id": "apple_product_features",
+      "label": "Apple 日历与提醒事项官方功能说明",
+      "query": {
+        "engine": "SQLite",
+        "sql": "WITH mappings(order_no, ascend_object, apple_object, shared_behavior, boundary) AS (VALUES (1, '任务', 'VTODO / EKReminder', '标题、日期/时间、优先级、备注、重复、闹钟、完成状态双向同步', '预计时长保留为 Ascend 计划属性'), (2, '会议与普通日程', 'VEVENT / EKEvent', '开始、结束、全天、时区、地点、重复、提醒双向同步', '邀请与参与者回复进入增强版本'), (3, '考试节点', '全天或定时 VEVENT', '考试日期、名称、关联科目和提醒进入日历', '目标分数作为 Ascend 元数据或描述'), (4, '任务列表', 'VTODO Calendar / Reminder List', '列表名称、颜色与任务归属', '智能列表由 Ascend 查询视图生成'), (5, '日历', 'VEVENT Calendar', '日历名称、颜色、可见性与事件归属', '共享权限与订阅关系进入增强版本')) SELECT order_no AS 'order', ascend_object AS ascend, apple_object AS apple, shared_behavior, boundary FROM mappings ORDER BY order_no",
+        "description": "核对 Apple Calendar 与 Reminders 的联动方式、事件字段、提醒事项细节和账户能力边界。",
+        "executed_at": "2026-07-29T09:40:00+08:00",
+        "language": "Apple Developer Documentation and Apple Support",
+        "tables_used": [
+          "https://support.apple.com/en-gb/guide/iphone/iph14f1d32a5/ios",
+          "https://support.apple.com/en-gb/guide/iphone/iph3d110f84/ios",
+          "https://support.apple.com/en-gb/guide/iphone/iphec7a1de82/ios",
+          "https://developer.apple.com/documentation/eventkit/ekevent",
+          "https://developer.apple.com/documentation/eventkit/ekreminder",
+          "https://developer.apple.com/documentation/eventkit/ekcalendaritem",
+          "https://developer.apple.com/documentation/eventkit/creating-a-recurring-event"
+        ]
+      }
+    },
+    {
+      "id": "engineering_estimate",
+      "label": "基于当前代码边界与目标协议范围的工程估算",
+      "query": {
+        "engine": "SQLite",
+        "sql": "WITH estimates(phase, scope, low_weeks, high_weeks) AS (VALUES ('0 协议尖峰', 'Apple 真机 CalDAV 往返验证', 2, 2), ('1 产品内核', '任务、事件、列表、日历、重复与提醒', 6, 8), ('2 双向账户', '生产 CalDAV、冲突、审计与 Web Push', 4, 8), ('3 原生增强', 'Swift EventKit、选择性同步与 App Store', 6, 10)) SELECT phase, scope, low_weeks, high_weeks, (low_weeks + high_weeks) / 2.0 AS midpoint_weeks FROM estimates ORDER BY phase",
+        "description": "按一名熟悉当前代码库、CalDAV/iCalendar 和 Swift 的全职工程师估算；范围包含实现、自动化测试和 Apple 真机验证。",
+        "executed_at": "2026-07-29T10:00:00+08:00",
+        "language": "SQL",
+        "filters": [
+          "包含核心 CRUD、迁移、同步可靠性与测试",
+          "共享邀请、附件、Siri、Widget 和复杂协作位于增强范围"
+        ],
+        "metric_definitions": [
+          "下界与上界为工程判断区间；中点 = (下界 + 上界) / 2，用于比较阶段相对投入。"
+        ],
+        "tables_used": [
+          "docs/agent-development-guide.md",
+          "src/components/CalendarView.tsx",
+          "src/lib/repo/planner.ts",
+          "src/lib/migrations.ts",
+          "https://developer.apple.com/documentation/eventkit",
+          "https://support.apple.com/guide/iphone/add-or-remove-accounts-iph8739025dd/26/ios/26"
+        ]
+      }
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildWorkspaceExport, WORKSPACE_EXPORT_SCHEMA, WORKSPACE_EXPORT_SCHEMA_VERSION } from "./export";
 import { createMockExam } from "./mock-exams";
-import { addNote, addTask } from "./planner";
+import { addNote, addTask, toggleTask } from "./planner";
 import { createMistake, createStudySession } from "./reviews";
 import { saveDailyReviewLimit } from "./settings";
 import { createTestDb, createTestWorkspace, seedSubjectWithChapter } from "./testing";
@@ -13,7 +13,7 @@ function seedWorkspaceData(db: ReturnType<typeof createTestDb>, workspaceId: str
   seedSubjectWithChapter(db, scope);
   addTask(db, scope, { day: "2026-07-17", title: "刷矩阵真题", subjectCode: "M1", priority: 1 });
   const done = addTask(db, scope, { day: "2026-07-17", title: "复盘错题" });
-  db.prepare("UPDATE day_tasks SET done = 1 WHERE workspace_id = ? AND id = ?").run(workspaceId, done.id);
+  toggleTask(db, scope, { id: done.id, done: true });
   addNote(db, scope, { day: "2026-07-17", content: "今天状态不错" });
   // ensureDay 已建出 2026-07-17 的空行：写入计划内容，另留一个空行日验证过滤。
   db.prepare("UPDATE daily_entries SET plan = '上午线代' WHERE workspace_id = ? AND date = '2026-07-17'").run(workspaceId);
@@ -63,12 +63,16 @@ describe("export repo", () => {
 
     expect(data.schema).toBe(WORKSPACE_EXPORT_SCHEMA);
     expect(data.schema_version).toBe(WORKSPACE_EXPORT_SCHEMA_VERSION);
+    expect(data.planner.schema_version).toBe(3);
+    expect(data.planner).not.toHaveProperty("push_subscriptions");
     expect(data.exported_at).toBe(EXPORTED_AT);
     expect(data.workspace.display_name).toBe("备考空间");
 
     expect(data.settings.dailyReviewLimit).toBe(20);
     expect(data.planner.tasks).toHaveLength(2);
     expect(data.planner.tasks.map((task) => task.title)).toEqual(["刷矩阵真题", "复盘错题"]);
+    expect(data.planner.lists.map((list) => list.name)).toContain("Inbox");
+    expect(data.planner.calendars.map((calendar) => calendar.name)).toEqual(["个人日历", "学习里程碑"]);
     expect(data.planner.notes).toHaveLength(1);
     // ensureDay 造出来的空行不导出，只保留真正写过内容的日子。
     expect(data.planner.daily_entries.map((entry) => entry.date)).toEqual(["2026-07-17"]);

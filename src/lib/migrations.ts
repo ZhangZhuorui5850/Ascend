@@ -2,6 +2,8 @@ import type Database from "better-sqlite3";
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { addMinutesToInstant, localDateTimeToUtc } from "./planner/time";
+import { ensurePlannerDefaults, plannerDefaultId } from "./repo/planner-defaults";
 import { LEGACY_WORKSPACE_ID } from "./repo/workspaces";
 
 type Migration = {
@@ -12,6 +14,7 @@ type Migration = {
 
 type MigrationOptions = {
   uploadRoot?: string;
+  throughVersion?: string;
 };
 
 const migrations: Migration[] = [
@@ -556,7 +559,383 @@ const migrations: Migration[] = [
         ON agent_tokens(token_hash);
     `,
   },
+  {
+    version: "0018_planner_core",
+    run: (database) => {
+      addColumnIfMissing(database, "workspaces", "timezone", "TEXT NOT NULL DEFAULT 'Asia/Shanghai'");
+      addColumnIfMissing(database, "workspaces", "week_start", "INTEGER NOT NULL DEFAULT 1");
+      addColumnIfMissing(database, "workspaces", "hour_cycle", "INTEGER NOT NULL DEFAULT 24");
+      addColumnIfMissing(database, "workspaces", "working_hours_json", "TEXT NOT NULL DEFAULT '{}'");
+      database.exec(`
+        CREATE TABLE task_lists (
+          id TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          color_token TEXT NOT NULL DEFAULT 'summit-blue',
+          icon TEXT NOT NULL DEFAULT 'ListTodo',
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          is_inbox INTEGER NOT NULL DEFAULT 0 CHECK (is_inbox IN (0, 1)),
+          archived_at TEXT,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(workspace_id, name),
+          FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX idx_task_lists_inbox
+          ON task_lists(workspace_id, is_inbox) WHERE is_inbox = 1;
+        CREATE INDEX idx_task_lists_workspace
+          ON task_lists(workspace_id, archived_at, sort_order, id);
+
+        CREATE TABLE planner_tasks (
+          id TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL,
+          list_id TEXT NOT NULL,
+          parent_task_id TEXT,
+          depth INTEGER NOT NULL DEFAULT 0 CHECK (depth BETWEEN 0 AND 3),
+          title TEXT NOT NULL CHECK (length(trim(title)) > 0),
+          notes TEXT NOT NULL DEFAULT '',
+          subject_code TEXT,
+          status TEXT NOT NULL DEFAULT 'open'
+            CHECK (status IN ('open', 'waiting', 'completed', 'canceled')),
+          priority INTEGER NOT NULL DEFAULT 2 CHECK (priority IN (1, 2, 3)),
+          due_date TEXT,
+          due_at TEXT,
+          due_timezone TEXT,
+          scheduled_start_at TEXT,
+          scheduled_end_at TEXT,
+          scheduled_timezone TEXT,
+          scheduled_all_day INTEGER NOT NULL DEFAULT 0 CHECK (scheduled_all_day IN (0, 1)),
+          estimated_minutes INTEGER NOT NULL DEFAULT 30 CHECK (estimated_minutes BETWEEN 5 AND 1440),
+          series_id TEXT,
+          occurrence_key TEXT,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          deleted_at TEXT,
+          completed_at TEXT,
+          canceled_at TEXT,
+          version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
+          legacy_day_task_id INTEGER,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CHECK (due_date IS NULL OR due_at IS NULL),
+          CHECK ((due_at IS NULL AND due_timezone IS NULL) OR (due_at IS NOT NULL AND due_timezone IS NOT NULL)),
+          CHECK (
+            (scheduled_start_at IS NULL AND scheduled_end_at IS NULL AND scheduled_timezone IS NULL)
+            OR
+            (scheduled_start_at IS NOT NULL AND scheduled_end_at IS NOT NULL
+             AND scheduled_timezone IS NOT NULL AND scheduled_end_at > scheduled_start_at)
+          ),
+          CHECK (
+            (status = 'completed' AND completed_at IS NOT NULL)
+            OR (status != 'completed' AND completed_at IS NULL)
+          ),
+          CHECK (
+            (status = 'canceled' AND canceled_at IS NOT NULL)
+            OR (status != 'canceled' AND canceled_at IS NULL)
+          ),
+          UNIQUE(workspace_id, legacy_day_task_id),
+          UNIQUE(workspace_id, series_id, occurrence_key),
+          FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+          FOREIGN KEY (list_id) REFERENCES task_lists(id) ON DELETE RESTRICT,
+          FOREIGN KEY (parent_task_id) REFERENCES planner_tasks(id) ON DELETE RESTRICT
+        );
+        CREATE INDEX idx_planner_tasks_workspace_list
+          ON planner_tasks(workspace_id, list_id, deleted_at, status, sort_order, id);
+        CREATE INDEX idx_planner_tasks_due
+          ON planner_tasks(workspace_id, deleted_at, status, due_date, due_at, id);
+        CREATE INDEX idx_planner_tasks_schedule
+          ON planner_tasks(workspace_id, deleted_at, scheduled_start_at, scheduled_end_at, id);
+        CREATE INDEX idx_planner_tasks_parent
+          ON planner_tasks(workspace_id, parent_task_id, sort_order, id);
+
+        CREATE TABLE planner_calendars (
+          id TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          color_token TEXT NOT NULL DEFAULT 'summit-blue',
+          is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
+          visibility TEXT NOT NULL DEFAULT 'visible'
+            CHECK (visibility IN ('visible', 'hidden')),
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          archived_at TEXT,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(workspace_id, name),
+          FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX idx_planner_calendars_default
+          ON planner_calendars(workspace_id, is_default) WHERE is_default = 1;
+        CREATE INDEX idx_planner_calendars_workspace
+          ON planner_calendars(workspace_id, archived_at, sort_order, id);
+
+        CREATE TABLE calendar_events (
+          id TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL,
+          calendar_id TEXT NOT NULL,
+          title TEXT NOT NULL CHECK (length(trim(title)) > 0),
+          description TEXT NOT NULL DEFAULT '',
+          location TEXT NOT NULL DEFAULT '',
+          url TEXT NOT NULL DEFAULT '',
+          subject_code TEXT,
+          kind TEXT NOT NULL DEFAULT 'event'
+            CHECK (kind IN ('event', 'class', 'exam', 'meeting', 'focus', 'milestone')),
+          busy_status TEXT NOT NULL DEFAULT 'busy' CHECK (busy_status IN ('busy', 'free')),
+          start_at TEXT,
+          end_at TEXT,
+          timezone TEXT,
+          start_date TEXT,
+          end_date_exclusive TEXT,
+          all_day INTEGER NOT NULL DEFAULT 0 CHECK (all_day IN (0, 1)),
+          recurrence_rule TEXT,
+          recurrence_until TEXT,
+          recurring_event_id TEXT,
+          original_start_at TEXT,
+          exception_kind TEXT CHECK (exception_kind IN ('override', 'cancel')),
+          migration_key TEXT,
+          deleted_at TEXT,
+          version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CHECK (
+            (all_day = 1 AND start_date IS NOT NULL AND end_date_exclusive IS NOT NULL
+             AND end_date_exclusive > start_date AND start_at IS NULL AND end_at IS NULL AND timezone IS NULL)
+            OR
+            (all_day = 0 AND start_at IS NOT NULL AND end_at IS NOT NULL
+             AND end_at > start_at AND timezone IS NOT NULL
+             AND start_date IS NULL AND end_date_exclusive IS NULL)
+          ),
+          CHECK (
+            (recurring_event_id IS NULL AND original_start_at IS NULL AND exception_kind IS NULL)
+            OR
+            (recurring_event_id IS NOT NULL AND original_start_at IS NOT NULL AND exception_kind IS NOT NULL)
+          ),
+          UNIQUE(workspace_id, recurring_event_id, original_start_at),
+          UNIQUE(workspace_id, migration_key),
+          FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+          FOREIGN KEY (calendar_id) REFERENCES planner_calendars(id) ON DELETE RESTRICT,
+          FOREIGN KEY (recurring_event_id) REFERENCES calendar_events(id) ON DELETE CASCADE
+        );
+        CREATE INDEX idx_calendar_events_timed_range
+          ON calendar_events(workspace_id, deleted_at, start_at, end_at, calendar_id);
+        CREATE INDEX idx_calendar_events_all_day_range
+          ON calendar_events(workspace_id, deleted_at, start_date, end_date_exclusive, calendar_id);
+        CREATE INDEX idx_calendar_events_recurring
+          ON calendar_events(workspace_id, recurring_event_id, original_start_at);
+
+        CREATE TABLE planner_labels (
+          id TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          color_token TEXT NOT NULL DEFAULT 'summit-blue',
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(workspace_id, name),
+          FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+        );
+        CREATE INDEX idx_planner_labels_workspace
+          ON planner_labels(workspace_id, name, id);
+
+        CREATE TABLE planner_task_labels (
+          workspace_id TEXT NOT NULL,
+          task_id TEXT NOT NULL,
+          label_id TEXT NOT NULL,
+          PRIMARY KEY (workspace_id, task_id, label_id),
+          FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+          FOREIGN KEY (task_id) REFERENCES planner_tasks(id) ON DELETE CASCADE,
+          FOREIGN KEY (label_id) REFERENCES planner_labels(id) ON DELETE CASCADE
+        );
+        CREATE TABLE planner_event_labels (
+          workspace_id TEXT NOT NULL,
+          event_id TEXT NOT NULL,
+          label_id TEXT NOT NULL,
+          PRIMARY KEY (workspace_id, event_id, label_id),
+          FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+          FOREIGN KEY (event_id) REFERENCES calendar_events(id) ON DELETE CASCADE,
+          FOREIGN KEY (label_id) REFERENCES planner_labels(id) ON DELETE CASCADE
+        );
+      `);
+
+      const workspaces = database.prepare("SELECT id FROM workspaces ORDER BY id").all() as Array<{ id: string }>;
+      for (const workspace of workspaces) ensurePlannerDefaults(database, { workspaceId: workspace.id });
+      migrateLegacyDayTasks(database);
+      database.exec(`
+        CREATE TRIGGER day_tasks_planner_v2_readonly_insert
+        BEFORE INSERT ON day_tasks
+        BEGIN
+          SELECT RAISE(ABORT, 'day_tasks is read-only after Planner v2 migration');
+        END;
+        CREATE TRIGGER day_tasks_planner_v2_readonly_update
+        BEFORE UPDATE ON day_tasks
+        BEGIN
+          SELECT RAISE(ABORT, 'day_tasks is read-only after Planner v2 migration');
+        END;
+        CREATE TRIGGER day_tasks_planner_v2_readonly_delete
+        BEFORE DELETE ON day_tasks
+        BEGIN
+          SELECT RAISE(ABORT, 'day_tasks is read-only after Planner v2 migration');
+        END;
+      `);
+    },
+  },
+  {
+    version: "0019_planner_recurrence_reminders",
+    sql: `
+      CREATE TABLE task_series (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        rrule TEXT NOT NULL,
+        timezone TEXT NOT NULL,
+        generation_mode TEXT NOT NULL
+          CHECK (generation_mode IN ('fixed_schedule', 'after_completion')),
+        template_json TEXT NOT NULL,
+        next_occurrence_at TEXT,
+        active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+        generated_count INTEGER NOT NULL DEFAULT 0 CHECK (generated_count >= 0),
+        idempotency_key TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(workspace_id, idempotency_key),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+      );
+      CREATE INDEX idx_task_series_due
+        ON task_series(workspace_id, active, next_occurrence_at, id);
+
+      CREATE TABLE planner_reminders (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        entity_type TEXT NOT NULL CHECK (entity_type IN ('task', 'event')),
+        entity_id TEXT NOT NULL,
+        anchor TEXT NOT NULL
+          CHECK (anchor IN ('due', 'scheduled_start', 'event_start', 'exact')),
+        offset_minutes INTEGER,
+        exact_at TEXT,
+        channel TEXT NOT NULL CHECK (channel IN ('in_app', 'web_push')),
+        status TEXT NOT NULL DEFAULT 'pending'
+          CHECK (status IN ('pending', 'leased', 'sent', 'failed', 'canceled')),
+        next_attempt_at TEXT NOT NULL,
+        attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+        leased_until TEXT,
+        lease_owner TEXT,
+        sent_at TEXT,
+        last_error TEXT NOT NULL DEFAULT '',
+        idempotency_key TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CHECK (
+          (anchor = 'exact' AND exact_at IS NOT NULL)
+          OR (anchor != 'exact' AND offset_minutes IS NOT NULL)
+        ),
+        UNIQUE(workspace_id, idempotency_key),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+      );
+      CREATE INDEX idx_planner_reminders_claim
+        ON planner_reminders(status, next_attempt_at, leased_until, id);
+      CREATE INDEX idx_planner_reminders_entity
+        ON planner_reminders(workspace_id, entity_type, entity_id, status, id);
+
+      CREATE TABLE planner_notifications (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        reminder_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL DEFAULT '',
+        target_path TEXT NOT NULL,
+        read_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(workspace_id, reminder_id),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+        FOREIGN KEY (reminder_id) REFERENCES planner_reminders(id) ON DELETE CASCADE
+      );
+      CREATE INDEX idx_planner_notifications_unread
+        ON planner_notifications(workspace_id, read_at, created_at DESC);
+
+      CREATE TABLE push_subscriptions (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        endpoint_hash TEXT NOT NULL,
+        endpoint_ciphertext TEXT NOT NULL,
+        p256dh_ciphertext TEXT NOT NULL,
+        auth_ciphertext TEXT NOT NULL,
+        device_name TEXT NOT NULL DEFAULT '',
+        last_success_at TEXT,
+        expired_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(workspace_id, endpoint_hash),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      CREATE INDEX idx_push_subscriptions_active
+        ON push_subscriptions(workspace_id, expired_at, id);
+    `,
+  },
 ];
+
+function migrateLegacyDayTasks(database: Database.Database): void {
+  if (!tableExists(database, "day_tasks") || !tableExists(database, "planner_tasks")) return;
+  const legacyTasks = database.prepare(`
+    SELECT d.workspace_id, d.id, d.day, d.title, d.subject_code, d.done, d.sort_order,
+           d.created_at, d.done_at, d.priority, d.estimated_minutes, d.scheduled_start, d.notes,
+           COALESCE(w.timezone, 'Asia/Shanghai') AS timezone
+    FROM day_tasks d
+    JOIN workspaces w ON w.id = d.workspace_id
+    LEFT JOIN planner_tasks p
+      ON p.workspace_id = d.workspace_id AND p.legacy_day_task_id = d.id
+    WHERE p.id IS NULL
+    ORDER BY d.workspace_id, d.id
+  `).all() as Array<{
+    workspace_id: string;
+    id: number;
+    day: string;
+    title: string;
+    subject_code: string | null;
+    done: number;
+    sort_order: number;
+    created_at: string;
+    done_at: string | null;
+    priority: number;
+    estimated_minutes: number;
+    scheduled_start: string | null;
+    notes: string;
+    timezone: string;
+  }>;
+  const insert = database.prepare(`
+    INSERT OR IGNORE INTO planner_tasks
+      (id, workspace_id, list_id, title, notes, subject_code, status, priority,
+       due_date, scheduled_start_at, scheduled_end_at, scheduled_timezone,
+       estimated_minutes, sort_order, completed_at, version, legacy_day_task_id,
+       created_at, updated_at)
+    VALUES
+      (@plannerId, @workspaceId, @listId, @title, @notes, @subjectCode, @status, @priority,
+       @dueDate, @scheduledStartAt, @scheduledEndAt, @scheduledTimezone,
+       @estimatedMinutes, @sortOrder, @completedAt, 1, @legacyId,
+       @createdAt, @updatedAt)
+  `);
+  for (const task of legacyTasks) {
+    const scheduledStartAt = task.scheduled_start
+      ? localDateTimeToUtc({ date: task.day, time: task.scheduled_start, timeZone: task.timezone })
+      : null;
+    insert.run({
+      plannerId: `${task.workspace_id}:planner:legacy-day-task:${task.id}`,
+      workspaceId: task.workspace_id,
+      listId: plannerDefaultId(task.workspace_id, "inbox"),
+      title: task.title,
+      notes: task.notes,
+      subjectCode: task.subject_code,
+      status: task.done ? "completed" : "open",
+      priority: task.priority,
+      dueDate: scheduledStartAt ? null : task.day,
+      scheduledStartAt,
+      scheduledEndAt: scheduledStartAt ? addMinutesToInstant(scheduledStartAt, task.estimated_minutes) : null,
+      scheduledTimezone: scheduledStartAt ? task.timezone : null,
+      estimatedMinutes: task.estimated_minutes,
+      sortOrder: task.sort_order,
+      completedAt: task.done ? (task.done_at ?? task.created_at) : null,
+      legacyId: task.id,
+      createdAt: task.created_at,
+      updatedAt: task.done_at ?? task.created_at,
+    });
+  }
+}
 
 function addColumnIfMissing(database: Database.Database, table: string, column: string, definition: string): void {
   const columns = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
@@ -736,6 +1115,7 @@ export function runMigrations(database: Database.Database, options: MigrationOpt
   const insert = database.prepare("INSERT INTO schema_migrations (version, checksum) VALUES (?, ?)");
 
   for (const migration of migrations) {
+    if (options.throughVersion && migration.version > options.throughVersion) break;
     const expectedChecksum = checksum(migration.sql ?? migration.version);
     const appliedChecksum = applied.get(migration.version);
     if (appliedChecksum) {

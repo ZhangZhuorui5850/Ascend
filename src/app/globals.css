@@ -304,6 +304,11 @@ p {
   text-decoration: underline;
 }
 
+body:has([data-planner-workspace="tasks"]) .icpFooter,
+body:has([data-planner-workspace="calendar"]) .icpFooter {
+  display: none;
+}
+
 /* 收纳面板：宽屏为常驻右栏，窄屏为抽屉 */
 .capturePanel {
   position: sticky;
@@ -3082,81 +3087,6 @@ body[data-dragging] .mapCard::after {
   font-variant-numeric: tabular-nums;
 }
 
-/* ---------- 10. 日历 ---------- */
-
-.calendarShell {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 14px;
-}
-
-.calendarShell .fc {
-  --fc-border-color: var(--line);
-  --fc-today-bg-color: var(--accent-soft);
-  --fc-page-bg-color: var(--surface);
-  font-size: 13px;
-}
-
-.calendarShell .fc .fc-toolbar-title {
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.calendarShell .fc .fc-button {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  color: var(--muted);
-  box-shadow: none;
-  padding: 5px 10px;
-  font-size: 12.5px;
-}
-
-.calendarShell .fc .fc-button:hover,
-.calendarShell .fc .fc-button-active {
-  background: var(--accent-soft) !important;
-  border-color: var(--accent) !important;
-  color: var(--accent) !important;
-}
-
-.calendarShell .fc .fc-daygrid-day:hover {
-  background: var(--surface-soft);
-  cursor: pointer;
-}
-
-.calendarShell .fc-event {
-  border: 0;
-  border-radius: 4px;
-  padding: 1px 5px;
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.eventStudy {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.eventAsset {
-  background: var(--surface-soft);
-  color: var(--muted);
-}
-
-.eventReview {
-  background: var(--ok-soft);
-  color: var(--ok);
-}
-
-.eventMistake {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.eventDone {
-  background: var(--warn-soft);
-  color: var(--warn);
-}
-
 /* ---------- 11. 登录页 ---------- */
 
 .loginShell {
@@ -4655,19 +4585,10 @@ kbd {
   }
 }
 
-/* P2 · mobile calendar, library productivity and offline outbox */
-.calendarViewSwitch,
+/* P2 · library productivity and offline outbox */
 .driveViewSwitch { display: flex; justify-content: flex-end; gap: 4px; margin-bottom: 10px; }
-.calendarViewSwitch button,
 .driveViewSwitch button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--quiet); background: var(--surface); }
-.calendarViewSwitch button.active,
 .driveViewSwitch button.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
-.calendarAgenda { display: grid; gap: 8px; }
-.calendarAgenda > button { display: grid; grid-template-columns: 110px 1fr 1.4fr auto; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); text-align: left; }
-.calendarAgenda > button:hover { border-color: var(--accent); }
-.calendarAgenda time { font-family: var(--font-mono); font-weight: 700; }
-.calendarAgenda small { color: var(--quiet); }
-.calendarAgenda b { color: var(--accent); font-size: 12px; }
 .mobileDayNavigator { display: none; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .mobileDayNavigator summary { padding: 12px; font-weight: 700; cursor: pointer; }
 .mobileDayNavigator nav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 12px 12px; }
@@ -4719,11 +4640,6 @@ kbd {
   .dayModule { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
   .dayModule > summary { display: block; padding: 12px 14px; color: var(--ink-soft); font-weight: 700; cursor: pointer; }
   .dayModule > div { padding: 0 6px 6px; }
-  .calendarViewSwitch { justify-content: stretch; }
-  .calendarViewSwitch button { flex: 1; justify-content: center; }
-  .calendarAgenda > button { grid-template-columns: 1fr auto; }
-  .calendarAgenda > button span,
-  .calendarAgenda > button small { grid-column: 1 / -1; }
   .driveBatchBar { bottom: calc(96px + env(safe-area-inset-bottom)); width: calc(100vw - 20px); justify-content: center; flex-wrap: wrap; }
   .driveTable.gridMode { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .driveTable.gridMode .driveRow { min-height: 150px; }
@@ -5909,8 +5825,7 @@ h3,
 .countdownCard,
 .homeStat,
 .homeContext,
-.dayStatusBar,
-.calendarShell {
+.dayStatusBar {
   border-radius: var(--radius-lg);
 }
 
@@ -9568,7 +9483,6 @@ body[data-dragging] .mapTools {
 
   .taskCreate button,
   .quickLogRow button,
-  .calendarViewSwitch button,
   .driveBatchBar button {
     min-height: 44px;
   }

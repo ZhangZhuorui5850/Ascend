@@ -20,6 +20,8 @@ import { getSettings, saveDailyReviewLimit, saveExamCountdowns } from "./setting
 import { getStudyStreak } from "./stats";
 import { createTestDb, createTestWorkspace, seedSubjectWithChapter } from "./testing";
 import { LEGACY_WORKSPACE_ID } from "./workspaces";
+import { ensurePlannerDefaults, plannerDefaultId } from "./planner-defaults";
+import { createPlannerTask } from "./planner-tasks";
 
 const legacyScope = { workspaceId: LEGACY_WORKSPACE_ID };
 
@@ -125,6 +127,20 @@ describe("day tasks", () => {
       estimated_minutes: 60,
     });
     expect(listCalendarTasks(db, legacyScope).map((item) => item.id)).toContain(task.id);
+  });
+
+  it("projects a completely unscheduled Planner task without crashing Calendar sorting", () => {
+    const db = createTestDb();
+    ensurePlannerDefaults(db, legacyScope);
+    createPlannerTask(db, legacyScope, {
+      clientMutationId: "calendar-unscheduled-task",
+      listId: plannerDefaultId(legacyScope.workspaceId, "inbox"),
+      title: "无日期任务",
+    });
+
+    expect(() => listCalendarTasks(db, legacyScope)).not.toThrow();
+    expect(listCalendarTasks(db, legacyScope).find((task) => task.title === "无日期任务")?.day)
+      .toBe("");
   });
 
   it("keeps task positions stable when completion changes", () => {

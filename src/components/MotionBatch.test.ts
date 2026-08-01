@@ -79,6 +79,17 @@ describe("motion batch CSS contracts", () => {
     expect(appShell).not.toContain('exit="summit-page-exit"');
   });
 
+  it("keeps the capture FAB out of both Planner routes and active Planner overlays", () => {
+    expect(appShell).toContain('const isPlannerRoute = pathname.startsWith("/tasks") || pathname.startsWith("/calendar")');
+    expect(appShell).toContain("!captureOpen && !isPlannerRoute");
+    expect(appShell).not.toContain("captureFabPlanner");
+  });
+
+  it("removes the global ICP overlay from both Planner workspaces", () => {
+    expect(globals).toContain('body:has([data-planner-workspace="tasks"]) .icpFooter');
+    expect(globals).toContain('body:has([data-planner-workspace="calendar"]) .icpFooter');
+  });
+
   it("migrates progress motion to transform", () => {
     expect(summit).toMatch(/\.progressTrack span,[\s\S]*transition: transform var\(--motion-quick\)/);
     expect(globals).not.toMatch(/\.progressTrack span\s*\{[^}]*transition:\s*width/s);

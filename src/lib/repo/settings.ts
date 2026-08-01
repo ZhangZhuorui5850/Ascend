@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import type { WorkspaceScope } from "../access-context";
 import { assertDateKey } from "../dates";
+import { syncLegacyExamCountdownEvents } from "./planner-events";
 
 export type ExamCountdown = {
   name: string;
@@ -140,6 +141,7 @@ export function saveExamCountdowns(
     ...(item.subjectCode ? { subjectCode: item.subjectCode } : {}),
     ...(item.targetScore !== undefined ? { targetScore: item.targetScore } : {}),
   }))));
+  syncLegacyExamCountdownEvents(db, scope, cleaned);
 }
 
 export function saveDailyReviewLimit(db: Database.Database, scope: WorkspaceScope, limit: number): void {

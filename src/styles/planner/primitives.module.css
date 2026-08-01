@@ -1,0 +1,540 @@
+.backdrop {
+  position: fixed;
+  z-index: var(--planner-z-drawer);
+  inset: 0;
+  background: color-mix(in srgb, var(--surface-inverse) 42%, transparent);
+  opacity: 1;
+  transition: opacity var(--motion-panel) var(--motion-ease-standard);
+}
+
+.backdrop[data-starting-style],
+.backdrop[data-ending-style] {
+  opacity: 0;
+}
+
+.drawerViewport {
+  position: fixed;
+  z-index: calc(var(--planner-z-drawer) + 1);
+  inset: 0;
+  display: flex;
+  pointer-events: none;
+}
+
+.drawerPopup {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  max-height: 100%;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  background: var(--planner-surface-raised);
+  box-shadow: var(--planner-shadow-overlay);
+  color: var(--ink);
+  outline: 0;
+  pointer-events: auto;
+}
+
+.drawerPopup[data-planner-surface="drawer"] {
+  width: min(420px, calc(100vw - var(--space-8)));
+  height: 100%;
+  margin-left: auto;
+  transform: translateX(var(--drawer-swipe-movement-x));
+}
+
+.drawerPopup[data-planner-surface="sheet"] {
+  width: 100%;
+  max-height: calc(100dvh - var(--space-4));
+  margin-top: auto;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  transform: translateY(calc(var(--drawer-snap-point-offset) + var(--drawer-swipe-movement-y)));
+}
+
+.sheetDragArea {
+  display: grid;
+  min-height: 28px;
+  place-items: center;
+  touch-action: none;
+}
+
+.sheetHandle {
+  width: 42px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+
+.drawerHeader,
+.popoverHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border-bottom: 1px solid var(--line);
+  padding: var(--space-4);
+}
+
+.drawerContent {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-4);
+  padding-bottom: calc(
+    var(--space-6) + var(--drawer-keyboard-inset, 0px) + env(safe-area-inset-bottom)
+  );
+}
+
+.overlayTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  font-weight: 750;
+}
+
+.overlayDescription {
+  margin: var(--space-1) 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.iconButton {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  place-items: center;
+}
+
+.iconButton:hover {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.iconButton:focus-visible,
+.segmentedControl button:focus-visible,
+.collapsibleTrigger:focus-visible,
+.toastAction:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.popoverPositioner {
+  z-index: var(--planner-z-popover);
+  max-width: calc(100vw - var(--space-6));
+}
+
+.popoverPopup {
+  width: min(360px, calc(100vw - var(--space-6)));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--planner-surface-raised);
+  box-shadow: var(--planner-shadow-overlay);
+  color: var(--ink);
+  outline: 0;
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity var(--motion-panel) var(--motion-ease-standard),
+    transform var(--motion-panel) var(--motion-ease-standard);
+}
+
+.popoverPopup[data-starting-style],
+.popoverPopup[data-ending-style] {
+  opacity: 0;
+  transform: translateY(var(--space-2)) scale(0.98);
+}
+
+.popoverContent {
+  max-height: min(70dvh, 560px);
+  overflow: auto;
+  padding: var(--space-4);
+}
+
+.collapsible {
+  border-top: 1px solid var(--line);
+}
+
+.collapsibleTrigger {
+  display: flex;
+  width: 100%;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.collapsibleTrigger > span {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.collapsibleTrigger small {
+  color: var(--muted);
+}
+
+.collapsibleTrigger svg {
+  transition: transform var(--motion-base) var(--motion-ease-standard);
+}
+
+.collapsibleTrigger[data-panel-open] svg {
+  transform: rotate(180deg);
+}
+
+.collapsiblePanel {
+  height: var(--collapsible-panel-height);
+  overflow: hidden;
+  transition:
+    height var(--motion-panel) var(--motion-ease-standard),
+    opacity var(--motion-fast) var(--motion-ease-standard);
+}
+
+.collapsiblePanel[data-starting-style],
+.collapsiblePanel[data-ending-style] {
+  height: 0;
+  opacity: 0;
+}
+
+.collapsibleContent {
+  padding: 0 0 var(--space-4);
+}
+
+.segmentedControl {
+  display: flex;
+  min-width: 0;
+  gap: var(--space-1);
+  overflow-x: auto;
+  padding: var(--space-1);
+  scrollbar-width: none;
+}
+
+.segmentedControl::-webkit-scrollbar {
+  display: none;
+}
+
+.segmentedControl button {
+  display: inline-flex;
+  min-height: 36px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0 var(--space-3);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.segmentedControl .segmentActive {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.segmentedControl small {
+  font-family: var(--font-num);
+}
+
+.statusIndicator {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.statusIndicator[data-status="saved"] {
+  color: var(--ok);
+}
+
+.statusIndicator[data-status="error"],
+.statusIndicator[data-status="conflict"] {
+  color: var(--danger);
+}
+
+.statusIndicator[data-status="optimistic"] svg,
+.statusIndicator[data-status="pending"] svg {
+  animation: planner-spin var(--motion-page) linear infinite;
+}
+
+.toastViewport {
+  position: fixed;
+  z-index: var(--planner-z-toast);
+  right: max(var(--space-4), env(safe-area-inset-right));
+  bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+  display: grid;
+  width: min(380px, calc(100vw - var(--space-6)));
+  gap: var(--space-2);
+  outline: 0;
+}
+
+.toast {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--planner-surface-raised);
+  box-shadow: var(--planner-shadow-overlay);
+  color: var(--ink);
+  transition:
+    opacity var(--motion-panel) var(--motion-ease-standard),
+    transform var(--motion-panel) var(--motion-ease-standard);
+}
+
+.toast[data-starting-style],
+.toast[data-ending-style] {
+  opacity: 0;
+  transform: translateY(var(--space-3));
+}
+
+.toast[data-kind="error"],
+.toast[data-kind="conflict"] {
+  border-color: var(--danger);
+}
+
+.toastContent {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.toastTitle {
+  margin: 0 0 var(--space-1);
+  font-size: 0.85rem;
+}
+
+.toastDescription {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.toastAction {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: var(--space-1);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-2);
+  background: var(--accent-soft);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.dialogBackdrop {
+  position: fixed;
+  z-index: var(--planner-z-dialog);
+  inset: 0;
+  background: color-mix(in srgb, var(--surface-inverse) 48%, transparent);
+  opacity: 1;
+  transition: opacity var(--motion-panel) var(--motion-ease-standard);
+}
+
+.dialogViewport {
+  position: fixed;
+  z-index: calc(var(--planner-z-dialog) + 1);
+  inset: 0;
+  display: grid;
+  padding: var(--space-4);
+  place-items: center;
+}
+
+.dialogPopup {
+  width: min(440px, 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--planner-surface-raised);
+  box-shadow: var(--planner-shadow-overlay);
+  color: var(--ink);
+  outline: 0;
+  padding: var(--space-5);
+  transition:
+    opacity var(--motion-panel) var(--motion-ease-standard),
+    transform var(--motion-panel) var(--motion-ease-standard);
+}
+
+.dialogBackdrop[data-starting-style],
+.dialogBackdrop[data-ending-style],
+.dialogPopup[data-starting-style],
+.dialogPopup[data-ending-style] {
+  opacity: 0;
+}
+
+.dialogPopup[data-starting-style],
+.dialogPopup[data-ending-style] {
+  transform: translateY(var(--space-2)) scale(0.98);
+}
+
+.dialogHeader {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-3);
+}
+
+.dialogIcon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  place-items: center;
+}
+
+.dialogIcon[data-danger="true"] {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+.dialogActions button {
+  min-height: 38px;
+}
+
+/* Shared Planner form skin. Keep it here: Tasks and Calendar deliberately share it. */
+.field {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  font-weight: 620;
+}
+
+.fieldControl,
+.field input,
+.field textarea,
+.field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid var(--planner-field-line);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  appearance: none;
+  background: var(--planner-field);
+  color: var(--ink);
+  font: inherit;
+}
+
+.propertyRow input,
+.propertyRow select {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  appearance: none;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+}
+
+.field textarea { min-height: 112px; resize: vertical; }
+
+.fieldControl:hover,
+.field input:hover,
+.field textarea:hover,
+.field select:hover,
+.propertyRow input:hover,
+.propertyRow select:hover,
+.dateTimeField:hover { border-color: var(--planner-field-line); background: var(--planner-field-hover); }
+
+.fieldControl:focus-visible,
+.field input:focus-visible,
+.field textarea:focus-visible,
+.field select:focus-visible,
+.propertyRow input:focus-visible,
+.propertyRow select:focus-visible { border-color: var(--planner-field-line); outline: 2px solid var(--accent); outline-offset: 1px; background: var(--planner-field-focus); }
+
+.dateTimeField:has(input:focus-visible) {
+  border-color: var(--planner-field-line);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  background: var(--planner-field-focus);
+}
+
+.propertyRow {
+  display: grid;
+  grid-template-columns: minmax(72px, 0.4fr) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 46px;
+  border-bottom: 1px solid var(--planner-row-divider);
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.propertyRow > span:last-child { min-width: 0; }
+
+.dateTimeField {
+  position: relative;
+  display: grid;
+  min-height: 40px;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+}
+
+.dateTimeField input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.dateTimeField output { padding: 8px 10px; color: var(--ink); font-family: var(--font-num); font-size: 0.82rem; }
+
+@keyframes planner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1179px) {
+  .iconButton {
+    width: 44px;
+    height: 44px;
+  }
+
+  .drawerPopup .drawerContent button,
+  .drawerPopup .drawerContent input:not([type="checkbox"]):not([type="radio"]),
+  .drawerPopup .drawerContent select,
+  .drawerPopup .drawerContent textarea,
+  .dialogActions button,
+  .segmentedControl button {
+    min-width: 44px;
+    min-height: 46px;
+  }
+}
+
+@media (max-width: 760px) {
+  .toastViewport {
+    right: var(--space-3);
+    bottom: calc(var(--mobile-nav-height) + var(--space-3) + env(safe-area-inset-bottom));
+    width: calc(100vw - var(--space-6));
+  }
+}

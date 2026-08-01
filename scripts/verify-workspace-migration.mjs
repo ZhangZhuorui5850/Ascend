@@ -20,6 +20,9 @@ try {
     "assets", "folders", "app_settings", "drafts", "tags", "devices", "entity_changes",
     "conflicts", "blobs", "upload_sessions", "asset_tags", "asset_knowledge_tags",
     "asset_links", "study_sessions", "review_events", "mistakes", "day_tasks", "day_notes",
+    "task_lists", "planner_tasks", "planner_calendars", "calendar_events", "planner_labels",
+    "planner_task_labels", "planner_event_labels",
+    "task_series", "planner_reminders", "planner_notifications", "push_subscriptions",
   ];
 
   for (const table of scopedTables) {
@@ -74,6 +77,16 @@ try {
     SELECT COUNT(*) AS count FROM asset_links l
     LEFT JOIN knowledge_points p ON p.workspace_id = l.workspace_id AND p.id = l.knowledge_point_id
     WHERE l.knowledge_point_id IS NOT NULL AND p.id IS NULL
+  `);
+  runRelationCheck("planner_task_list", `
+    SELECT COUNT(*) AS count FROM planner_tasks t
+    LEFT JOIN task_lists l ON l.workspace_id = t.workspace_id AND l.id = t.list_id
+    WHERE l.id IS NULL
+  `);
+  runRelationCheck("planner_event_calendar", `
+    SELECT COUNT(*) AS count FROM calendar_events e
+    LEFT JOIN planner_calendars c ON c.workspace_id = e.workspace_id AND c.id = e.calendar_id
+    WHERE c.id IS NULL
   `);
 
   let missingFiles = 0;
