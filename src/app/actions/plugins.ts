@@ -16,6 +16,9 @@ function revalidatePluginSurfaces(): void {
   revalidatePath("/", "layout");
   revalidatePath("/extensions");
   revalidatePath("/settings");
+  revalidatePath("/kinetic", "layout");
+  revalidatePath("/kinetic/extensions");
+  revalidatePath("/kinetic/settings");
 }
 
 export async function setPluginEnabledAction(input: {
@@ -59,6 +62,7 @@ export async function requestAlgorithmPilotAction(input: {
     const enrollment = requestAlgorithmPilot(getDb(), access, input);
     revalidatePluginSurfaces();
     revalidatePath("/practice/algorithms");
+    revalidatePath("/kinetic/practice/algorithms");
     return { ok: true, enrollment };
   } catch (error) {
     return actionFailure("plugins", error, "算法评测试点申请失败");

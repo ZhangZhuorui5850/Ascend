@@ -18,6 +18,7 @@ import type { ActionResult } from "./day";
 function revalidateProfileEverywhere() {
   // 昵称/头像出现在侧栏、顶栏和账户菜单，整个布局都要刷新
   revalidatePath("/", "layout");
+  revalidatePath("/kinetic", "layout");
 }
 
 export async function updateProfileAction(input: { displayName: string }): Promise<ActionResult> {
@@ -77,6 +78,7 @@ export async function changeAccountPasswordAction(input: {
     const tokens = mergeAccountTokens(session.token, await readSessionsCookie());
     setSessionCookies(cookieStore, session.token, tokens, session.expiresAt);
     revalidatePath("/settings");
+    revalidatePath("/kinetic/settings");
     return { ok: true };
   } catch (error) {
     return actionFailure("profile", error, "密码修改失败");

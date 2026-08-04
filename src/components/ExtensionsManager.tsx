@@ -32,9 +32,11 @@ const PERMISSION_LABELS: Record<string, string> = {
 export function ExtensionsManager({
   initial,
   compact = false,
+  routePrefix = "",
 }: {
   initial: WorkspacePlugin[];
   compact?: boolean;
+  routePrefix?: string;
 }) {
   const { notify } = useFeedback();
   const [plugins, setPlugins] = useState(initial);
@@ -146,7 +148,7 @@ export function ExtensionsManager({
                   </button>
                 </div>
                 {plugin.enabled ? (
-                  <Link href={plugin.manifest.route}>
+                  <Link href={`${routePrefix}${plugin.manifest.route}`}>
                     打开扩展 <ArrowRight size={14} />
                   </Link>
                 ) : (
