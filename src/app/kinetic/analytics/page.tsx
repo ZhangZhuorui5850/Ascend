@@ -1,3 +1,36 @@
-import AnalyticsPage from "@/app/analytics/page";
-export const dynamic = "force-dynamic";
-export default AnalyticsPage;
+import { Activity, ArrowUpRight, Brain, Clock3, Crosshair, Gauge, Radar, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { CreateTrainingTaskButton } from "@/components/CreateTrainingTaskButton";
+import { RichText } from "@/components/RichText";
+import { todayKey } from "@/lib/dates";
+import { getDb } from "@/lib/db";
+import { requirePageWorkspace } from "@/lib/page-auth";
+import { getPluginAnalyticsSections } from "@/lib/plugins/runtime";
+import { getMockExamDashboard } from "@/lib/repo/mock-exams";
+import { getLearningAnalytics } from "@/lib/repo/stats";
+import styles from "@/components/kinetic/KineticSignals.module.css";
+
+export const dynamic="force-dynamic";
+
+export default async function KineticAnalyticsPage(){
+  const access=await requirePageWorkspace("/kinetic/analytics"); const db=getDb(); const today=todayKey(); const analytics=getLearningAnalytics(db,access,today); const mock=getMockExamDashboard(db,access); const plugins=getPluginAnalyticsSections(db,access,today);
+  const outcomes=analytics.outcomes; const reviewTotal=analytics.scoreDist.reduce((sum,item)=>sum+item,0); const maxDaily=Math.max(1,...analytics.dailyMinutes.map((item)=>item.minutes)); const maxSubject=Math.max(1,...analytics.subjectMinutes.map((item)=>item.minutes)); const backlog=analytics.backlog.dueReviews+analytics.backlog.dueMistakes;
+  const signals=[
+    {label:"7D DELAYED RECALL",value:rate(outcomes.delayedRecall7.rate),samples:outcomes.delayedRecall7.samples,detail:`成功 ${outcomes.delayedRecall7.successes}/${outcomes.delayedRecall7.samples}`},
+    {label:"30D LONG RETENTION",value:rate(outcomes.delayedRecall30.rate),samples:outcomes.delayedRecall30.samples,detail:`成功 ${outcomes.delayedRecall30.successes}/${outcomes.delayedRecall30.samples}`},
+    {label:"ERROR REATTEMPT",value:rate(outcomes.mistakeReattempt.rate),samples:outcomes.mistakeReattempt.samples,detail:`成功 ${outcomes.mistakeReattempt.successes}/${outcomes.mistakeReattempt.samples}`},
+    {label:"CALIBRATION GAP",value:outcomes.confidenceCalibration.meanAbsoluteGap===null?"—":`${outcomes.confidenceCalibration.meanAbsoluteGap}/3`,samples:outcomes.confidenceCalibration.samples,detail:"信心与核对后结果的平均差"},
+    {label:"BACKLOG P50",value:outcomes.backlogAge.p50Days===null?"—":`${outcomes.backlogAge.p50Days}d`,samples:outcomes.backlogAge.samples,detail:`P90 ${outcomes.backlogAge.p90Days??"—"} 天`},
+    {label:"RETEST COVERAGE",value:rate(outcomes.interventionVerification.rate),samples:outcomes.interventionVerification.eligible,detail:`${outcomes.interventionVerification.verified}/${outcomes.interventionVerification.eligible} 有后续证据`},
+  ];
+  return <div className={styles.page}>
+    <header className={styles.signalHero}><div><span><Radar size={14}/>EVIDENCE BEFORE EFFORT</span><h1>不要只看投入，<br/>先看理解有没有<span>穿过时间。</span></h1><p>延迟提取、错题重做、信心校准与训练后复测先于学习时长。样本不足时只展示，不制造强结论。</p></div><div className={styles.signalCore}><i/><i/><Activity size={28}/><strong>{analytics.week.studyMinutes}</strong><small>7D STUDY MINUTES</small></div><section><div><small>ACTIVE</small><strong>{analytics.week.activeDays}<span>/7</span></strong></div><div><small>RECALL</small><strong>{analytics.week.reviews}</strong></div><div><small>BACKLOG</small><strong>{backlog}</strong></div></section></header>
+    <section className={styles.outcomeField}><header><div><span>01 / OUTCOME SIGNALS</span><h2>结果与验证</h2></div><small>{outcomes.windowStart} — {outcomes.windowEnd}</small></header><div>{signals.map((signal)=><article key={signal.label} data-weak={signal.samples<5}><span>{signal.label}</span><strong>{signal.value}</strong><p>{signal.detail}</p><small>{signal.samples} SAMPLES{signal.samples<5?" · LOW EVIDENCE":""}</small></article>)}</div><p>评分仍包含用户核对后的自评；复测匹配不代表因果改善。少于 5 个样本只显示信号，不生成稳定判断。</p></section>
+    <section className={styles.rhythmGrid}><article className={styles.weekRhythm}><header><div><span>7 DAY RHYTHM</span><h2>学习节律</h2></div><Clock3 size={18}/></header><div>{analytics.dailyMinutes.map((item,index)=><i key={item.day} style={{"--rhythm":Math.max(.035,item.minutes/maxDaily)} as React.CSSProperties}><b/><span>{item.minutes}</span><small>{index===6?"NOW":weekday(item.day)}</small></i>)}</div><footer><span>本周 {analytics.week.studyMinutes} 分钟</span><span>上周 {analytics.prevWeek.studyMinutes} 分钟</span></footer></article><article className={styles.scoreSignal}><header><div><span>RECALL QUALITY</span><h2>核对后结果</h2></div><Brain size={18}/></header><strong>{reviewTotal}<small> 次</small></strong><div>{analytics.scoreDist.map((count,index)=><i key={index} style={{flex:Math.max(count,.05)}} data-score={index}><span>{count}</span></i>)}</div><footer>{["忘","疑","会","熟"].map((label,index)=><span key={label}><i data-score={index}/>{label} {analytics.scoreDist[index]}</span>)}</footer></article></section>
+    <section className={styles.analysisGrid}><article className={styles.subjectSignal}><header><div><span>ATTENTION ALLOCATION</span><h2>时间流向</h2></div><Gauge size={18}/></header><div>{analytics.subjectMinutes.slice(0,8).map((item)=><div key={item.code||"none"}><span>{item.code||"—"}</span><strong>{item.name}</strong><i><b style={{transform:`scaleX(${item.minutes/maxSubject})`}}/></i><em>{item.minutes}m</em></div>)}{!analytics.subjectMinutes.length?<p>带科目记录学习后，注意力流向会出现。</p>:null}</div></article><article className={styles.weakSignal}><header><div><span>INTERVENTION QUEUE</span><h2>下一步干预</h2></div><Crosshair size={18}/></header><div>{analytics.weakPoints.slice(0,8).map((point,index)=><article key={point.id}><Link href={`/kinetic/subjects/${point.subjectCode}?focus=${encodeURIComponent(point.id)}`}><span>{String(index+1).padStart(2,"0")}</span><div><small>{point.subjectCode} · {point.tierName}</small><strong><RichText text={point.title}/></strong><p>{point.reasons.join(" / ")}</p></div><em>{point.priorityScore}</em><ArrowUpRight size={14}/></Link><CreateTrainingTaskButton compact day={today} knowledgePointId={point.id} notes={`分析来源：${point.reasons.join(" / ")}`} sourceId={point.id} sourceType="weak_point" subjectCode={point.subjectCode} title={`专项回炉：${point.title}`} verificationMethod="完成一次无提示回忆或同类小测"/></article>)}{!analytics.weakPoints.length?<div className={styles.emptySignal}><Sparkles size={22}/><strong>没有明显弱点</strong><span>推进新章节，或用一次综合模拟产生新证据。</span></div>:null}</div></article></section>
+    <section className={styles.mockSignal}><header><div><span>MOCK EXPERIMENTS</span><h2>模考信号</h2></div><Link href="/kinetic/mock-exams">进入实验室 <ArrowUpRight size={14}/></Link></header><div><p><strong>{mock.exams.length}</strong><span>全部实验</span></p><p><strong>{mock.averagePercent}%</strong><span>当前得分率</span></p><p><strong>{mock.comparison?.sampleCount??0}</strong><span>可比样本</span></p><p><strong>{mock.weakAreas[0]?.label||"—"}</strong><span>优先补强</span></p></div></section>
+    {plugins.map((plugin)=><section className={styles.pluginSignal} key={plugin.pluginId}><header><div><span>PLUGIN EVIDENCE</span><h2>{plugin.title}</h2></div><Link href={plugin.href}>{plugin.sampleLabel}<ArrowUpRight size={13}/></Link></header><div>{plugin.cards.map((card)=><article key={card.label}><small>{card.label}</small><strong>{card.value}</strong><p>{card.detail}</p><span>{card.samples} samples</span></article>)}</div><p>{plugin.caveat}</p></section>)}
+  </div>;
+}
+function rate(value:number|null){return value===null?"—":`${Math.round(value*100)}%`}
+function weekday(day:string){return new Intl.DateTimeFormat("zh-CN",{weekday:"short",timeZone:"Asia/Shanghai"}).format(new Date(`${day}T12:00:00Z`))}

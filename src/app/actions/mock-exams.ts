@@ -29,8 +29,11 @@ export async function createMockExamAction(input: {
     const access = await requireWorkspace();
     createMockExam(getDb(), access, input);
     revalidatePath("/mock-exams");
+    revalidatePath("/kinetic/mock-exams");
     revalidatePath("/analytics");
+    revalidatePath("/kinetic/analytics");
     revalidatePath("/");
+    revalidatePath("/kinetic");
     return { ok: true };
   } catch (error) {
     return actionFailure("mock-exams", error, "保存失败");

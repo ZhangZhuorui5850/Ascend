@@ -1,3 +1,24 @@
-import MockExamsPage from "@/app/mock-exams/page";
-export const dynamic = "force-dynamic";
-export default MockExamsPage;
+import { BarChart3, Crosshair, FlaskConical, Radar, Sparkles, Target, Trophy } from "lucide-react";
+import { CreateTrainingTaskButton } from "@/components/CreateTrainingTaskButton";
+import { MockExamForm } from "@/components/MockExamForm";
+import { todayKey } from "@/lib/dates";
+import { getDb } from "@/lib/db";
+import { requirePageWorkspace } from "@/lib/page-auth";
+import { getCaptureHierarchy } from "@/lib/repo/knowledge";
+import { getMockExamDashboard } from "@/lib/repo/mock-exams";
+import styles from "@/components/kinetic/KineticSignals.module.css";
+
+export const dynamic="force-dynamic";
+
+export default async function KineticMockExamsPage(){
+  const access=await requirePageWorkspace("/kinetic/mock-exams"); const db=getDb(); const dashboard=getMockExamDashboard(db,access); const today=todayKey();
+  const change=dashboard.changePercent; const comparison=dashboard.comparison; const lead=dashboard.weakAreas[0];
+  return <div className={styles.page}>
+    <header className={styles.examHero}><div><span><FlaskConical size={14}/>CONTROLLED PERFORMANCE LAB</span><h1>模考不是分数墙，<br/>是一次<span>受控实验。</span></h1><p>记录范围、难度、时间与题组证据，才允许跨场比较；主观感受保留，但不冒充诊断结论。</p></div><div className={styles.examRadar}><i/><i/><Crosshair size={29}/><strong>{dashboard.averagePercent}<span>%</span></strong><small>{comparison?.comparable?"COMPARABLE AVG":"LATEST SIGNAL"}</small></div><section><div><small>ATTEMPTS</small><strong>{dashboard.exams.length}</strong></div><div><small>BEST</small><strong>{dashboard.bestPercent}<span>%</span></strong></div><div><small>DELTA</small><strong data-tone={change===null?"flat":change>=0?"up":"down"}>{change===null?"—":`${change>0?"+":""}${change}%`}</strong></div></section></header>
+    <section className={styles.examWorkspace}><div className={styles.formSurface}><header><div><span>01 / NEW EXPERIMENT</span><h2>记录一次真实表现</h2></div><Radar size={19}/></header><div className={styles.legacySurface}><MockExamForm subjects={getCaptureHierarchy(db,access)} today={today}/></div></div><aside className={styles.nextFocus}><header><Target size={19}/><span>NEXT INTERVENTION</span><h2>下一轮重点</h2></header>{lead?<><div className={styles.focusScore}><small>{lead.attempts<2?"EARLY SIGNAL":"REPEATED WEAKNESS"}</small><strong>{lead.percent}<span>%</span></strong><h3>{lead.label}</h3><p>{lead.evidenceGroups} 个题组 / {lead.attempts} 场可比模考</p></div><div className={styles.focusEvidence}>{lead.questionTypes.map((item)=><span key={item}>{item}</span>)}{lead.causeCategories.map((item)=><span data-cause key={item}>{item}</span>)}</div><p>{lead.attempts<2?"证据仍少，只做试探性训练；用短复测确认，而不是直接下稳定结论。":"该短板跨场重复出现，优先建立专项训练与同类复测。"}</p><CreateTrainingTaskButton activityType="mock" completionCriteria={`完成“${lead.label}”同类训练并进行一次小测`} day={today} notes={`由模考题组证据生成；完成同类题后安排一次短复测。`} knowledgePointId={lead.knowledgePointId} sourceId={dashboard.exams[0]?.id} sourceType="mock_exam" subjectCode={lead.subjectCode??undefined} title={`模考专项：${lead.label}`} verificationMethod="同类小测"/></>:<div className={styles.emptySignal}><Sparkles size={25}/><strong>等待第一组题组证据</strong><span>只有总分时不猜测薄弱知识点。</span></div>}</aside></section>
+    {dashboard.weakAreas.length?<section className={styles.weakMatrix}><header><div><span>WEAKNESS MATRIX</span><h2>题组信号排序</h2></div><BarChart3 size={19}/></header><div>{dashboard.weakAreas.map((area,index)=><article key={area.key}><span>{String(index+1).padStart(2,"0")}</span><div><strong>{area.label}</strong><small>{area.subjectCode||"综合"} · {area.attempts} 场</small></div><i><b style={{transform:`scaleX(${area.percent/100})`}}/></i><em>{area.percent}%</em></article>)}</div></section>:null}
+    <section className={styles.examHistory}><header><div><span>PERFORMANCE LOG</span><h2>模考实验档案</h2></div><Trophy size={20}/></header><div>{dashboard.exams.map((exam,index)=><article key={exam.id}><div className={styles.examIndex}>{String(dashboard.exams.length-index).padStart(2,"0")}</div><div className={styles.examScore}><strong>{exam.percent}<span>%</span></strong><small>{exam.score}/{exam.max_score}</small></div><div className={styles.examMain}><span>{exam.day} · {exam.subject_code||"综合"}{exam.scope_label?` · ${exam.scope_label}`:""}</span><h3>{exam.name}</h3><p>{exam.duration_minutes} 分钟 · {diagnosisLabel(exam.diagnosis_status)}{exam.difficulty?` · ${exam.difficulty}`:""}</p>{exam.breakdown.length?<div>{exam.breakdown.slice(0,6).map((item,itemIndex)=>{const percent=Math.round(item.score/item.maxScore*100);return <span key={`${item.label}-${itemIndex}`}><small>{item.label}</small><i><b style={{transform:`scaleX(${percent/100})`}}/></i><strong>{percent}%</strong></span>})}</div>:null}</div></article>)}{!dashboard.exams.length?<div className={styles.emptyArchive}><FlaskConical size={28}/><strong>还没有模考实验</strong><span>记录首次计时表现，建立自己的可比基线。</span></div>:null}</div></section>
+  </div>;
+}
+
+function diagnosisLabel(status:import("@/lib/repo/mock-exams").MockExamDiagnosisStatus){if(status==="evidence_complete")return"完整题组证据";if(status==="evidence_partial")return"部分题组证据";if(status==="quick")return"快速记录";if(status==="legacy")return"历史记录";return"主观感受";}
