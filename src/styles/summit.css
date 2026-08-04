@@ -2373,3 +2373,111 @@ html[data-motion="reduce"]::view-transition-old(*),
 html[data-motion="reduce"]::view-transition-new(*) {
   animation-duration: 0.001ms !important;
 }
+
+/* Compatibility surfaces retained while the Kinetic workspace ships in parallel. */
+.homeCapacity {
+  display: grid;
+  gap: 16px;
+  padding: clamp(19px, 2vw, 26px);
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  box-shadow: var(--shadow);
+}
+
+.homeCapacityHead {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.homeCapacityHead h2 { margin: 4px 0 0; font-family: var(--font-serif); }
+
+.homeCapacityMetrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--line);
+}
+
+.homeCapacityMetrics > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 13px 15px;
+  background: var(--surface-raised);
+}
+
+.homeCapacityMetrics span { color: var(--quiet); font-size: 10px; }
+.homeCapacityMetrics strong { font-family: var(--font-num); font-size: 20px; font-variant-numeric: tabular-nums; }
+.homeCapacityMetrics strong small { color: var(--quiet); font-size: 9px; font-weight: 600; }
+.homeCapacityMetrics .warning strong { color: var(--danger); }
+
+.homeCapacityTrack {
+  position: relative;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.homeCapacityTrack i { position: absolute; inset-block: 0; }
+.homeCapacityTrack .studied { left: 0; background: var(--accent); }
+.homeCapacityTrack .planned { background: var(--summit-blue); }
+.homeCapacityStatus,.homeCapacityOverdue,.homeCapacityDraft > p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.7; }
+.homeCapacityStatus strong { color: var(--ink); font-family: var(--font-num); }
+.homeCapacityOverdue { color: var(--warn); }
+.homeCapacityDraft summary { color: var(--accent); font-size: 11px; font-weight: 700; cursor: pointer; }
+.homeCapacityDraft > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; margin-top: 10px; }
+.homeCapacityDraft a { display: grid; gap: 4px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; color: inherit; background: var(--surface-soft); text-decoration: none; }
+.homeCapacityDraft a span,.homeCapacityDraft a small { color: var(--quiet); font-size: 9px; }
+.homeCapacityDraft a strong { font-size: 11px; }
+
+.outcomeSignalGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.outcomeSignalCard {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface-soft);
+}
+
+.outcomeSignalCard header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.outcomeSignalCard header span { color: var(--muted); font-size: 10px; font-weight: 650; }
+.outcomeSignalCard header em { padding: 3px 6px; border-radius: 999px; color: var(--quiet); background: var(--surface-raised); font-size: 8px; font-style: normal; }
+.outcomeSignalCard > strong { font-family: var(--font-num); font-size: clamp(25px, 3vw, 38px); font-variant-numeric: tabular-nums; }
+.outcomeSignalCard > p,.outcomeCaveat { margin: 0; color: var(--quiet); font-size: 9px; line-height: 1.65; }
+.outcomeSignalCard[data-sample="enough"] { border-color: var(--accent-line); background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface-raised)); }
+.outcomeSignals,.pluginAnalyticsSection { display: grid; gap: 16px; }
+
+.commandGroup { display: grid; gap: 4px; }
+.commandGroup + .commandGroup { margin-top: 8px; }
+.commandGroupLabel { margin: 0; padding: 6px 10px 3px; color: var(--quiet); font-size: 9px; font-weight: 750; letter-spacing: .12em; }
+.commandResultRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; gap: 5px; }
+.commandResultPrimary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px; min-width: 0; padding: 10px 12px; border: 0; border-radius: 10px; color: inherit; background: transparent; text-align: left; }
+.commandResultPrimary.active { background: var(--accent-soft); }
+.commandResultPrimary > span { display: grid; gap: 3px; min-width: 0; }
+.commandResultPrimary strong,.commandResultPrimary small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.commandResultPrimary small { color: var(--quiet); font-size: 9px; }
+.commandTrainingAction { display: grid; width: 38px; place-items: center; border: 1px solid var(--accent-line); border-radius: 10px; color: var(--accent); background: var(--accent-soft); }
+
+@media (max-width: 760px) {
+  .homeCapacityMetrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .outcomeSignalGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 520px) {
+  .outcomeSignalGrid { grid-template-columns: 1fr; }
+  .homeCapacityHead { align-items: start; }
+}

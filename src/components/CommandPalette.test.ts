@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const source = readFileSync(new URL("./CommandPalette.tsx", import.meta.url), "utf8");
-const styles = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+const styles = [
+  readFileSync(new URL("../app/globals.css", import.meta.url), "utf8"),
+  readFileSync(new URL("../styles/summit.css", import.meta.url), "utf8"),
+].join("\n");
 
 describe("CommandPalette global entity search", () => {
   it("debounces authenticated workspace search and cancels stale requests", () => {
