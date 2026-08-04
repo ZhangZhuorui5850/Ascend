@@ -62,7 +62,14 @@ export function AppShell({ user, hierarchy, enabledPluginIds, modulePrefs, child
     }
   }
 
-  if (pathname === "/login" || pathname === "/change-password" || pathname.startsWith("/invite/") || !user) {
+  if (
+    pathname === "/login"
+    || pathname === "/change-password"
+    || pathname.startsWith("/invite/")
+    || pathname.startsWith("/proposals")
+    || pathname.startsWith("/concept")
+    || !user
+  ) {
     return <>{children}</>;
   }
 
