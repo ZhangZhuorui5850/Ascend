@@ -46,12 +46,13 @@ import {
   sortFiles,
 } from "@/components/file-explorer/explorer-utils";
 
-export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, usage }: {
+export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, usage, basePath = "/assets" }: {
   explorer: ExplorerState;
   hierarchy: CaptureSubject[];
   searchQuery: string;
   searchResults: ExplorerFile[] | null;
   usage?: { usedBytes: number; quotaBytes: number };
+  basePath?: string;
 }) {
   const router = useRouter();
   const { confirm, notify } = useFeedback();
@@ -98,7 +99,7 @@ export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, 
 
   function openFolder(path: string) {
     setSelectedFileId(null);
-    router.push(path ? `/assets?folder=${encodeURIComponent(path)}` : "/assets");
+    router.push(path ? `${basePath}?folder=${encodeURIComponent(path)}` : basePath);
   }
 
   function openFilePage(page: number) {
@@ -106,7 +107,7 @@ export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, 
     const params = new URLSearchParams();
     if (explorer.currentPath) params.set("folder", explorer.currentPath);
     if (page > 1) params.set("page", String(page));
-    router.push(params.size ? `/assets?${params}` : "/assets");
+    router.push(params.size ? `${basePath}?${params}` : basePath);
   }
 
   function report(result: ActionResult) {
@@ -260,11 +261,11 @@ export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, 
             {isSearch ? <span className="drivePathSearch"><ChevronRight size={13} />搜索“{searchQuery}”</span> : null}
           </div>
           <div className="driveActions">
-            <form action="/assets" className="driveSearch" role="search">
+            <form action={basePath} className="driveSearch" role="search">
               <Search size={14} />
               <input defaultValue={searchQuery} key={searchQuery} name="q" placeholder="搜索名称、备注、科目、知识点" />
               {searchQuery ? (
-                <Link aria-label="清除搜索" className="driveSearchClear" href="/assets">
+                <Link aria-label="清除搜索" className="driveSearchClear" href={basePath}>
                   <X size={13} />
                 </Link>
               ) : null}

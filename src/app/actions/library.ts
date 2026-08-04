@@ -24,6 +24,7 @@ function failure(error: unknown): ActionResult {
 
 function revalidateLibrary() {
   revalidatePath("/assets");
+  revalidatePath("/kinetic/assets");
 }
 
 export async function createFolderAction(input: { parentPath: string; name: string }): Promise<ActionResult> {

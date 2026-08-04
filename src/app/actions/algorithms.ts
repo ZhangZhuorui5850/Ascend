@@ -9,11 +9,16 @@ import type { ActionResult } from "./day";
 
 function revalidateAlgorithmViews(day?: string): void {
   revalidatePath("/practice/algorithms");
+  revalidatePath("/kinetic/practice/algorithms");
   revalidatePath("/");
+  revalidatePath("/kinetic");
   revalidatePath("/analytics");
+  revalidatePath("/kinetic/analytics");
   if (day) {
     revalidatePath(`/day/${day}`);
+    revalidatePath(`/kinetic/day/${day}`);
     revalidatePath("/calendar");
+    revalidatePath("/kinetic/calendar");
   }
 }
 
