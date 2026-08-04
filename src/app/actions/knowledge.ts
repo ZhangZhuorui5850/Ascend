@@ -33,9 +33,12 @@ function failure(error: unknown): ActionResult {
 
 function revalidateKnowledge(subjectCode?: string) {
   revalidatePath("/subjects");
+  revalidatePath("/kinetic/subjects");
   if (subjectCode) revalidatePath(`/subjects/${subjectCode}`);
+  if (subjectCode) revalidatePath(`/kinetic/subjects/${subjectCode}`);
   // 收纳面板的层级数据由根布局提供
   revalidatePath("/", "layout");
+  revalidatePath("/kinetic", "layout");
 }
 
 export async function createSubjectAction(input: {
@@ -192,6 +195,7 @@ export async function markPointLearnedAction(input: {
     markPointLearned(getDb(), access, { knowledgePointId: input.id, day: input.day });
     revalidateKnowledge(input.subjectCode);
     revalidatePath(`/day/${input.day}`);
+    revalidatePath(`/kinetic/day/${input.day}`);
     return { ok: true };
   } catch (error) {
     return failure(error);
