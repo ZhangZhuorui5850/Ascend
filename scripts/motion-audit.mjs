@@ -18,6 +18,7 @@ const KNOWN_PLANNER_MOTION_CONSUMERS = new Set([
   "src/components/redesign/TasksTrail.tsx",
   // 正式 Kinetic 产品空间由 src/app/kinetic/layout.tsx 的 MotionProvider 托管。
   "src/components/kinetic/KineticHome.tsx",
+  "src/components/kinetic/KineticDay.tsx",
   "src/components/kinetic/KineticShell.tsx",
 ]);
 const KEYFRAME_LEGACY_BASELINE = new Map();

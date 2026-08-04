@@ -28,10 +28,15 @@ function failure(error: unknown): ActionResult {
 
 function revalidateLearningEvidence(day: string): void {
   revalidatePath(`/day/${day}`);
+  revalidatePath(`/kinetic/day/${day}`);
   revalidatePath("/");
+  revalidatePath("/kinetic");
   revalidatePath("/analytics");
+  revalidatePath("/kinetic/analytics");
   revalidatePath("/subjects");
+  revalidatePath("/kinetic/subjects");
   revalidatePath("/subjects/[code]", "page");
+  revalidatePath("/kinetic/subjects/[code]", "page");
 }
 
 /** 日记/计划等文本字段的自动保存；不触发整页刷新。 */
@@ -44,6 +49,8 @@ export async function saveDayEntry(date: string, fields: Partial<Record<DayField
     }
     updateDayEntry(getDb(), access, date, sanitized);
     revalidatePath("/calendar");
+    revalidatePath(`/kinetic/day/${date}`);
+    revalidatePath("/kinetic/calendar");
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -81,6 +88,7 @@ export async function addMistake(input: {
     createMistake(getDb(), access, input);
     revalidateLearningEvidence(input.day);
     revalidatePath("/mistakes");
+    revalidatePath("/kinetic/mistakes");
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -113,7 +121,9 @@ export async function spreadBacklogAction(input: {
     const access = await requireWorkspace();
     const result = spreadReviewBacklog(getDb(), access, input);
     revalidatePath(`/day/${input.day}`);
+    revalidatePath(`/kinetic/day/${input.day}`);
     revalidatePath("/");
+    revalidatePath("/kinetic");
     return { ok: true, ...result };
   } catch (error) {
     return failure(error);
@@ -142,6 +152,7 @@ export async function reattemptMistakeAction(input: {
     const result = reattemptMistake(getDb(), access, input);
     revalidateLearningEvidence(input.day);
     revalidatePath("/mistakes");
+    revalidatePath("/kinetic/mistakes");
     return { ok: true, undo: result.undo ?? undefined };
   } catch (error) {
     return failure(error);
@@ -154,6 +165,7 @@ export async function undoReattemptAction(input: { day: string; undo: MistakeUnd
     undoReattempt(getDb(), access, input.undo);
     revalidateLearningEvidence(input.day);
     revalidatePath("/mistakes");
+    revalidatePath("/kinetic/mistakes");
     return { ok: true };
   } catch (error) {
     return failure(error);

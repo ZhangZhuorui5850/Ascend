@@ -27,9 +27,14 @@ function failure(error: unknown): ActionResult {
 // 注意不要用 refresh()：Next 16.2 在软导航到达的页面上会丢弃 refresh() 的 RSC 回流
 // （库写成功但 UI 直到硬刷新才更新），revalidatePath 无此问题。
 function revalidateTaskViews(...days: string[]) {
-  for (const day of new Set(days)) revalidatePath(`/day/${day}`);
+  for (const day of new Set(days)) {
+    revalidatePath(`/day/${day}`);
+    revalidatePath(`/kinetic/day/${day}`);
+  }
   revalidatePath("/");
+  revalidatePath("/kinetic");
   revalidatePath("/calendar");
+  revalidatePath("/kinetic/calendar");
 }
 
 export async function addTaskAction(input: {
@@ -155,6 +160,7 @@ export async function addNoteAction(input: { day: string; content: string }): Pr
     const access = await requireWorkspace();
     const note = addNote(getDb(), access, input);
     revalidatePath(`/day/${input.day}`);
+    revalidatePath(`/kinetic/day/${input.day}`);
     return { ok: true, note };
   } catch (error) {
     return failure(error);
@@ -166,6 +172,7 @@ export async function updateNoteAction(input: { id: number; day: string; content
     const access = await requireWorkspace();
     updateNote(getDb(), access, input);
     revalidatePath(`/day/${input.day}`);
+    revalidatePath(`/kinetic/day/${input.day}`);
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -177,6 +184,7 @@ export async function deleteNoteAction(input: { id: number; day: string }): Prom
     const access = await requireWorkspace();
     deleteNote(getDb(), access, input.id);
     revalidatePath(`/day/${input.day}`);
+    revalidatePath(`/kinetic/day/${input.day}`);
     return { ok: true };
   } catch (error) {
     return failure(error);
