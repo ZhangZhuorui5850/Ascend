@@ -10,7 +10,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { logout } from "@/app/actions/auth";
+import { logoutKinetic } from "@/app/actions/auth";
 import { CapturePanel } from "@/components/CapturePanel";
 import { clearOfflineLearningData, setActiveOfflineWorkspace } from "@/lib/offline-review";
 import type { PluginId } from "@/lib/plugins/registry";
@@ -74,7 +74,7 @@ function activeRoute(pathname: string, item: NavItem): boolean {
 
 async function logoutWithCleanup() {
   await clearOfflineLearningData().catch(() => undefined);
-  await logout();
+  await logoutKinetic();
 }
 
 export function KineticShell({

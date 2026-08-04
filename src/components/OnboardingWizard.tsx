@@ -10,7 +10,7 @@ type SubjectOption = { code: string; name: string };
 const WEEKLY_PRESETS = [300, 600, 900, 1200];
 const REVIEW_PRESETS = [10, 20, 30, 50];
 
-export function OnboardingWizard({ initial, subjects }: { initial: AppSettings; subjects: SubjectOption[] }) {
+export function OnboardingWizard({ destination = "/", initial, subjects }: { destination?: string; initial: AppSettings; subjects: SubjectOption[] }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [goal, setGoal] = useState(initial.learningGoal);
@@ -48,7 +48,7 @@ export function OnboardingWizard({ initial, subjects }: { initial: AppSettings; 
     });
     setBusy(false);
     if (!result.ok) return setError(result.error || "保存失败");
-    router.push("/");
+    router.push(destination);
     router.refresh();
   }
 

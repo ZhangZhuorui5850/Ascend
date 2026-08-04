@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { SESSION_COOKIE } from "./src/lib/auth-constants";
 
-const PUBLIC_PATHS = ["/login", "/invite", "/proposals", "/concept", "/api/health", "/api/mcp"];
+const PUBLIC_PATHS = ["/login", "/kinetic/login", "/invite", "/proposals", "/concept", "/api/health", "/api/mcp"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -20,7 +20,7 @@ export function proxy(request: NextRequest) {
   }
 
   const url = request.nextUrl.clone();
-  url.pathname = "/login";
+  url.pathname = pathname.startsWith("/kinetic") ? "/kinetic/login" : "/login";
   url.searchParams.set("next", pathname);
   return NextResponse.redirect(url);
 }

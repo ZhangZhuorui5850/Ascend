@@ -12,7 +12,7 @@ const WEEKLY_PRESETS = [300, 600, 900, 1200];
 const REVIEW_PRESETS = [10, 20, 30, 50];
 type CountdownDraft = ExamCountdown & { clientKey: string };
 
-export function SettingsForm({ initial, subjects }: { initial: AppSettings; subjects: Array<{ code: string; name: string }> }) {
+export function SettingsForm({ initial, onboardingHref = "/onboarding", subjects }: { initial: AppSettings; onboardingHref?: string; subjects: Array<{ code: string; name: string }> }) {
   const router = useRouter();
   const [countdowns, setCountdowns] = useState<CountdownDraft[]>(() => (
     initial.examCountdowns.length
@@ -65,7 +65,7 @@ export function SettingsForm({ initial, subjects }: { initial: AppSettings; subj
         <div className="settingsSectionHead">
           <span><Target size={17} /></span>
           <div><span className="sectionKicker">LEARNING DIRECTION</span><h2>学习目标</h2><p>确定主线目标、每周投入与当前科目。</p></div>
-          <Link className="secondaryButton" href="/onboarding">按步骤设置</Link>
+          <Link className="secondaryButton" href={onboardingHref}>按步骤设置</Link>
         </div>
         <div className="settingsGoalComposer">
           <label><span>当前最重要的结果</span>

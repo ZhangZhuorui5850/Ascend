@@ -3,11 +3,12 @@ import { KineticShell } from "@/components/kinetic/KineticShell";
 import { MotionProvider } from "@/components/ui/MotionProvider";
 import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
-import { requirePageWorkspace } from "@/lib/page-auth";
+import { optionalSession } from "@/lib/request-auth";
 import { listEnabledPluginIds } from "@/lib/repo/plugins";
 import { getCaptureHierarchy } from "@/lib/repo/knowledge";
 import { getSettings } from "@/lib/repo/settings";
 import { getHomeSnapshot, getWeeklyCapacity } from "@/lib/repo/stats";
+import { workspaceNeedsOnboarding } from "@/lib/repo/workspaces";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,18 @@ export const metadata: Metadata = {
 };
 
 export default async function KineticLayout({ children }: { children: React.ReactNode }) {
-  const access = await requirePageWorkspace("/kinetic");
+  const context = await optionalSession();
+  if (
+    !context
+    || context.role !== "user"
+    || !context.workspaceId
+    || context.mustChangePassword
+    || workspaceNeedsOnboarding(getDb(), { workspaceId: context.workspaceId })
+  ) {
+    return <MotionProvider>{children}</MotionProvider>;
+  }
+
+  const access = { workspaceId: context.workspaceId };
   const db = getDb();
   const today = todayKey();
   const settings = getSettings(db, access);
@@ -27,7 +39,7 @@ export default async function KineticLayout({ children }: { children: React.Reac
   return (
     <MotionProvider>
       <KineticShell
-        displayName={access.displayName}
+        displayName={context.displayName}
         enabledPluginIds={listEnabledPluginIds(db, access)}
         hierarchy={getCaptureHierarchy(db, access)}
         modulePrefs={settings.modulePrefs}

@@ -103,7 +103,7 @@ export default async function KineticSettingsPage() {
         </ControlGroup>
 
         <ControlGroup description="学习目标、投入预算、复习容量与考试里程碑。" icon={BrainCircuit} id="study" index="03" title="研究节奏">
-          <SettingsForm initial={settings} subjects={subjects} />
+          <SettingsForm initial={settings} onboardingHref="/kinetic/onboarding" subjects={subjects} />
         </ControlGroup>
 
         <ControlGroup description="决定哪些学习能力出现在轨道和命令面板。" icon={Boxes} id="modules" index="04" title="功能板块">

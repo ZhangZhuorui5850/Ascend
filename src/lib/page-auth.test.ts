@@ -26,8 +26,20 @@ describe("workspaceRedirectTarget", () => {
     );
   });
 
+  it("keeps unauthenticated Kinetic navigation inside the Kinetic entry flow", () => {
+    expect(workspaceRedirectTarget(makeContext({ workspaceId: null }), "/kinetic/tasks")).toBe(
+      "/kinetic/login?next=%2Fkinetic%2Ftasks",
+    );
+  });
+
   it("sends a user with a pending forced password change to the change-password page", () => {
     expect(workspaceRedirectTarget(makeContext({ mustChangePassword: true }), "/")).toBe("/change-password");
+  });
+
+  it("preserves a Kinetic destination through a forced password change", () => {
+    expect(workspaceRedirectTarget(makeContext({ mustChangePassword: true }), "/kinetic/calendar")).toBe(
+      "/kinetic/change-password?next=%2Fkinetic%2Fcalendar",
+    );
   });
 
   it("sends an admin to the admin console instead of a learning workspace", () => {
@@ -44,6 +56,11 @@ describe("workspaceRedirectTarget", () => {
 
   it("allows the onboarding page itself to avoid a redirect loop", () => {
     expect(workspaceRedirectTarget(makeContext(), "/onboarding", true)).toBeNull();
+  });
+
+  it("keeps incomplete Kinetic workspaces in the Kinetic onboarding flow", () => {
+    expect(workspaceRedirectTarget(makeContext(), "/kinetic/tasks", true)).toBe("/kinetic/onboarding");
+    expect(workspaceRedirectTarget(makeContext(), "/kinetic/onboarding", true)).toBeNull();
   });
 
   it("keeps forced password changes ahead of onboarding", () => {

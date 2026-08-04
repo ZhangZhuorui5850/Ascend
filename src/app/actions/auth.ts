@@ -46,7 +46,12 @@ export async function login(_previous: LoginState, formData: FormData): Promise<
   const tokens = mergeAccountTokens(session.token, previousActive ? [previousActive, ...listed] : listed);
   setSessionCookies(cookieStore, session.token, tokens, session.expiresAt);
 
-  redirect(user.mustChangePassword ? "/change-password" : safeNextPath(formData.get("next")));
+  const nextPath = safeNextPath(formData.get("next"));
+  redirect(user.mustChangePassword
+    ? nextPath.startsWith("/kinetic")
+      ? `/kinetic/change-password?next=${encodeURIComponent(nextPath)}`
+      : "/change-password"
+    : nextPath);
 }
 
 /** 免密切换到本设备已登录的另一个账号。 */
@@ -69,7 +74,7 @@ export async function updateRequiredPassword(_previous: LoginState, formData: Fo
   if (newPassword !== confirmation) return { error: "两次输入的新密码不一致" };
   if (newPassword === currentPassword) return { error: "新密码不能与当前密码相同" };
 
-  let destination = "/";
+  let destination = safeNextPath(formData.get("next"));
   try {
     const access = await requireAccessContext();
     changePassword(access.userId, currentPassword, newPassword);
@@ -83,7 +88,7 @@ export async function updateRequiredPassword(_previous: LoginState, formData: Fo
     // 改密后本用户全部旧会话已吊销；重建活跃会话并清理列表中的失效 token
     const tokens = mergeAccountTokens(session.token, await readSessionsCookie());
     setSessionCookies(cookieStore, session.token, tokens, session.expiresAt);
-    destination = access.role === "admin" ? "/admin" : "/";
+    destination = access.role === "admin" ? "/admin" : destination;
   } catch (error) {
     return { error: actionFailure("auth", error, "密码更新失败").error };
   }
@@ -91,7 +96,7 @@ export async function updateRequiredPassword(_previous: LoginState, formData: Fo
 }
 
 /** 退出当前账号：列表里还有其他有效账号时自动顶上，否则回登录页。 */
-export async function logout(): Promise<void> {
+async function performLogout(loginPath: "/login" | "/kinetic/login"): Promise<void> {
   const cookieStore = await cookies();
   const active = cookieStore.get(SESSION_COOKIE)?.value;
   deleteSession(active);
@@ -105,7 +110,15 @@ export async function logout(): Promise<void> {
   }
 
   clearSessionCookies(cookieStore);
-  redirect("/login");
+  redirect(loginPath);
+}
+
+export async function logout(): Promise<void> {
+  return performLogout("/login");
+}
+
+export async function logoutKinetic(): Promise<void> {
+  return performLogout("/kinetic/login");
 }
 
 /** 退出本设备全部账号。 */
