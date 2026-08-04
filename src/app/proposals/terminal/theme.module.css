@@ -1,0 +1,509 @@
+.root {
+  --t-bg: #06100b;
+  --t-panel: #0a1710;
+  --t-panel2: #0e2118;
+  --t-line: #21412f;
+  --t-ink: #aef5c8;
+  --t-bright: #69f6a1;
+  --t-muted: #5f9b76;
+  --t-amber: #f2c765;
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  min-height: 100dvh;
+  overflow-x: clip;
+  background: var(--t-bg);
+  color: var(--t-ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.root * {
+  box-sizing: border-box;
+}
+.root button,
+.root input {
+  font: inherit;
+}
+.tree {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  border-right: 1px solid var(--t-line);
+  background: #07120c;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  min-height: 74px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--t-line);
+  color: var(--t-ink);
+  text-decoration: none;
+}
+.brand span {
+  color: var(--t-bright);
+}
+.brand b {
+  color: #73b98d;
+}
+.brand i {
+  color: var(--t-amber);
+  font-style: normal;
+}
+.tree nav {
+  display: grid;
+  padding: 16px 10px;
+}
+.tree nav p {
+  margin: 14px 7px 6px;
+  color: var(--t-muted);
+}
+.tree nav a,
+.tree nav > span {
+  min-height: 34px;
+  padding: 8px;
+  color: var(--t-muted);
+  text-decoration: none;
+}
+.tree nav a[aria-current="page"] {
+  background: var(--t-panel2);
+  color: var(--t-bright);
+}
+.tree > button {
+  display: flex;
+  justify-content: space-between;
+  min-height: 44px;
+  margin: auto 12px 14px;
+  padding: 11px;
+  border: 1px solid var(--t-line);
+  background: transparent;
+  color: var(--t-muted);
+  cursor: pointer;
+}
+.root kbd {
+  padding: 2px 5px;
+  border: 1px solid var(--t-line);
+  border-radius: 3px;
+  background: var(--t-panel2);
+  color: var(--t-ink);
+  font-size: 10px;
+}
+.screen {
+  display: grid;
+  grid-template-rows: 45px 1fr 38px;
+  min-width: 0;
+  height: 100dvh;
+}
+.screen > header {
+  display: grid;
+  grid-template-columns: 90px 1fr auto;
+  align-items: center;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--t-line);
+  background: var(--t-panel);
+}
+.screen > header > div {
+  display: flex;
+  gap: 6px;
+}
+.screen > header i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #b75c5c;
+}
+.screen > header i:nth-child(2) {
+  background: var(--t-amber);
+}
+.screen > header i:nth-child(3) {
+  background: var(--t-bright);
+}
+.screen > header > span {
+  text-align: center;
+}
+.screen > header > b {
+  color: var(--t-muted);
+  font-size: 9px;
+}
+.body {
+  padding: 24px clamp(14px, 3vw, 34px);
+  overflow: auto;
+}
+.screen > footer {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 0 14px;
+  border-top: 1px solid var(--t-line);
+  background: var(--t-panel);
+  color: var(--t-muted);
+  font-size: 9px;
+}
+.screen > footer b {
+  color: var(--t-ink);
+}
+.prompt {
+  margin: 0 0 12px;
+  color: var(--t-ink);
+}
+.prompt span,
+.cursor span {
+  color: var(--t-bright);
+}
+.prompt b,
+.cursor b {
+  color: #7e9cf2;
+}
+.status {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  max-width: 900px;
+  margin: 0 0 28px;
+  border: 1px solid var(--t-line);
+}
+.status div {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-right: 1px solid var(--t-line);
+}
+.status div:last-child {
+  border: 0;
+}
+.status span {
+  color: var(--t-muted);
+  font-size: 9px;
+}
+.status b {
+  color: var(--t-bright);
+  font-size: 26px;
+}
+.taskOutput {
+  min-width: 680px;
+  max-width: 1100px;
+  margin: 0 0 28px;
+  border: 1px solid var(--t-line);
+}
+.taskOutput > header,
+.taskOutput > button {
+  display: grid;
+  grid-template-columns: 35px 70px 45px minmax(230px, 1fr) 80px 45px;
+  align-items: center;
+  min-height: 35px;
+  padding: 0 9px;
+  text-align: left;
+}
+.taskOutput > header {
+  border-bottom: 1px solid var(--t-line);
+  color: var(--t-muted);
+  font-size: 9px;
+}
+.taskOutput > button {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px dotted var(--t-line);
+  background: transparent;
+  color: var(--t-ink);
+  cursor: pointer;
+}
+.taskOutput > button:last-child {
+  border: 0;
+}
+.taskOutput > button:hover,
+.taskOutput > button[aria-current="true"] {
+  background: var(--t-panel2);
+}
+.taskOutput button > i {
+  color: var(--t-amber);
+  font-size: 9px;
+  font-style: normal;
+}
+.taskOutput button > i[data-status="done"] {
+  color: var(--t-bright);
+}
+.taskOutput button > i[data-status="canceled"] {
+  color: #e17878;
+}
+.taskOutput button > strong {
+  font-weight: 400;
+}
+.taskOutput button > span {
+  color: var(--t-muted);
+}
+.output {
+  max-width: 900px;
+  margin: 0 0 28px;
+  padding: 10px 13px;
+  border-left: 2px solid var(--t-amber);
+  background: var(--t-panel);
+}
+.output p {
+  margin: 5px 0;
+}
+.output i {
+  color: var(--t-amber);
+  font-style: normal;
+}
+.output span {
+  color: var(--t-muted);
+}
+.meter {
+  position: relative;
+  display: flex;
+  align-items: center;
+  max-width: 900px;
+  margin-bottom: 28px;
+  white-space: pre;
+}
+.meter > i {
+  position: absolute;
+  left: 10px;
+  height: 15px;
+  background: rgba(105, 246, 161, 0.18);
+}
+.meter b {
+  color: var(--t-bright);
+  font-weight: 400;
+}
+.meter span:last-child {
+  margin-left: 8px;
+  color: var(--t-muted);
+}
+.cursor {
+  margin-top: 30px;
+}
+.cursor > i {
+  display: inline-block;
+  width: 8px;
+  height: 14px;
+  vertical-align: -2px;
+  background: var(--t-bright);
+  animation: blink 1s steps(1, end) infinite;
+}
+.banner {
+  display: grid;
+  gap: 8px;
+  max-width: 1000px;
+  margin-bottom: 28px;
+  padding: 18px;
+  border: 1px solid var(--t-line);
+  background: var(--t-panel);
+}
+.banner > span {
+  color: var(--t-amber);
+}
+.banner > strong {
+  font: 500 20px var(--font-sans);
+}
+.banner > small {
+  color: var(--t-muted);
+}
+.recall {
+  max-width: 900px;
+  margin-bottom: 28px;
+  border: 1px solid var(--t-line);
+  background: var(--t-panel);
+}
+.recall header {
+  display: flex;
+  gap: 18px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--t-line);
+}
+.recall header i {
+  color: var(--t-amber);
+  font-style: normal;
+}
+.recall header b {
+  margin-left: auto;
+  color: var(--t-muted);
+}
+.recall > strong,
+.recall > p,
+.recall > details {
+  display: block;
+  margin: 15px;
+}
+.recall > strong {
+  font: 500 19px var(--font-sans);
+}
+.recall > p {
+  color: var(--t-muted);
+}
+.recall summary {
+  min-height: 32px;
+  color: var(--t-bright);
+  cursor: pointer;
+}
+.recall details p {
+  padding: 12px;
+  border-left: 2px solid var(--t-bright);
+  background: var(--t-panel2);
+}
+.logs {
+  max-width: 900px;
+  margin-bottom: 28px;
+  padding: 10px 14px;
+  background: var(--t-panel);
+  color: var(--t-muted);
+}
+.logs p {
+  margin: 4px;
+}
+.logs span {
+  color: #6483b8;
+}
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: start center;
+  padding-top: 15dvh;
+  background: rgba(0, 5, 2, 0.74);
+}
+.overlay section {
+  width: min(620px, calc(100vw - 28px));
+  border: 1px solid var(--t-bright);
+  background: #08150e;
+  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.6);
+}
+.overlay section > header {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  align-items: center;
+  min-height: 58px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--t-line);
+}
+.overlay header > span {
+  color: var(--t-bright);
+  font-size: 20px;
+}
+.overlay input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--t-ink);
+}
+.overlay section > button {
+  display: grid;
+  grid-template-columns: 25px 140px 1fr;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 1px solid var(--t-line);
+  background: transparent;
+  color: var(--t-ink);
+  text-align: left;
+  cursor: pointer;
+}
+.overlay section > button:hover {
+  background: var(--t-panel2);
+}
+.overlay button i {
+  color: var(--t-bright);
+  font-style: normal;
+}
+.overlay button span {
+  color: var(--t-muted);
+}
+.root a:focus-visible,
+.root button:focus-visible,
+.root summary:focus-visible,
+.root input:focus-visible {
+  outline: 1px solid var(--t-bright);
+  outline-offset: 2px;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+@media (max-width: 850px) {
+  .root {
+    grid-template-columns: 1fr;
+  }
+  .tree {
+    position: static;
+    display: grid;
+    grid-template-columns: 190px 1fr;
+    height: auto;
+  }
+  .tree nav {
+    display: flex;
+    overflow-x: auto;
+    padding: 8px;
+  }
+  .tree nav p,
+  .tree nav > span {
+    display: none;
+  }
+  .tree nav a {
+    flex: none;
+  }
+  .tree > button {
+    display: none;
+  }
+  .screen {
+    height: auto;
+    min-height: calc(100dvh - 74px);
+  }
+  .body {
+    overflow-x: auto;
+  }
+}
+@media (max-width: 560px) {
+  .tree {
+    grid-template-columns: 145px 1fr;
+  }
+  .brand {
+    padding: 0 8px;
+  }
+  .tree nav a {
+    padding: 8px 7px;
+  }
+  .screen > header {
+    grid-template-columns: 60px 1fr;
+  }
+  .screen > header > b {
+    display: none;
+  }
+  .status {
+    grid-template-columns: repeat(2, minmax(110px, 1fr));
+    min-width: 0;
+  }
+  .status div:nth-child(2) {
+    border-right: 0;
+  }
+  .screen > footer {
+    gap: 12px;
+    overflow-x: auto;
+  }
+  .screen > footer span {
+    flex: none;
+  }
+  .body {
+    padding: 18px 12px;
+  }
+  .taskOutput {
+    min-width: 650px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .root *,
+  .root *::before,
+  .root *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+:global(html[data-motion="reduce"]) .root *,
+:global(html[data-motion="reduce"]) .root *::before,
+:global(html[data-motion="reduce"]) .root *::after {
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+}

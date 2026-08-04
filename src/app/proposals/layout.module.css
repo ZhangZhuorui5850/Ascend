@@ -1,0 +1,11 @@
+.scope {
+  display: contents;
+}
+
+.scope + :global(.icpFooter) {
+  position: static;
+  inset: auto;
+  min-height: 42px;
+  padding: 12px;
+  background: var(--bg);
+}

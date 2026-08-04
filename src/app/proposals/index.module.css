@@ -1,0 +1,212 @@
+.page {
+  --pi-bg: #efece5;
+  --pi-paper: #f8f6f0;
+  --pi-ink: #171817;
+  --pi-muted: #66665f;
+  --pi-line: #c9c6bd;
+  min-height: 100dvh;
+  padding: clamp(24px, 5vw, 72px);
+  overflow-x: clip;
+  background: var(--pi-bg);
+  color: var(--pi-ink);
+  font-family: var(--font-sans);
+}
+
+.page * {
+  box-sizing: border-box;
+}
+.header {
+  max-width: 920px;
+  margin: 0 auto clamp(44px, 7vw, 88px);
+}
+.back {
+  display: inline-block;
+  min-height: 44px;
+  color: var(--pi-muted);
+  font-size: 13px;
+  text-decoration: none;
+}
+.eyebrow {
+  margin: 0 0 14px;
+  color: var(--pi-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+}
+.header h1 {
+  max-width: 780px;
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(42px, 7vw, 92px);
+  font-weight: 500;
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+}
+.lead {
+  max-width: 680px;
+  margin: 30px 0 0 auto;
+  color: var(--pi-muted);
+  font-size: clamp(14px, 1.5vw, 17px);
+  line-height: 1.8;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+.card {
+  grid-column: span 4;
+  display: flex;
+  flex-direction: column;
+  min-height: 430px;
+  padding: 24px;
+  border: 1px solid var(--pi-line);
+  background: var(--pi-paper);
+}
+.card:nth-child(4),
+.card:nth-child(5) {
+  grid-column: span 6;
+}
+.cardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.mark {
+  font-family: var(--font-serif);
+  font-size: 34px;
+}
+.swatches {
+  display: flex;
+}
+.swatches i {
+  width: 24px;
+  height: 24px;
+  margin-left: -5px;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 50%;
+}
+.thesis {
+  margin: 58px 0 8px;
+  color: var(--pi-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.card h2 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(26px, 3vw, 42px);
+  font-weight: 500;
+}
+.description {
+  max-width: 34ch;
+  min-height: 54px;
+  color: var(--pi-muted);
+  line-height: 1.65;
+}
+.card dl {
+  display: grid;
+  gap: 7px;
+  margin: auto 0 22px;
+}
+.card dl div {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  border-top: 1px solid var(--pi-line);
+  padding-top: 7px;
+  font-size: 12px;
+}
+.card dt {
+  color: var(--pi-muted);
+}
+.card dd {
+  margin: 0;
+}
+.open {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  background: var(--pi-ink);
+  color: var(--pi-paper);
+  text-decoration: none;
+}
+.matrix {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.65fr) minmax(0, 1.7fr);
+  gap: 40px;
+  max-width: 1280px;
+  margin: 100px auto 0;
+  padding-top: 28px;
+  border-top: 2px solid var(--pi-ink);
+}
+.matrix h2 {
+  max-width: 360px;
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(28px, 4vw, 52px);
+  font-weight: 500;
+  line-height: 1.08;
+}
+.tableWrap {
+  overflow-x: auto;
+}
+.matrix table {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.matrix th,
+.matrix td {
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--pi-line);
+  text-align: left;
+}
+.matrix thead th {
+  color: var(--pi-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+}
+.matrix tbody th {
+  font-family: var(--font-serif);
+  font-size: 16px;
+}
+.back:focus-visible,
+.open:focus-visible {
+  outline: 2px solid #4058d6;
+  outline-offset: 3px;
+}
+
+@media (max-width: 900px) {
+  .card,
+  .card:nth-child(4),
+  .card:nth-child(5) {
+    grid-column: span 6;
+  }
+  .matrix {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .page {
+    padding: 20px 16px 64px;
+  }
+  .card,
+  .card:nth-child(4),
+  .card:nth-child(5) {
+    grid-column: 1 / -1;
+    min-height: 380px;
+  }
+  .header h1 {
+    font-size: clamp(40px, 14vw, 58px);
+  }
+}
