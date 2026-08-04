@@ -145,6 +145,9 @@ function workspaceTimeZone(db: ReturnType<typeof getDb>, workspaceId: string): s
 function revalidateCalendar(): void {
   revalidatePath("/");
   revalidatePath("/calendar");
+  revalidatePath("/kinetic");
+  revalidatePath("/kinetic/calendar");
+  revalidatePath("/kinetic/day/[date]", "page");
 }
 
 function failure(error: unknown): EventActionResult {
