@@ -79,7 +79,12 @@ function revalidatePlannerViews(entity?: PlannerTask): void {
   revalidatePath("/tasks");
   revalidatePath("/calendar");
   revalidatePath("/day/[date]", "page");
+  revalidatePath("/kinetic");
+  revalidatePath("/kinetic/tasks");
+  revalidatePath("/kinetic/calendar");
+  revalidatePath("/kinetic/day/[date]", "page");
   if (entity?.subject_code) revalidatePath(`/subjects/${entity.subject_code}`);
+  if (entity?.subject_code) revalidatePath(`/kinetic/subjects/${entity.subject_code}`);
 }
 
 export async function createPlannerTaskAction(input: {

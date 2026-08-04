@@ -68,6 +68,7 @@ export function AppShell({ user, hierarchy, enabledPluginIds, modulePrefs, child
     || pathname.startsWith("/invite/")
     || pathname.startsWith("/proposals")
     || pathname.startsWith("/concept")
+    || pathname.startsWith("/kinetic")
     || !user
   ) {
     return <>{children}</>;
