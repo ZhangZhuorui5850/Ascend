@@ -20,6 +20,7 @@ export async function createTaskListAction(input: {
       icon: input.icon ?? "ListTodo",
     });
     revalidatePath("/tasks");
+    revalidatePath("/kinetic/tasks");
     return { ok: true, entity };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "创建清单失败" };
@@ -37,6 +38,7 @@ export async function createPlannerLabelAction(input: {
       colorToken: input.colorToken ?? "summit-blue",
     });
     revalidatePath("/tasks");
+    revalidatePath("/kinetic/tasks");
     return { ok: true, entity };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "创建标签失败" };

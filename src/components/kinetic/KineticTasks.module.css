@@ -1,0 +1,204 @@
+.page {
+  position: relative;
+  width: min(1680px, 100%);
+  min-height: calc(100svh - var(--kinetic-top));
+  margin-inline: auto;
+  padding: clamp(28px, 3.8vw, 62px) clamp(18px, 3.8vw, 62px) 96px;
+}
+
+.page button,.page input,.page textarea,.page select { font: inherit; }
+.hero { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(390px, .8fr); gap: 6vw; align-items: center; padding: 8px 0 clamp(34px, 4vw, 62px); }
+.hero > div:first-child > span { color: var(--kinetic-violet); font-size: 7px; font-weight: 900; letter-spacing: .18em; }
+.hero h1 { margin: 20px 0 18px; font-size: clamp(48px, 5.2vw, 84px); font-weight: 620; line-height: .9; letter-spacing: -.075em; }
+.hero h1 span { position: relative; color: var(--kinetic-violet); font-style: italic; font-weight: 470; }
+.hero h1 span::after { content: ""; position: absolute; right: -4px; bottom: 1px; left: -3px; z-index: -1; height: 12px; border-radius: 50%; background: var(--kinetic-acid); transform: rotate(-2deg); }
+.hero > div:first-child > p { max-width: 650px; margin: 0; color: rgba(18,18,34,.55); font-size: 13px; line-height: 1.8; }
+.heroTelemetry { display: grid; grid-template-columns: 190px 1fr; gap: 24px; align-items: center; }
+.telemetryCore { --task-ratio: 0%; position: relative; display: flex; width: 180px; height: 180px; align-items: center; justify-content: center; flex-direction: column; border-radius: 50%; background: conic-gradient(var(--kinetic-violet) var(--task-ratio),rgba(96,71,255,.1) 0); box-shadow: 0 30px 70px rgba(96,71,255,.14); }
+.telemetryCore::before { content: ""; position: absolute; inset: 9px; border-radius: 50%; background: rgba(255,255,255,.88); box-shadow: inset 0 0 30px rgba(96,71,255,.08); }
+.telemetryCore::after { content: ""; position: absolute; inset: -14px; border: 1px dashed rgba(96,71,255,.2); border-radius: 50%; animation: kineticTasksOrbit calc(var(--motion-reward) * 28) linear infinite; }
+.telemetryCore > * { position: relative; }
+.telemetryCore small,.telemetryCore span { color: rgba(18,18,34,.4); font-size: 5px; font-weight: 850; letter-spacing: .13em; }
+.telemetryCore strong { margin: 7px 0 4px; font-size: 54px; font-weight: 550; letter-spacing: -.08em; line-height: .9; }
+.heroTelemetry dl { display: grid; gap: 9px; margin: 0; }
+.heroTelemetry dl > div { display: flex; align-items: center; justify-content: space-between; min-height: 47px; padding: 0 14px; border-bottom: 1px solid var(--kinetic-line); }
+.heroTelemetry dt { color: rgba(18,18,34,.45); font-size: 7px; }
+.heroTelemetry dd { margin: 0; font-size: 17px; font-weight: 750; }
+.heroTelemetry dd small { margin-left: 2px; color: rgba(18,18,34,.4); font-size: 7px; }
+
+.controlDeck { display: grid; grid-template-columns: auto minmax(260px, 1fr) auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid rgba(18,18,34,.08); border-radius: 20px; background: rgba(255,255,255,.5); box-shadow: 0 20px 60px rgba(18,18,34,.05); backdrop-filter: blur(16px); }
+.captureToggle { position: relative; display: flex; min-height: 46px; align-items: center; gap: 9px; padding: 0 16px; overflow: hidden; border: 0; border-radius: 13px; color: white; background: var(--kinetic-ink); font-size: 8px; font-weight: 850; cursor: pointer; }
+.captureToggle i { position: absolute; right: -16px; width: 55px; height: 55px; border-radius: 50%; background: var(--kinetic-violet); filter: blur(10px); opacity: .7; }
+.search { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; min-height: 46px; padding: 0 13px; border: 1px solid rgba(18,18,34,.08); border-radius: 13px; background: rgba(255,255,255,.65); }
+.search input { min-width: 0; border: 0; outline: 0; background: transparent; font-size: 9px; }
+.search kbd { padding: 4px 6px; border: 1px solid var(--kinetic-line); border-radius: 5px; color: rgba(18,18,34,.38); font-size: 6px; }
+.search button { display: grid; width: 27px; height: 27px; place-items: center; border: 0; border-radius: 50%; background: rgba(18,18,34,.05); cursor: pointer; }
+.keyboardHint { display: flex; align-items: center; gap: 9px; padding: 0 8px; color: rgba(18,18,34,.42); font-size: 6px; font-weight: 800; letter-spacing: .05em; }
+.keyboardHint i { width: 1px; height: 14px; background: var(--kinetic-line); }
+
+.capture { margin-top: 13px; padding: 19px; border: 1px solid rgba(96,71,255,.13); border-radius: 23px; background: linear-gradient(130deg,rgba(255,255,255,.78),rgba(246,244,255,.68)); box-shadow: 0 24px 70px rgba(96,71,255,.08); animation: kineticTasksReveal var(--motion-panel) var(--motion-ease-enter) both; }
+.captureTitle { display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 15px; }
+.captureTitle > span { display: flex; align-items: center; gap: 7px; color: var(--kinetic-violet); font-size: 7px; font-weight: 900; letter-spacing: .12em; }
+.captureTitle > input { min-width: 0; padding: 12px 2px; border: 0; border-bottom: 1px solid var(--kinetic-line); outline: 0; background: transparent; font-size: clamp(15px,1.4vw,20px); font-weight: 650; }
+.captureFields { display: grid; grid-template-columns: 1.15fr repeat(5,minmax(100px,1fr)) auto; gap: 8px; margin-top: 17px; }
+.captureFields label,.inspector label { display: grid; gap: 6px; min-width: 0; }
+.captureFields label > span,.inspector label > span { color: rgba(18,18,34,.42); font-size: 6px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.captureFields input,.captureFields select,.inspector input,.inspector select,.inspector textarea,.newList input { width: 100%; min-width: 0; border: 1px solid rgba(18,18,34,.1); border-radius: 10px; outline: 0; color: var(--kinetic-ink); background: rgba(255,255,255,.7); font-size: 8px; }
+.captureFields input,.captureFields select { height: 38px; padding: 0 9px; }
+.captureFields > button { display: flex; min-height: 38px; align-items: center; gap: 14px; align-self: end; padding: 0 14px; border: 0; border-radius: 11px; color: var(--kinetic-ink); background: var(--kinetic-acid); font-size: 8px; font-weight: 850; cursor: pointer; }
+
+.workspace { display: grid; grid-template-columns: 224px minmax(360px,1fr) minmax(300px,370px); gap: 17px; margin-top: 24px; min-height: 680px; }
+.navigator,.taskField,.inspector { border: 1px solid rgba(18,18,34,.08); background: rgba(255,255,255,.46); backdrop-filter: blur(16px); }
+.navigator { padding: 15px 10px; border-radius: 23px; }
+.navigator > header,.listHeader { display: flex; min-height: 35px; align-items: center; justify-content: space-between; padding: 0 10px; color: rgba(18,18,34,.38); font-size: 6px; font-weight: 900; letter-spacing: .14em; }
+.navigator nav { display: grid; gap: 3px; }
+.navigator nav > button { display: grid; grid-template-columns: 35px 1fr auto; align-items: center; min-height: 48px; padding: 0 8px; border: 0; border-radius: 13px; color: rgba(18,18,34,.58); background: transparent; text-align: left; cursor: pointer; transition: color var(--motion-fast) var(--motion-ease),background var(--motion-fast) var(--motion-ease),transform var(--motion-fast) var(--motion-ease); }
+.navigator nav > button:hover { color: var(--kinetic-ink); background: rgba(255,255,255,.78); transform: translateX(3px); }
+.navigator nav > button[aria-current="page"] { color: white; background: var(--kinetic-ink); box-shadow: 0 12px 26px rgba(18,18,34,.15); }
+.navigator nav button > i { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; background: rgba(96,71,255,.08); }
+.navigator nav button[aria-current="page"] > i { color: var(--kinetic-ink); background: var(--kinetic-acid); }
+.navigator nav button > span { display: grid; gap: 2px; font-size: 8px; font-weight: 720; }
+.navigator nav button small { font-size: 5px; letter-spacing: .1em; opacity: .46; }
+.navigator nav button b,.listNav button b { font-size: 7px; font-weight: 800; opacity: .45; }
+.listHeader { margin-top: 13px; padding-top: 10px; border-top: 1px solid var(--kinetic-line); }
+.listHeader button { display: grid; width: 28px; height: 28px; place-items: center; border: 0; border-radius: 50%; color: inherit; background: rgba(18,18,34,.05); cursor: pointer; }
+.newList { display: grid; grid-template-columns: 1fr 32px; gap: 5px; padding: 4px 5px 8px; }
+.newList input { height: 35px; padding: 0 9px; }
+.newList button { display: grid; place-items: center; border: 0; border-radius: 9px; color: white; background: var(--kinetic-violet); }
+.listNav { display: grid; gap: 2px; }
+.listNav button { display: grid; grid-template-columns: 17px 1fr auto; align-items: center; min-height: 39px; padding: 0 10px; border: 0; border-radius: 10px; color: rgba(18,18,34,.56); background: transparent; font-size: 8px; text-align: left; cursor: pointer; }
+.listNav button:hover,.listNav button[aria-current="page"] { color: var(--kinetic-ink); background: white; }
+.listNav button > i { --list-index: 0; width: 8px; height: 8px; border-radius: 50%; background: hsl(calc(250 + var(--list-index) * 34) 82% 62%); box-shadow: 0 0 0 4px hsl(calc(250 + var(--list-index) * 34) 82% 62% / .1); }
+
+.taskField { min-width: 0; padding: 22px; border-radius: 25px; }
+.taskField > header { display: flex; align-items: end; justify-content: space-between; padding: 0 2px 18px; border-bottom: 1px solid var(--kinetic-line); }
+.taskField > header span { color: var(--kinetic-violet); font-size: 6px; font-weight: 900; letter-spacing: .13em; }
+.taskField > header h2 { margin: 5px 0 0; font-size: clamp(24px,2.4vw,35px); letter-spacing: -.055em; }
+.taskField > header p { margin: 0; color: rgba(18,18,34,.42); font-size: 7px; }
+.taskStream { display: grid; gap: 7px; padding-top: 13px; }
+.taskRow { --row-index: 0; position: relative; display: grid; grid-template-columns: 38px minmax(0,1fr) 94px 54px 30px; align-items: center; gap: 9px; min-height: 77px; padding: 8px 8px 8px 10px; overflow: hidden; border: 1px solid rgba(18,18,34,.075); border-radius: 17px; background: rgba(255,255,255,.54); opacity: 0; transform: translateY(12px); animation: kineticTasksRowIn var(--motion-slow) var(--motion-ease-enter) calc(var(--motion-stagger) * var(--row-index)) forwards; transition: border-color var(--motion-fast) var(--motion-ease),background var(--motion-fast) var(--motion-ease),transform var(--motion-fast) var(--motion-ease); }
+.taskRow::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 3px; background: var(--kinetic-violet); opacity: 0; }
+.taskRow:hover { background: rgba(255,255,255,.92); transform: translateX(4px); }
+.taskRow.taskSelected { border-color: rgba(96,71,255,.34); background: white; box-shadow: 0 14px 38px rgba(96,71,255,.09); }
+.taskRow.taskSelected::before { opacity: 1; }
+.taskRow.taskCompleted { opacity: .48 !important; }
+.taskRow.taskCompleted strong { text-decoration: line-through; }
+.taskCheck,.taskArrow { display: grid; place-items: center; border: 1px solid rgba(18,18,34,.12); border-radius: 50%; color: rgba(18,18,34,.62); background: transparent; cursor: pointer; }
+.taskCheck { position: relative; width: 36px; height: 36px; }
+.taskCheck i { position: absolute; inset: -4px; border: 1px solid transparent; border-top-color: var(--kinetic-violet); border-radius: 50%; opacity: 0; }
+.taskCheck:disabled i { opacity: 1; animation: kineticTasksOrbit var(--motion-reward) linear infinite; }
+.taskOpen { display: grid; min-width: 0; gap: 6px; padding: 6px 3px; border: 0; outline: 0; color: inherit; background: transparent; text-align: left; cursor: pointer; }
+.taskOpen > span { display: grid; gap: 5px; min-width: 0; }
+.taskOpen small { color: var(--kinetic-violet); font-size: 5px; font-weight: 850; letter-spacing: .1em; }
+.taskOpen strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.taskOpen p { margin: 0; overflow: hidden; color: rgba(18,18,34,.4); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.taskTime { display: flex; align-items: center; gap: 7px; color: rgba(18,18,34,.42); font-size: 6px; }
+.taskTime > span { display: grid; gap: 3px; }
+.taskTime b { color: rgba(18,18,34,.7); font-size: 7px; }
+.taskState { justify-self: start; padding: 5px 8px; border-radius: 999px; color: var(--kinetic-violet); background: rgba(96,71,255,.08); font-size: 5px; font-weight: 850; white-space: nowrap; }
+.taskState[data-state="waiting"] { color: #9a5a00; background: rgba(255,169,42,.13); }
+.taskState[data-state="completed"] { color: #008a6d; background: rgba(60,230,189,.13); }
+.taskArrow { width: 29px; height: 29px; border: 0; background: rgba(18,18,34,.04); }
+.empty { display: flex; min-height: 440px; align-items: center; justify-content: center; flex-direction: column; text-align: center; }
+.empty > div { position: relative; display: grid; width: 110px; height: 110px; place-items: center; margin-bottom: 18px; border-radius: 50%; color: var(--kinetic-violet); background: rgba(96,71,255,.07); }
+.empty > div i { position: absolute; inset: -12px; border: 1px solid rgba(96,71,255,.15); border-radius: 50%; }
+.empty > div i:nth-child(2) { inset: -29px; border-style: dashed; animation: kineticTasksOrbit calc(var(--motion-reward) * 22) linear infinite; }
+.empty > div i:nth-child(3) { inset: -46px; opacity: .45; }
+.empty h3 { margin: 8px 0; font-size: 18px; letter-spacing: -.04em; }
+.empty p { margin: 0; color: rgba(18,18,34,.45); font-size: 8px; }
+.empty > button { display: flex; min-height: 40px; align-items: center; gap: 7px; margin-top: 22px; padding: 0 14px; border: 0; border-radius: 999px; color: white; background: var(--kinetic-ink); font-size: 7px; font-weight: 800; cursor: pointer; }
+
+.inspector { position: relative; align-self: start; min-height: 600px; padding: 21px; border-radius: 25px; box-shadow: 0 24px 75px rgba(18,18,34,.07); }
+.inspector form > header { display: flex; align-items: center; justify-content: space-between; color: rgba(18,18,34,.4); font-size: 6px; font-weight: 900; letter-spacing: .14em; }
+.inspector form > header button { display: grid; width: 29px; height: 29px; place-items: center; border: 0; border-radius: 50%; background: rgba(18,18,34,.05); cursor: pointer; }
+.inspectorIndex { display: flex; align-items: center; gap: 11px; margin: 28px 0 20px; }
+.inspectorIndex span { color: var(--kinetic-violet); font-size: 28px; font-weight: 600; letter-spacing: -.06em; }
+.inspectorIndex i { flex: 1; height: 1px; background: linear-gradient(90deg,var(--kinetic-violet),transparent); }
+.inspector label { margin-top: 13px; }
+.inspector textarea { resize: vertical; min-height: 74px; padding: 10px; line-height: 1.5; }
+.inspector .titleField textarea { min-height: 82px; border: 0; border-bottom: 1px solid var(--kinetic-line); border-radius: 0; background: transparent; font-size: 18px; font-weight: 700; letter-spacing: -.035em; }
+.inspectorGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+.inspectorGrid label { margin: 0; }
+.inspectorGrid input,.inspectorGrid select { height: 39px; padding: 0 9px; }
+.inspectorActions { display: grid; grid-template-columns: 1fr 1fr 40px; gap: 7px; margin-top: 19px; padding-top: 16px; border-top: 1px solid var(--kinetic-line); }
+.inspectorActions button { display: flex; min-height: 40px; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 11px; color: white; background: var(--kinetic-ink); font-size: 7px; font-weight: 800; cursor: pointer; }
+.inspectorActions button.waitAction { color: var(--kinetic-ink); background: rgba(18,18,34,.07); }
+.inspectorActions button.deleteAction { padding: 0; color: var(--kinetic-orange); background: rgba(255,92,53,.09); }
+.inspectorActions button.restoreAction { grid-column: 1/-1; color: var(--kinetic-ink); background: var(--kinetic-acid); }
+.inspector footer { display: flex; justify-content: space-between; margin-top: 18px; color: rgba(18,18,34,.3); font-size: 5px; font-weight: 800; letter-spacing: .1em; }
+.inspectorEmpty { display: flex; min-height: 550px; align-items: center; justify-content: center; flex-direction: column; text-align: center; }
+.inspectorEmpty > div { position: relative; display: grid; width: 85px; height: 85px; place-items: center; margin-bottom: 26px; border-radius: 50%; color: white; background: var(--kinetic-violet); }
+.inspectorEmpty > div i { position: absolute; inset: -12px; border: 1px solid rgba(96,71,255,.2); border-radius: 50%; }
+.inspectorEmpty > div i:nth-child(2) { inset: -25px; border-style: dashed; animation: kineticTasksOrbit calc(var(--motion-reward) * 20) linear infinite; }
+.inspectorEmpty > span { color: var(--kinetic-violet); font-size: 6px; font-weight: 900; letter-spacing: .14em; }
+.inspectorEmpty h3 { margin: 10px 0 7px; font-size: 18px; }
+.inspectorEmpty p { max-width: 230px; margin: 0; color: rgba(18,18,34,.42); font-size: 8px; line-height: 1.6; }
+.toast { position: fixed; z-index: 200; right: 22px; bottom: max(48px,calc(var(--app-safe-bottom) + 12px)); display: flex; min-height: 44px; align-items: center; gap: 9px; padding: 0 16px; border-radius: 999px; color: var(--kinetic-ink); background: var(--kinetic-acid); box-shadow: 0 18px 50px rgba(18,18,34,.24); font-size: 8px; font-weight: 850; animation: kineticTasksToast var(--motion-panel) var(--motion-ease-enter) both; }
+
+@keyframes kineticTasksOrbit { to { transform: rotate(360deg); } }
+@keyframes kineticTasksReveal { from { opacity: 0; transform: translateY(-12px); } }
+@keyframes kineticTasksRowIn { to { opacity: 1; transform: translateY(0); } }
+@keyframes kineticTasksToast { from { opacity: 0; transform: translateY(18px) scale(.94); } }
+
+@media (max-width: 1280px) {
+  .hero { grid-template-columns: 1fr 370px; }
+  .workspace { grid-template-columns: 200px minmax(360px,1fr); }
+  .inspector { grid-column: 2; }
+  .captureFields { grid-template-columns: repeat(3,1fr); }
+  .captureFields > button { min-height: 40px; }
+}
+
+@media (max-width: 900px) {
+  .page { padding: 28px 16px 105px; }
+  .hero { grid-template-columns: 1fr; gap: 30px; }
+  .heroTelemetry { max-width: 560px; }
+  .controlDeck { grid-template-columns: auto 1fr; }
+  .keyboardHint { display: none; }
+  .workspace { grid-template-columns: 180px minmax(0,1fr); }
+  .inspector { grid-column: 1/-1; }
+  .taskRow { grid-template-columns: 38px minmax(0,1fr) 80px 30px; }
+  .taskState { display: none; }
+  .toast { bottom: calc(90px + var(--app-safe-bottom)); }
+}
+
+@media (max-width: 680px) {
+  .hero h1 { font-size: clamp(44px,13vw,63px); }
+  .heroTelemetry { grid-template-columns: 135px 1fr; gap: 14px; }
+  .telemetryCore { width: 128px; height: 128px; }
+  .telemetryCore strong { font-size: 40px; }
+  .controlDeck { grid-template-columns: 1fr; }
+  .captureToggle { justify-content: center; }
+  .captureTitle { grid-template-columns: 1fr; }
+  .captureFields { grid-template-columns: 1fr 1fr; }
+  .captureFields > button { grid-column: 1/-1; justify-content: space-between; }
+  .workspace { display: block; }
+  .navigator { margin-bottom: 14px; padding: 10px; overflow: hidden; }
+  .navigator > header,.listHeader,.newList,.listNav { display: none; }
+  .navigator nav { display: flex; gap: 7px; overflow-x: auto; scrollbar-width: none; }
+  .navigator nav > button { flex: none; grid-template-columns: 31px auto auto; min-height: 43px; padding-right: 12px; }
+  .navigator nav button > span { display: block; }
+  .navigator nav button small { display: none; }
+  .taskField { padding: 15px 10px; border-radius: 22px; }
+  .taskRow { grid-template-columns: 37px minmax(0,1fr) 30px; min-height: 70px; }
+  .taskTime,.taskState { display: none; }
+  .inspector { margin-top: 14px; min-height: 0; }
+  .inspectorEmpty { min-height: 330px; }
+  .toast { right: 12px; left: 12px; justify-content: center; }
+}
+
+@media (max-width: 420px) {
+  .page { padding-inline: 11px; }
+  .hero h1 { font-size: 42px; }
+  .heroTelemetry { grid-template-columns: 112px 1fr; }
+  .telemetryCore { width: 104px; height: 104px; }
+  .telemetryCore strong { font-size: 32px; }
+  .heroTelemetry dl > div { min-height: 37px; padding-inline: 8px; }
+  .capture { padding: 14px; }
+  .captureFields { grid-template-columns: 1fr; }
+  .captureFields > button { grid-column: auto; }
+  .inspectorGrid { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page *,.page *::before,.page *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+}
