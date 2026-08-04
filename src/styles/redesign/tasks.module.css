@@ -1,0 +1,374 @@
+/* 待办 v2：三栏 / Drawer / Sheet 响应式表面。全部走 token。 */
+
+.page {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.kicker {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.18em;
+}
+
+.header h1 {
+  margin: var(--space-1) 0 0;
+  font-family: var(--font-serif);
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 650;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr) 300px;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.paneLabel {
+  display: block;
+  padding-bottom: var(--space-2);
+  color: var(--quiet);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+/* ---------- 清单栏 ---------- */
+
+.listsPane {
+  display: grid;
+  gap: 2px;
+}
+
+.listsPane ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.listItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.listItem:hover {
+  background: var(--surface-soft);
+}
+
+.listItem[data-active] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.listItem em {
+  color: var(--quiet);
+  font-family: var(--font-num);
+  font-size: 11px;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.listItem:focus-visible,
+.listAdd:focus-visible,
+.taskRow:focus-visible,
+.taskCheck:focus-visible,
+.inspectorPrimary:focus-visible,
+.inspectorGhost:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.listAdd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin-top: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color var(--motion-fast) var(--motion-ease);
+}
+
+.listAdd:hover {
+  border-color: var(--accent-line);
+}
+
+/* ---------- 任务列表 ---------- */
+
+.listPane {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.captureBar input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-size: 13.5px;
+  box-shadow: var(--shadow-xs);
+}
+
+.captureBar input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent-line);
+}
+
+.taskList {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.taskRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 56px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-xs);
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease);
+}
+
+.taskRow[data-priority="1"] {
+  border-left-color: var(--accent);
+}
+
+.taskRow:hover {
+  border-color: var(--accent-line);
+}
+
+.taskRow[aria-selected="true"] {
+  border-color: var(--accent-line);
+  background: var(--planner-row-selected);
+}
+
+.taskRow[data-done] {
+  opacity: 0.55;
+}
+
+.taskRow[data-done] strong {
+  text-decoration: line-through;
+}
+
+.taskCheck {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--accent);
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.taskCheck:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.taskCheck[aria-pressed="true"] {
+  border-color: var(--ok);
+  background: var(--ok);
+  color: var(--accent-ink);
+}
+
+.taskMain {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.taskMain strong {
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.taskMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.taskMeta i {
+  color: var(--quiet);
+  font-family: var(--font-mono);
+  font-style: normal;
+  font-weight: 700;
+}
+
+.taskMeta i[data-p="1"] {
+  color: var(--accent);
+}
+
+.taskMeta em {
+  font-style: normal;
+}
+
+/* ---------- Inspector ---------- */
+
+.inspectorPane {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.inspectorEmpty {
+  color: var(--quiet);
+  font-size: 12px;
+}
+
+.inspectorBody {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.inspectorRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.inspectorField {
+  display: grid;
+  gap: 4px;
+}
+
+.inspectorField > span {
+  color: var(--quiet);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.inspectorField strong {
+  font-size: 13.5px;
+}
+
+.inspectorField p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.inspectorActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.inspectorPrimary {
+  flex: 1;
+  min-height: 44px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color var(--motion-fast) var(--motion-ease);
+}
+
+.inspectorPrimary:hover {
+  background: var(--accent-hover);
+}
+
+.inspectorGhost {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color var(--motion-fast) var(--motion-ease);
+}
+
+.inspectorGhost:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.inspectorHint {
+  margin: 0;
+  color: var(--quiet);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+/* ---------- 响应式：761–1179 双栏（详情走 Drawer），≤760 单栏（详情走 Sheet） ---------- */
+
+@media (max-width: 1179px) {
+  .workspace {
+    grid-template-columns: 180px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .listsPane {
+    display: none;
+  }
+}

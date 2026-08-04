@@ -101,13 +101,6 @@
   word-break: break-all;
 }
 
-@keyframes driveSheetIn {
-  from {
-    opacity: 0;
-    transform: translateY(24px);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .driveDetailSheet {
     animation-duration: 0.001ms;

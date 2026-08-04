@@ -12,6 +12,10 @@ const KNOWN_PLANNER_MOTION_CONSUMERS = new Set([
   "src/components/planner/PlannerTaskList.tsx",
   "src/components/planner/PlannerTaskRow.tsx",
   "src/components/planner/PlannerTasksWorkspace.tsx",
+  // 重设计预览（/redesign）：均在 TrailShell / TasksTrail 的 MotionProvider 内消费语义契约
+  "src/components/redesign/DayAgenda.tsx",
+  "src/components/redesign/NextQueue.tsx",
+  "src/components/redesign/TasksTrail.tsx",
 ]);
 const KEYFRAME_LEGACY_BASELINE = new Map();
 

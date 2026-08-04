@@ -1,0 +1,447 @@
+/* 每日工作台 v2：议程单流。全部走 token。 */
+
+.page {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.kicker {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.18em;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.headerTitle {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.dayNav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dayNav h1 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(24px, 3vw, 34px);
+  font-weight: 650;
+}
+
+.dayNav a {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--muted);
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.dayNav a:hover {
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+.dayNav a:focus-visible,
+.ghostButton:focus-visible,
+.agendaCheck:focus-visible,
+.scoreButton:focus-visible,
+.quickAction:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.headerActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.ghostButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink-soft);
+  font-size: 13px;
+  text-decoration: none;
+  transition: border-color var(--motion-fast) var(--motion-ease);
+}
+
+.ghostButton:hover {
+  border-color: var(--accent-line);
+}
+
+/* ---------- 状态条 ---------- */
+
+.statusBar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-xs);
+}
+
+.statusBar > div {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  min-height: 64px;
+  align-content: center;
+  padding: var(--space-2) var(--space-4);
+  border-left: 1px solid var(--line);
+}
+
+.statusBar > div:first-child {
+  border-left: 0;
+}
+
+.statusBar strong {
+  font-family: var(--font-num);
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+}
+
+.statusBar span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.statusBar > div[data-tone="due"] {
+  background: var(--accent-soft);
+}
+
+.statusBar > div[data-tone="due"] strong {
+  color: var(--accent);
+}
+
+/* ---------- 议程 ---------- */
+
+.agenda {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.agendaHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.agendaHead h2 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 18px;
+}
+
+.agendaCount {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.agendaList {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agendaItem {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.agendaItem[data-done] {
+  opacity: 0.55;
+}
+
+.agendaItem[data-done] strong {
+  text-decoration: line-through;
+}
+
+.agendaTime {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--quiet);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.agendaCard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 56px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-xs);
+  transition: border-color var(--motion-fast) var(--motion-ease);
+}
+
+.agendaCard[data-priority="1"] {
+  border-left-color: var(--accent);
+}
+
+.agendaCard[data-kind="review"] {
+  border-left-color: var(--info);
+  background: color-mix(in srgb, var(--info-soft) 34%, var(--surface-raised));
+}
+
+.agendaCard:hover {
+  border-color: var(--accent-line);
+}
+
+.agendaCardMain {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agendaCardMain strong {
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agendaMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.agendaMeta i {
+  color: var(--quiet);
+  font-family: var(--font-mono);
+  font-style: normal;
+  font-weight: 700;
+}
+
+.agendaMeta i[data-p="1"] {
+  color: var(--accent);
+}
+
+.agendaMeta em {
+  font-style: normal;
+}
+
+.agendaCheck {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--accent);
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.agendaCheck:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.agendaCheck[aria-pressed="true"] {
+  border-color: var(--ok);
+  background: var(--ok);
+  color: var(--accent-ink);
+}
+
+.scoreGroup {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+.scoreButton {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink-soft);
+  font-family: var(--font-num);
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.scoreButton:hover {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.scoreDone {
+  flex: none;
+  padding: 6px var(--space-3);
+  border-radius: 99px;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.agendaClear {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.agendaClear p {
+  margin: 0;
+}
+
+.agendaClear strong {
+  color: var(--ink);
+}
+
+.agendaSeal {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--font-serif);
+  font-size: 20px;
+  transform: rotate(4deg);
+  animation: sealStamp var(--motion-reward) var(--motion-ease-snappy) both;
+}
+
+/* ---------- 快捷面板 ---------- */
+
+.quickPanel {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+
+.quickPanel h2 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 16px;
+}
+
+.quickGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.quickAction {
+  display: grid;
+  place-items: center;
+  min-height: 48px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease);
+}
+
+.quickAction:hover {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+
+.quickHint {
+  margin: 0;
+  color: var(--quiet);
+  font-size: 11px;
+}
+
+/* ---------- 响应式 ---------- */
+
+@media (max-width: 760px) {
+  .statusBar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .statusBar > div:nth-child(3) {
+    border-left: 0;
+  }
+
+  .statusBar > div:nth-child(n + 3) {
+    border-top: 1px solid var(--line);
+  }
+
+  .agendaItem {
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: var(--space-2);
+  }
+
+  .quickGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scoreButton {
+    width: 40px;
+    height: 44px;
+  }
+}

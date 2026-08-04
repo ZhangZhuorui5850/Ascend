@@ -1235,16 +1235,6 @@
   font-size: 10px;
 }
 
-.spin {
-  animation: algorithm-spin 1s linear infinite;
-}
-
-@keyframes algorithm-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .algorithmEmpty {
   display: grid;
   min-height: 220px;
