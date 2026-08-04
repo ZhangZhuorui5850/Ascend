@@ -1,4 +1,4 @@
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { newWorlds } from "./worlds";
 import styles from "./concept.module.css";
@@ -44,7 +44,10 @@ export default function ConceptIndexPage() {
     <main className={styles.page}>
       <header className={styles.header}>
         <div className={styles.brand}><i /><span>ASCEND / EXPERIMENTAL INTERFACES</span></div>
-        <span>NINETEEN MOTION SYSTEMS · 2026</span>
+        <div className={styles.headerMeta}>
+          <span>NINETEEN MOTION SYSTEMS · 2026</span>
+          <Link href="/concept/guide" className={styles.guideLink}><BookOpen size={13} />DESIGN PLAYBOOK</Link>
+        </div>
       </header>
       <section className={styles.intro}>
         <p>THE MOTION EDITION</p>
