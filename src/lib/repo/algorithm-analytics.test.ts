@@ -41,10 +41,10 @@ describe("algorithm analytics", () => {
     db.prepare(`
       INSERT INTO algorithm_submissions
         (workspace_id, attempt_id, problem_id, operation_id, code_sha256,
-         language, submission_kind, status, gateway_latency_ms)
+         language, submission_kind, status, gateway_latency_ms, submitted_at)
       VALUES
-        (?, ?, ?, 'metrics:operation:0001', 'hash', 'cpp17', 'formal', 'AC', 80),
-        (?, ?, ?, 'metrics:operation:0002', 'hash', 'cpp17', 'formal', 'WA', 140)
+        (?, ?, ?, 'metrics:operation:0001', 'hash', 'cpp17', 'formal', 'AC', 80, '2026-07-20T10:00:00.000Z'),
+        (?, ?, ?, 'metrics:operation:0002', 'hash', 'cpp17', 'formal', 'WA', 140, '2026-07-21T10:00:00.000Z')
     `).run(scope.workspaceId, first, problemId, scope.workspaceId, first, problemId);
 
     const metrics = getAlgorithmAnalytics(db, scope, "2026-07-26");

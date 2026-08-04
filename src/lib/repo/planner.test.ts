@@ -315,8 +315,10 @@ describe("day tasks", () => {
     });
 
     expect(() => listCalendarTasks(db, legacyScope)).not.toThrow();
-    expect(listCalendarTasks(db, legacyScope).find((task) => task.title === "无日期任务")?.day)
-      .toBe("");
+    // 合并线（2026-08）：legacy 日历视图只读 day_tasks；v2-only 任务经 /tasks 与
+    // 日历事件投影展示，不回漏进 legacy 视图（生产库保留本地功能线，day_tasks 可写）。
+    expect(listCalendarTasks(db, legacyScope).find((task) => task.title === "无日期任务"))
+      .toBeUndefined();
   });
 
   it("keeps task positions stable when completion changes", () => {

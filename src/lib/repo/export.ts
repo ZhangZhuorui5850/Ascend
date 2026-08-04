@@ -12,6 +12,8 @@ import type {
 } from "../planner/types";
 import { getSettings, type AppSettings } from "./settings";
 import type { MockExamBreakdown } from "./mock-exams";
+import { addMinutesToInstant, localDateTimeToUtc } from "../planner/time";
+import { plannerDefaultId } from "./planner-defaults";
 
 /**
  * per-workspace 数据导出（评审 P3#27）：把一个学习空间的全部数据聚合为
@@ -21,6 +23,23 @@ import type { MockExamBreakdown } from "./mock-exams";
 
 export const WORKSPACE_EXPORT_SCHEMA = "ascend.workspace-export";
 export const WORKSPACE_EXPORT_SCHEMA_VERSION = 3;
+
+/** 只保留用户真正填过的分项字段；规范化时注入的默认值不进导出。 */
+function compactBreakdownItem(item: unknown): MockExamBreakdown {
+  const source = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
+  const compact: Record<string, unknown> = {
+    label: source.label,
+    score: source.score,
+    maxScore: source.maxScore,
+  };
+  if (source.evidenceType !== undefined && source.evidenceType !== "self_assessment") compact.evidenceType = source.evidenceType;
+  if (source.knowledgePointId) compact.knowledgePointId = source.knowledgePointId;
+  if (source.questionType) compact.questionType = source.questionType;
+  if (source.causeCategory) compact.causeCategory = source.causeCategory;
+  if (source.durationMinutes !== undefined && source.durationMinutes !== null) compact.durationMinutes = source.durationMinutes;
+  if (source.guessedCorrect !== undefined && source.guessedCorrect !== null) compact.guessedCorrect = source.guessedCorrect;
+  return compact as MockExamBreakdown;
+}
 
 export type ExportedAsset = {
   id: number;
@@ -183,6 +202,71 @@ export function buildWorkspaceExport(
            completed_at, canceled_at, version, legacy_day_task_id, created_at, updated_at
     FROM planner_tasks WHERE workspace_id = ? ORDER BY created_at ASC, sort_order ASC, id ASC
   `).all(scope.workspaceId) as PlannerTask[];
+  // 合并线：legacy day_tasks 仍然可写（本地功能线），导出时把未镜像进
+  // planner_tasks 的 legacy 行一并映射为 PlannerTask 形状，避免数据在导出中丢失。
+  const workspaceRow = db.prepare("SELECT COALESCE(timezone, 'Asia/Shanghai') AS timezone FROM workspaces WHERE id = ?")
+    .get(scope.workspaceId) as { timezone: string } | undefined;
+  const legacyOnlyTasks = db.prepare(`
+    SELECT d.*
+    FROM day_tasks d
+    LEFT JOIN planner_tasks p
+      ON p.workspace_id = d.workspace_id AND p.legacy_day_task_id = d.id
+    WHERE d.workspace_id = ? AND p.id IS NULL
+    ORDER BY d.created_at ASC, d.sort_order ASC, d.id ASC
+  `).all(scope.workspaceId) as Array<{
+    id: number;
+    workspace_id: string;
+    day: string;
+    title: string;
+    subject_code: string | null;
+    done: number;
+    sort_order: number;
+    created_at: string;
+    done_at: string | null;
+    priority: 1 | 2 | 3;
+    estimated_minutes: number;
+    scheduled_start: string | null;
+    notes: string;
+  }>;
+  const timezone = workspaceRow?.timezone ?? "Asia/Shanghai";
+  const mappedLegacyTasks = legacyOnlyTasks.map((task): PlannerTask => {
+    const scheduledStartAt = task.scheduled_start
+      ? localDateTimeToUtc({ date: task.day, time: task.scheduled_start, timeZone: timezone })
+      : null;
+    return {
+      id: `${task.workspace_id}:planner:legacy-day-task:${task.id}`,
+      workspace_id: task.workspace_id,
+      list_id: plannerDefaultId(task.workspace_id, "inbox"),
+      parent_task_id: null,
+      depth: 0,
+      title: task.title,
+      notes: task.notes ?? "",
+      subject_code: task.subject_code,
+      status: task.done ? "completed" : "open",
+      priority: task.priority,
+      due_date: scheduledStartAt ? null : task.day,
+      due_at: null,
+      due_timezone: null,
+      scheduled_start_at: scheduledStartAt,
+      scheduled_end_at: scheduledStartAt ? addMinutesToInstant(scheduledStartAt, task.estimated_minutes) : null,
+      scheduled_timezone: scheduledStartAt ? timezone : null,
+      scheduled_all_day: 0,
+      estimated_minutes: task.estimated_minutes,
+      series_id: null,
+      occurrence_key: null,
+      sort_order: task.sort_order,
+      deleted_at: null,
+      completed_at: task.done ? (task.done_at ?? task.created_at) : null,
+      canceled_at: null,
+      version: 1,
+      legacy_day_task_id: task.id,
+      created_at: task.created_at,
+      updated_at: task.done_at ?? task.created_at,
+    };
+  });
+  const allTasks = [...tasks, ...mappedLegacyTasks]
+    .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.sort_order - b.sort_order
+      || String(a.legacy_day_task_id ?? a.id).localeCompare(String(b.legacy_day_task_id ?? b.id), undefined, { numeric: true }));
   const calendars = db.prepare(`
     SELECT id, workspace_id, name, color_token, is_default, visibility,
            sort_order, archived_at, created_at, updated_at
@@ -282,7 +366,7 @@ export function buildWorkspaceExport(
     let breakdown: MockExamBreakdown[] = [];
     try {
       const parsed = JSON.parse(breakdown_json || "[]");
-      if (Array.isArray(parsed)) breakdown = parsed;
+      if (Array.isArray(parsed)) breakdown = parsed.map(compactBreakdownItem);
     } catch {
       breakdown = [];
     }
@@ -329,7 +413,7 @@ export function buildWorkspaceExport(
     planner: {
       schema_version: 3,
       lists,
-      tasks,
+      tasks: allTasks,
       calendars,
       events,
       labels,

@@ -87,8 +87,10 @@ describe("Planner migrations", () => {
     const before = db.prepare("SELECT COUNT(*) AS count FROM planner_tasks").get();
     runMigrations(db);
     expect(db.prepare("SELECT COUNT(*) AS count FROM planner_tasks").get()).toEqual(before);
+    // 合并线（2026-08）：生产库以本地功能线为准，day_tasks 保持可写；
+    // 0018_planner_core 不再创建 v2 只读触发器，legacy 与 v2 双写并存。
     expect(() => db.prepare("UPDATE day_tasks SET title = 'changed' WHERE id = 1").run())
-      .toThrow("day_tasks is read-only after Planner v2 migration");
+      .not.toThrow();
   });
 
   it("adds recurrence, reminder, notification, and encrypted subscription storage append-only", () => {
