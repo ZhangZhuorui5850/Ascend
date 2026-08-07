@@ -23,3 +23,46 @@
 @media(max-width:760px){.page{padding:20px 14px 112px}.examHero,.signalHero{min-height:0;padding:75px 22px 32px;border-radius:27px}.examRadar,.signalCore{display:none}.examHero h1,.signalHero h1{font-size:clamp(39px,11vw,61px)}.formSurface>header,.weakMatrix>header,.examHistory>header,.outcomeField>header,.weekRhythm>header,.scoreSignal>header,.subjectSignal>header,.weakSignal>header,.mockSignal>header,.pluginSignal>header{padding:19px}.legacySurface{padding:14px}.weakMatrix article{grid-template-columns:24px minmax(100px,1fr) 45px}.weakMatrix article>i{display:none}.examHistory>div{padding:8px 15px 20px}.examHistory>div>article{grid-template-columns:27px 70px minmax(0,1fr);gap:10px}.examScore{width:65px}.examMain>div{grid-template-columns:1fr}.outcomeField>div{grid-template-columns:1fr}.outcomeField article{min-height:145px}.rhythmGrid{grid-template-columns:1fr}.weekRhythm>div{height:220px;padding-inline:15px;gap:7px}.weakSignal>div{padding-inline:14px}.weakSignal>div>article{grid-template-columns:1fr}.weakSignal :global(.secondaryButton){margin:0 0 12px 38px;width:max-content}.mockSignal>div{grid-template-columns:repeat(2,1fr)}.pluginSignal>div{grid-template-columns:1fr}}
 @media(max-width:480px){.examHero>section>div,.signalHero>section>div{min-height:80px;padding:12px 8px}.examHero section strong,.signalHero section strong{font-size:24px}.legacySurface :global(.mockExamGrid),.legacySurface :global(.mockExamFormGrid){grid-template-columns:1fr}.examHistory>div>article{grid-template-columns:22px 1fr}.examScore{display:none}.subjectSignal>div>div{grid-template-columns:30px minmax(80px,1fr) 40px}.subjectSignal>div i{display:none}.weakSignal article>a{grid-template-columns:24px minmax(0,1fr) auto}.weakSignal article em{display:none}}
 @media(prefers-reduced-motion:reduce){.examRadar::before,.examRadar i,.signalCore::before,.signalCore i{animation:none!important}}
+
+/* Make the embedded mock-exam form use the same readable control rhythm. */
+.legacySurface :global(.field),
+.legacySurface :global(label) {
+  color: rgba(18,18,34,.62);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.legacySurface :global(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])),
+.legacySurface :global(textarea),
+.legacySurface :global(select) {
+  min-height: 44px;
+  padding: 9px 12px;
+  color: var(--kinetic-ink);
+  background: rgba(255,255,255,.76);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.legacySurface :global(input[type="checkbox"]),
+.legacySurface :global(input[type="radio"]) {
+  min-height: auto;
+  padding: 0;
+}
+
+.legacySurface :global(textarea) {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.legacySurface :global(.formError),
+.legacySurface :global(.hint) {
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.legacySurface :global(.formError) {
+  padding: 9px 12px;
+  border-radius: 11px;
+  background: rgba(255,92,53,.1);
+  color: var(--kinetic-orange);
+}

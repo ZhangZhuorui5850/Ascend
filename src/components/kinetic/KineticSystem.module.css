@@ -27,3 +27,34 @@
 @media(max-width:720px){.page{padding:18px 13px 108px}.hero{min-height:600px;padding:33px 24px;border-radius:28px}.heroCopy{width:100%}.hero h1{font-size:clamp(44px,13vw,68px)}.heroCopy>p{font-size:10px}.orbitSystem,.controlCore{top:auto;right:50%;bottom:25px;width:min(69vw,300px);transform:translateX(50%)}.heroBadges{gap:6px}.heroBadges span{font-size:6px}.signalStrip{grid-template-columns:1fr 1fr;border-radius:19px}.signalStrip>div{padding:15px}.signalStrip>div>span{font-size:20px}.signalStrip strong{font-size:7px}.systemSurface{padding:14px;border-radius:23px}.surfaceHeader{grid-template-columns:1fr auto}.surfaceHeader p{display:none}.controlNav{top:calc(var(--kinetic-top) + var(--app-safe-top) + 7px)}.controlGroup{border-radius:23px}.controlGroup>header{padding:23px 18px}.controlBody{padding:12px}.controlBody :global(.card){padding:16px}.controlBody :global(.settingsSectionHead){grid-template-columns:auto 1fr}.controlBody :global(.settingsSectionHead .secondaryButton),.controlBody :global(.sectionHint){display:none}}
 @media(max-width:440px){.hero{min-height:575px}.hero h1{font-size:44px}.signalStrip>div{grid-template-columns:1fr;gap:3px}.signalStrip>div>span{grid-row:auto}.controlNav{margin-inline:-4px}.controlNav a{min-width:44px}.controlNav a span{display:none}.surfaceHeader h2{font-size:30px}.paletteContract{grid-template-columns:1fr}.paletteContract>p{grid-column:auto}}
 @media(prefers-reduced-motion:reduce){.hero::before,.orbitSystem>i,.controlCore>i,.controlCore::before,.orbitNodeA,.orbitNodeB,.orbitNodeC{animation:none!important}}
+
+/* The settings and extension cards are legacy surfaces inside the new shell. */
+.controlBody :global(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])),
+.controlBody :global(textarea),
+.controlBody :global(select) {
+  min-height: 44px;
+  padding: 9px 12px;
+  color: var(--kinetic-ink);
+  background: rgba(255,255,255,.76);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.controlBody :global(input[type="checkbox"]),
+.controlBody :global(input[type="radio"]) {
+  min-height: auto;
+  padding: 0;
+}
+
+.controlBody :global(textarea) {
+  min-height: 104px;
+  resize: vertical;
+}
+
+.controlBody :global(.field),
+.controlBody :global(.sectionHint),
+.controlBody :global(.hint),
+.controlBody :global(.formError) {
+  font-size: 11px;
+  line-height: 1.6;
+}

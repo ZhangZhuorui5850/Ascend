@@ -84,3 +84,48 @@
 @media(max-width:760px){.page{padding:20px 14px 112px}.knowledgeHero,.subjectHero,.errorHero{min-height:0;padding:75px 22px 32px;border-radius:27px}.knowledgeCore,.subjectGauge,.errorPulse{display:none}.knowledgeHero h1,.subjectHero h1,.errorHero h1{font-size:clamp(39px,11vw,61px)}.heroMetrics,.subjectStats,.errorHero>section{grid-template-columns:repeat(3,1fr)}.subjectOrbit{grid-template-columns:88px minmax(0,1fr);gap:14px;min-height:145px;padding:16px}.orbitVisual{width:82px}.subjectOrbit>svg{display:none}.legacySurface{padding:16px}.evidenceGrid{grid-template-columns:1fr}.reattemptField>header{align-items:start;flex-direction:column;gap:15px}.openErrors{padding:17px}.openErrors>div>div{grid-template-columns:25px 4px minmax(0,1fr)}.openErrors :global(.secondaryButton){grid-column:3}.graduateStream>div{grid-template-columns:1fr}.floatingAction{right:15px;bottom:88px}.workbenchSurface{padding:12px}}
 @media(max-width:480px){.heroMetrics>div,.subjectStats>div,.errorHero>section>div{min-height:80px;padding:12px 8px}.heroMetrics strong,.subjectStats strong,.errorHero>section strong{font-size:24px}.subjectOrbit{grid-template-columns:1fr}.orbitVisual{display:none}.orbitCopy h3{font-size:19px}.causeRadar>div{grid-template-columns:70px 1fr auto}}
 @media(prefers-reduced-motion:reduce){.knowledgeCore::before,.knowledgeCore i,.errorPulse::before,.errorPulse i{animation:none!important}}
+
+/* Shared form baseline for the legacy knowledge and review widgets. */
+.legacySurface :global(.field),
+.legacySurface :global(.inlineField) {
+  gap: 8px;
+  color: rgba(18,18,34,.62);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.legacySurface :global(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])),
+.legacySurface :global(textarea),
+.legacySurface :global(select) {
+  min-height: 44px;
+  padding: 9px 12px;
+  color: var(--kinetic-ink);
+  background: rgba(255,255,255,.76);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.legacySurface :global(input[type="checkbox"]),
+.legacySurface :global(input[type="radio"]) {
+  min-height: auto;
+  padding: 0;
+}
+
+.legacySurface :global(textarea) {
+  min-height: 104px;
+  resize: vertical;
+}
+
+.legacySurface :global(.hint),
+.legacySurface :global(.sectionHint),
+.legacySurface :global(.formError) {
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.legacySurface :global(.formError) {
+  padding: 9px 12px;
+  border-radius: 11px;
+  background: rgba(255,92,53,.1);
+  color: var(--kinetic-orange);
+}

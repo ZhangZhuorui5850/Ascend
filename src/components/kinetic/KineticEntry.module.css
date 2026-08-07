@@ -12,3 +12,73 @@
 @media(max-width:980px){.entry{grid-template-columns:1fr}.fieldStory{min-height:570px}.entryOrbit{width:330px}.formStage{min-height:620px}.onboardingHero{border-radius:34px}}
 @media(max-width:620px){.fieldStory{min-height:550px;padding:25px 22px}.fieldStory>header small{display:none}.storyCopy{width:100%}.storyCopy h1{font-size:clamp(49px,15vw,74px)}.storyCopy p{max-width:72%;font-size:9px}.entryOrbit{right:-30%;bottom:6%;width:290px}.fieldStory>footer span:last-child{display:none}.formStage{min-height:600px;padding:90px 24px 70px}.formStage :global(.loginCard h1){font-size:39px}.entryHint{bottom:24px}.onboardingField{padding:12px 12px 100px}.onboardingHero{min-height:520px;align-items:start;padding:34px 24px;border-radius:28px}.onboardingHero h1{font-size:48px}.onboardingHero>svg{position:absolute;right:25px;bottom:25px}.wizardSurface{padding:13px;border-radius:24px}.wizardSurface :global(.onboardingPane h1){font-size:36px}}
 @media(prefers-reduced-motion:reduce){.fieldStory::after,.mark i,.entryOrbit>i,.fieldStory>footer i,.securityCore>i{animation:none!important}}
+
+/* Keep the entry flow readable when the fixed Kinetic art direction meets real form content. */
+.formStage :global(.loginCard h1) {
+  max-width: 12ch;
+  font-size: clamp(36px, 3.35vw, 50px);
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+.formStage :global(.loginCard > p) {
+  max-width: 42rem;
+  margin-bottom: 28px;
+  color: rgba(18, 18, 34, .58);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.formStage :global(.field) {
+  gap: 9px;
+  margin-top: 20px;
+  color: rgba(18, 18, 34, .62);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.formStage :global(.field input),
+.formStage :global(.field textarea),
+.formStage :global(.field select) {
+  min-height: 52px;
+  padding: 0 15px;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.formStage :global(.field textarea) {
+  min-height: 112px;
+  padding-block: 13px;
+  resize: vertical;
+}
+
+.formStage :global(.primaryButton) {
+  min-height: 54px;
+  margin-top: 26px;
+  font-size: 12px;
+  letter-spacing: .04em;
+}
+
+.entryHint {
+  max-width: 520px;
+  margin-inline: auto;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+@media(max-width:620px) {
+  .formStage :global(.loginCard h1) {
+    max-width: none;
+    font-size: 39px;
+  }
+
+  .formStage :global(.loginCard > p) {
+    font-size: 12px;
+  }
+
+  .entryHint {
+    right: 24px;
+    left: 24px;
+    font-size: 10px;
+  }
+}

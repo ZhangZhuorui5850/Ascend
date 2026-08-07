@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import {
   ArrowRight, ArrowUpRight, Brain, Check, ChevronRight, Clock3,
   Command, Flame, Focus, Gauge, Pause, Play, RotateCcw, Sparkles,
@@ -9,6 +9,7 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { updatePlannerTaskAction } from "@/app/actions/planner-tasks";
+import { motion as motionContract } from "@/lib/motion/contracts";
 import styles from "./KineticHome.module.css";
 
 export type KineticHomeData = {
@@ -149,13 +150,13 @@ export function KineticHome({ data }: { data: KineticHomeData }) {
       <section className={styles.viewSwitcher} aria-label="首页视图">
         {(Object.keys(viewLabels) as ViewMode[]).map((view) => (
           <button className={mode === view ? styles.viewActive : ""} key={view} onClick={() => setMode(view)} type="button">
-            {mode === view ? <motion.i layoutId="kinetic-home-mode" /> : null}<span>{viewLabels[view]}</span>
+            {mode === view ? <m.i layoutId="kinetic-home-mode" /> : null}<span>{viewLabels[view]}</span>
           </button>
         ))}
       </section>
 
       <AnimatePresence mode="wait">
-        <motion.div className={styles.stage} key={mode} initial={reduceMotion ? false : { opacity: 0, y: 18, filter: "blur(12px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={reduceMotion ? undefined : { opacity: 0, y: -10, filter: "blur(8px)" }}>
+        <m.div className={styles.stage} key={mode} initial={reduceMotion ? false : { opacity: 0, y: 18, filter: "blur(12px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={reduceMotion ? undefined : { opacity: 0, y: -10, filter: "blur(8px)" }}>
           {mode === "pulse" ? (
             <>
               <section className={styles.heroCopy}>
@@ -174,7 +175,7 @@ export function KineticHome({ data }: { data: KineticHomeData }) {
                   <span className={styles.ringOne} /><span className={styles.ringTwo} /><span className={styles.ringThree} />
                   <span className={styles.satellite}><Brain size={18} /></span><span className={styles.satelliteTwo}><Zap size={16} /></span>
                   <div className={styles.coreDisc}>
-                    <svg viewBox="0 0 180 180" aria-hidden="true"><circle cx="90" cy="90" r="78" /><motion.circle className={styles.progressCircle} cx="90" cy="90" r="78" initial={reduceMotion ? false : { pathLength: 0 }} animate={{ pathLength: Math.min(1,data.momentum / 100) }} /></svg>
+                    <svg viewBox="0 0 180 180" aria-hidden="true"><circle cx="90" cy="90" r="78" /><m.circle className={styles.progressCircle} cx="90" cy="90" r="78" initial={reduceMotion ? false : { pathLength: 0 }} animate={{ pathLength: Math.min(1,data.momentum / 100) }} /></svg>
                     <div><small>WEEKLY MOMENTUM</small><strong>{data.momentum}<sup>%</sup></strong><span><Flame size={12} />真实学习记录</span></div>
                   </div>
                   <small className={styles.orbitCaptionA}>STUDIED {data.weekly.studiedMinutes}</small><small className={styles.orbitCaptionB}>TARGET {data.weekly.targetMinutes}</small>
@@ -190,14 +191,14 @@ export function KineticHome({ data }: { data: KineticHomeData }) {
               <section className={styles.missionStream}>
                 <header><div><small>LIVE MISSION STREAM</small><h2>今日任务轨迹</h2></div><p>{openMissions.length} 条开放 · {missions.filter((item) => item.completed).length} 条完成</p></header>
                 <div className={styles.missionList}>
-                  {missions.map((mission) => <motion.article className={mission.completed ? styles.missionDone : ""} layout key={mission.id}>
+                  {missions.map((mission) => <m.article className={mission.completed ? styles.missionDone : ""} layout key={mission.id} transition={motionContract.row.reorder}>
                     <button aria-label={mission.completed ? `恢复 ${mission.title}` : `完成 ${mission.title}`} className={styles.checkButton} disabled={pending} onClick={() => completeMission(mission)} type="button">{mission.completed ? <Check size={15} /> : mission.index}<i /></button>
                     <div><span>{mission.subject}</span><h3>{mission.title}</h3></div>
                     <span className={styles.taskSchedule}>{mission.scheduledTime || mission.dueDate || "自由轨道"}</span>
                     <span className={styles.taskPriority} data-priority={mission.priority}>{priorityLabel(mission.priority)}</span>
                     <span className={styles.taskDuration}>{mission.duration}m</span>
                     <button aria-label={`专注 ${mission.title}`} className={styles.focusButton} onClick={() => openFocus(mission)} type="button"><Focus size={15} /></button>
-                  </motion.article>)}
+                  </m.article>)}
                   {!missions.length ? <div className={styles.emptyStream}><Sparkles size={20} /><strong>今天的轨道还是空的</strong><Link href="/kinetic/tasks">去 Inbox 安排任务</Link></div> : null}
                 </div>
               </section>
@@ -232,13 +233,13 @@ export function KineticHome({ data }: { data: KineticHomeData }) {
               <aside className={styles.echoManifesto}><span>EVIDENCE, NOT FEELING</span><blockquote>“不要问看懂没有，去看一周后能否无提示重建。”</blockquote><p>延迟提取、错题回炉和信心校准共同构成学习结果证据。</p><div><span>今日完成 {data.summary.reviewsDone}</span><span>新增错题 {data.summary.mistakesLogged}</span></div></aside>
             </section>
           ) : null}
-        </motion.div>
+        </m.div>
       </AnimatePresence>
 
       {data.pluginSignals.length ? <section className={styles.pluginSignals}>{data.pluginSignals.map((signal) => <Link href={signal.href} key={signal.key}><Command size={15} /><div><small>{signal.label}</small><strong>{signal.title}</strong><p>{signal.description}</p></div><b>{signal.count}</b><ArrowUpRight size={16} /></Link>)}</section> : null}
 
       <AnimatePresence>{focusMission ? <FocusLayer mission={focusMission} running={focusRunning} seconds={focusSeconds} onClose={() => { setFocusRunning(false); setFocusMission(null); }} onReset={() => { setFocusRunning(false); setFocusSeconds(focusMission.duration * 60); }} onToggle={() => setFocusRunning((value) => !value)} /> : null}</AnimatePresence>
-      <AnimatePresence>{toast ? <motion.div className={styles.toast} initial={{ opacity: 0, y: 25, scale: .94 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12 }} role="status"><Sparkles size={15} />{toast}</motion.div> : null}</AnimatePresence>
+      <AnimatePresence>{toast ? <m.div className={styles.toast} initial={{ opacity: 0, y: 25, scale: .94 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12 }} role="status"><Sparkles size={15} />{toast}</m.div> : null}</AnimatePresence>
     </div>
   );
 }
@@ -248,13 +249,13 @@ function FocusLayer({ mission, running, seconds, onClose, onReset, onToggle }: {
   onClose: () => void; onReset: () => void; onToggle: () => void;
 }) {
   const reduceMotion = useReducedMotion();
-  return <motion.div className={styles.focusLayer} initial={reduceMotion ? false : { opacity: 0, clipPath: "circle(0% at 50% 50%)" }} animate={{ opacity: 1, clipPath: "circle(100% at 50% 50%)" }} exit={{ opacity: 0, clipPath: "circle(0% at 50% 50%)" }}>
+  return <m.div className={styles.focusLayer} initial={reduceMotion ? false : { opacity: 0, clipPath: "circle(0% at 50% 50%)" }} animate={{ opacity: 1, clipPath: "circle(100% at 50% 50%)" }} exit={{ opacity: 0, clipPath: "circle(0% at 50% 50%)" }}>
     <div className={styles.focusAtmosphere} aria-hidden="true"><i /><i /><i /></div>
     <button aria-label="退出专注" className={styles.focusClose} onClick={onClose} type="button"><X size={18} />退出</button>
     <small>DEEP FOCUS / {mission.subject}</small><h2>{mission.title}</h2><strong>{formatTimer(seconds)}</strong><p>{running ? "保持当前轨迹。只处理这一件事。" : "准备好后开始；退出不会自动记录学习时长。"}</p>
     <div><button aria-label={running ? "暂停" : "开始"} onClick={onToggle} type="button">{running ? <Pause fill="currentColor" size={25} /> : <Play fill="currentColor" size={25} />}</button><button aria-label="重置" onClick={onReset} type="button"><RotateCcw size={18} /></button></div>
     <span>{running ? "SESSION IN MOTION" : "READY WHEN YOU ARE"}</span>
-  </motion.div>;
+  </m.div>;
 }
 
 function priorityLabel(priority: 1 | 2 | 3) { return priority === 1 ? "深潜" : priority === 2 ? "稳定" : "轻量"; }

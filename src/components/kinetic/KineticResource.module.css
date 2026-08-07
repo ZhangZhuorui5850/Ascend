@@ -11,3 +11,32 @@
 @media(max-width:760px){.page{padding:20px 14px 112px}.libraryHero,.algorithmHero{min-height:0;padding:75px 22px 32px;border-radius:27px}.memoryCore,.codeCore{display:none}.libraryHero h1,.algorithmHero h1{font-size:clamp(39px,11vw,61px)}.librarySignals{grid-template-columns:repeat(2,1fr)}.librarySignals>div{min-height:68px;padding:12px}.explorerSurface,.algorithmSurface{padding:7px;border-radius:22px}.explorerSurface :global(.driveShell){min-height:580px;border-radius:17px}.transferManifest{grid-template-columns:1fr;padding:15px}.transferManifest>div{min-height:45px}.transferManifest>p{justify-self:start}.transferManifest>svg{display:none}.judgeSignal{top:18px;left:22px}.algorithmSurface{padding:10px}}
 @media(max-width:480px){.libraryHero>section>div,.algorithmHero>section>div{min-height:80px;padding:12px 8px}.libraryHero section strong,.algorithmHero section strong{font-size:20px}.librarySignals{grid-template-columns:1fr}.librarySignals>div{min-height:58px}.explorerSurface :global(.driveToolbar){padding-inline:8px}.algorithmSurface :global(.algorithmMetrics){grid-template-columns:repeat(2,1fr)}}
 @media(prefers-reduced-motion:reduce){.memoryCore::before,.memoryCore i,.codeCore::before,.codeCore i{animation:none!important}}
+
+/* Keep file and algorithm widgets consistent with Kinetic's form language. */
+.explorerSurface :global(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])),
+.explorerSurface :global(textarea),
+.explorerSurface :global(select),
+.algorithmSurface :global(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])),
+.algorithmSurface :global(textarea),
+.algorithmSurface :global(select) {
+  min-height: 44px;
+  padding: 9px 12px;
+  color: var(--kinetic-ink);
+  background: rgba(255,255,255,.76);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.explorerSurface :global(input[type="checkbox"]),
+.explorerSurface :global(input[type="radio"]),
+.algorithmSurface :global(input[type="checkbox"]),
+.algorithmSurface :global(input[type="radio"]) {
+  min-height: auto;
+  padding: 0;
+}
+
+.explorerSurface :global(textarea),
+.algorithmSurface :global(textarea) {
+  min-height: 104px;
+  resize: vertical;
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import {
   BarChart3, BrainCircuit, CalendarDays, CheckSquare2, ChevronRight,
   Command, FileStack, FlaskConical, Gauge, Home, LogOut, Menu, Orbit,
@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { logoutKinetic } from "@/app/actions/auth";
 import { CapturePanel } from "@/components/CapturePanel";
 import { clearOfflineLearningData, setActiveOfflineWorkspace } from "@/lib/offline-review";
+import { motion as motionContract } from "@/lib/motion/contracts";
 import type { PluginId } from "@/lib/plugins/registry";
 import type { CaptureSubject } from "@/lib/repo/knowledge";
 import type { ModulePref } from "@/lib/repo/settings";
@@ -182,7 +183,7 @@ export function KineticShell({
               <div className={styles.navSlot} key={item.href}>
                 {index === 0 || previous.group !== item.group ? <span className={styles.groupLabel}>{item.group}</span> : null}
                 <Link aria-current={activeRoute(pathname, item) ? "page" : undefined} className={activeRoute(pathname, item) ? styles.navActive : ""} href={item.href} onClick={() => setMobileOpen(false)}>
-                  <span className={styles.navIcon}><Icon size={18} />{activeRoute(pathname, item) ? <motion.i layoutId="kinetic-active-orbit" /> : null}</span>
+                  <span className={styles.navIcon}><Icon size={18} />{activeRoute(pathname, item) ? <m.i layoutId="kinetic-active-orbit" transition={motionContract.row.reorder} /> : null}</span>
                   <span className={styles.navLabel}>{item.label}</span>
                   <ChevronRight className={styles.navArrow} size={15} />
                 </Link>
@@ -262,8 +263,8 @@ function KineticCommand({ navigation, onClose, onNavigate }: {
     : navigation.slice(0, 6);
 
   return (
-    <motion.div className={styles.commandBackdrop} initial={reduceMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <motion.section aria-label="快速抵达" aria-modal="true" className={styles.commandPanel} initial={reduceMotion ? false : { opacity: 0, y: 26, scale: .96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, scale: .98 }} role="dialog">
+    <m.div className={styles.commandBackdrop} initial={reduceMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <m.section aria-label="快速抵达" aria-modal="true" className={styles.commandPanel} initial={reduceMotion ? false : { opacity: 0, y: 26, scale: .96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, scale: .98 }} role="dialog">
         <header><Command size={18} /><input ref={inputRef} aria-label="搜索整个学习空间" onChange={(event) => updateQuery(event.target.value)} placeholder="搜索知识点、任务、错题、资料……" value={query} /><button aria-label="关闭" onClick={onClose} type="button"><X size={17} /></button></header>
         <div className={styles.commandBody}>
           <small>{query.trim() ? "SEARCHING THE FIELD" : "QUICK ORBITS"}</small>
@@ -273,7 +274,7 @@ function KineticCommand({ navigation, onClose, onNavigate }: {
           {query.trim() && !loading && !shownRoutes.length && !results.length ? <p className={styles.commandEmpty}>没有找到匹配轨迹</p> : null}
         </div>
         <footer><span><kbd>↵</kbd> 打开</span><span><kbd>ESC</kbd> 关闭</span><span>真实 workspace 搜索</span></footer>
-      </motion.section>
-    </motion.div>
+      </m.section>
+    </m.div>
   );
 }

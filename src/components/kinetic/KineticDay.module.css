@@ -272,3 +272,144 @@
 @media (prefers-reduced-motion: reduce) {
   .heroSignal::after,.heroSignal i { animation: none !important; }
 }
+
+/* Adapter for the legacy learning modules embedded in the Kinetic surface. */
+.legacySurface :global(.sectionHint),
+.legacySurface :global(.hint),
+.legacySurface :global(.formError) {
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.legacySurface :global(.reviewQueue) {
+  border-left: 0;
+}
+
+.legacySurface :global(.sectionHint),
+.legacySurface :global(.hint) {
+  color: rgba(18, 18, 34, .52);
+}
+
+.legacySurface :global(.formError) {
+  padding: 9px 12px;
+  border-radius: 11px;
+  background: rgba(255, 92, 53, .1);
+  color: var(--kinetic-orange);
+}
+
+.legacySurface :global(.field) {
+  gap: 8px;
+  color: rgba(18, 18, 34, .62);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.legacySurface :global(.inlineField) {
+  color: rgba(18, 18, 34, .62);
+  font-size: 12px;
+}
+
+.legacySurface :global(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])),
+.legacySurface :global(textarea),
+.legacySurface :global(select) {
+  min-height: 44px;
+  padding: 9px 12px;
+  color: var(--kinetic-ink);
+  background: rgba(255, 255, 255, .76);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.legacySurface :global(input[type="checkbox"]),
+.legacySurface :global(input[type="radio"]) {
+  min-height: auto;
+  padding: 0;
+}
+
+.legacySurface :global(textarea) {
+  min-height: 104px;
+  resize: vertical;
+}
+
+.legacySurface :global(.quickLogForm),
+.legacySurface :global(.quickLogRow),
+.legacySurface :global(.tagPicker),
+.legacySurface :global(.scoreButtons) {
+  gap: 10px;
+}
+
+.legacySurface :global(.tagPicker),
+.legacySurface :global(.scoreButtons) {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.legacySurface :global(.tagPicker button),
+.legacySurface :global(.segmented button),
+.legacySurface :global(.scoreButtons button),
+.legacySurface :global(.noteAdd) {
+  min-height: 36px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.legacySurface :global(.queueCard) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 14px;
+}
+
+.legacySurface :global(.queueCard.mistake) {
+  border-left-color: var(--kinetic-orange);
+}
+
+.legacySurface :global(.queueInfo) {
+  min-width: 0;
+}
+
+.legacySurface :global(.queueInfo strong) {
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.legacySurface :global(.queueInfo small),
+.legacySurface :global(.queueInfo em),
+.legacySurface :global(.noteMeta),
+.legacySurface :global(.saveStatus) {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.legacySurface :global(.noteMeta) {
+  color: rgba(18, 18, 34, .48);
+}
+
+.legacySurface :global(.noteMeta small) {
+  color: rgba(18, 18, 34, .48);
+}
+
+.legacySurface :global(.saveStatus.save-saving),
+.legacySurface :global(.saveStatus.save-error) {
+  color: var(--kinetic-orange);
+}
+
+.legacySurface :global(.saveStatus.save-saved) {
+  color: var(--kinetic-mint);
+}
+
+.legacySurface :global(.noteCard),
+.legacySurface :global(.noteCard.composer) {
+  background: rgba(255, 255, 255, .7);
+}
+
+@media (max-width: 760px) {
+  .legacySurface :global(.queueCard) {
+    grid-template-columns: 1fr;
+  }
+
+  .legacySurface :global(.scoreButtons) {
+    justify-content: flex-start;
+  }
+}

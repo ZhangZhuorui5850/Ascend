@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import {
   ArrowRight, ArrowUpRight, BookOpenCheck, Brain, CalendarDays, Check,
   ChevronLeft, ChevronRight, Circle, Clock3, FileText, Flame, History,
@@ -10,6 +10,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPlannerTaskAction, updatePlannerTaskAction } from "@/app/actions/planner-tasks";
 import { DayJournal } from "@/components/DayJournal";
+import { motion as motionContract } from "@/lib/motion/contracts";
 import { DayNotes } from "@/components/DayNotes";
 import { QuickLog } from "@/components/QuickLog";
 import { ReviewQueue } from "@/components/ReviewQueue";
@@ -191,12 +192,12 @@ export function KineticDay({
       </header>
 
       <section className={styles.modeRail} aria-label="工作台模式">
-        <div className={styles.progressTrack}><motion.i initial={reduceMotion ? false : { scaleX: 0 }} animate={{ scaleX: completion / 100 }} /><span>{completion}% CLOSED</span></div>
+        <div className={styles.progressTrack}><m.i initial={reduceMotion ? false : { scaleX: 0 }} animate={{ scaleX: completion / 100 }} /><span>{completion}% CLOSED</span></div>
         <div className={styles.modeTabs}>
           {MODES.map((item) => {
             const Icon = item.icon;
             return <button aria-pressed={mode === item.key} className={mode === item.key ? styles.modeActive : ""} key={item.key} onClick={() => setMode(item.key)} type="button">
-              {mode === item.key ? <motion.i layoutId="kinetic-day-mode" /> : null}
+              {mode === item.key ? <m.i layoutId="kinetic-day-mode" /> : null}
               <Icon size={15} /><span><small>{item.caption}</small>{item.label}</span>
             </button>;
           })}
@@ -205,7 +206,7 @@ export function KineticDay({
       </section>
 
       <AnimatePresence mode="wait" initial={false}>
-        <motion.main
+        <m.main
           animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           className={styles.stage}
           exit={reduceMotion ? undefined : { opacity: 0, y: -10, filter: "blur(8px)" }}
@@ -275,10 +276,10 @@ export function KineticDay({
               <AssetField assets={day.assets} />
             </section>
           ) : null}
-        </motion.main>
+        </m.main>
       </AnimatePresence>
 
-      <AnimatePresence>{toast ? <motion.div animate={{ opacity: 1, y: 0, scale: 1 }} className={styles.toast} exit={{ opacity: 0, y: 12, scale: .96 }} initial={{ opacity: 0, y: 24, scale: .94 }} role="status"><Sparkles size={15} />{toast}</motion.div> : null}</AnimatePresence>
+      <AnimatePresence>{toast ? <m.div animate={{ opacity: 1, y: 0, scale: 1 }} className={styles.toast} exit={{ opacity: 0, y: 12, scale: .96 }} initial={{ opacity: 0, y: 24, scale: .94 }} role="status"><Sparkles size={15} />{toast}</m.div> : null}</AnimatePresence>
     </div>
   );
 }
@@ -307,14 +308,14 @@ function ExecuteField({ inboxId, lists, onCreate, onToggle, pending, tasks, time
     <section className={styles.taskField}>
       <header><div><small>LIVE TRAJECTORIES</small><h3>今日执行流</h3></div><span>{active.length} ACTIVE</span></header>
       <div className={styles.taskList}>
-        {tasks.map((task, index) => <motion.article className={task.status === "completed" ? styles.taskDone : ""} layout key={task.id}>
+        {tasks.map((task, index) => <m.article className={task.status === "completed" ? styles.taskDone : ""} layout key={task.id} transition={motionContract.row.reorder}>
           <button aria-label={task.status === "completed" ? `恢复 ${task.title}` : `完成 ${task.title}`} disabled={pending} onClick={() => onToggle(task)} type="button">{task.status === "completed" ? <Check size={15} /> : <Circle size={15} />}<i /></button>
           <span className={styles.taskIndex}>{String(index + 1).padStart(2, "0")}</span>
           <div><small>{task.subject_code || lists.find((list) => list.id === task.list_id)?.name || "GENERAL"}</small><h4>{task.title}</h4>{task.notes ? <p>{task.notes}</p> : null}</div>
           <span className={styles.taskTime}><Clock3 size={13} />{taskTime(task, timeZone)}</span>
           <span className={styles.taskDuration}>{task.estimated_minutes}m</span>
           <span className={styles.taskPriority} data-priority={task.priority}>{task.priority === 1 ? "DEEP" : task.priority === 2 ? "FLOW" : "LIGHT"}</span>
-        </motion.article>)}
+        </m.article>)}
         {!tasks.length ? <div className={styles.emptyTasks}><Orbit size={28} /><h3>今日轨道还是空的</h3><p>从一个 25 分钟内可以验证的动作开始。</p></div> : null}
       </div>
       <form className={styles.quickTask} onSubmit={onCreate}>
