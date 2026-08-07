@@ -13,6 +13,7 @@
   },
   "scripts": {
     "ascend": "tsx scripts/ascend-cli.ts",
+    "import:zhongguancun": "tsx scripts/import-zhongguancun.ts",
     "mcp:ascend": "tsx scripts/ascend-mcp.ts",
     "dev": "next dev",
     "build": "next build",
