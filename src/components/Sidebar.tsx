@@ -225,7 +225,7 @@ export function MobileNav({
       {role === "user" ? (
         <button className="mobileCapture" onClick={onCaptureClick} type="button">
           <PlusCircle size={20} />
-          <span>收纳</span>
+          <span>记录</span>
         </button>
       ) : null}
       {role === "user" ? (

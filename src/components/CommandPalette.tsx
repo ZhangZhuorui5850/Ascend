@@ -91,10 +91,10 @@ export function CommandPalette({
       navigation.unshift({
         key: "navigation:today",
         group: "页面与操作",
-        label: "打开今日工作台",
-        href: `/day/${todayKey()}`,
+        label: "打开今天",
+        href: "/",
         icon: ArrowRight,
-        description: "计划、执行与复盘",
+        description: `今天 · ${todayKey()}`,
       });
     }
     return navigation;
@@ -103,10 +103,10 @@ export function CommandPalette({
     ? [{
         key: "command:capture",
         group: "页面与操作",
-        label: "收纳资料",
+        label: "记录",
         href: "",
         icon: Inbox,
-        description: "上传文件、截图或笔记",
+        description: "任务、学习、错题、笔记或资料",
         capture: true,
       }, ...items]
     : items, [items, role]);
@@ -133,15 +133,11 @@ export function CommandPalette({
 
   useEffect(() => {
     function handle(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setOpen(!open);
-      }
       if (event.key === "Escape") setOpen(false);
     }
     window.addEventListener("keydown", handle);
     return () => window.removeEventListener("keydown", handle);
-  }, [open, setOpen]);
+  }, [setOpen]);
 
   useEffect(() => {
     if (!open) return;

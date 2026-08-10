@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ViewTransition } from "react";
-import { Inbox } from "lucide-react";
+import { Plus } from "lucide-react";
 import { CapturePanel } from "@/components/CapturePanel";
 import { MobileNav, Sidebar } from "@/components/Sidebar";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -13,6 +13,7 @@ import { setActiveOfflineWorkspace } from "@/lib/offline-review";
 import type { PluginId } from "@/lib/plugins/registry";
 import type { CaptureSubject } from "@/lib/repo/knowledge";
 import type { ModulePref } from "@/lib/repo/settings";
+import type { CaptureKind } from "@/lib/capture/parser";
 
 type AppShellProps = {
   user: { displayName: string; role: "admin" | "user"; workspaceKey: string | null; account: DeviceAccount; accounts: DeviceAccount[] } | null;
@@ -25,10 +26,10 @@ type AppShellProps = {
 export function AppShell({ user, hierarchy, enabledPluginIds, modulePrefs, children }: AppShellProps) {
   const pathname = usePathname();
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [captureIntent, setCaptureIntent] = useState<CaptureKind | undefined>();
   const [commandOpen, setCommandOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const isPlannerRoute = pathname.startsWith("/tasks") || pathname.startsWith("/calendar");
 
   useEffect(() => {
     void setActiveOfflineWorkspace(user?.workspaceKey ?? null).catch((error) => {
@@ -37,11 +38,25 @@ export function AppShell({ user, hierarchy, enabledPluginIds, modulePrefs, child
   }, [user?.workspaceKey]);
 
   useEffect(() => {
-    function openCapture() {
+    function openCapture(event: Event) {
+      const requested = (event as CustomEvent<{ intent?: CaptureKind }>).detail?.intent;
+      setCaptureIntent(requested);
       setCaptureOpen(true);
     }
     window.addEventListener("zgca:open-capture", openCapture);
     return () => window.removeEventListener("zgca:open-capture", openCapture);
+  }, []);
+
+  useEffect(() => {
+    function onShortcut(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCaptureIntent(undefined);
+        setCaptureOpen(true);
+      }
+    }
+    window.addEventListener("keydown", onShortcut);
+    return () => window.removeEventListener("keydown", onShortcut);
   }, []);
 
   useEffect(() => {
@@ -67,7 +82,7 @@ export function AppShell({ user, hierarchy, enabledPluginIds, modulePrefs, child
   }
 
   return (
-    <div className={`appFrame ${captureOpen ? "captureOpen" : ""} ${sidebarCollapsed ? "sidebarCollapsed" : ""}`}>
+    <div className={`appFrame ${sidebarCollapsed ? "sidebarCollapsed" : ""}`}>
       <Sidebar
         account={user.account}
         accounts={user.accounts}
@@ -93,26 +108,35 @@ export function AppShell({ user, hierarchy, enabledPluginIds, modulePrefs, child
       </div>
       {user.role === "user" ? (
         <>
-          <button
-            aria-label="关闭收纳面板"
-            aria-hidden={!captureOpen}
-            className="captureBackdrop"
-            data-testid="capture-backdrop"
-            onClick={() => setCaptureOpen(false)}
-            tabIndex={captureOpen ? 0 : -1}
-            type="button"
+          <CapturePanel
+            intent={captureIntent}
+            onOpenChange={setCaptureOpen}
+            open={captureOpen}
+            subjects={hierarchy}
           />
-          <CapturePanel subjects={hierarchy} onClose={() => setCaptureOpen(false)} />
-          {!captureOpen && !isPlannerRoute ? (
-            <button className="captureFab" onClick={() => setCaptureOpen(true)} type="button">
-              <Inbox size={17} />
-              收纳
+          {!captureOpen ? (
+            <button
+              className="captureFab"
+              onClick={() => {
+                setCaptureIntent(undefined);
+                setCaptureOpen(true);
+              }}
+              type="button"
+            >
+              <Plus size={17} />
+              记录
             </button>
           ) : null}
         </>
       ) : null}
-      <MobileNav enabledPluginIds={enabledPluginIds} modulePrefs={modulePrefs} onCaptureClick={() => setCaptureOpen(true)} role={user.role} />
-      <CommandPalette enabledPluginIds={enabledPluginIds} modulePrefs={modulePrefs} onCapture={() => setCaptureOpen(true)} open={commandOpen} role={user.role} setOpen={setCommandOpen} />
+      <MobileNav enabledPluginIds={enabledPluginIds} modulePrefs={modulePrefs} onCaptureClick={() => {
+        setCaptureIntent(undefined);
+        setCaptureOpen(true);
+      }} role={user.role} />
+      <CommandPalette enabledPluginIds={enabledPluginIds} modulePrefs={modulePrefs} onCapture={() => {
+        setCaptureIntent(undefined);
+        setCaptureOpen(true);
+      }} open={commandOpen} role={user.role} setOpen={setCommandOpen} />
     </div>
   );
 }

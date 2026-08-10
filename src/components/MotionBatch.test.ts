@@ -15,12 +15,13 @@ const plannerActions = source("../app/actions/planner.ts");
 const globals = source("../app/globals.css");
 const summit = source("../styles/summit.css");
 const appShell = source("./AppShell.tsx");
+const captureStyles = source("./CapturePanel.module.css");
 
 describe("motion batch list presence", () => {
-  it("animates local attachment and countdown insertion/removal", () => {
-    expect(capture).toContain("enteringAttachmentIds");
-    expect(capture).toContain("leavingAttachmentIds");
-    expect(capture).toContain("data-entering={entering");
+  it("keeps capture file state explicit and countdown insertion/removal animated", () => {
+    expect(capture).toContain('type AttachmentStatus = "queued" | "uploading" | "uploaded" | "error"');
+    expect(capture).toContain("Promise.all(queued.map(uploadAttachment))");
+    expect(capture).toContain("outcomes.filter((saved) => !saved)");
     expect(settings).toContain("enteringCountdownKeys");
     expect(settings).toContain("leavingCountdownKeys");
     expect(settings).toContain("key={item.clientKey}");
@@ -61,7 +62,7 @@ describe("review state machines", () => {
 
 describe("motion batch CSS contracts", () => {
   it("uses tokenized list enter/exit animations", () => {
-    expect(globals).toMatch(/\.attachmentCard\[data-entering\][\s\S]*var\(--motion-quick\)/);
+    expect(captureStyles).toContain("@media (prefers-reduced-motion: reduce)");
     expect(globals).toMatch(/\.queueCard\[data-leaving\][\s\S]*var\(--motion-fast\)/);
   });
 
@@ -79,10 +80,12 @@ describe("motion batch CSS contracts", () => {
     expect(appShell).not.toContain('exit="summit-page-exit"');
   });
 
-  it("keeps the capture FAB out of both Planner routes and active Planner overlays", () => {
-    expect(appShell).toContain('const isPlannerRoute = pathname.startsWith("/tasks") || pathname.startsWith("/calendar")');
-    expect(appShell).toContain("!captureOpen && !isPlannerRoute");
-    expect(appShell).not.toContain("captureFabPlanner");
+  it("opens the same accessible capture primitive from every route", () => {
+    expect(capture).toContain("PlannerDrawer");
+    expect(capture).toContain('surface={surface}');
+    expect(appShell).toContain("<CapturePanel");
+    expect(appShell).toContain("!captureOpen");
+    expect(appShell).not.toContain("isPlannerRoute");
   });
 
   it("removes the global ICP overlay from both Planner workspaces", () => {

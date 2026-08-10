@@ -1,0 +1,311 @@
+.capture {
+  display: grid;
+  gap: 16px;
+  min-height: 0;
+}
+
+.intentTabs {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.intentTabs button {
+  align-items: center;
+  background: var(--surface-soft);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--muted);
+  display: inline-flex;
+  flex-direction: column;
+  font-size: .72rem;
+  gap: 4px;
+  justify-content: center;
+  min-height: 52px;
+  padding: 5px 2px;
+}
+
+.intentTabs button[aria-selected="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+  font-weight: 750;
+}
+
+.mainField,
+.detailFields label {
+  display: grid;
+  gap: 6px;
+}
+
+.mainField > span,
+.detailFields label > span {
+  color: var(--ink-soft);
+  font-size: .78rem;
+  font-weight: 700;
+}
+
+.mainField textarea,
+.detailFields input,
+.detailFields select {
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink);
+  font: inherit;
+  width: 100%;
+}
+
+.mainField textarea {
+  line-height: 1.55;
+  min-height: 118px;
+  padding: 12px;
+  resize: vertical;
+}
+
+.mainField textarea:focus,
+.detailFields input:focus,
+.detailFields select:focus {
+  border-color: var(--accent);
+  outline: 2px solid color-mix(in srgb, var(--accent) 18%, transparent);
+  outline-offset: 1px;
+}
+
+.preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.preview span {
+  background: var(--info-soft);
+  border-radius: 999px;
+  color: var(--info);
+  font-size: .72rem;
+  padding: 4px 8px;
+}
+
+.warning,
+.message {
+  border-radius: var(--radius);
+  font-size: .76rem;
+  margin: 0;
+  padding: 9px 10px;
+}
+
+.warning {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.message {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.details {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.details summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: .78rem;
+  min-height: 44px;
+  padding: 12px 0;
+}
+
+.detailFields {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding-bottom: 4px;
+}
+
+.detailFields input,
+.detailFields select {
+  min-height: 42px;
+  padding: 0 9px;
+}
+
+.wideField {
+  grid-column: 1 / -1;
+}
+
+.footer {
+  align-items: center;
+  background: var(--planner-surface-raised);
+  border-top: 1px solid var(--line);
+  bottom: calc(-1 * var(--space-4));
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin: 0 calc(-1 * var(--space-4));
+  padding: 12px var(--space-4);
+  position: sticky;
+  z-index: 2;
+}
+
+.footer > span {
+  color: var(--muted);
+  font-size: .7rem;
+}
+
+.footer button {
+  align-items: center;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--accent-ink);
+  display: inline-flex;
+  font-weight: 750;
+  gap: 7px;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 116px;
+  padding: 0 14px;
+}
+
+.footer button:disabled {
+  opacity: .48;
+}
+
+.assetCapture {
+  display: grid;
+  gap: 12px;
+}
+
+.dropZone {
+  align-items: center;
+  background: var(--surface-soft);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
+  color: var(--ink-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+  min-height: 142px;
+  padding: 18px;
+}
+
+.dropZone span {
+  color: var(--muted);
+  font-size: .72rem;
+}
+
+.attachments {
+  display: grid;
+  gap: 7px;
+}
+
+.attachment {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 9px;
+  grid-template-columns: 32px minmax(0, 1fr) auto 36px;
+  min-height: 52px;
+  padding: 7px;
+}
+
+.fileIcon {
+  color: var(--info);
+  display: grid;
+  place-items: center;
+}
+
+.fileMeta {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fileMeta strong {
+  font-size: .78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileMeta small {
+  color: var(--muted);
+  font-size: .68rem;
+}
+
+.remove,
+.retry {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  display: inline-flex;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.retry {
+  color: var(--danger);
+  font-size: .68rem;
+  gap: 3px;
+}
+
+.dropOverlay {
+  align-items: center;
+  background: color-mix(in srgb, var(--surface-inverse) 70%, transparent);
+  color: var(--accent-ink);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  inset: 0;
+  justify-content: center;
+  pointer-events: none;
+  position: fixed;
+  z-index: calc(var(--planner-z-dialog) + 2);
+}
+
+.spin {
+  animation: captureSpin 1s linear infinite;
+}
+
+@keyframes captureSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 760px) {
+  .capture {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .intentTabs button {
+    min-height: 48px;
+  }
+
+  .mainField textarea {
+    min-height: 104px;
+  }
+}
+
+@media (max-width: 390px) {
+  .intentTabs button {
+    font-size: .66rem;
+  }
+
+  .detailFields {
+    grid-template-columns: 1fr;
+  }
+
+  .wideField {
+    grid-column: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}
