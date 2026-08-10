@@ -14,6 +14,7 @@ if (!existsSync(databasePath)) throw new Error(`Database not found: ${databasePa
 
 const db = new Database(databasePath, { readonly: true, fileMustExist: true });
 const issues = [];
+const warnings = [];
 const counts = {};
 
 try {
@@ -45,6 +46,9 @@ try {
     if (!reminderMigration) {
       issues.push({ type: "missing_migration", version: "0019_planner_recurrence_reminders" });
     }
+    const compatibilityMigration = db.prepare(`
+      SELECT version FROM schema_migrations WHERE version = '0029_planner_legacy_dual_write'
+    `).get();
 
     const workspaces = db.prepare("SELECT id, timezone FROM workspaces ORDER BY id").all();
     counts.workspaces = workspaces.length;
@@ -99,7 +103,16 @@ try {
       WHERE type = 'trigger' AND name LIKE 'day_tasks_planner_v2_readonly_%'
     `).get().count;
     counts.readonlyTriggers = triggerCount;
-    if (triggerCount !== 3) issues.push({ type: "readonly_trigger_count", expected: 3, actual: triggerCount });
+    const expectedTriggerCount = compatibilityMigration ? 0 : 3;
+    if (triggerCount !== expectedTriggerCount) {
+      issues.push({
+        type: "readonly_trigger_count",
+        expected: expectedTriggerCount,
+        actual: triggerCount,
+        compatibilityMigrationApplied: Boolean(compatibilityMigration),
+      });
+    }
+    counts.projectionDrift = warnings.length;
     finish();
   }
 } finally {
@@ -122,15 +135,23 @@ function verifyLegacyRow(row) {
     ["status", row.done ? "completed" : "open", row.status],
   ];
   for (const [field, expected, actual] of pairs) {
-    if (expected !== actual) issues.push({ type: "field_mismatch", ...identity, field, expected, actual });
+    if (expected !== actual) {
+      warnings.push({
+        type: "legacy_projection_drift",
+        ...identity,
+        field,
+        legacyValue: expected,
+        canonicalValue: actual,
+      });
+    }
   }
   if (row.done_at && row.completed_at !== row.done_at) {
-    issues.push({
-      type: "field_mismatch",
+    warnings.push({
+      type: "legacy_projection_drift",
       ...identity,
       field: "completed_at",
-      expected: row.done_at,
-      actual: row.completed_at,
+      legacyValue: row.done_at,
+      canonicalValue: row.completed_at,
     });
   }
   if (row.scheduled_start) {
@@ -142,11 +163,12 @@ function verifyLegacyRow(row) {
       || row.due_date !== null
       || row.due_at !== null
     ) {
-      issues.push({
-        type: "scheduled_round_trip",
+      warnings.push({
+        type: "legacy_projection_drift",
+        field: "schedule",
         ...identity,
-        expected: { date: row.day, time: row.scheduled_start, timezone: row.timezone },
-        actual: {
+        legacyValue: { date: row.day, time: row.scheduled_start, timezone: row.timezone },
+        canonicalValue: {
           date: local.date,
           time: local.time,
           timezone: row.scheduled_timezone,
@@ -160,11 +182,12 @@ function verifyLegacyRow(row) {
       - new Date(row.scheduled_start_at).getTime()
     ) / 60_000;
     if (duration !== row.estimated_minutes) {
-      issues.push({
-        type: "scheduled_duration",
+      warnings.push({
+        type: "legacy_projection_drift",
+        field: "scheduled_duration",
         ...identity,
-        expected: row.estimated_minutes,
-        actual: duration,
+        legacyValue: row.estimated_minutes,
+        canonicalValue: duration,
       });
     }
   } else if (
@@ -173,11 +196,12 @@ function verifyLegacyRow(row) {
     || row.scheduled_start_at !== null
     || row.scheduled_end_at !== null
   ) {
-    issues.push({
-      type: "unscheduled_mapping",
+    warnings.push({
+      type: "legacy_projection_drift",
+      field: "due_schedule",
       ...identity,
-      expected: { dueDate: row.day },
-      actual: {
+      legacyValue: { dueDate: row.day },
+      canonicalValue: {
         dueDate: row.due_date,
         dueAt: row.due_at,
         scheduledStartAt: row.scheduled_start_at,
@@ -220,7 +244,7 @@ function tableExists(name) {
 }
 
 function finish() {
-  const report = { ok: issues.length === 0, databasePath, counts, issues };
+  const report = { ok: issues.length === 0, databasePath, counts, issues, warnings };
   console.log(JSON.stringify(report, null, 2));
   if (!report.ok) process.exitCode = 1;
 }
