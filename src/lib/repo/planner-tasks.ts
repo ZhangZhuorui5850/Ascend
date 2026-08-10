@@ -430,6 +430,17 @@ export function projectPlannerTaskToDayTask(task: PlannerTask, compatibilityId: 
     estimated_minutes: task.estimated_minutes,
     scheduled_start: scheduled?.time.slice(0, 5) ?? null,
     notes: task.notes,
+    knowledge_point_id: null,
+    activity_type: "unspecified",
+    completion_criteria: "",
+    source_type: "",
+    source_id: "",
+    actual_minutes: null,
+    completion_output: "",
+    planned_verification_method: "",
+    verification_method: "",
+    verification_result: "",
+    verification_outcome: "",
   };
 }
 
