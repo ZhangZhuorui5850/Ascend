@@ -5,6 +5,12 @@ import { z } from "zod";
 import { getUploadRoot } from "../db";
 import { assertDateKey, shiftDateKey, todayKey } from "../dates";
 import { writeAuditLog } from "../audit";
+import {
+  createTask as createCanonicalTask,
+  deleteTask as deleteCanonicalTask,
+  restoreTask as restoreCanonicalTask,
+  updateTask as updateCanonicalTask,
+} from "../application/tasks/commands";
 import { revealAlgorithmHint } from "../repo/algorithm-hints";
 import {
   getAlgorithmLearningState,
@@ -74,11 +80,7 @@ import {
 } from "../repo/planner-reminders";
 import { createTaskSeries } from "../repo/planner-series";
 import {
-  createPlannerTask,
   listTaskView,
-  restorePlannerTask,
-  softDeletePlannerTask,
-  updatePlannerTask,
 } from "../repo/planner-tasks";
 import { createMistake, createReviewEvent, createStudySession, getMistakeBook } from "../repo/reviews";
 import { searchWorkspace } from "../repo/search";
@@ -441,7 +443,7 @@ export const agentOperations: AgentOperation[] = [
     entityType: "planner_task",
     run: ({ db, context }, input) => {
       ensurePlannerDefaults(db, context);
-      return createPlannerTask(db, context, {
+      return createCanonicalTask(db, context, {
         ...input,
         listId: input.listId ?? plannerDefaultId(context.workspaceId, "inbox"),
       });
@@ -471,7 +473,7 @@ export const agentOperations: AgentOperation[] = [
     }),
     readOnly: false,
     entityType: "planner_task",
-    run: ({ db, context }, input) => updatePlannerTask(db, context, input),
+    run: ({ db, context }, input) => updateCanonicalTask(db, context, input),
   }),
   defineOperation({
     id: "planner.task.delete",
@@ -488,7 +490,7 @@ export const agentOperations: AgentOperation[] = [
     entityType: "planner_task",
     run: ({ db, context }, input) => {
       requireConfirmation(input.confirm, "删除 Planner 任务");
-      return softDeletePlannerTask(db, context, input);
+      return deleteCanonicalTask(db, context, input);
     },
   }),
   defineOperation({
@@ -502,7 +504,7 @@ export const agentOperations: AgentOperation[] = [
     }),
     readOnly: false,
     entityType: "planner_task",
-    run: ({ db, context }, input) => restorePlannerTask(db, context, input),
+    run: ({ db, context }, input) => restoreCanonicalTask(db, context, input),
   }),
   defineOperation({
     id: "planner.calendar.list",

@@ -7,15 +7,17 @@ import type {
   PlannerTask,
   PlannerTaskStatus,
 } from "@/lib/planner/types";
+import {
+  createTask,
+  deleteTask,
+  restoreTask,
+  updateTask,
+} from "@/lib/application/tasks/commands";
 import { getDb } from "@/lib/db";
 import {
   batchUpdatePlannerTasks,
-  createPlannerTask,
   getPlannerTask,
   purgeDeletedPlannerTasks,
-  restorePlannerTask,
-  softDeletePlannerTask,
-  updatePlannerTask,
 } from "@/lib/repo/planner-tasks";
 import { setPlannerTaskLabels } from "@/lib/repo/planner-labels";
 import { createTaskSeries } from "@/lib/repo/planner-series";
@@ -106,7 +108,7 @@ export async function createPlannerTaskAction(input: {
         })
       : null;
     const estimatedMinutes = input.estimatedMinutes ?? 30;
-    const entity = createPlannerTask(db, access, {
+    const entity = createTask(db, access, {
       clientMutationId: input.clientMutationId,
       listId: input.listId,
       parentTaskId: input.parentTaskId,
@@ -156,7 +158,7 @@ export async function updatePlannerTaskAction(input: {
         ? null
         : undefined;
     const estimatedMinutes = input.estimatedMinutes ?? current.estimated_minutes;
-    const result = updatePlannerTask(db, access, {
+    const result = updateTask(db, access, {
       id: input.id,
       expectedVersion: input.expectedVersion,
       title: input.title,
@@ -189,7 +191,7 @@ export async function deletePlannerTaskAction(input: {
 }): Promise<TaskActionResult> {
   try {
     const access = await requireWorkspace();
-    const result = softDeletePlannerTask(getDb(), access, input);
+    const result = deleteTask(getDb(), access, input);
     if (result.conflict) return { ok: false, conflict: result.conflict, error: "任务版本冲突" };
     revalidatePlannerViews(result.entity);
     return { ok: true, entity: result.entity };
@@ -205,7 +207,7 @@ export async function restorePlannerTaskAction(input: {
 }): Promise<TaskActionResult> {
   try {
     const access = await requireWorkspace();
-    const result = restorePlannerTask(getDb(), access, input);
+    const result = restoreTask(getDb(), access, input);
     if (result.conflict) return { ok: false, conflict: result.conflict, error: "任务版本冲突" };
     revalidatePlannerViews(result.entity);
     return { ok: true, entity: result.entity };
