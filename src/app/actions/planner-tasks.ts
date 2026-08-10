@@ -17,10 +17,12 @@ import {
   restoreTask,
   updateTask,
 } from "@/lib/application/tasks/commands";
+import {
+  createRecurringTask,
+  setTaskLabels,
+} from "@/lib/application/tasks/organization-commands";
 import { getDb } from "@/lib/db";
 import { getPlannerTask } from "@/lib/repo/planner-tasks";
-import { setPlannerTaskLabels } from "@/lib/repo/planner-labels";
-import { createTaskSeries } from "@/lib/repo/planner-series";
 import { requireWorkspace } from "@/lib/request-auth";
 
 type TaskActionResult = {
@@ -47,7 +49,7 @@ export async function createPlannerTaskSeriesAction(input: {
     const access = await requireWorkspace();
     const db = getDb();
     const timeZone = workspaceTimeZone(db, access.workspaceId);
-    const result = createTaskSeries(db, access, {
+    const result = createRecurringTask(db, access, {
       clientMutationId: input.clientMutationId,
       rrule: input.rrule,
       timezone: timeZone,
@@ -266,7 +268,7 @@ export async function updatePlannerTaskLabelsAction(input: {
 }): Promise<TaskActionResult> {
   try {
     const access = await requireWorkspace();
-    const entity = setPlannerTaskLabels(getDb(), access, {
+    const entity = setTaskLabels(getDb(), access, {
       taskId: input.id,
       expectedVersion: input.expectedVersion,
       labelIds: input.labelIds,

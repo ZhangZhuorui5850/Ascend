@@ -42,4 +42,12 @@ describe("canonical write boundaries", () => {
     expect(plannerTaskAction).toContain("batchTasks(getDb(), access, input)");
     expect(plannerTaskAction).toContain("purgeTaskTrash(getDb(), access, input)");
   });
+
+  it("keeps recurring series and task-label orchestration behind application commands", () => {
+    for (const file of productionSources(["app/actions/", "lib/agent/"])) {
+      expect(file.source, file.path).not.toMatch(/\b(?:createTaskSeries|setPlannerTaskLabels)\s*\(/);
+    }
+    expect(plannerTaskAction).toContain("createRecurringTask(db, access");
+    expect(plannerTaskAction).toContain("setTaskLabels(getDb(), access");
+  });
 });

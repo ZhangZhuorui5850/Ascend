@@ -15,6 +15,7 @@ import {
   restoreTask as restoreCanonicalTask,
   updateTask as updateCanonicalTask,
 } from "../application/tasks/commands";
+import { createRecurringTask } from "../application/tasks/organization-commands";
 import { recordStudy } from "../application/learning/record-study";
 import { recordAlgorithmAttemptCommand } from "../application/algorithms/record-attempt";
 import { revealAlgorithmHint } from "../repo/algorithm-hints";
@@ -78,7 +79,6 @@ import {
   createPlannerReminder,
   listEntityReminders,
 } from "../repo/planner-reminders";
-import { createTaskSeries } from "../repo/planner-series";
 import {
   getPlannerTask,
   listTaskView,
@@ -966,7 +966,7 @@ export const agentOperations: AgentOperation[] = [
         firstOccurrenceAt,
         ...template
       } = input;
-      return createTaskSeries(db, context, {
+      return createRecurringTask(db, context, {
         clientMutationId,
         rrule,
         timezone,
