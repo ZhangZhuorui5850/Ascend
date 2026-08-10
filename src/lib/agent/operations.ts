@@ -97,6 +97,18 @@ import type { AgentContext } from "./context";
 type JsonObject = Record<string, unknown>;
 type OperationSchema = z.ZodType<JsonObject>;
 
+const PLANNER_TASK_ALIAS_DEPRECATION = Object.freeze({
+  deprecated: true,
+  replacement: "task.*",
+  reason: "任务语义已收敛到 canonical task operations；planner.task.* 仅保留迁移兼容。",
+});
+
+function withPlannerTaskAliasDeprecation<T extends object>(value: T): T & {
+  deprecation: typeof PLANNER_TASK_ALIAS_DEPRECATION;
+} {
+  return { ...value, deprecation: PLANNER_TASK_ALIAS_DEPRECATION };
+}
+
 export type AgentRuntime = {
   db: Database.Database;
   context: AgentContext;
@@ -700,8 +712,8 @@ export const agentOperations: AgentOperation[] = [
   }),
   defineOperation({
     id: "planner.task.list",
-    title: "查询 Planner v2 任务",
-    description: "按智能视图查询 Planner v2 任务，同时返回可用清单。任务包含独立到期、排期、层级、状态与 version。",
+    title: "查询任务（兼容别名）",
+    description: "已弃用；请改用 task.list。迁移期按智能视图返回 canonical Planner 任务与 deprecation metadata。",
     schema: z.object({
       view: z.enum(["inbox", "today", "upcoming", "anytime", "overdue", "waiting", "completed", "trash", "all"])
         .optional()
@@ -714,7 +726,7 @@ export const agentOperations: AgentOperation[] = [
     entityType: "planner_task",
     run: ({ db, context }, input) => {
       ensurePlannerDefaults(db, context);
-      return {
+      return withPlannerTaskAliasDeprecation({
         lists: listTaskLists(db, context),
         tasks: listTaskView(db, context, {
           view: input.view,
@@ -722,13 +734,13 @@ export const agentOperations: AgentOperation[] = [
           listId: input.listId,
           limit: input.limit,
         }),
-      };
+      });
     },
   }),
   defineOperation({
     id: "planner.task.create",
-    title: "创建 Planner v2 任务",
-    description: "幂等创建 Planner v2 任务；due 与 scheduled 字段保持独立，瞬时值使用 UTC ISO 8601。",
+    title: "创建任务（兼容别名）",
+    description: "已弃用；请改用 task.create。迁移期仍幂等创建 canonical 任务并返回 deprecation metadata。",
     schema: z.object({
       clientMutationId: z.string().min(1).max(200),
       listId: z.string().optional(),
@@ -750,16 +762,16 @@ export const agentOperations: AgentOperation[] = [
     entityType: "planner_task",
     run: ({ db, context }, input) => {
       ensurePlannerDefaults(db, context);
-      return createCanonicalTask(db, context, {
+      return withPlannerTaskAliasDeprecation(createCanonicalTask(db, context, {
         ...input,
         listId: input.listId ?? plannerDefaultId(context.workspaceId, "inbox"),
-      });
+      }));
     },
   }),
   defineOperation({
     id: "planner.task.update",
-    title: "更新 Planner v2 任务",
-    description: "按 expectedVersion 局部更新任务；版本冲突返回最新实体。",
+    title: "更新任务（兼容别名）",
+    description: "已弃用；请改用 task.update。迁移期仍按 expectedVersion 更新 canonical 任务并返回 deprecation metadata。",
     schema: z.object({
       id: z.string().min(1),
       expectedVersion: z.number().int().positive(),
@@ -780,12 +792,14 @@ export const agentOperations: AgentOperation[] = [
     }),
     readOnly: false,
     entityType: "planner_task",
-    run: ({ db, context }, input) => updateCanonicalTask(db, context, input),
+    run: ({ db, context }, input) => withPlannerTaskAliasDeprecation(
+      updateCanonicalTask(db, context, input),
+    ),
   }),
   defineOperation({
     id: "planner.task.delete",
-    title: "移动 Planner v2 任务到回收站",
-    description: "使用稳定 clientMutationId 软删除任务，必须明确确认。",
+    title: "删除任务（兼容别名）",
+    description: "已弃用；请改用 task.delete。迁移期仍软删除 canonical 任务并返回 deprecation metadata。",
     schema: z.object({
       id: z.string().min(1),
       expectedVersion: z.number().int().positive(),
@@ -797,13 +811,13 @@ export const agentOperations: AgentOperation[] = [
     entityType: "planner_task",
     run: ({ db, context }, input) => {
       requireConfirmation(input.confirm, "删除 Planner 任务");
-      return deleteCanonicalTask(db, context, input);
+      return withPlannerTaskAliasDeprecation(deleteCanonicalTask(db, context, input));
     },
   }),
   defineOperation({
     id: "planner.task.restore",
-    title: "恢复 Planner v2 任务",
-    description: "使用稳定 clientMutationId 从回收站恢复任务。",
+    title: "恢复任务（兼容别名）",
+    description: "已弃用；请改用 task.restore。迁移期仍恢复 canonical 任务并返回 deprecation metadata。",
     schema: z.object({
       id: z.string().min(1),
       expectedVersion: z.number().int().positive(),
@@ -811,7 +825,9 @@ export const agentOperations: AgentOperation[] = [
     }),
     readOnly: false,
     entityType: "planner_task",
-    run: ({ db, context }, input) => restoreCanonicalTask(db, context, input),
+    run: ({ db, context }, input) => withPlannerTaskAliasDeprecation(
+      restoreCanonicalTask(db, context, input),
+    ),
   }),
   defineOperation({
     id: "planner.calendar.list",

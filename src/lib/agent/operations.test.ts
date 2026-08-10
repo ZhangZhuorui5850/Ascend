@@ -37,6 +37,9 @@ describe("Ascend Agent operations", () => {
     expect(manifest.some((item) => item.readOnly)).toBe(true);
     expect(manifest.some((item) => !item.readOnly)).toBe(true);
     expect(manifest.find((item) => item.id === "task.delete")?.destructive).toBe(true);
+    expect(manifest
+      .filter((item) => /^planner\.task\.(?:list|create|update|delete|restore)$/.test(item.id))
+      .every((item) => item.description.includes("已弃用"))).toBe(true);
   });
 
   it("requires an explicit account when multiple active workspaces exist", () => {
@@ -234,13 +237,18 @@ describe("Ascend Agent operations", () => {
       { db, context },
       getAgentOperation("planner.task.create"),
       createInput,
-    )) as { id: string; version: number };
+    )) as {
+      id: string;
+      version: number;
+      deprecation: { deprecated: boolean; replacement: string };
+    };
     const replay = (await executeAgentOperation(
       { db, context },
       getAgentOperation("planner.task.create"),
       { ...createInput, title: "重试标题" },
     )) as { id: string; version: number };
     expect(replay.id).toBe(created.id);
+    expect(created.deprecation).toMatchObject({ deprecated: true, replacement: "task.*" });
 
     const updated = (await executeAgentOperation(
       { db, context },
