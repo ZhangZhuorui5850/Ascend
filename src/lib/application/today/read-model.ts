@@ -100,11 +100,18 @@ export function getTodayReadModel(
     ...tasks.flatMap((task) => toTodayTask(task, input.day, timeZone)),
     ...events.map((event) => toTodayEvent(event, timeZone)),
   ];
+  const availableMinutes = input.availableMinutes ?? inferAvailableMinutes(
+    input.now,
+    localDateTimeToUtc({ date: dayEnd, time: "00:00", timeZone }),
+    tasks,
+    events,
+  );
   return {
     day: input.day,
     timeZone,
     nextAction: selectNextAction(candidates, {
       ...input,
+      availableMinutes,
       exams: settings.examCountdowns.map((exam) => ({
         day: exam.date,
         subjectCode: exam.subjectCode ?? null,
@@ -203,4 +210,24 @@ function compareTimelineItems(left: TodayTimelineItem, right: TodayTimelineItem)
   return (left.startTime ?? "00:00").localeCompare(right.startTime ?? "00:00")
     || (left.kind === right.kind ? 0 : left.kind === "event" ? -1 : 1)
     || left.id.localeCompare(right.id);
+}
+
+function inferAvailableMinutes(
+  now: string,
+  dayEnd: string,
+  tasks: PlannerTask[],
+  events: CalendarEvent[],
+): number | undefined {
+  const nowMs = Date.parse(now);
+  if (!Number.isFinite(nowMs)) return undefined;
+  const futureStarts = [
+    ...tasks.flatMap((task) => task.status === "open" && task.scheduled_start_at
+      ? [Date.parse(task.scheduled_start_at)]
+      : []),
+    ...events.flatMap((event) => event.start_at ? [Date.parse(event.start_at)] : []),
+    Date.parse(dayEnd),
+  ].filter((value) => Number.isFinite(value) && value > nowMs);
+  if (!futureStarts.length) return undefined;
+  const minutes = Math.floor((Math.min(...futureStarts) - nowMs) / 60_000);
+  return minutes >= 5 ? minutes : undefined;
 }
