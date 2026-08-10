@@ -5,6 +5,11 @@ import type {
   PlannerTask,
   PlannerTaskStatus,
 } from "../../planner/types";
+import { dateKeyInTimeZone } from "../../planner/time";
+import {
+  appendLearningEvidence,
+  type AppendLearningEvidenceInput,
+} from "../../repo/learning-evidence";
 import { ensurePlannerDefaults, plannerDefaultId } from "../../repo/planner-defaults";
 import {
   createPlannerTask,
@@ -34,6 +39,11 @@ export type TaskSchedule =
       endAt: string;
       timeZone: string;
     };
+
+export type CompleteTaskEvidence = Omit<
+  AppendLearningEvidenceInput,
+  "taskId" | "completionCycle" | "day" | "idempotencyKey" | "correctsEvidenceId"
+>;
 
 /**
  * Canonical task write boundary shared by Web actions and agent operations.
@@ -75,17 +85,64 @@ export function updateTask(
 export function completeTask(
   db: Database.Database,
   scope: WorkspaceScope,
-  input: { id: string; expectedVersion: number },
+  input: {
+    id: string;
+    expectedVersion: number;
+    day?: string;
+    clientMutationId?: string;
+    evidence?: CompleteTaskEvidence;
+  },
 ): TaskCommandResult {
-  return changeTaskStatus(db, scope, { ...input, status: "completed" });
+  return db.transaction(() => {
+    requireActiveTask(db, scope, input.id);
+    const result = updatePlannerTask(db, scope, {
+      id: input.id,
+      expectedVersion: input.expectedVersion,
+      status: "completed",
+    });
+    if (!result.entity) return result;
+    const completionCycle = nextCompletionCycle(db, scope, input.id);
+    appendLearningEvidence(db, scope, {
+      taskId: input.id,
+      completionCycle,
+      day: input.day ?? currentWorkspaceDay(db, scope),
+      idempotencyKey: input.clientMutationId
+        ?? `task-complete:${input.id}:version:${result.entity.version}`,
+      outcome: "completed",
+      ...input.evidence,
+    });
+    return result;
+  })();
 }
 
 export function reopenTask(
   db: Database.Database,
   scope: WorkspaceScope,
-  input: { id: string; expectedVersion: number },
+  input: {
+    id: string;
+    expectedVersion: number;
+    day?: string;
+    clientMutationId?: string;
+  },
 ): TaskCommandResult {
-  return changeTaskStatus(db, scope, { ...input, status: "open" });
+  return db.transaction(() => {
+    requireActiveTask(db, scope, input.id);
+    const result = updatePlannerTask(db, scope, {
+      id: input.id,
+      expectedVersion: input.expectedVersion,
+      status: "open",
+    });
+    if (!result.entity) return result;
+    appendLearningEvidence(db, scope, {
+      taskId: input.id,
+      completionCycle: currentCompletionCycle(db, scope, input.id),
+      day: input.day ?? currentWorkspaceDay(db, scope),
+      idempotencyKey: input.clientMutationId
+        ?? `task-reopen:${input.id}:version:${result.entity.version}`,
+      outcome: "reopened",
+    });
+    return result;
+  })();
 }
 
 export function changeTaskStatus(
@@ -175,6 +232,42 @@ function assertSubjectOwnership(
     SELECT 1 FROM subjects WHERE workspace_id = ? AND code = ?
   `).get(scope.workspaceId, subjectCode);
   if (!subject) throw new Error("科目不存在或不属于当前学习空间");
+}
+
+function currentCompletionCycle(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  taskId: string,
+): number {
+  return Math.max(1, (db.prepare(`
+    SELECT COALESCE(MAX(completion_cycle), 0) AS cycle
+    FROM learning_evidence
+    WHERE workspace_id = ? AND task_id = ?
+  `).get(scope.workspaceId, taskId) as { cycle: number }).cycle);
+}
+
+function nextCompletionCycle(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  taskId: string,
+): number {
+  return currentCompletionCycle(db, scope, taskId) + (
+    db.prepare(`
+      SELECT 1 FROM learning_evidence
+      WHERE workspace_id = ? AND task_id = ?
+      LIMIT 1
+    `).get(scope.workspaceId, taskId) ? 1 : 0
+  );
+}
+
+function currentWorkspaceDay(
+  db: Database.Database,
+  scope: WorkspaceScope,
+): string {
+  const workspace = db.prepare("SELECT timezone FROM workspaces WHERE id = ?")
+    .get(scope.workspaceId) as { timezone: string } | undefined;
+  if (!workspace) throw new Error("学习空间不存在");
+  return dateKeyInTimeZone(new Date(), workspace.timezone);
 }
 
 export function unwrapTaskMutation(result: PlannerTaskMutation): PlannerTask {

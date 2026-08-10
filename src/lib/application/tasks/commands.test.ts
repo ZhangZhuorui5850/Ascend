@@ -10,6 +10,7 @@ import {
 } from "./commands";
 import { createTestDb, createTestWorkspace } from "../../repo/testing";
 import { plannerDefaultId } from "../../repo/planner-defaults";
+import { listLearningEvidence } from "../../repo/learning-evidence";
 
 describe("canonical task application commands", () => {
   it("creates in the canonical inbox and rejects a foreign subject", () => {
@@ -66,23 +67,48 @@ describe("canonical task application commands", () => {
     const completed = completeTask(db, scope, {
       id: scheduled.id,
       expectedVersion: scheduled.version,
+      day: "2026-08-10",
+      evidence: { actualMinutes: 35, output: "完成并核对" },
     }).entity!;
     expect(completed.status).toBe("completed");
+    expect(listLearningEvidence(db, scope, { taskId: created.id })).toMatchObject([
+      {
+        completionCycle: 1,
+        day: "2026-08-10",
+        outcome: "completed",
+        actualMinutes: 35,
+        output: "完成并核对",
+      },
+    ]);
     const reopened = reopenTask(db, scope, {
       id: completed.id,
       expectedVersion: completed.version,
+      day: "2026-08-10",
     }).entity!;
     expect(reopened.status).toBe("open");
-
-    const deleted = deleteTask(db, scope, {
+    const completedAgain = completeTask(db, scope, {
       id: reopened.id,
       expectedVersion: reopened.version,
+      day: "2026-08-11",
+    }).entity!;
+    expect(listLearningEvidence(db, scope, { taskId: created.id }).map((item) => ({
+      cycle: item.completionCycle,
+      outcome: item.outcome,
+    }))).toEqual([
+      { cycle: 2, outcome: "completed" },
+      { cycle: 1, outcome: "reopened" },
+      { cycle: 1, outcome: "completed" },
+    ]);
+
+    const deleted = deleteTask(db, scope, {
+      id: completedAgain.id,
+      expectedVersion: completedAgain.version,
       clientMutationId: "delete-lifecycle",
     }).entity!;
     expect(deleted.deleted_at).not.toBeNull();
     expect(deleteTask(db, scope, {
-      id: reopened.id,
-      expectedVersion: reopened.version,
+      id: completedAgain.id,
+      expectedVersion: completedAgain.version,
       clientMutationId: "delete-lifecycle",
     }).entity).toEqual(deleted);
     expect(() => updateTask(db, scope, {
