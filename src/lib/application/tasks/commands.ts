@@ -78,6 +78,21 @@ export function updateTask(
       scope,
       input.subjectCode === undefined ? current.subject_code : input.subjectCode,
     );
+    const isCompletion = input.status === "completed" && current.status !== "completed";
+    const isReopen = input.status === "open" && current.status === "completed";
+    if (isCompletion || isReopen) {
+      const hasOtherPatch = Object.entries(input).some(([key, value]) =>
+        key !== "id" && key !== "expectedVersion" && key !== "status" && value !== undefined);
+      let expectedVersion = input.expectedVersion;
+      if (hasOtherPatch) {
+        const intermediate = updatePlannerTask(db, scope, { ...input, status: undefined });
+        if (!intermediate.entity) return intermediate;
+        expectedVersion = intermediate.entity.version;
+      }
+      return isCompletion
+        ? completeTask(db, scope, { id: input.id, expectedVersion })
+        : reopenTask(db, scope, { id: input.id, expectedVersion });
+    }
     return updatePlannerTask(db, scope, input);
   })();
 }
@@ -150,6 +165,13 @@ export function changeTaskStatus(
   scope: WorkspaceScope,
   input: { id: string; expectedVersion: number; status: PlannerTaskStatus },
 ): TaskCommandResult {
+  if (input.status === "completed") {
+    return completeTask(db, scope, input);
+  }
+  if (input.status === "open") {
+    const current = requireActiveTask(db, scope, input.id);
+    if (current.status === "completed") return reopenTask(db, scope, input);
+  }
   return db.transaction(() => {
     requireActiveTask(db, scope, input.id);
     return updatePlannerTask(db, scope, input);

@@ -151,4 +151,25 @@ describe("canonical task application commands", () => {
     expect(stale.conflict).toMatchObject({ actualVersion: first.version });
     expect(stale.entity).toBeUndefined();
   });
+
+  it("does not let the generic update path bypass completion evidence", () => {
+    const db = createTestDb();
+    const scope = createTestWorkspace(db);
+    const task = createTask(db, scope, {
+      clientMutationId: "generic-completion",
+      title: "Complete through update",
+    });
+
+    const completed = updateTask(db, scope, {
+      id: task.id,
+      expectedVersion: task.version,
+      title: "Updated and completed",
+      status: "completed",
+    }).entity!;
+
+    expect(completed).toMatchObject({ title: "Updated and completed", status: "completed", version: 3 });
+    expect(listLearningEvidence(db, scope, { taskId: task.id })).toMatchObject([
+      { completionCycle: 1, outcome: "completed" },
+    ]);
+  });
 });
