@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { randomUUID } from "node:crypto";
 import { readFile, realpath, stat } from "node:fs/promises";
 import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import { z } from "zod";
@@ -6,8 +7,11 @@ import { getUploadRoot } from "../db";
 import { assertDateKey, shiftDateKey, todayKey } from "../dates";
 import { writeAuditLog } from "../audit";
 import {
+  completeTask as completeCanonicalTask,
   createTask as createCanonicalTask,
   deleteTask as deleteCanonicalTask,
+  reopenTask as reopenCanonicalTask,
+  rescheduleTask as rescheduleCanonicalTask,
   restoreTask as restoreCanonicalTask,
   updateTask as updateCanonicalTask,
 } from "../application/tasks/commands";
@@ -55,15 +59,10 @@ import {
 import { createMockExam, getMockExamDashboard } from "../repo/mock-exams";
 import {
   addNote,
-  addTask,
   deleteNote,
-  deleteTask,
-  listCalendarTasks,
-  scheduleTask,
-  toggleTask,
   updateNote,
-  updateTask,
 } from "../repo/planner";
+import { listCanonicalCalendarTasks } from "../repo/planner-calendar-tasks";
 import { ensurePlannerDefaults, plannerDefaultId } from "../repo/planner-defaults";
 import { listPlannerCalendars } from "../repo/planner-calendars";
 import {
@@ -80,8 +79,14 @@ import {
 } from "../repo/planner-reminders";
 import { createTaskSeries } from "../repo/planner-series";
 import {
+  getPlannerTask,
   listTaskView,
 } from "../repo/planner-tasks";
+import {
+  getLearningTaskLink,
+  upsertLearningTaskLink,
+} from "../repo/learning-evidence";
+import { addMinutesToInstant, localDateTimeToUtc, utcToZonedDateTime } from "../planner/time";
 import { createMistake, createReviewEvent, createStudySession, getMistakeBook } from "../repo/reviews";
 import { searchWorkspace } from "../repo/search";
 import { getSettings } from "../repo/settings";
@@ -148,6 +153,69 @@ function resultEntityId(result: unknown, input: JsonObject): string | null {
     if (input[key] !== undefined && input[key] !== null) return String(input[key]);
   }
   return null;
+}
+
+function resolveAgentTask(
+  db: Database.Database,
+  context: AgentContext,
+  id: string | number,
+  includeDeleted = false,
+): NonNullable<ReturnType<typeof getPlannerTask>> {
+  const canonicalId = typeof id === "string"
+    ? id
+    : (db.prepare(`
+        SELECT id FROM planner_tasks
+        WHERE workspace_id = ? AND legacy_day_task_id = ?
+      `).get(context.workspaceId, id) as { id: string } | undefined)?.id;
+  if (!canonicalId) throw new Error("任务不存在");
+  const task = getPlannerTask(db, context, canonicalId);
+  if (!task || (!includeDeleted && task.deleted_at)) throw new Error("任务不存在");
+  return task;
+}
+
+function agentWorkspaceTimeZone(db: Database.Database, workspaceId: string): string {
+  const workspace = db.prepare("SELECT timezone FROM workspaces WHERE id = ?")
+    .get(workspaceId) as { timezone: string } | undefined;
+  if (!workspace) throw new Error("学习空间不存在");
+  return workspace.timezone;
+}
+
+function canonicalTaskDay(
+  task: NonNullable<ReturnType<typeof getPlannerTask>>,
+  fallbackTimeZone: string,
+): string | null {
+  if (task.scheduled_start_at) {
+    return utcToZonedDateTime(
+      task.scheduled_start_at,
+      task.scheduled_timezone ?? fallbackTimeZone,
+    ).date;
+  }
+  if (task.due_date) return task.due_date;
+  return task.due_at
+    ? utcToZonedDateTime(task.due_at, task.due_timezone ?? fallbackTimeZone).date
+    : null;
+}
+
+function normalizePlannerPriority(value: number | undefined): 1 | 2 | 3 | undefined {
+  if (value === undefined) return undefined;
+  if (value === 1 || value === 2 || value === 3) return value;
+  throw new Error("任务优先级无效");
+}
+
+function hasLearningTaskFields(input: {
+  knowledgePointId?: string | null;
+  activityType?: string;
+  completionCriteria?: string;
+  plannedVerificationMethod?: string;
+  sourceType?: string;
+  sourceId?: string | number;
+}): boolean {
+  return input.knowledgePointId !== undefined
+    || input.activityType !== undefined
+    || input.completionCriteria !== undefined
+    || input.plannedVerificationMethod !== undefined
+    || input.sourceType !== undefined
+    || input.sourceId !== undefined;
 }
 
 function allowedImportRoots(): string[] {
@@ -243,8 +311,8 @@ export const agentOperations: AgentOperation[] = [
   }),
   defineOperation({
     id: "task.list",
-    title: "查询日程任务",
-    description: "按日期范围查询日历任务；默认只查今天，最多 366 天、500 条。",
+    title: "查询任务",
+    description: "按日期范围查询 canonical Planner 任务；返回稳定 UUID 与 version。",
     schema: z.object({
       from: date.optional(),
       to: date.optional(),
@@ -255,22 +323,22 @@ export const agentOperations: AgentOperation[] = [
       const from = input.from || todayKey();
       const to = input.to || from;
       ensureRange(from, to);
-      return listCalendarTasks(db, context, {
-        from,
-        to,
-        includeDone: input.includeDone,
-        limit: 500,
-      });
+      const timeZone = agentWorkspaceTimeZone(db, context.workspaceId);
+      return listCanonicalCalendarTasks(db, context, timeZone)
+        .filter((task) => task.day >= from && task.day <= to)
+        .filter((task) => input.includeDone || !task.done)
+        .slice(0, 500);
     },
   }),
   defineOperation({
     id: "task.create",
-    title: "创建日程任务",
-    description: "在指定日期创建任务，可关联知识点、活动类型、完成标准和来源。",
+    title: "创建任务",
+    description: "幂等创建 canonical Planner 任务，并在同一事务写入可选学习任务关联。",
     schema: z.object({
+      clientMutationId: z.string().min(1).max(200).optional(),
       day: date,
       title: z.string().min(1),
-      subjectCode: z.string().optional(),
+      subjectCode: z.string().nullable().optional(),
       priority: z.number().int().min(1).max(3).optional(),
       estimatedMinutes: z.number().int().min(5).max(480).optional(),
       scheduledStart: z
@@ -286,18 +354,52 @@ export const agentOperations: AgentOperation[] = [
       completionCriteria: z.string().max(500).optional(),
       sourceType: z.string().max(50).optional(),
       sourceId: z.union([z.string(), z.number()]).optional(),
-      verificationMethod: z.string().max(200).optional(),
+      plannedVerificationMethod: z.string().max(200).optional(),
     }),
     readOnly: false,
-    entityType: "task",
-    run: ({ db, context }, input) => addTask(db, context, input),
+    entityType: "planner_task",
+    run: ({ db, context }, input) => db.transaction(() => {
+      const timeZone = agentWorkspaceTimeZone(db, context.workspaceId);
+      const estimatedMinutes = input.estimatedMinutes ?? 30;
+      const scheduledStartAt = input.scheduledStart
+        ? localDateTimeToUtc({ date: input.day, time: input.scheduledStart, timeZone })
+        : null;
+      const task = createCanonicalTask(db, context, {
+        clientMutationId: input.clientMutationId ?? randomUUID(),
+        title: input.title,
+        subjectCode: input.subjectCode,
+        priority: normalizePlannerPriority(input.priority),
+        estimatedMinutes,
+        notes: input.notes,
+        dueDate: scheduledStartAt ? null : input.day,
+        scheduledStartAt,
+        scheduledEndAt: scheduledStartAt
+          ? addMinutesToInstant(scheduledStartAt, estimatedMinutes)
+          : null,
+        scheduledTimezone: scheduledStartAt ? timeZone : null,
+      });
+      if (hasLearningTaskFields(input)) {
+        upsertLearningTaskLink(db, context, {
+          taskId: task.id,
+          knowledgePointId: input.knowledgePointId,
+          activityType: input.activityType,
+          completionCriteria: input.completionCriteria,
+          plannedVerificationMethod: input.plannedVerificationMethod,
+          sourceType: input.sourceType,
+          sourceId: input.sourceId,
+          expectedVersion: 0,
+        });
+      }
+      return { ...task, learning_task: getLearningTaskLink(db, context, task.id) };
+    })(),
   }),
   defineOperation({
     id: "task.update",
-    title: "更新日程任务",
-    description: "局部更新任务内容、完成状态或排期；传入 day 可跨日移动。",
+    title: "更新任务",
+    description: "兼容 numeric legacy ID 或 canonical UUID；所有修改合并为一个 canonical transaction。",
     schema: z.object({
-      id: z.number().int().positive(),
+      id: z.union([z.string().min(1), z.number().int().positive()]),
+      expectedVersion: z.number().int().positive().optional(),
       title: z.string().min(1).optional(),
       subjectCode: z.string().nullable().optional(),
       priority: z.number().int().min(1).max(3).optional(),
@@ -321,14 +423,14 @@ export const agentOperations: AgentOperation[] = [
       verificationMethod: z.string().max(200).optional(),
       verificationResult: z.string().max(200).optional(),
       verificationOutcome: z.enum(["improved", "unchanged", "regressed", "unknown"]).optional(),
-      recordAsStudy: z.boolean().optional(),
-      scheduleRetestAfterDays: z.union([z.literal(1), z.literal(3), z.literal(7)]).optional(),
+      clientMutationId: z.string().min(1).max(200).optional(),
     }),
     readOnly: false,
-    entityType: "task",
-    run: ({ db, context }, input) => {
+    entityType: "planner_task",
+    run: ({ db, context }, input) => db.transaction(() => {
       const {
         id,
+        expectedVersion,
         day,
         done,
         actualMinutes,
@@ -336,59 +438,263 @@ export const agentOperations: AgentOperation[] = [
         verificationMethod,
         verificationResult,
         verificationOutcome,
-        recordAsStudy,
-        scheduleRetestAfterDays,
+        clientMutationId,
+        knowledgePointId,
+        activityType,
+        completionCriteria,
+        plannedVerificationMethod,
+        scheduledStart,
         ...fields
       } = input;
-      if (Object.keys(fields).length) updateTask(db, context, { id, ...fields });
-      if (day)
-        scheduleTask(db, context, {
-          id,
-          day,
-          scheduledStart: input.scheduledStart,
-          estimatedMinutes: input.estimatedMinutes,
+      const task = resolveAgentTask(db, context, id);
+      let version = expectedVersion ?? task.version;
+      if (expectedVersion !== undefined && expectedVersion !== task.version) {
+        return { conflict: { entityId: task.id, expectedVersion, actualVersion: task.version, latest: task } };
+      }
+      const corePatch = Object.fromEntries(
+        Object.entries(fields).filter(([, value]) => value !== undefined),
+      );
+      if (Object.keys(corePatch).length) {
+        const updated = updateCanonicalTask(db, context, {
+          id: task.id,
+          expectedVersion: version,
+          ...corePatch,
+          priority: normalizePlannerPriority(input.priority),
         });
+        if (!updated.entity) return updated;
+        version = updated.entity.version;
+      }
+      if (day !== undefined || scheduledStart !== undefined) {
+        const targetDay = day ?? canonicalTaskDay(task, agentWorkspaceTimeZone(db, context.workspaceId));
+        if (!targetDay) throw new Error("改期需提供 day");
+        const timeZone = agentWorkspaceTimeZone(db, context.workspaceId);
+        const scheduledStartAt = scheduledStart
+          ? localDateTimeToUtc({ date: targetDay, time: scheduledStart, timeZone })
+          : null;
+        const duration = input.estimatedMinutes ?? task.estimated_minutes;
+        const scheduled = rescheduleCanonicalTask(db, context, {
+          id: task.id,
+          expectedVersion: version,
+          estimatedMinutes: duration,
+          schedule: scheduledStartAt
+            ? {
+                kind: "timed",
+                startAt: scheduledStartAt,
+                endAt: addMinutesToInstant(scheduledStartAt, duration),
+                timeZone,
+              }
+            : { kind: "none" },
+          dueDate: scheduledStartAt ? undefined : targetDay,
+        });
+        if (!scheduled.entity) return scheduled;
+        version = scheduled.entity.version;
+      }
+      if (
+        knowledgePointId !== undefined
+        || activityType !== undefined
+        || completionCriteria !== undefined
+        || plannedVerificationMethod !== undefined
+      ) {
+        const currentLink = getLearningTaskLink(db, context, task.id);
+        upsertLearningTaskLink(db, context, {
+          taskId: task.id,
+          knowledgePointId,
+          activityType,
+          completionCriteria,
+          plannedVerificationMethod,
+          expectedVersion: currentLink?.version ?? 0,
+        });
+      }
       if (done !== undefined) {
-        toggleTask(db, context, {
-          id,
-          done,
-          actualMinutes,
-          completionOutput,
-          verificationMethod,
-          verificationResult,
-          verificationOutcome,
-          recordAsStudy,
-          scheduleRetestAfterDays,
-        });
+        const statusResult = done
+          ? completeCanonicalTask(db, context, {
+              id: task.id,
+              expectedVersion: version,
+              day,
+              clientMutationId,
+              evidence: {
+                actualMinutes,
+                output: completionOutput,
+                verificationMethod,
+                verificationResult,
+                verificationOutcome,
+              },
+            })
+          : reopenCanonicalTask(db, context, {
+              id: task.id,
+              expectedVersion: version,
+              day,
+              clientMutationId,
+            });
+        if (!statusResult.entity) return statusResult;
+        version = statusResult.entity.version;
       } else if (
         actualMinutes !== undefined
         || completionOutput !== undefined
         || verificationMethod !== undefined
         || verificationResult !== undefined
         || verificationOutcome !== undefined
-        || recordAsStudy !== undefined
-        || scheduleRetestAfterDays !== undefined
       ) {
         throw new Error("完成证据只能在 done=true 时写入");
       }
-      if (!Object.keys(fields).length && !day && done === undefined) {
+      if (
+        !Object.keys(corePatch).length
+        && day === undefined
+        && scheduledStart === undefined
+        && done === undefined
+        && knowledgePointId === undefined
+        && activityType === undefined
+        && completionCriteria === undefined
+        && plannedVerificationMethod === undefined
+      ) {
         throw new Error("至少提供一个要更新的字段");
       }
-      return { id, updated: true };
-    },
+      return {
+        task: getPlannerTask(db, context, task.id),
+        learning: getLearningTaskLink(db, context, task.id),
+        version,
+      };
+    })(),
   }),
   defineOperation({
     id: "task.delete",
-    title: "删除日程任务",
-    description: "把一个任务移入 Planner 回收站，必须明确确认。",
-    schema: z.object({ id: z.number().int().positive(), confirm: z.boolean() }),
+    title: "删除任务",
+    description: "兼容 numeric legacy ID 或 UUID，把 canonical 任务移入回收站。",
+    schema: z.object({
+      id: z.union([z.string().min(1), z.number().int().positive()]),
+      expectedVersion: z.number().int().positive().optional(),
+      clientMutationId: z.string().min(1).max(200).optional(),
+      confirm: z.boolean(),
+    }),
     readOnly: false,
     destructive: true,
-    entityType: "task",
+    entityType: "planner_task",
     run: ({ db, context }, input) => {
       requireConfirmation(input.confirm, "删除任务");
-      deleteTask(db, context, input.id);
-      return { id: input.id, deleted: true };
+      const task = resolveAgentTask(db, context, input.id);
+      return deleteCanonicalTask(db, context, {
+        id: task.id,
+        expectedVersion: input.expectedVersion ?? task.version,
+        clientMutationId: input.clientMutationId ?? randomUUID(),
+      });
+    },
+  }),
+  defineOperation({
+    id: "task.complete",
+    title: "完成任务",
+    description: "完成 canonical 任务，并在同一事务追加不可覆盖的 completion evidence。",
+    schema: z.object({
+      id: z.union([z.string().min(1), z.number().int().positive()]),
+      expectedVersion: z.number().int().positive().optional(),
+      clientMutationId: z.string().min(1).max(200).optional(),
+      day: date.optional(),
+      actualMinutes: z.number().int().min(1).max(1440).nullable().optional(),
+      output: z.string().max(4000).optional(),
+      outcome: z.string().max(100).optional(),
+      difficulty: z.string().max(100).optional(),
+      verificationMethod: z.string().max(200).optional(),
+      verificationResult: z.string().max(1000).optional(),
+      verificationOutcome: z.string().max(100).optional(),
+      confidence: z.number().int().min(0).max(100).nullable().optional(),
+    }),
+    readOnly: false,
+    entityType: "planner_task",
+    run: ({ db, context }, input) => {
+      const task = resolveAgentTask(db, context, input.id);
+      return completeCanonicalTask(db, context, {
+        id: task.id,
+        expectedVersion: input.expectedVersion ?? task.version,
+        clientMutationId: input.clientMutationId,
+        day: input.day,
+        evidence: {
+          actualMinutes: input.actualMinutes,
+          output: input.output,
+          outcome: input.outcome,
+          difficulty: input.difficulty,
+          verificationMethod: input.verificationMethod,
+          verificationResult: input.verificationResult,
+          verificationOutcome: input.verificationOutcome,
+          confidence: input.confidence,
+        },
+      });
+    },
+  }),
+  defineOperation({
+    id: "task.reopen",
+    title: "重新打开任务",
+    description: "重新打开 canonical 任务；旧 completion evidence 保留并记录 reopen 事件。",
+    schema: z.object({
+      id: z.union([z.string().min(1), z.number().int().positive()]),
+      expectedVersion: z.number().int().positive().optional(),
+      clientMutationId: z.string().min(1).max(200).optional(),
+      day: date.optional(),
+    }),
+    readOnly: false,
+    entityType: "planner_task",
+    run: ({ db, context }, input) => {
+      const task = resolveAgentTask(db, context, input.id);
+      return reopenCanonicalTask(db, context, {
+        id: task.id,
+        expectedVersion: input.expectedVersion ?? task.version,
+        clientMutationId: input.clientMutationId,
+        day: input.day,
+      });
+    },
+  }),
+  defineOperation({
+    id: "task.reschedule",
+    title: "重新安排任务",
+    description: "原子更新 canonical 任务的 Due 与 Schedule；scheduledStart 为空时设为全天到期日。",
+    schema: z.object({
+      id: z.union([z.string().min(1), z.number().int().positive()]),
+      expectedVersion: z.number().int().positive().optional(),
+      day: date,
+      scheduledStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable(),
+      estimatedMinutes: z.number().int().min(5).max(1440).optional(),
+    }),
+    readOnly: false,
+    entityType: "planner_task",
+    run: ({ db, context }, input) => {
+      const task = resolveAgentTask(db, context, input.id);
+      const timeZone = agentWorkspaceTimeZone(db, context.workspaceId);
+      const startAt = input.scheduledStart
+        ? localDateTimeToUtc({ date: input.day, time: input.scheduledStart, timeZone })
+        : null;
+      const estimatedMinutes = input.estimatedMinutes ?? task.estimated_minutes;
+      return rescheduleCanonicalTask(db, context, {
+        id: task.id,
+        expectedVersion: input.expectedVersion ?? task.version,
+        dueDate: startAt ? undefined : input.day,
+        estimatedMinutes,
+        schedule: startAt
+          ? {
+              kind: "timed",
+              startAt,
+              endAt: addMinutesToInstant(startAt, estimatedMinutes),
+              timeZone,
+            }
+          : { kind: "none" },
+      });
+    },
+  }),
+  defineOperation({
+    id: "task.restore",
+    title: "恢复任务",
+    description: "按 UUID 或已有 legacy mapping 从 canonical Planner 回收站恢复任务。",
+    schema: z.object({
+      id: z.union([z.string().min(1), z.number().int().positive()]),
+      expectedVersion: z.number().int().positive().optional(),
+      clientMutationId: z.string().min(1).max(200).optional(),
+    }),
+    readOnly: false,
+    entityType: "planner_task",
+    run: ({ db, context }, input) => {
+      const task = resolveAgentTask(db, context, input.id, true);
+      return restoreCanonicalTask(db, context, {
+        id: task.id,
+        expectedVersion: input.expectedVersion ?? task.version,
+        clientMutationId: input.clientMutationId ?? randomUUID(),
+      });
     },
   }),
   defineOperation({

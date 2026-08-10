@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { resolveAgentContext } from "./context";
 import { agentOperations, executeAgentOperation, getAgentOperation, operationManifest } from "./operations";
 import { createTestDb, createTestWorkspace } from "../repo/testing";
+import { addTask } from "../repo/planner";
+import { getLearningTaskLink, listLearningEvidence } from "../repo/learning-evidence";
 
 describe("Ascend Agent operations", () => {
   const databases: ReturnType<typeof createTestDb>[] = [];
@@ -52,11 +54,11 @@ describe("Ascend Agent operations", () => {
       day: "2026-07-19",
       title: "Agent 创建的任务",
       estimatedMinutes: 45,
-    })) as { id: number };
+    })) as { id: string };
     const listed = (await executeAgentOperation({ db, context }, getAgentOperation("task.list"), {
       from: "2026-07-19",
       to: "2026-07-19",
-    })) as Array<{ id: number; title: string }>;
+    })) as Array<{ id: string; title: string }>;
 
     expect(listed).toContainEqual(expect.objectContaining({ id: created.id, title: "Agent 创建的任务" }));
     expect(db.prepare("SELECT COUNT(*) AS count FROM planner_tasks WHERE workspace_id = ?").get(other.workspaceId)).toEqual(
@@ -64,7 +66,7 @@ describe("Ascend Agent operations", () => {
     );
     expect(db.prepare("SELECT action, entity_type FROM audit_logs ORDER BY id DESC LIMIT 1").get()).toEqual({
       action: "agent.task.create",
-      entity_type: "task",
+      entity_type: "planner_task",
     });
   });
 
@@ -73,14 +75,112 @@ describe("Ascend Agent operations", () => {
     const created = (await executeAgentOperation({ db, context }, getAgentOperation("task.create"), {
       day: "2026-07-19",
       title: "不能误删",
-    })) as { id: number };
+    })) as { id: string };
 
     await expect(
       executeAgentOperation({ db, context }, getAgentOperation("task.delete"), { id: created.id, confirm: false }),
     ).rejects.toThrow("confirm=true");
     expect(
-      db.prepare("SELECT title FROM planner_tasks WHERE workspace_id = ? AND rowid = ?").get(context.workspaceId, created.id),
+      db.prepare("SELECT title FROM planner_tasks WHERE workspace_id = ? AND id = ?").get(context.workspaceId, created.id),
     ).toEqual({ title: "不能误删" });
+  });
+
+  it("routes canonical and numeric-compatible task writes through one Planner entity", async () => {
+    const { db, context } = setup();
+    const created = (await executeAgentOperation({ db, context }, getAgentOperation("task.create"), {
+      clientMutationId: "agent-task-canonical",
+      day: "2026-07-19",
+      title: "Canonical Agent task",
+      activityType: "practice",
+      plannedVerificationMethod: "闭卷复述",
+    })) as { id: string; version: number };
+    expect(getLearningTaskLink(db, context, created.id)).toMatchObject({
+      activityType: "practice",
+      plannedVerificationMethod: "闭卷复述",
+    });
+
+    await executeAgentOperation({ db, context }, getAgentOperation("task.update"), {
+      id: created.id,
+      expectedVersion: created.version,
+      done: true,
+      clientMutationId: "agent-task-complete",
+      actualMinutes: 20,
+      completionOutput: "完成一轮",
+    });
+    expect(listLearningEvidence(db, context, { taskId: created.id })).toMatchObject([
+      { actualMinutes: 20, output: "完成一轮", outcome: "completed" },
+    ]);
+
+    const legacy = addTask(db, context, { day: "2026-07-20", title: "Legacy identity" });
+    const mirrored = db.prepare(`
+      SELECT id, version FROM planner_tasks
+      WHERE workspace_id = ? AND legacy_day_task_id = ?
+    `).get(context.workspaceId, legacy.id) as { id: string; version: number };
+    await executeAgentOperation({ db, context }, getAgentOperation("task.update"), {
+      id: legacy.id,
+      expectedVersion: mirrored.version,
+      title: "Updated through numeric compatibility",
+    });
+    expect(db.prepare("SELECT title FROM planner_tasks WHERE id = ?").get(mirrored.id)).toEqual({
+      title: "Updated through numeric compatibility",
+    });
+    expect(db.prepare("SELECT title FROM day_tasks WHERE id = ?").get(legacy.id)).toEqual({
+      title: "Legacy identity",
+    });
+  });
+
+  it("exposes explicit canonical complete, reopen, reschedule, delete, and restore commands", async () => {
+    const { db, context } = setup();
+    const created = (await executeAgentOperation({ db, context }, getAgentOperation("task.create"), {
+      clientMutationId: "agent-explicit-lifecycle",
+      day: "2026-07-19",
+      title: "Explicit lifecycle",
+    })) as { id: string; version: number };
+
+    const scheduled = (await executeAgentOperation({ db, context }, getAgentOperation("task.reschedule"), {
+      id: created.id,
+      expectedVersion: created.version,
+      day: "2026-07-20",
+      scheduledStart: "09:15",
+      estimatedMinutes: 35,
+    })) as { entity: { version: number; scheduled_start_at: string } };
+    expect(scheduled.entity.scheduled_start_at).toBe("2026-07-20T01:15:00.000Z");
+
+    const completed = (await executeAgentOperation({ db, context }, getAgentOperation("task.complete"), {
+      id: created.id,
+      expectedVersion: scheduled.entity.version,
+      clientMutationId: "agent-explicit-complete",
+      day: "2026-07-20",
+      actualMinutes: 30,
+      output: "完成并验证",
+    })) as { entity: { version: number; status: string } };
+    expect(completed.entity.status).toBe("completed");
+    expect(listLearningEvidence(db, context, { taskId: created.id })).toMatchObject([
+      { actualMinutes: 30, output: "完成并验证", outcome: "completed" },
+    ]);
+
+    const reopened = (await executeAgentOperation({ db, context }, getAgentOperation("task.reopen"), {
+      id: created.id,
+      expectedVersion: completed.entity.version,
+      clientMutationId: "agent-explicit-reopen",
+      day: "2026-07-20",
+    })) as { entity: { version: number; status: string } };
+    expect(reopened.entity.status).toBe("open");
+
+    const deleted = (await executeAgentOperation({ db, context }, getAgentOperation("task.delete"), {
+      id: created.id,
+      expectedVersion: reopened.entity.version,
+      clientMutationId: "agent-explicit-delete",
+      confirm: true,
+    })) as { entity: { version: number; deleted_at: string } };
+    expect(deleted.entity.deleted_at).toBeTruthy();
+
+    const restored = (await executeAgentOperation({ db, context }, getAgentOperation("task.restore"), {
+      id: created.id,
+      expectedVersion: deleted.entity.version,
+      clientMutationId: "agent-explicit-restore",
+    })) as { entity: { deleted_at: string | null } };
+    expect(restored.entity.deleted_at).toBeNull();
   });
 
   it("supports idempotent Planner v2 task writes, conflicts, restore, and workspace isolation", async () => {

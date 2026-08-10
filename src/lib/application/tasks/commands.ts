@@ -123,8 +123,8 @@ export function completeTask(
       day: input.day ?? currentWorkspaceDay(db, scope),
       idempotencyKey: input.clientMutationId
         ?? `task-complete:${input.id}:version:${result.entity.version}`,
-      outcome: "completed",
       ...input.evidence,
+      outcome: input.evidence?.outcome ?? "completed",
     });
     return result;
   })();
