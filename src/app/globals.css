@@ -893,6 +893,13 @@ button:focus-visible {
   color: var(--quiet);
 }
 
+.saveStatusGroup {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .saveStatus.save-saving {
   color: var(--warn);
 }
@@ -903,6 +910,16 @@ button:focus-visible {
 
 .saveStatus.save-error {
   color: var(--danger);
+}
+
+.saveRetry {
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--danger);
+  font-size: 12.5px;
 }
 
 .reviewQueue {
@@ -7540,7 +7557,7 @@ a,
 
   .dayTasks .sectionHint,
   .dayNotes .sectionHint,
-  .dayJournal .saveStatus {
+  .dayJournal .saveStatusGroup {
     max-width: 58%;
     text-align: right;
   }

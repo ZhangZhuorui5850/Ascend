@@ -16,6 +16,12 @@ export type DayEntry = {
 export const DAY_FIELDS = ["plan", "diary", "summary", "blockers", "tomorrow"] as const;
 export type DayField = (typeof DAY_FIELDS)[number];
 
+export type DayEntryAutosaveInput = {
+  clientId: string;
+  revision: number;
+  fields: Partial<Record<DayField, string>>;
+};
+
 export type DueReview = {
   id: string;
   title: string;
@@ -230,4 +236,59 @@ export function updateDayEntry(
         updated_at = CURRENT_TIMESTAMP
     WHERE workspace_id = @workspaceId AND date = @date
   `).run(next);
+}
+
+/**
+ * Persist one browser tab's autosave revision atomically.
+ *
+ * The drafts row is a per-workspace/date/client revision ledger. It prevents an
+ * older fetch from overwriting a newer pagehide beacon when the two requests
+ * arrive out of order.
+ */
+export function updateDayEntryAutosave(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  date: string,
+  input: DayEntryAutosaveInput,
+): { applied: boolean; revision: number } {
+  assertDateKey(date);
+  if (!/^[a-zA-Z0-9._:-]{1,120}$/.test(input.clientId)) throw new Error("Invalid autosave client id");
+  if (!Number.isSafeInteger(input.revision) || input.revision < 1) throw new Error("Invalid autosave revision");
+
+  return db.transaction(() => {
+    const ledger = db.prepare(`
+      SELECT version
+      FROM drafts
+      WHERE workspace_id = ? AND scope_type = 'day-entry-autosave' AND scope_id = ? AND field = ?
+    `).get(scope.workspaceId, date, input.clientId) as { version: number } | undefined;
+
+    if (ledger && ledger.version >= input.revision) {
+      return { applied: false, revision: ledger.version };
+    }
+
+    updateDayEntry(db, scope, date, input.fields);
+    const ledgerId = `${scope.workspaceId}:day-entry-autosave:${date}:${input.clientId}`;
+    db.prepare(`
+      INSERT INTO drafts
+        (workspace_id, id, scope_type, scope_id, field, content, base_version, version, status, device_id, updated_at)
+      VALUES
+        (?, ?, 'day-entry-autosave', ?, ?, '', ?, ?, 'active', ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(workspace_id, scope_type, scope_id, field) DO UPDATE SET
+        base_version = excluded.base_version,
+        version = excluded.version,
+        status = 'active',
+        device_id = excluded.device_id,
+        updated_at = CURRENT_TIMESTAMP
+    `).run(
+      scope.workspaceId,
+      ledgerId,
+      date,
+      input.clientId,
+      input.revision,
+      input.revision,
+      input.clientId,
+    );
+
+    return { applied: true, revision: input.revision };
+  })();
 }

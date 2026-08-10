@@ -34,7 +34,7 @@ function revalidateLearningEvidence(day: string): void {
   revalidatePath("/subjects/[code]", "page");
 }
 
-/** 日记/计划等文本字段的自动保存；不触发整页刷新。 */
+/** 日记/计划等文本字段的保存，并失效所有直接展示这些字段的页面。 */
 export async function saveDayEntry(date: string, fields: Partial<Record<DayField, string>>): Promise<ActionResult> {
   try {
     const access = await requireWorkspace();
@@ -43,6 +43,8 @@ export async function saveDayEntry(date: string, fields: Partial<Record<DayField
       if (typeof fields[field] === "string") sanitized[field] = fields[field];
     }
     updateDayEntry(getDb(), access, date, sanitized);
+    revalidatePath(`/day/${date}`);
+    revalidatePath("/");
     revalidatePath("/calendar");
     return { ok: true };
   } catch (error) {
