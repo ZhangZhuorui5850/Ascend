@@ -120,6 +120,65 @@ describe("runMigrations", () => {
     expect(getAppliedMigrations(db)).toContain("0013_learning_engine");
   });
 
+  it("adds workspace-guarded learning task links and append-oriented evidence", () => {
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    runMigrations(db);
+
+    for (const table of ["learning_task_links", "learning_evidence"]) {
+      expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table)).toEqual({
+        name: table,
+      });
+    }
+    const linkColumns = (db.prepare("PRAGMA table_info(learning_task_links)").all() as Array<{ name: string }>)
+      .map((row) => row.name);
+    expect(linkColumns).toEqual(expect.arrayContaining([
+      "task_id",
+      "knowledge_point_id",
+      "activity_type",
+      "completion_criteria",
+      "planned_verification_method",
+      "source_type",
+      "source_id",
+      "version",
+    ]));
+    const evidenceColumns = (db.prepare("PRAGMA table_info(learning_evidence)").all() as Array<{ name: string }>)
+      .map((row) => row.name);
+    expect(evidenceColumns).toEqual(expect.arrayContaining([
+      "task_id",
+      "completion_cycle",
+      "day",
+      "activity_type",
+      "actual_minutes",
+      "output",
+      "outcome",
+      "difficulty",
+      "verification_method",
+      "verification_result",
+      "verification_outcome",
+      "confidence",
+      "idempotency_key",
+      "corrected_by",
+      "voided_at",
+    ]));
+    expect((db.prepare("PRAGMA foreign_key_list(learning_evidence)").all() as Array<{ table: string }>)
+      .map((row) => row.table)).toEqual(expect.arrayContaining([
+      "workspaces",
+      "planner_tasks",
+      "knowledge_points",
+      "learning_evidence",
+    ]));
+    expect(db.prepare(`
+      SELECT COUNT(*) AS count FROM sqlite_master
+      WHERE type = 'trigger' AND name LIKE 'learning_evidence_%_workspace_%'
+    `).get()).toEqual({ count: 6 });
+    expect(getAppliedMigrations(db)).toContain("0030_learning_evidence_foundation");
+
+    const before = db.prepare("SELECT sql FROM sqlite_master WHERE name = 'learning_evidence'").get();
+    runMigrations(db);
+    expect(db.prepare("SELECT sql FROM sqlite_master WHERE name = 'learning_evidence'").get()).toEqual(before);
+  });
+
   it("adds onboarding and mock-exam product state", () => {
     const db = new Database(":memory:");
     initializeDatabase(db);

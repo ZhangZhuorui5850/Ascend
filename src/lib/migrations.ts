@@ -5,6 +5,7 @@ import path from "node:path";
 import { LEGACY_WORKSPACE_ID } from "./repo/workspaces";
 import { addMinutesToInstant, localDateTimeToUtc } from "./planner/time";
 import { ensurePlannerDefaults, plannerDefaultId } from "./repo/planner-defaults";
+import { LEARNING_EVIDENCE_SCHEMA_V0030_SQL } from "./learning-evidence-schema";
 
 type Migration = {
   version: string;
@@ -1413,6 +1414,10 @@ const migrations: Migration[] = [
         FOREIGN KEY (mistake_id) REFERENCES mistakes(id)
       );
     `,
+  },
+  {
+    version: "0030_learning_evidence_foundation",
+    sql: LEARNING_EVIDENCE_SCHEMA_V0030_SQL,
   },
 
 ];
