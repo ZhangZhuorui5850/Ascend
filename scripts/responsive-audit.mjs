@@ -36,7 +36,7 @@ try {
   await ensureOnboarding();
   if (stateMatrix) await auditPlannerStateMatrix();
   await auditPlannerAppearanceMatrix();
-  await auditPage("home-desktop", "/", 1440, 900, ".homeFocus");
+  await auditPage("home-desktop", "/", 1440, 900, "[data-today-page]");
   await auditDay("desktop", 1440, 900, { sidebar: true, capturePanel: false, mobileNav: false });
   await auditPage("files-desktop", "/assets", 1440, 900, ".driveExplorer");
   await auditPlannerTasks("tasks-desktop", "/tasks", 1440, 1000);
@@ -44,7 +44,7 @@ try {
   await auditPage("subjects-tablet", "/subjects", 1024, 900, ".subjectCards");
   await auditPlannerTasks("tasks-tablet", "/tasks", 900, 1000, "drawer");
   await auditPlannerCalendar("calendar-tablet", "/calendar", 900, 1000, "drawer");
-  await auditPage("home-mobile", "/", 390, 844, ".homeFocus");
+  await auditPage("home-mobile", "/", 390, 844, "[data-today-page]");
   await auditDay("mobile", 390, 844, { sidebar: false, capturePanel: false, mobileNav: true });
   await auditMobileTaskLayout();
   await auditPage("files-mobile", "/assets", 390, 844, ".driveExplorer");
@@ -60,11 +60,9 @@ try {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
   await page.keyboard.press("Control+K");
-  await expectVisible(".commandPalette", "keyboard command palette opens");
-  await page.getByLabel("搜索功能").fill("资料库");
-  await page.keyboard.press("Enter");
-  await page.waitForURL(`${baseUrl}/assets`, { timeout: 10_000 });
-  console.log("command palette keyboard navigation passed");
+  await expectVisible('[data-testid="capture-panel"]', "keyboard capture opens");
+  await page.getByRole("button", { name: "关闭记录" }).click();
+  console.log("universal capture keyboard shortcut passed");
   await page.locator("button.topbarIconButton").first().click();
   const explicitTheme = await page.evaluate(() => document.documentElement.dataset.theme);
   if (explicitTheme !== "light" && explicitTheme !== "dark") throw new Error(`theme switch did not set an explicit theme: ${explicitTheme}`);
@@ -78,9 +76,9 @@ try {
   await page.getByRole("button", { name: "关闭更多菜单" }).click();
 
   await page.goto(`${baseUrl}/day/${day}`, { waitUntil: "networkidle" });
-  await page.getByTestId("mobile-nav").getByRole("button", { name: "收纳", exact: true }).click();
+  await page.getByTestId("mobile-nav").getByRole("button", { name: "记录", exact: true }).click();
   await expectVisible('[data-testid="capture-panel"]', "mobile capture panel opens");
-  await expectVisible('[data-testid="capture-backdrop"]', "mobile capture backdrop opens");
+  await expectVisible("[data-planner-backdrop]", "mobile capture backdrop opens");
   await assertNoHorizontalOverflow("mobile capture open");
   console.log(`responsive audit passed for ${baseUrl}`);
 } finally {
@@ -129,9 +127,9 @@ async function auditPage(name, pathname, width, height, selector) {
 
 async function auditRouteMatrix() {
   const routes = [
-    ["home", "/", ".homeFocus"],
+    ["home", "/", "[data-today-page]"],
     ["day", `/day/${day}`, ".dayHeader"],
-    ["calendar", "/calendar", ".pageStack"],
+    ["calendar", "/calendar", '[data-planner-workspace="calendar"]'],
     ["subjects", "/subjects", ".subjectCards"],
     ["assets", "/assets", ".driveExplorer"],
     ["mistakes", "/mistakes", ".pageStack"],
@@ -165,16 +163,14 @@ async function auditNavigationPositioning() {
   await page.goto(`${baseUrl}/settings`, { waitUntil: "networkidle" });
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   if (await page.evaluate(() => window.scrollY) < 100) throw new Error("navigation reset test page is not scrollable");
-  await page.getByTestId("mobile-nav").getByRole("link", { name: "总览" }).click();
+  await page.getByTestId("mobile-nav").getByRole("link", { name: "今天" }).click();
   await page.waitForURL(`${baseUrl}/`, { timeout: 10_000 });
   await page.waitForTimeout(350);
   const resetY = await page.evaluate(() => window.scrollY);
   if (resetY > 1) throw new Error(`cross-route navigation retained scroll position ${resetY}px`);
 
-  const taskLink = page.locator(`a[href="/day/${day}#day-tasks"]`).first();
-  await taskLink.click();
-  await page.waitForURL(`${baseUrl}/day/${day}#day-tasks`, { timeout: 10_000 });
-  await assertHashTargetClear("#day-tasks", "home → today task anchor");
+  await page.getByRole("link", { name: "补录与日终复盘" }).click();
+  await page.waitForURL(`${baseUrl}/day/${day}`, { timeout: 10_000 });
 
   await page.goto(`${baseUrl}/settings`, { waitUntil: "networkidle" });
   await page.locator('.settingsTabs a[href="#study"]').click();
@@ -966,11 +962,18 @@ async function auditPwaContract() {
 async function ensureOnboarding() {
   await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
   if (!page.url().includes("/onboarding")) return;
-  await page.locator(".onboardingPane textarea").fill("响应式审计学习目标");
+  const newSubject = page.getByRole("button", { name: "创建新科目" });
+  if (await newSubject.count()) await newSubject.click();
+  const code = page.getByLabel("科目编号");
+  if (await code.count()) {
+    await code.fill("QA");
+    await page.getByLabel("科目名称").fill("响应式审计");
+  }
   await page.getByRole("button", { name: "下一步" }).click();
+  await page.getByLabel("当前目标").fill("验证产品收敛与响应式布局");
   await page.getByRole("button", { name: "下一步" }).click();
-  await page.getByRole("button", { name: "下一步" }).click();
-  await page.getByRole("button", { name: "进入今日工作台" }).click();
+  await page.getByLabel("第一件事").fill("完成响应式验收");
+  await page.getByRole("button", { name: "进入今天" }).click();
   await page.waitForURL(`${baseUrl}/`, { timeout: 10_000 });
 }
 

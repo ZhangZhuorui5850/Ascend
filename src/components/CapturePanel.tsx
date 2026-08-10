@@ -358,7 +358,7 @@ export function CapturePanel({
         surface={surface}
         title="记录"
       >
-        <div className={styles.capture} onPaste={handlePaste}>
+        <div className={styles.capture} data-testid="capture-panel" onPaste={handlePaste}>
           <div aria-label="记录类型" className={styles.intentTabs} role="tablist">
             {INTENTS.map((item) => {
               const Icon = item.icon;

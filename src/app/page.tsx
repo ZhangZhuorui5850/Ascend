@@ -28,7 +28,7 @@ export default async function TodayPage() {
   );
 
   return (
-    <div className={styles.page}>
+    <div className={styles.page} data-today-page>
       <header className={styles.header}>
         <div>
           <p className={styles.kicker}>TODAY</p>
@@ -37,7 +37,7 @@ export default async function TodayPage() {
         <time dateTime={day}>{formatDay(day)}</time>
       </header>
 
-      <section aria-labelledby="today-now" className={styles.now}>
+      <section aria-labelledby="today-now" className={styles.now} data-today-now>
         <p className={styles.sectionLabel}>NOW</p>
         {action ? (
           <>
@@ -72,7 +72,7 @@ export default async function TodayPage() {
         )}
       </section>
 
-      <section aria-labelledby="today-timeline" className={styles.section}>
+      <section aria-labelledby="today-timeline" className={styles.section} data-today-timeline>
         <div className={styles.sectionHeading}>
           <div>
             <p className={styles.sectionLabel}>TODAY</p>
@@ -93,7 +93,7 @@ export default async function TodayPage() {
         ) : null}
       </section>
 
-      <section aria-labelledby="today-review" className={styles.section}>
+      <section aria-labelledby="today-review" className={styles.section} data-today-review>
         <div className={styles.sectionHeading}>
           <div>
             <p className={styles.sectionLabel}>REVIEW</p>
@@ -111,7 +111,7 @@ export default async function TodayPage() {
         </dl>
       </section>
 
-      <section aria-labelledby="today-capture" className={`${styles.section} ${styles.capture}`}>
+      <section aria-labelledby="today-capture" className={`${styles.section} ${styles.capture}`} data-today-capture>
         <div>
           <p className={styles.sectionLabel}>CAPTURE</p>
           <h2 id="today-capture">记录刚刚发生的事</h2>

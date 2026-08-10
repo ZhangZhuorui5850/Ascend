@@ -310,6 +310,13 @@ body:has([data-planner-workspace="calendar"]) .icpFooter {
   display: none;
 }
 
+@media (min-width: 1180px) {
+  body:has([data-planner-workspace="tasks"]) .captureFab,
+  body:has([data-planner-workspace="calendar"]) .captureFab {
+    display: none;
+  }
+}
+
 /* 收纳面板：宽屏为常驻右栏，窄屏为抽屉 */
 .capturePanel {
   position: sticky;
