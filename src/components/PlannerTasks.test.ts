@@ -27,12 +27,15 @@ describe("Planner Tasks Phase 2 surface", () => {
     expect(workspace).toContain("rollback");
   });
 
-  it("routes every task mutation through authenticated Server Actions and repo", () => {
+  it("routes every task mutation through authenticated Server Actions and application commands", () => {
     expect(actions).toContain('"use server"');
     expect(actions).toContain("requireWorkspace()");
-    expect(actions).toContain("createPlannerTask(");
-    expect(actions).toContain("updatePlannerTask(");
-    expect(actions).toContain("softDeletePlannerTask(");
+    expect(actions).toContain("createTask(");
+    expect(actions).toContain("updateTask(");
+    expect(actions).toContain("deleteTask(");
+    expect(actions).toContain("restoreTask(");
+    expect(actions).not.toContain("createPlannerTask(");
+    expect(actions).not.toContain("softDeletePlannerTask(");
     expect(actions).toContain('revalidatePath("/tasks")');
     expect(actions).toContain('revalidatePath("/day/[date]", "page")');
   });
