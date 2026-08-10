@@ -33,14 +33,12 @@ type AttemptRow = {
   transfer_source_problem_id: number | null;
 };
 
-export function getAlgorithmAnalytics(
-  db: Database.Database,
-  scope: WorkspaceScope,
-  today: string,
-): AlgorithmAnalytics {
+export function getAlgorithmAnalytics(db: Database.Database, scope: WorkspaceScope, today: string): AlgorithmAnalytics {
   requirePluginEnabled(db, scope, "algorithms");
   assertDateKey(today);
-  const attempts = db.prepare(`
+  const attempts = db
+    .prepare(
+      `
     SELECT id, problem_id, day, verdict, independent, review_kind,
            pre_confidence, active_seconds, source_verification,
            transfer_source_problem_id
@@ -49,26 +47,28 @@ export function getAlgorithmAnalytics(
       AND outcome NOT IN ('in_progress', 'JE', 'CANCELLED')
       AND day <= ?
     ORDER BY day ASC, id ASC
-  `).all(scope.workspaceId, today) as AttemptRow[];
+  `,
+    )
+    .all(scope.workspaceId, today) as AttemptRow[];
   const byProblem = new Map<number, AttemptRow[]>();
   for (const attempt of attempts) {
     const list = byProblem.get(attempt.problem_id) ?? [];
     list.push(attempt);
     byProblem.set(attempt.problem_id, list);
   }
-  const firstAttempts = [...byProblem.values()].flatMap((rows) => rows[0] ? [rows[0]] : []);
+  const firstAttempts = [...byProblem.values()].flatMap((rows) => (rows[0] ? [rows[0]] : []));
   const firstSuccesses = firstAttempts.filter(isIndependentAccepted).length;
   const independentProblems = [...byProblem.values()].filter((rows) => rows.some(isIndependentAccepted));
   const lapses = independentProblems.filter((rows) => {
     const firstSuccessIndex = rows.findIndex(isIndependentAccepted);
-    return rows.slice(firstSuccessIndex + 1).at(-1)?.verdict !== "AC"
-      && rows.slice(firstSuccessIndex + 1).length > 0;
+    return rows.slice(firstSuccessIndex + 1).at(-1)?.verdict !== "AC" && rows.slice(firstSuccessIndex + 1).length > 0;
   }).length;
-  const transferAttempts = attempts.filter((attempt) => (
-    attempt.review_kind === "unseen_variant"
-    && attempt.transfer_source_problem_id !== null
-  ));
-  const completedReviews = db.prepare(`
+  const transferAttempts = attempts.filter(
+    (attempt) => attempt.review_kind === "unseen_variant" && attempt.transfer_source_problem_id !== null,
+  );
+  const completedReviews = db
+    .prepare(
+      `
     SELECT
       CAST(julianday(completed.day) - julianday(source.day) AS INTEGER) AS interval_days,
       completed.verdict,
@@ -80,7 +80,9 @@ export function getAlgorithmAnalytics(
       ON completed.workspace_id = review.workspace_id AND completed.id = review.attempt_id
     WHERE review.workspace_id = ? AND review.completed_at IS NOT NULL
       AND completed.day <= ?
-  `).all(scope.workspaceId, today) as Array<{
+  `,
+    )
+    .all(scope.workspaceId, today) as Array<{
     interval_days: number;
     verdict: string;
     independent: number;
@@ -92,24 +94,33 @@ export function getAlgorithmAnalytics(
     ? calibrated.reduce((sum, attempt) => {
         const probability = Math.max(0, Math.min(1, (attempt.pre_confidence || 0) / 3));
         const outcome = attempt.verdict === "AC" ? 1 : 0;
-        return sum + ((probability - outcome) ** 2);
+        return sum + (probability - outcome) ** 2;
       }, 0) / calibrated.length
     : null;
   const activeSeconds = attempts
     .map((attempt) => attempt.active_seconds)
     .filter((seconds) => seconds > 0)
     .sort((left, right) => left - right);
-  const gatewayRows = db.prepare(`
-    SELECT gateway_latency_ms, status
-    FROM algorithm_submissions
-    WHERE workspace_id = ? AND submission_kind = 'formal' AND date(submitted_at) <= ?
-    ORDER BY id ASC
-  `).all(scope.workspaceId, today) as Array<{
+  const gatewayRows = db
+    .prepare(
+      `
+    SELECT submission.gateway_latency_ms, submission.status
+    FROM algorithm_submissions submission
+    JOIN algorithm_attempts attempt
+      ON attempt.workspace_id = submission.workspace_id
+      AND attempt.id = submission.attempt_id
+    WHERE submission.workspace_id = ?
+      AND submission.submission_kind = 'formal'
+      AND attempt.day <= ?
+    ORDER BY submission.id ASC
+  `,
+    )
+    .all(scope.workspaceId, today) as Array<{
     gateway_latency_ms: number | null;
     status: string;
   }>;
   const gatewayLatencies = gatewayRows
-    .flatMap((row) => row.gateway_latency_ms === null ? [] : [row.gateway_latency_ms])
+    .flatMap((row) => (row.gateway_latency_ms === null ? [] : [row.gateway_latency_ms]))
     .sort((left, right) => left - right);
   return {
     firstAttempt: { successes: firstSuccesses, samples: firstAttempts.length },
@@ -128,14 +139,12 @@ export function getAlgorithmAnalytics(
     gateway: {
       p50LatencyMs: percentile(gatewayLatencies, 0.5),
       p95LatencyMs: percentile(gatewayLatencies, 0.95),
-      failures: gatewayRows.filter((row) => (
-        row.status === "JE" || row.status === "CANCELLED" || row.status === "RETRYABLE_ERROR"
-      )).length,
+      failures: gatewayRows.filter(
+        (row) => row.status === "JE" || row.status === "CANCELLED" || row.status === "RETRYABLE_ERROR",
+      ).length,
       samples: gatewayRows.length,
     },
-    providerVerifiedAttempts: attempts.filter((attempt) => (
-      attempt.source_verification === "provider_verified"
-    )).length,
+    providerVerifiedAttempts: attempts.filter((attempt) => attempt.source_verification === "provider_verified").length,
   };
 }
 
@@ -143,9 +152,10 @@ function isIndependentAccepted(row: { verdict: string; independent: number }): b
   return row.verdict === "AC" && Boolean(row.independent);
 }
 
-function summarizeAccepted(
-  rows: Array<{ verdict: string; independent: number }>,
-): { successes: number; samples: number } {
+function summarizeAccepted(rows: Array<{ verdict: string; independent: number }>): {
+  successes: number;
+  samples: number;
+} {
   return {
     successes: rows.filter(isIndependentAccepted).length,
     samples: rows.length,
