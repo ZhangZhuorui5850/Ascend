@@ -314,7 +314,7 @@ export function PlannerTasksWorkspace({
   async function purgeTrash(): Promise<void> {
     const confirmed = await confirm({
       title: "清理回收站",
-      description: "永久清理 30 天前进入回收站的任务。",
+      description: "永久清理 30 天前且没有学习证据的任务；含学习记录或仍有关联子任务的项目会保留。",
       confirmLabel: "永久清理",
       danger: true,
     });
@@ -328,13 +328,9 @@ export function PlannerTasksWorkspace({
         "网络异常，回收站内容保持原状",
       );
       if (result.ok) {
-        for (const task of tasks) {
-          if (task.deleted_at && task.deleted_at < cutoff) {
-            applyOptimistic({ type: "remove", id: task.id });
-          }
-        }
+        for (const id of result.purgedTaskIds ?? []) applyOptimistic({ type: "remove", id });
         setMutationStatus("saved");
-        notify("回收站清理完成");
+        notify(`已永久清理 ${result.purged ?? 0} 项，因学习记录或关联保留 ${result.retained ?? 0} 项`);
       } else {
         mutationFailure(result.error ?? "清理回收站失败");
       }
@@ -632,7 +628,7 @@ export function PlannerTasksWorkspace({
           </div>
           {view === "trash" ? (
             <div className={styles.trashHeader}>
-              <span>回收站保留可恢复任务</span>
+              <span>含学习证据的任务将保留，其他任务可在 30 天后清理</span>
               <button onClick={() => void purgeTrash()} type="button">
                 <Trash2 size={15} />
                 清理 30 天前任务

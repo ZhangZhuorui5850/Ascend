@@ -378,7 +378,7 @@ export function purgeDeletedPlannerTasks(
   db: Database.Database,
   scope: WorkspaceScope,
   input: { deletedBefore: string; confirm: boolean },
-): number {
+): { purged: number; retained: number; purgedTaskIds: string[] } {
   if (!input.confirm) throw new Error("永久清理需明确确认");
   return db.transaction(() => {
     const rows = db.prepare(`
@@ -386,7 +386,21 @@ export function purgeDeletedPlannerTasks(
       WHERE workspace_id = ? AND deleted_at IS NOT NULL AND deleted_at < ?
       ORDER BY depth DESC, id ASC
     `).all(scope.workspaceId, input.deletedBefore) as Array<{ id: string }>;
-    if (!rows.length) return 0;
+    if (!rows.length) return { purged: 0, retained: 0, purgedTaskIds: [] };
+    const hasEvidence = db.prepare(`
+      SELECT 1 FROM learning_evidence
+      WHERE workspace_id = ? AND task_id = ?
+      LIMIT 1
+    `);
+    const hasChild = db.prepare(`
+      SELECT 1 FROM planner_tasks
+      WHERE workspace_id = ? AND parent_task_id = ?
+      LIMIT 1
+    `);
+    const removeReminders = db.prepare(`
+      DELETE FROM planner_reminders
+      WHERE workspace_id = ? AND entity_type = 'task' AND entity_id = ?
+    `);
     const removeChanges = db.prepare(`
       DELETE FROM entity_changes
       WHERE workspace_id = ? AND entity_type = 'planner_task' AND entity_id = ?
@@ -394,11 +408,21 @@ export function purgeDeletedPlannerTasks(
     const removeTask = db.prepare(`
       DELETE FROM planner_tasks WHERE workspace_id = ? AND id = ?
     `);
+    const purgedTaskIds: string[] = [];
     for (const row of rows) {
+      // Evidence is append-oriented audit history and must never be cascaded or
+      // detached by trash maintenance. A retained child also keeps its parent.
+      if (hasEvidence.get(scope.workspaceId, row.id)) continue;
+      if (hasChild.get(scope.workspaceId, row.id)) continue;
+      removeReminders.run(scope.workspaceId, row.id);
       removeChanges.run(scope.workspaceId, row.id);
-      removeTask.run(scope.workspaceId, row.id);
+      if (removeTask.run(scope.workspaceId, row.id).changes) purgedTaskIds.push(row.id);
     }
-    return rows.length;
+    return {
+      purged: purgedTaskIds.length,
+      retained: rows.length - purgedTaskIds.length,
+      purgedTaskIds,
+    };
   })();
 }
 

@@ -8,17 +8,17 @@ import type {
   PlannerTaskStatus,
 } from "@/lib/planner/types";
 import {
+  batchTasks,
+  purgeTaskTrash,
+} from "@/lib/application/tasks/batch-commands";
+import {
   createTask,
   deleteTask,
   restoreTask,
   updateTask,
 } from "@/lib/application/tasks/commands";
 import { getDb } from "@/lib/db";
-import {
-  batchUpdatePlannerTasks,
-  getPlannerTask,
-  purgeDeletedPlannerTasks,
-} from "@/lib/repo/planner-tasks";
+import { getPlannerTask } from "@/lib/repo/planner-tasks";
 import { setPlannerTaskLabels } from "@/lib/repo/planner-labels";
 import { createTaskSeries } from "@/lib/repo/planner-series";
 import { requireWorkspace } from "@/lib/request-auth";
@@ -228,9 +228,9 @@ export async function batchPlannerTasksAction(input: {
 }): Promise<TaskActionResult> {
   try {
     const access = await requireWorkspace();
-    const result = batchUpdatePlannerTasks(getDb(), access, input);
+    const result = batchTasks(getDb(), access, input);
     if (result.conflicts.length) {
-      return { ok: false, conflict: result.conflicts[0], error: "部分任务版本冲突" };
+      return { ok: false, conflict: result.conflicts[0], error: "任务版本冲突，批量操作未应用" };
     }
     revalidatePlannerViews(result.entities[0]);
     return { ok: true, entities: result.entities };
@@ -242,12 +242,18 @@ export async function batchPlannerTasksAction(input: {
 export async function purgePlannerTrashAction(input: {
   deletedBefore: string;
   confirm: boolean;
-}): Promise<{ ok: boolean; purged?: number; error?: string }> {
+}): Promise<{
+  ok: boolean;
+  purged?: number;
+  retained?: number;
+  purgedTaskIds?: string[];
+  error?: string;
+}> {
   try {
     const access = await requireWorkspace();
-    const purged = purgeDeletedPlannerTasks(getDb(), access, input);
+    const result = purgeTaskTrash(getDb(), access, input);
     revalidatePlannerViews();
-    return { ok: true, purged };
+    return { ok: true, ...result };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "清理失败" };
   }

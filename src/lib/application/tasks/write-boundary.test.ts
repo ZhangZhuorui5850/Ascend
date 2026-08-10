@@ -19,6 +19,10 @@ function productionSources(relativeRoots: string[]): Array<{ path: string; sourc
 
 describe("canonical write boundaries", () => {
   const runtime = productionSources(["app/actions/", "lib/agent/", "lib/application/"]);
+  const plannerTaskAction = readFileSync(
+    new URL("../../../app/actions/planner-tasks.ts", import.meta.url),
+    "utf8",
+  );
 
   it("forbids runtime SQL writes to the legacy day_tasks fact source", () => {
     for (const file of runtime) {
@@ -30,5 +34,12 @@ describe("canonical write boundaries", () => {
     for (const file of runtime) {
       expect(file.source, file.path).not.toMatch(/\b(?:addTask|toggleTask|scheduleTask|carryOverTasks|createStudySession)\s*\(/);
     }
+  });
+
+  it("keeps batch mutation and trash purge orchestration out of the Server Action", () => {
+    expect(plannerTaskAction).not.toContain("batchUpdatePlannerTasks");
+    expect(plannerTaskAction).not.toContain("purgeDeletedPlannerTasks");
+    expect(plannerTaskAction).toContain("batchTasks(getDb(), access, input)");
+    expect(plannerTaskAction).toContain("purgeTaskTrash(getDb(), access, input)");
   });
 });
