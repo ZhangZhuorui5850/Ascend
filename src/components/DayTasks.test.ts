@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 
 const source = readFileSync(new URL("./DayTasks.tsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
-const plannerActions = readFileSync(new URL("../app/actions/planner.ts", import.meta.url), "utf8");
-const toggleActionSource = plannerActions.slice(
-  plannerActions.indexOf("export async function toggleTaskAction"),
-  plannerActions.indexOf("export async function updateTaskAction"),
+const dayTaskActions = readFileSync(new URL("../app/actions/day-tasks.ts", import.meta.url), "utf8");
+const toggleActionSource = dayTaskActions.slice(
+  dayTaskActions.indexOf("export async function toggleDayTaskAction"),
+  dayTaskActions.indexOf("export async function deleteDayTaskAction"),
 );
 
 describe("TaskLine completion presentation", () => {
@@ -24,8 +24,7 @@ describe("TaskLine completion presentation", () => {
     expect(source).toContain("completionOutput");
     expect(source).toContain("verificationMethod");
     expect(source).toContain("verificationResult");
-    expect(source).toContain("同时把实际分钟与产出记入学习活动");
-    expect(source).toContain("recordAsStudy");
+    expect(toggleActionSource).toContain("evidence: input.evidence");
   });
 
   it("can schedule a traceable delayed retest and record its relative outcome", () => {
@@ -79,9 +78,9 @@ describe("optimistic toggle wiring", () => {
 
   it("persists writes via revalidatePath, never refresh()", () => {
     // Next 16.2 软导航页面会丢弃 refresh() 的 RSC 回流（见 docs/agent-development-guide.md）
-    expect(plannerActions).toContain('import { revalidatePath } from "next/cache"');
-    expect(plannerActions).not.toContain("import { refresh");
-    expect(plannerActions).toContain("function revalidateTaskViews");
+    expect(dayTaskActions).toContain('import { revalidatePath } from "next/cache"');
+    expect(dayTaskActions).not.toContain("import { refresh");
+    expect(dayTaskActions).toContain("function revalidateTaskViews");
     expect(toggleActionSource).toContain("revalidateTaskViews(input.day)");
     expect(source).not.toContain("router.refresh()");
   });
@@ -98,7 +97,10 @@ describe("optimistic task insertion", () => {
     expect(source).toContain("taskClientKeysRef.current.set(task.id, draft.clientKey!)");
     expect(source).toContain("onAnimationEnd");
     expect(source).toContain("exitingTasks");
-    expect(plannerActions).toContain("return { ok: true, task }");
+    expect(dayTaskActions).toContain("return { ok: true, task }");
+    expect(source).toContain("const id = crypto.randomUUID()");
+    expect(source).not.toContain("tempIdRef");
+    expect(source).not.toContain('from "@/app/actions/planner"');
     // 输入框在 transition 外立即清空,回车手感零等待
     expect(source).toMatch(/setTitle\(""\);\s*startTransition\(/);
   });
@@ -106,7 +108,7 @@ describe("optimistic task insertion", () => {
   it("starts refresh-backed mutations directly inside an event transition", () => {
     expect(source).not.toContain(".then(report)");
     expect(source).toContain("report(await action())");
-    expect(source).toContain("report(await updateTaskAction(input))");
+    expect(source).toContain("report(await updateDayTaskAction({");
   });
 
   it("keeps enter/exit animations on motion tokens, exit faster than enter", () => {

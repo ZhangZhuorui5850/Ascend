@@ -1,7 +1,8 @@
 import type Database from "better-sqlite3";
 import type { WorkspaceScope } from "../access-context";
 import { assertDateKey } from "../dates";
-import { listNotes, listTasks, type DayNote, type DayTask } from "./planner";
+import { listNotes, type DayNote } from "./planner";
+import { listDayTaskItems, type DayTaskItem } from "./task-read-model";
 
 export type DayEntry = {
   date: string;
@@ -45,7 +46,7 @@ export type DueMistake = {
 
 export type DayData = {
   entry: DayEntry;
-  tasks: DayTask[];
+  tasks: DayTaskItem[];
   notes: DayNote[];
   dueReviews: DueReview[];
   dueReviewsTotal: number;
@@ -119,7 +120,7 @@ export function getDay(
   if (options.includeReviewQueue === false) {
     return {
       entry,
-      tasks: listTasks(db, scope, date),
+      tasks: listDayTaskItems(db, scope, date),
       notes: listNotes(db, scope, date),
       dueReviews: [],
       dueReviewsTotal: 0,
@@ -198,7 +199,7 @@ export function getDay(
 
   return {
     entry,
-    tasks: listTasks(db, scope, date),
+    tasks: listDayTaskItems(db, scope, date),
     notes: listNotes(db, scope, date),
     dueReviews,
     dueReviewsTotal,

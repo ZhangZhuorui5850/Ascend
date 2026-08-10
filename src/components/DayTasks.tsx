@@ -2,15 +2,21 @@
 
 import { startTransition, useCallback, useEffect, useLayoutEffect, useOptimistic, useRef, useState } from "react";
 import { ArrowRight, Check, Clock3, ExternalLink, Plus, Settings2, Trash2 } from "lucide-react";
-import { addTaskAction, carryOverTasksAction, deleteTaskAction, toggleTaskAction, updateTaskAction } from "@/app/actions/planner";
+import {
+  carryDayTasksAction,
+  createDayTaskAction,
+  deleteDayTaskAction,
+  toggleDayTaskAction,
+  updateDayTaskAction,
+} from "@/app/actions/day-tasks";
 import { sortDayTasks } from "@/components/day-tasks-sort";
 import { EmptyState } from "@/components/EmptyState";
 import { useFeedback } from "@/components/FeedbackProvider";
 import type { CaptureSubject } from "@/lib/repo/knowledge";
-import type { DayTask } from "@/lib/repo/planner";
+import type { DayTaskItem } from "@/lib/repo/task-read-model";
 
-type ClientKey = string | number;
-type OptimisticTask = DayTask & { clientKey?: ClientKey; pending?: boolean };
+type ClientKey = string;
+type OptimisticTask = DayTaskItem & { clientKey?: ClientKey; pending?: boolean };
 type ExitingTask = { actionDone: boolean; animationDone: boolean; clientKey: ClientKey; task: OptimisticTask };
 
 const PRESENCE_EVENT_GRACE_MS = 50;
@@ -18,7 +24,7 @@ const PRESENCE_EVENT_GRACE_MS = 50;
 export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 0, yesterdayPlan = "" }: {
   day: string;
   today: string;
-  tasks: DayTask[];
+  tasks: DayTaskItem[];
   subjects: CaptureSubject[];
   carryFrom?: string;
   carryCount?: number;
@@ -32,24 +38,23 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
   const [scheduledStart, setScheduledStart] = useState("");
   const [busy, setBusy] = useState(false);
   const [planAdded, setPlanAdded] = useState(false);
-  const [completionOverrides, setCompletionOverrides] = useState<Record<number, boolean>>({});
+  const [completionOverrides, setCompletionOverrides] = useState<Record<string, boolean>>({});
   const [enteringClientKeys, setEnteringClientKeys] = useState<Set<ClientKey>>(() => new Set());
   const [exitingTasks, setExitingTasks] = useState<ExitingTask[]>([]);
-  const tempIdRef = useRef(-1);
   const draftOrderRef = useRef(maxSortOrder(tasks) + 1);
   const pendingDraftKeysRef = useRef(new Set<ClientKey>());
-  const taskClientKeysRef = useRef(new Map<number, ClientKey>());
+  const taskClientKeysRef = useRef(new Map<string, ClientKey>());
   const [optimisticTasks, addOptimisticTask] = useOptimistic(
     tasks as OptimisticTask[],
     (state: OptimisticTask[], task: OptimisticTask) => sortDayTasks([...state, task]),
   );
 
-  const canonicalDisplayTasks = optimisticTasks.map((task) => completionOverrides[task.id] === undefined
+  const canonicalDisplayTasks: OptimisticTask[] = optimisticTasks.map((task) => completionOverrides[task.id] === undefined
     ? task
-    : { ...task, done: completionOverrides[task.id] ? 1 : 0 });
+    : { ...task, done: completionOverrides[task.id] ? 1 as const : 0 as const });
   const exitingById = new Map(exitingTasks.map((entry) => [entry.task.id, entry]));
   const canonicalIds = new Set(canonicalDisplayTasks.map((task) => task.id));
-  const displayTasks = sortDayTasks([
+  const displayTasks = sortDayTasks<OptimisticTask>([
     ...canonicalDisplayTasks.filter((task) => !exitingById.get(task.id)?.animationDone),
     ...exitingTasks
       .filter((entry) => !entry.animationDone && !canonicalIds.has(entry.task.id))
@@ -76,7 +81,7 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
     });
   }, []);
 
-  const finishExiting = useCallback((id: number) => {
+  const finishExiting = useCallback((id: string) => {
     setExitingTasks((current) => current.flatMap((entry) => {
       if (entry.task.id !== id) return [entry];
       if (entry.actionDone) return [];
@@ -91,18 +96,22 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
     estimatedMinutes: number;
     scheduledStart: string | null;
   }): OptimisticTask {
-    const id = tempIdRef.current--;
+    const id = crypto.randomUUID();
     return {
       id,
+      version: 0,
+      legacy_day_task_id: null,
       day,
       title: input.title,
       subject_code: input.subjectCode || null,
+      status: "open",
       done: 0,
       sort_order: draftOrderRef.current++,
       priority: input.priority === 1 || input.priority === 3 ? input.priority : 2,
       estimated_minutes: input.estimatedMinutes,
       scheduled_start: input.scheduledStart,
       notes: "",
+      learning_link_version: 0,
       knowledge_point_id: null,
       activity_type: "unspecified",
       completion_criteria: "",
@@ -114,7 +123,7 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
       verification_method: "",
       verification_result: "",
       verification_outcome: "",
-      clientKey: `draft-${Math.abs(id)}`,
+      clientKey: id,
       pending: true,
     };
   }
@@ -124,7 +133,7 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
     setEnteringClientKeys((current) => new Set(current).add(draft.clientKey!));
   }
 
-  function settleDraft(draft: OptimisticTask, task?: DayTask) {
+  function settleDraft(draft: OptimisticTask, task?: DayTaskItem) {
     pendingDraftKeysRef.current.delete(draft.clientKey!);
     if (task) {
       taskClientKeysRef.current.set(task.id, draft.clientKey!);
@@ -140,7 +149,7 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
     startTransition(async () => {
       addOptimisticTask(draft);
       try {
-        const result = await addTaskAction({ day, title: planText, subjectCode: "" });
+        const result = await createDayTaskAction({ clientMutationId: crypto.randomUUID(), day, title: planText, subjectCode: null });
         settleDraft(draft, result.task);
         if (result.ok) setPlanAdded(true);
         report(result);
@@ -169,7 +178,7 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
     });
   }
 
-  function setTaskCompletion(id: number, done: boolean) {
+  function setTaskCompletion(id: string, done: boolean) {
     const serverDone = Boolean(tasks.find((task) => task.id === id)?.done);
     setCompletionOverrides((current) => {
       const next = { ...current };
@@ -188,7 +197,15 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
     startTransition(async () => {
       addOptimisticTask(draft);
       try {
-        const result = await addTaskAction({ day, title: trimmed, subjectCode, priority, estimatedMinutes, scheduledStart: scheduledStart || null });
+        const result = await createDayTaskAction({
+          clientMutationId: crypto.randomUUID(),
+          day,
+          title: trimmed,
+          subjectCode: subjectCode || null,
+          priority: priority === 1 || priority === 3 ? priority : 2,
+          estimatedMinutes,
+          scheduledStart: scheduledStart || null,
+        });
         settleDraft(draft, result.task);
         if (!result.ok) setTitle((current) => current || trimmed);
         report(result);
@@ -207,7 +224,12 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
     setExitingTasks((current) => [...current, { actionDone: false, animationDone: false, clientKey, task }]);
     startTransition(async () => {
       try {
-        const result = await deleteTaskAction({ id: task.id, day });
+        const result = await deleteDayTaskAction({
+          id: task.id,
+          expectedVersion: task.version,
+          clientMutationId: crypto.randomUUID(),
+          day,
+        });
         setExitingTasks((current) => current.flatMap((entry) => {
           if (entry.task.id !== task.id) return [entry];
           if (!result.ok || entry.animationDone) return [];
@@ -246,7 +268,7 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
           <p>昨天还剩 <strong>{carryCount}</strong> 条未完成任务。</p>
           <button
             className="secondaryButton"
-            onClick={() => runRefreshAction(() => carryOverTasksAction({ fromDay: carryFrom!, toDay: day }))}
+            onClick={() => runRefreshAction(() => carryDayTasksAction({ fromDay: carryFrom!, toDay: day }))}
             type="button"
           >
             <ArrowRight size={14} />
@@ -321,7 +343,7 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
       {isPast && openCount ? (
         <button
           className="secondaryButton carryOver"
-          onClick={() => runRefreshAction(() => carryOverTasksAction({ fromDay: day, toDay: today }))}
+          onClick={() => runRefreshAction(() => carryDayTasksAction({ fromDay: day, toDay: today }))}
           type="button"
         >
           <ArrowRight size={14} />
@@ -340,9 +362,9 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
   report: (result: { ok: boolean; error?: string }) => void;
   entering: boolean;
   leaving: boolean;
-  onCompletionChange: (id: number, done: boolean) => void;
+  onCompletionChange: (id: string, done: boolean) => void;
   onEnterComplete: (clientKey: ClientKey) => void;
-  onExitComplete: (id: number) => void;
+  onExitComplete: (id: string) => void;
   onRemove: (task: OptimisticTask) => void;
 }) {
   const [pending, setPending] = useState(false);
@@ -352,8 +374,7 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
   const [completionOutput, setCompletionOutput] = useState("");
   const [verificationMethod, setVerificationMethod] = useState("");
   const [verificationResult, setVerificationResult] = useState("");
-  const [verificationOutcome, setVerificationOutcome] = useState<DayTask["verification_outcome"]>("");
-  const [recordAsStudy, setRecordAsStudy] = useState(true);
+  const [verificationOutcome, setVerificationOutcome] = useState<DayTaskItem["verification_outcome"]>("");
   const [scheduleRetest, setScheduleRetest] = useState(false);
   const [retestAfterDays, setRetestAfterDays] = useState(1);
   const lineRef = useRef<HTMLDivElement>(null);
@@ -375,10 +396,16 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
     return () => window.clearTimeout(timeout);
   }, [clientKey, entering, leaving, onEnterComplete, onExitComplete, task.id]);
 
-  function update(input: Parameters<typeof updateTaskAction>[0]) {
+  function update(input: Omit<Parameters<typeof updateDayTaskAction>[0], "id" | "expectedVersion" | "linkExpectedVersion" | "day">) {
     startTransition(async () => {
       try {
-        report(await updateTaskAction(input));
+        report(await updateDayTaskAction({
+          id: task.id,
+          expectedVersion: task.version,
+          linkExpectedVersion: task.learning_link_version,
+          day,
+          ...input,
+        }));
       } catch (error) {
         console.error("更新任务失败", error);
         report({ ok: false, error: "网络异常，操作未保存" });
@@ -393,8 +420,7 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
       completionOutput?: string;
       verificationMethod?: string;
       verificationResult?: string;
-      verificationOutcome?: DayTask["verification_outcome"];
-      recordAsStudy?: boolean;
+      verificationOutcome?: DayTaskItem["verification_outcome"];
       scheduleRetestAfterDays?: number;
     } = {},
   ) {
@@ -402,7 +428,23 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
     setPending(true);
     onCompletionChange(task.id, nextDone);
     try {
-      const result = await toggleTaskAction({ id: task.id, day, done: nextDone, ...evidence });
+      const result = await toggleDayTaskAction({
+        id: task.id,
+        expectedVersion: task.version,
+        clientMutationId: crypto.randomUUID(),
+        day,
+        done: nextDone,
+        evidence: nextDone && Object.keys(evidence).some((key) => key !== "scheduleRetestAfterDays")
+          ? {
+              actualMinutes: evidence.actualMinutes,
+              output: evidence.completionOutput,
+              verificationMethod: evidence.verificationMethod,
+              verificationResult: evidence.verificationResult,
+              verificationOutcome: evidence.verificationOutcome,
+            }
+          : undefined,
+        scheduleRetestAfterDays: evidence.scheduleRetestAfterDays,
+      });
       if (!result.ok) onCompletionChange(task.id, done);
       if (result.ok) setCompleting(false);
       report(result);
@@ -426,7 +468,6 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
     setVerificationMethod(task.planned_verification_method);
     setVerificationResult("");
     setVerificationOutcome("");
-    setRecordAsStudy(true);
     setScheduleRetest(Boolean(task.knowledge_point_id && task.source_type && task.source_type !== "training_retest"));
     setRetestAfterDays(1);
     setCompleting(true);
@@ -437,7 +478,7 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
       className={`${done ? "taskLine done" : "taskLine"} priority${task.priority}`}
       data-entering={entering ? "" : undefined}
       data-leaving={leaving ? "" : undefined}
-      id={task.id > 0 ? `task-${task.id}` : undefined}
+      id={!isDraft ? `task-${task.id}` : undefined}
       onAnimationEnd={(event) => {
         if (event.target !== event.currentTarget) return;
         if (leaving && event.animationName === "taskFallOut") onExitComplete(task.id);
@@ -467,7 +508,7 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
           onBlur={(event) => {
             const next = event.target.value.trim();
             if (!isDraft && next && next !== task.title) {
-              update({ id: task.id, day, title: next });
+              update({ title: next });
             }
           }}
           readOnly={isDraft}
@@ -547,7 +588,7 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
               <span>{task.source_type === "training_retest" ? "相对训练前" : "验证结论"}</span>
               <select
                 aria-label="验证结论"
-                onChange={(event) => setVerificationOutcome(event.target.value as DayTask["verification_outcome"])}
+                onChange={(event) => setVerificationOutcome(event.target.value as DayTaskItem["verification_outcome"])}
                 value={verificationOutcome}
               >
                 <option value="">未记录</option>
@@ -558,14 +599,6 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
               </select>
             </label>
           </div>
-          <label className="taskRecordAsStudy">
-            <input
-              checked={recordAsStudy}
-              onChange={(event) => setRecordAsStudy(event.target.checked)}
-              type="checkbox"
-            />
-            <span>同时把实际分钟与产出记入学习活动</span>
-          </label>
           {task.knowledge_point_id && task.source_type && task.source_type !== "training_retest" ? (
             <div className="taskRetestSchedule">
               <label className="taskRecordAsStudy">
@@ -603,7 +636,6 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
                 verificationMethod,
                 verificationResult,
                 verificationOutcome,
-                recordAsStudy,
                 scheduleRetestAfterDays: scheduleRetest ? retestAfterDays : undefined,
               })}
               type="button"
@@ -614,7 +646,7 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
         </div>
       ) : null}
       {expanded ? <div className="taskLineDetails">
-        <label><span>科目</span><select defaultValue={task.subject_code || ""} onChange={(event) => update({ id: task.id, day, subjectCode: event.target.value || null })}>
+        <label><span>科目</span><select defaultValue={task.subject_code || ""} onChange={(event) => update({ subjectCode: event.target.value || null })}>
           <option value="">无科目</option>
           {subjects.map((subject) => (
             <option key={subject.code} value={subject.code}>
@@ -622,7 +654,7 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
             </option>
           ))}
         </select></label>
-        <label><span>知识点</span><select defaultValue={task.knowledge_point_id || ""} onChange={(event) => update({ id: task.id, day, knowledgePointId: event.target.value || null })}>
+        <label><span>知识点</span><select defaultValue={task.knowledge_point_id || ""} onChange={(event) => update({ knowledgePointId: event.target.value || null })}>
           <option value="">不关联知识点</option>
           {subjects.map((subject) => (
             <optgroup key={subject.code} label={`${subject.code} · ${subject.name}`}>
@@ -632,7 +664,7 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
             </optgroup>
           ))}
         </select></label>
-        <label><span>活动类型</span><select defaultValue={task.activity_type} onChange={(event) => update({ id: task.id, day, activityType: event.target.value })}>
+        <label><span>活动类型</span><select defaultValue={task.activity_type} onChange={(event) => update({ activityType: event.target.value as DayTaskItem["activity_type"] })}>
           <option value="unspecified">未指定</option>
           <option value="study">学习</option>
           <option value="practice">练习</option>
@@ -641,19 +673,19 @@ function TaskLine({ task, clientKey, day, subjects, report, entering, leaving, o
           <option value="mock">模考</option>
           <option value="mixed">混合</option>
         </select></label>
-        <label><span>优先级</span><select defaultValue={task.priority} onChange={(event) => update({ id: task.id, day, priority: Number(event.target.value) })}>
+        <label><span>优先级</span><select defaultValue={task.priority} onChange={(event) => update({ priority: Number(event.target.value) as 1 | 2 | 3 })}>
           <option value={1}>P1 · 关键</option><option value={2}>P2 · 常规</option><option value={3}>P3 · 弹性</option>
         </select></label>
-        <label><span>开始时间</span><input defaultValue={task.scheduled_start || ""} onBlur={(event) => update({ id: task.id, day, scheduledStart: event.target.value || null })} type="time" /></label>
-        <label><span>预计分钟</span><input defaultValue={task.estimated_minutes} max={480} min={5} onBlur={(event) => update({ id: task.id, day, estimatedMinutes: Number(event.target.value) })} step={5} type="number" /></label>
+        <label><span>开始时间</span><input defaultValue={task.scheduled_start || ""} onBlur={(event) => update({ scheduledStart: event.target.value || null })} type="time" /></label>
+        <label><span>预计分钟</span><input defaultValue={task.estimated_minutes} max={480} min={5} onBlur={(event) => update({ estimatedMinutes: Number(event.target.value) })} step={5} type="number" /></label>
         <label className="taskNotes"><span>执行备注</span><textarea defaultValue={task.notes} maxLength={500} onBlur={(event) => {
-          if (event.target.value !== task.notes) update({ id: task.id, day, notes: event.target.value });
+          if (event.target.value !== task.notes) update({ notes: event.target.value });
         }} placeholder="写下完成标准、资料位置或训练范围" rows={2} /></label>
         <label className="taskNotes"><span>完成标准</span><textarea defaultValue={task.completion_criteria} maxLength={500} onBlur={(event) => {
-          if (event.target.value !== task.completion_criteria) update({ id: task.id, day, completionCriteria: event.target.value });
+          if (event.target.value !== task.completion_criteria) update({ completionCriteria: event.target.value });
         }} placeholder="达到什么结果才算完成，例如：20 题并订正全部错题" rows={2} /></label>
         <label className="taskNotes"><span>计划验证方法</span><input defaultValue={task.planned_verification_method} maxLength={200} onBlur={(event) => {
-          if (event.target.value !== task.planned_verification_method) update({ id: task.id, day, plannedVerificationMethod: event.target.value });
+          if (event.target.value !== task.planned_verification_method) update({ plannedVerificationMethod: event.target.value });
         }} placeholder="例如：闭卷回忆、同类小测、独立重做" /></label>
       </div> : null}
     </div>
@@ -717,7 +749,7 @@ function resizeTitle(element: HTMLTextAreaElement | null) {
   element.style.height = `${element.scrollHeight}px`;
 }
 
-function maxSortOrder(tasks: DayTask[]): number {
+function maxSortOrder(tasks: DayTaskItem[]): number {
   return tasks.reduce((max, task) => Math.max(max, task.sort_order), 0);
 }
 

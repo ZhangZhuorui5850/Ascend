@@ -15,9 +15,9 @@ import { requirePageWorkspace } from "@/lib/page-auth";
 import { PRE_CONFIDENCE_LABELS } from "@/lib/review-evidence";
 import { getDay, getTomorrowPlan } from "@/lib/repo/days";
 import { getCaptureHierarchy, getSubjects } from "@/lib/repo/knowledge";
-import { listTasks } from "@/lib/repo/planner";
 import { listRecentMistakeCauses } from "@/lib/repo/reviews";
 import { getSettings } from "@/lib/repo/settings";
+import { listDayTaskItems } from "@/lib/repo/task-read-model";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +53,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
   const doneTasks = day.tasks.filter((task) => task.done).length;
   const queueCount = day.dueReviews.length + day.dueMistakes.length;
   const yesterday = shiftDateKey(date, -1);
-  const carryCount = isToday ? listTasks(db, access, yesterday).filter((task) => !task.done).length : 0;
+  const carryCount = isToday ? listDayTaskItems(db, access, yesterday).filter((task) => !task.done).length : 0;
   const yesterdayPlan = isToday ? getTomorrowPlan(db, access, yesterday) : "";
 
   return (
