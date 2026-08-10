@@ -680,18 +680,46 @@ export function listNotes(db: Database.Database, scope: WorkspaceScope, day: str
 export function addNote(
   db: Database.Database,
   scope: WorkspaceScope,
-  input: { day: string; content: string },
+  input: { day: string; content: string; clientMutationId?: string },
 ): DayNote {
   const day = assertDateKey(input.day);
   const content = input.content.trim();
   if (!content) throw new Error("随笔内容必填");
-  ensureDay(db, scope, day);
-  const result = db.prepare(`
-    INSERT INTO day_notes (workspace_id, day, content) VALUES (?, ?, ?)
-  `).run(scope.workspaceId, day, content);
-  return db.prepare(`
+  const clientMutationId = input.clientMutationId?.trim() || null;
+  const opId = clientMutationId ? `capture-note:${scope.workspaceId}:${clientMutationId}` : null;
+  return db.transaction(() => {
+    if (opId) {
+      const replay = db.prepare(`
+        SELECT entity_id FROM entity_changes
+        WHERE workspace_id = ? AND op_id = ? AND entity_type = 'day_note'
+      `).get(scope.workspaceId, opId) as { entity_id: string } | undefined;
+      if (replay) {
+        const existing = getNote(db, scope, Number(replay.entity_id));
+        if (!existing) throw new Error("幂等随笔记录缺少实体");
+        if (existing.day !== day || existing.content !== content) throw new Error("随笔幂等键载荷冲突");
+        return existing;
+      }
+    }
+    ensureDay(db, scope, day);
+    const result = db.prepare(`
+      INSERT INTO day_notes (workspace_id, day, content) VALUES (?, ?, ?)
+    `).run(scope.workspaceId, day, content);
+    const note = getNote(db, scope, Number(result.lastInsertRowid))!;
+    if (opId) {
+      db.prepare(`
+        INSERT INTO entity_changes
+          (workspace_id, op_id, entity_type, entity_id, op, patch_json, snapshot_json)
+        VALUES (?, ?, 'day_note', ?, 'create', ?, ?)
+      `).run(scope.workspaceId, opId, String(note.id), JSON.stringify(input), JSON.stringify(note));
+    }
+    return note;
+  })();
+}
+
+function getNote(db: Database.Database, scope: WorkspaceScope, id: number): DayNote | null {
+  return (db.prepare(`
     SELECT id, day, content, created_at FROM day_notes WHERE workspace_id = ? AND id = ?
-  `).get(scope.workspaceId, Number(result.lastInsertRowid)) as DayNote;
+  `).get(scope.workspaceId, id) as DayNote | undefined) ?? null;
 }
 
 export function updateNote(

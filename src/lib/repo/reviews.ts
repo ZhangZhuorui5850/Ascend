@@ -76,13 +76,26 @@ export function createMistake(
     causeCategory?: string;
     subjectCode?: string;
     knowledgePointId?: string;
+    clientMutationId?: string;
   },
 ): { id: number } {
   const day = assertDateKey(input.day);
   const title = input.title.trim();
   if (!title) throw new Error("错题标题必填");
   const knowledgePointId = input.knowledgePointId?.trim() || null;
+  const clientMutationId = input.clientMutationId?.trim() || null;
+  const opId = clientMutationId ? `capture-mistake:${scope.workspaceId}:${clientMutationId}` : null;
   return db.transaction(() => {
+    if (opId) {
+      const replay = db.prepare(`
+        SELECT entity_id, patch_json FROM entity_changes
+        WHERE workspace_id = ? AND op_id = ? AND entity_type = 'mistake'
+      `).get(scope.workspaceId, opId) as { entity_id: string; patch_json: string } | undefined;
+      if (replay) {
+        if (replay.patch_json !== JSON.stringify(input)) throw new Error("错题幂等键载荷冲突");
+        return { id: Number(replay.entity_id) };
+      }
+    }
     ensureDay(db, scope, day);
     let subjectCode = input.subjectCode?.trim() || null;
     if (knowledgePointId) {
@@ -107,8 +120,22 @@ export function createMistake(
       causeCategory: (input.causeCategory || "").trim(),
       nextReview: nextReviewDate(day, 0),
     });
+    const id = Number(result.lastInsertRowid);
     if (knowledgePointId) applyMistakeOutcome(db, scope, { knowledgePointId, day });
-    return { id: Number(result.lastInsertRowid) };
+    if (opId) {
+      db.prepare(`
+        INSERT INTO entity_changes
+          (workspace_id, op_id, entity_type, entity_id, op, patch_json, snapshot_json)
+        VALUES (?, ?, 'mistake', ?, 'create', ?, ?)
+      `).run(
+        scope.workspaceId,
+        opId,
+        String(id),
+        JSON.stringify(input),
+        JSON.stringify({ id, workspaceId: scope.workspaceId, day, title }),
+      );
+    }
+    return { id };
   })();
 }
 
