@@ -420,6 +420,7 @@ export function deleteSubject(db: Database.Database, scope: WorkspaceScope, code
     const points = db.prepare(`
       SELECT id FROM knowledge_points WHERE workspace_id = ? AND subject_code = ?
     `).all(scope.workspaceId, subjectCode) as Array<{ id: string }>;
+    assertNoCanonicalLearningReferences(db, scope, points.map((point) => point.id));
     for (const point of points) detachPointReferences(db, scope, point.id);
     db.prepare("DELETE FROM knowledge_points WHERE workspace_id = ? AND subject_code = ?").run(
       scope.workspaceId,
@@ -668,7 +669,14 @@ export function deleteChapter(db: Database.Database, scope: WorkspaceScope, id: 
   const rootId = id.trim();
   if (!rootId) throw new Error("章节必填");
   const remove = db.transaction(() => {
-    for (const chapterId of collectChapterSubtree(db, scope, rootId)) {
+    const chapterIds = collectChapterSubtree(db, scope, rootId);
+    const pointIds = chapterIds.flatMap((chapterId) => (
+      db.prepare(`
+        SELECT id FROM knowledge_points WHERE workspace_id = ? AND chapter_id = ?
+      `).all(scope.workspaceId, chapterId) as Array<{ id: string }>
+    ).map((point) => point.id));
+    assertNoCanonicalLearningReferences(db, scope, pointIds);
+    for (const chapterId of chapterIds) {
       const points = db.prepare(`
         SELECT id FROM knowledge_points WHERE workspace_id = ? AND chapter_id = ?
       `).all(scope.workspaceId, chapterId) as Array<{ id: string }>;
@@ -893,7 +901,9 @@ export function deletePoint(db: Database.Database, scope: WorkspaceScope, id: st
   const pointId = id.trim();
   if (!pointId) throw new Error("知识点必填");
   const remove = db.transaction(() => {
-    for (const nodeId of collectPointSubtree(db, scope, pointId)) {
+    const nodeIds = collectPointSubtree(db, scope, pointId);
+    assertNoCanonicalLearningReferences(db, scope, nodeIds);
+    for (const nodeId of nodeIds) {
       detachPointReferences(db, scope, nodeId);
       db.prepare("DELETE FROM knowledge_points WHERE workspace_id = ? AND id = ?").run(scope.workspaceId, nodeId);
     }
@@ -1018,6 +1028,31 @@ function detachPointReferences(db: Database.Database, scope: WorkspaceScope, poi
   db.prepare("UPDATE mistakes SET knowledge_point_id = NULL WHERE workspace_id = ? AND knowledge_point_id = ?").run(scope.workspaceId, pointId);
   db.prepare("UPDATE review_events SET knowledge_point_id = NULL WHERE workspace_id = ? AND knowledge_point_id = ?").run(scope.workspaceId, pointId);
   db.prepare("UPDATE study_sessions SET knowledge_point_id = NULL WHERE workspace_id = ? AND knowledge_point_id = ?").run(scope.workspaceId, pointId);
+}
+
+function assertNoCanonicalLearningReferences(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  pointIds: string[],
+): void {
+  if (!pointIds.length) return;
+  const placeholders = pointIds.map(() => "?").join(", ");
+  const parameters = [scope.workspaceId, ...pointIds];
+  const links = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM learning_task_links
+    WHERE workspace_id = ? AND knowledge_point_id IN (${placeholders})
+  `).get(...parameters) as { count: number };
+  const evidence = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM learning_evidence
+    WHERE workspace_id = ? AND knowledge_point_id IN (${placeholders})
+  `).get(...parameters) as { count: number };
+  if (links.count || evidence.count) {
+    throw new Error(
+      `知识点仍被 ${links.count} 个学习任务和 ${evidence.count} 条学习证据引用；为保留审计记录，当前不可删除`,
+    );
+  }
 }
 
 function slugFor(value: string): string {

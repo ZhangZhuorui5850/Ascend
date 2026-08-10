@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { completeTask, createTask } from "../application/tasks/commands";
 import {
   createChapter,
   createPoint,
@@ -20,6 +21,7 @@ import {
   updatePoint,
 } from "./knowledge";
 import { createReviewEvent } from "./reviews";
+import { upsertLearningTaskLink } from "./learning-evidence";
 import { createTestDb, createTestWorkspace, seedSubjectWithChapter } from "./testing";
 import { LEGACY_WORKSPACE_ID } from "./workspaces";
 
@@ -145,6 +147,38 @@ describe("knowledge repo", () => {
 
     expect(db.prepare("SELECT COUNT(*) c FROM asset_links WHERE knowledge_point_id = 'kp1'").get()).toMatchObject({ c: 0 });
     expect(db.prepare("SELECT COUNT(*) c FROM assets").get()).toMatchObject({ c: 1 });
+  });
+
+  it("fails loudly instead of deleting knowledge referenced by append-only learning evidence", () => {
+    const db = createTestDb();
+    seedSubjectWithChapter(db);
+    const task = createTask(db, legacyScope, {
+      clientMutationId: "knowledge-delete-guard-task",
+      title: "矩阵训练",
+      dueDate: "2026-08-10",
+      subjectCode: "M1",
+    });
+    upsertLearningTaskLink(db, legacyScope, {
+      taskId: task.id,
+      expectedVersion: 0,
+      knowledgePointId: "kp1",
+      activityType: "practice",
+    });
+    completeTask(db, legacyScope, {
+      id: task.id,
+      expectedVersion: task.version,
+      clientMutationId: "knowledge-delete-guard-complete",
+      day: "2026-08-10",
+      evidence: { output: "完成训练" },
+    });
+
+    expect(() => deletePoint(db, legacyScope, "kp1")).toThrow(/为保留审计记录，当前不可删除/);
+    expect(() => deleteChapter(db, legacyScope, "chapter:M1:matrix")).toThrow(/为保留审计记录，当前不可删除/);
+    expect(() => deleteSubject(db, legacyScope, "M1")).toThrow(/为保留审计记录，当前不可删除/);
+    expect(db.prepare("SELECT title FROM knowledge_points WHERE id = 'kp1'").get())
+      .toEqual({ title: "矩阵乘法" });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM learning_evidence WHERE task_id = ?")
+      .get(task.id)).toEqual({ count: 1 });
   });
 
   it("stamps created_at on new points and exposes it in detail queries", () => {
