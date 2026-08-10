@@ -26,7 +26,7 @@ describe("CommandPalette global entity search", () => {
 
   it("offers an explicit add-to-training action only for actionable results", () => {
     expect(source).toContain("entry.training");
-    expect(source).toContain("addTaskAction");
+    expect(source).toContain("createDayTaskAction");
     expect(source).toContain("加入今日训练");
     expect(source).toContain("sourceType: training.sourceType");
   });

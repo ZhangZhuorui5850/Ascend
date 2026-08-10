@@ -37,6 +37,7 @@ export function QuickLog({ day, subjects, recentCauses = [] }: {
     const result =
       mode === "session"
         ? await addStudySession({
+            clientMutationId: crypto.randomUUID(),
             day,
             title: trimmed,
             durationMinutes: minutes,

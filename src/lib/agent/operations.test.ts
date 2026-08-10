@@ -129,6 +129,41 @@ describe("Ascend Agent operations", () => {
     });
   });
 
+  it("routes idempotent Agent study capture through canonical learning evidence", async () => {
+    const { db, context } = setup();
+    const input = {
+      kind: "study",
+      operationId: "agent-study-capture-1",
+      day: "2026-07-19",
+      title: "Agent 学习记录",
+      durationMinutes: 25,
+      output: "完成一页笔记",
+    };
+
+    const first = await executeAgentOperation(
+      { db, context },
+      getAgentOperation("activity.record"),
+      input,
+    ) as { evidenceId: string; studySessionId: number };
+    const replay = await executeAgentOperation(
+      { db, context },
+      getAgentOperation("activity.record"),
+      input,
+    ) as { evidenceId: string; studySessionId: number };
+
+    expect(replay).toEqual(first);
+    expect(listLearningEvidence(db, context)).toMatchObject([{
+      id: first.evidenceId,
+      taskId: null,
+      actualMinutes: 25,
+      sourceType: "agent_capture",
+      sourceId: input.operationId,
+    }]);
+    expect(db.prepare(`
+      SELECT COUNT(*) AS count FROM study_sessions WHERE workspace_id = ?
+    `).get(context.workspaceId)).toEqual({ count: 1 });
+  });
+
   it("exposes explicit canonical complete, reopen, reschedule, delete, and restore commands", async () => {
     const { db, context } = setup();
     const created = (await executeAgentOperation({ db, context }, getAgentOperation("task.create"), {

@@ -29,6 +29,7 @@ export type MistakeBook = {
   graduated: MistakeListItem[];
 };
 
+/** @deprecated Compatibility/test helper. Runtime writes must use application/learning/record-study. */
 export function createStudySession(
   db: Database.Database,
   scope: WorkspaceScope,

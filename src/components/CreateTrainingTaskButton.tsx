@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Dumbbell, Plus } from "lucide-react";
-import { addTaskAction } from "@/app/actions/planner";
+import { createDayTaskAction } from "@/app/actions/day-tasks";
 import { useFeedback } from "@/components/FeedbackProvider";
 
 export function CreateTrainingTaskButton({
@@ -40,7 +40,8 @@ export function CreateTrainingTaskButton({
   async function create() {
     if (busy) return;
     setBusy(true);
-    const result = await addTaskAction({
+    const result = await createDayTaskAction({
+      clientMutationId: crypto.randomUUID(),
       day,
       title,
       subjectCode: subjectCode || "",
@@ -52,7 +53,7 @@ export function CreateTrainingTaskButton({
       completionCriteria: completionCriteria || "完成训练范围，并记录产出与验证结果。",
       sourceType,
       sourceId,
-      verificationMethod,
+      plannedVerificationMethod: verificationMethod,
     });
     setBusy(false);
     if (!result.ok) {

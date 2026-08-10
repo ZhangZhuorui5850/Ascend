@@ -15,6 +15,7 @@ import {
   restoreTask as restoreCanonicalTask,
   updateTask as updateCanonicalTask,
 } from "../application/tasks/commands";
+import { recordStudy } from "../application/learning/record-study";
 import { revealAlgorithmHint } from "../repo/algorithm-hints";
 import {
   getAlgorithmLearningState,
@@ -87,7 +88,7 @@ import {
   upsertLearningTaskLink,
 } from "../repo/learning-evidence";
 import { addMinutesToInstant, localDateTimeToUtc, utcToZonedDateTime } from "../planner/time";
-import { createMistake, createReviewEvent, createStudySession, getMistakeBook } from "../repo/reviews";
+import { createMistake, createReviewEvent, getMistakeBook } from "../repo/reviews";
 import { searchWorkspace } from "../repo/search";
 import { getSettings } from "../repo/settings";
 import { getHomeSnapshot, getLearningAnalytics, getWeeklyCapacity } from "../repo/stats";
@@ -1281,6 +1282,7 @@ export const agentOperations: AgentOperation[] = [
         kind: z.literal("study"),
         day: date,
         title: z.string().min(1),
+        operationId: z.string().min(1).max(200).optional(),
         durationMinutes: z.number().int().min(0).optional(),
         subjectCode: z.string().optional(),
         knowledgePointId: z.string().optional(),
@@ -1339,8 +1341,26 @@ export const agentOperations: AgentOperation[] = [
     entityType: "learning_activity",
     run: ({ db, context }, input) => {
       if (input.kind === "study") {
-        createStudySession(db, context, input);
-        return { recorded: true, kind: input.kind };
+        const operationId = input.operationId ?? randomUUID();
+        const result = recordStudy(db, context, {
+          idempotencyKey: operationId,
+          day: input.day,
+          title: input.title,
+          subjectCode: input.subjectCode,
+          knowledgePointId: input.knowledgePointId,
+          actualMinutes: input.durationMinutes,
+          output: input.output,
+          activityType: "study",
+          outcome: "recorded",
+          sourceType: "agent_capture",
+          sourceId: operationId,
+        });
+        return {
+          recorded: true,
+          kind: input.kind,
+          evidenceId: result.evidence.id,
+          studySessionId: result.studySessionId,
+        };
       }
       if (input.kind === "mistake") return { kind: input.kind, ...createMistake(db, context, input) };
       if (input.kind === "review") return { kind: input.kind, ...createReviewEvent(db, context, input) };

@@ -2,12 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { actionFailure } from "@/lib/action-failure";
+import { recordStudy } from "@/lib/application/learning/record-study";
 import { getDb } from "@/lib/db";
 import { DAY_FIELDS, updateDayEntry, type DayField } from "@/lib/repo/days";
 import {
   createMistake,
   createReviewEvent,
-  createStudySession,
   reattemptMistake,
   spreadReviewBacklog,
   undoReattempt,
@@ -53,6 +53,7 @@ export async function saveDayEntry(date: string, fields: Partial<Record<DayField
 }
 
 export async function addStudySession(input: {
+  clientMutationId: string;
   day: string;
   title: string;
   durationMinutes?: number;
@@ -62,7 +63,19 @@ export async function addStudySession(input: {
 }): Promise<ActionResult> {
   try {
     const access = await requireWorkspace();
-    createStudySession(getDb(), access, input);
+    recordStudy(getDb(), access, {
+      idempotencyKey: input.clientMutationId,
+      day: input.day,
+      title: input.title,
+      subjectCode: input.subjectCode,
+      knowledgePointId: input.knowledgePointId,
+      actualMinutes: input.durationMinutes,
+      output: input.output,
+      activityType: "study",
+      outcome: "recorded",
+      sourceType: "manual_capture",
+      sourceId: input.clientMutationId,
+    });
     revalidateLearningEvidence(input.day);
     return { ok: true };
   } catch (error) {

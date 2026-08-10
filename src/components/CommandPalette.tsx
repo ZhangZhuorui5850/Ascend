@@ -16,7 +16,7 @@ import {
   StickyNote,
   type LucideIcon,
 } from "lucide-react";
-import { addTaskAction } from "@/app/actions/planner";
+import { createDayTaskAction } from "@/app/actions/day-tasks";
 import { applyModulePrefs, getNavigation } from "@/components/Sidebar";
 import { useFeedback } from "@/components/FeedbackProvider";
 import { todayKey } from "@/lib/dates";
@@ -210,7 +210,8 @@ export function CommandPalette({
     setTrainingBusyKey(entry.key);
     const training = entry.training;
     try {
-      const result = await addTaskAction({
+      const result = await createDayTaskAction({
+        clientMutationId: crypto.randomUUID(),
         day: todayKey(),
         title: training.title,
         subjectCode: training.subjectCode || "",
@@ -221,7 +222,7 @@ export function CommandPalette({
         completionCriteria: training.sourceType === "mistake"
           ? "独立重做并订正，再完成一道同类题"
           : "完成专项训练，并进行一次无提示回忆",
-        verificationMethod: training.sourceType === "mistake" ? "独立重做与同类题验证" : "无提示回忆",
+        plannedVerificationMethod: training.sourceType === "mistake" ? "独立重做与同类题验证" : "无提示回忆",
         sourceType: training.sourceType,
         sourceId: training.sourceId,
         notes: training.notes,

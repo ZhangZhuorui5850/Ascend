@@ -6,6 +6,7 @@ import type {
   PlannerTaskStatus,
 } from "../../planner/types";
 import { dateKeyInTimeZone } from "../../planner/time";
+import { recordStudy } from "../learning/record-study";
 import {
   appendLearningEvidence,
   type AppendLearningEvidenceInput,
@@ -117,12 +118,13 @@ export function completeTask(
     });
     if (!result.entity) return result;
     const completionCycle = nextCompletionCycle(db, scope, input.id);
-    appendLearningEvidence(db, scope, {
+    recordStudy(db, scope, {
       taskId: input.id,
       completionCycle,
       day: input.day ?? currentWorkspaceDay(db, scope),
       idempotencyKey: input.clientMutationId
         ?? `task-complete:${input.id}:version:${result.entity.version}`,
+      title: result.entity.title,
       ...input.evidence,
       outcome: input.evidence?.outcome ?? "completed",
     });
