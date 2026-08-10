@@ -33,7 +33,7 @@ export default async function MistakesPage() {
           <MistakeReattempt day={today} mistakes={book.due} />
         ) : (
           <EmptyState
-            action={{ href: `/day/${today}`, label: "去今日工作台" }}
+            action={{ href: "/", label: "回到今天" }}
             seal="清"
             text="没有到期错题。继续推进今天的计划吧。"
           />
@@ -91,7 +91,7 @@ export default async function MistakesPage() {
       </section>
 
       <p className="hint">
-        新错题在<Link href={`/day/${today}`}>今日工作台</Link>或收纳面板记录，会自动关联科目和知识点。
+        新错题可从<Link href="/">Today</Link>的“记录”入口添加，并关联科目和知识点。
       </p>
     </div>
   );

@@ -1,4 +1,5 @@
 import { CalendarView } from "@/components/CalendarView";
+import { PlannerShell } from "@/components/planner/PlannerShell";
 import { getDb } from "@/lib/db";
 import { dateKeyInTimeZone } from "@/lib/planner/time";
 import { requirePageWorkspace } from "@/lib/page-auth";
@@ -22,12 +23,11 @@ export default async function CalendarPage() {
   const rangeEnd = new Date(now.getTime() + 370 * 24 * 60 * 60 * 1000);
 
   return (
-    <div className="pageStack">
-      <div className="pageHeader">
-        <span className="eyebrow">LEARNING RHYTHM · 学习节奏</span>
-        <h1>学习日历</h1>
-        <p>点击日期查看当天待办。拖动任务可以改期，周视图中拉伸任务可以调整时间预算。</p>
-      </div>
+    <PlannerShell
+      active="calendar"
+      description="查看任务与事件的时间分配；拖动任务可改期，拉伸可调整时间预算。"
+      title="日历"
+    >
       <CalendarView
         calendars={listPlannerCalendars(db, access)}
         exams={getSettings(db, access).examCountdowns}
@@ -41,6 +41,6 @@ export default async function CalendarPage() {
         tasks={listCanonicalCalendarTasks(db, access, workspace.timezone)}
         timeZone={workspace.timezone}
       />
-    </div>
+    </PlannerShell>
   );
 }

@@ -1,4 +1,5 @@
 import { PlannerTasks } from "@/components/PlannerTasks";
+import { PlannerShell } from "@/components/planner/PlannerShell";
 import { dateKeyInTimeZone } from "@/lib/planner/time";
 import type { PlannerTaskView } from "@/lib/repo/planner-tasks";
 import { getDb } from "@/lib/db";
@@ -46,12 +47,12 @@ export default async function TasksPage({
   });
 
   return (
-    <div className="pageStack plannerTasksPage">
-      <header className="pageHeader">
-        <span className="eyebrow">PLANNER · 任务</span>
-        <h1>待办系统</h1>
-        <p>从 Inbox 收集任务，分离到期与排期，在执行、完成和复盘之间保持清晰轨迹。</p>
-      </header>
+    <PlannerShell
+      active="tasks"
+      description="从 Inbox 收集任务，分离到期与排期，并保留完成轨迹。"
+      title="任务"
+    >
+      <div className="plannerTasksPage">
       <PlannerTasks
         initialReminders={listWorkspaceReminders(db, access)}
         initialTaskLabelIds={listPlannerTaskLabelIds(db, access)}
@@ -61,6 +62,7 @@ export default async function TasksPage({
         timeZone={workspace.timezone}
         view={view}
       />
-    </div>
+      </div>
+    </PlannerShell>
   );
 }

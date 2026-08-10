@@ -1,18 +1,19 @@
 "use client";
 
 import { startTransition, useState } from "react";
-import { ArrowDown, ArrowUp, BarChart3, BookOpen, GraduationCap, HardDrive, Tag, type LucideIcon } from "lucide-react";
+import { BarChart3, BookOpen, GraduationCap, HardDrive, Tag, type LucideIcon } from "lucide-react";
 import { saveModulePrefsAction } from "@/app/actions/settings";
 import { useFeedback } from "@/components/FeedbackProvider";
 import type { ModuleKey, ModulePref } from "@/lib/repo/settings";
 
 const MODULE_META: Record<ModuleKey, { label: string; description: string; icon: LucideIcon }> = {
   subjects: { label: "知识体系", description: "科目、章节与知识点管理", icon: BookOpen },
-  mistakes: { label: "错题回炉", description: "错题登记与间隔重练", icon: Tag },
+  mistakes: { label: "错题本", description: "复习中的错题登记与间隔重练", icon: Tag },
   "mock-exams": { label: "模考冲刺", description: "模考成绩记录与冲刺分析", icon: GraduationCap },
-  assets: { label: "资料库", description: "文件、截图与学习资料收纳", icon: HardDrive },
+  assets: { label: "资料", description: "文件、截图与学习资料", icon: HardDrive },
   analytics: { label: "学习分析", description: "学习时长与趋势统计", icon: BarChart3 },
 };
+const OPTIONAL_MORE_KEYS = new Set<ModuleKey>(["mistakes", "mock-exams", "analytics"]);
 
 export function ModulesSection({ initial }: { initial: ModulePref[] }) {
   const { notify } = useFeedback();
@@ -41,22 +42,13 @@ export function ModulesSection({ initial }: { initial: ModulePref[] }) {
     save(prefs.map((pref) => (pref.key === key ? { ...pref, enabled: !pref.enabled } : pref)));
   }
 
-  function move(key: ModuleKey, delta: -1 | 1) {
-    const index = prefs.findIndex((pref) => pref.key === key);
-    const target = index + delta;
-    if (index < 0 || target < 0 || target >= prefs.length) return;
-    const next = [...prefs];
-    [next[index], next[target]] = [next[target], next[index]];
-    save(next);
-  }
-
   return (
     <div className="card settingsModules">
       <p className="settingsModulesIntro">
-        关闭不需要的功能板块后，它会从侧栏、底部导航和命令面板中隐藏；上下箭头调整显示顺序。总览、今日执行与学习日历为核心板块，始终可见。
+        今天、计划、学习、复习与资料是稳定主入口。这里的偏好只影响“更多”中的可选模块。
       </p>
       <div className="settingsModulesList">
-        {prefs.map((pref, index) => {
+        {prefs.filter((pref) => OPTIONAL_MORE_KEYS.has(pref.key)).map((pref) => {
           const meta = MODULE_META[pref.key];
           const Icon = meta.icon;
           return (
@@ -67,22 +59,6 @@ export function ModulesSection({ initial }: { initial: ModulePref[] }) {
                 <small>{meta.description}</small>
               </div>
               <div className="settingsModuleTools">
-                <button
-                  aria-label={`上移${meta.label}`}
-                  disabled={index === 0}
-                  onClick={() => move(pref.key, -1)}
-                  type="button"
-                >
-                  <ArrowUp size={14} />
-                </button>
-                <button
-                  aria-label={`下移${meta.label}`}
-                  disabled={index === prefs.length - 1}
-                  onClick={() => move(pref.key, 1)}
-                  type="button"
-                >
-                  <ArrowDown size={14} />
-                </button>
                 <label className="settingsModuleSwitch">
                   <input
                     aria-label={`${pref.enabled ? "关闭" : "开启"}${meta.label}`}

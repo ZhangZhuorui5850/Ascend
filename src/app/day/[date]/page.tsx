@@ -60,7 +60,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
     <div className="pageStack">
       <header className="dayHeader">
         <div className="dayHeaderTitle">
-          <span className="eyebrow">{isToday ? "TODAY · 今日工作台" : "HISTORY · 当日工作台"}</span>
+          <span className="eyebrow">{isToday ? "ARCHIVE · 今日记录" : "HISTORY · 历史记录"}</span>
           <div className="dayNav">
             <Link aria-label="前一天" href={`/day/${shiftDateKey(date, -1)}`}><ChevronLeft size={18} /></Link>
             <h1>{formatDayTitle(date)}</h1>
@@ -68,7 +68,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
           </div>
         </div>
         <div className="dayHeaderActions">
-          {!isToday ? <Link className="secondaryButton" href={`/day/${today}`}>回到今天</Link> : null}
+          <Link className="secondaryButton" href="/">回到今天</Link>
           <Link className="secondaryButton" href="/calendar"><CalendarDays size={15} />日历</Link>
         </div>
       </header>
@@ -152,7 +152,7 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
                   <small>{asset.folder_path || "根目录"} · {formatSize(asset.size)}</small>
                 </a>
               ))}
-              {!day.assets.length ? <p className="empty">还没有资料。打开收纳面板，拖入文件或粘贴截图。</p> : null}
+              {!day.assets.length ? <p className="empty">还没有资料。打开“记录”，拖入文件或粘贴截图。</p> : null}
             </div>
           </section>
 

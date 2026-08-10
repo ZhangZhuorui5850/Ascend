@@ -215,7 +215,7 @@ export function PointLine({ point, subjectCode, today, report, onAddChild, focus
         ) : detail ? (
           <>
             <div className="pointTrainingAction">
-              <div><span className="sectionKicker">NEXT ACTION</span><strong>针对训练</strong><small>创建 45 分钟 P1 训练，带回今日工作台执行。</small></div>
+              <div><span className="sectionKicker">NEXT ACTION</span><strong>针对训练</strong><small>创建 45 分钟 P1 训练，带回 Today 执行。</small></div>
               <CreateTrainingTaskButton
                 compact
                 day={today}
