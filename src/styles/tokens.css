@@ -59,6 +59,11 @@
   --font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", serif;
   --font-num: Georgia, "Times New Roman", "Noto Serif SC", "SimSun", serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --type-page-title: 2rem;
+  --type-section-title: 1.25rem;
+  --type-body: 0.9375rem;
+  --type-support: 0.8125rem;
+  --type-caption: 0.75rem;
   --paper-grid: color-mix(in srgb, var(--line) 42%, transparent);
   --planner-surface-raised: var(--surface-raised);
   --planner-canvas: var(--bg);
@@ -77,6 +82,13 @@
   --planner-z-dialog: 90;
   --planner-z-toast: 100;
   --mobile-nav-height: 72px;
+}
+
+@media (max-width: 600px) {
+  :root {
+    --type-page-title: 1.75rem;
+    --type-section-title: 1.125rem;
+  }
 }
 
 @media (prefers-color-scheme: dark) {

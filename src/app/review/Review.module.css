@@ -23,8 +23,9 @@
 
 .header h1 {
   color: var(--ink);
-  font-family: var(--font-serif);
-  font-size: clamp(1.7rem, 4vw, 2.25rem);
+  font-family: var(--font-sans);
+  font-size: var(--type-page-title);
+  font-weight: 760;
   letter-spacing: -.04em;
   margin: 0;
 }

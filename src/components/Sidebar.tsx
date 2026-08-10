@@ -7,7 +7,6 @@ import {
   BarChart3,
   BookOpen,
   CalendarDays,
-  ClipboardList,
   Code2,
   type LucideIcon,
   GraduationCap,
@@ -24,12 +23,12 @@ import {
   ChevronLeft,
   MoreHorizontal,
   Puzzle,
+  RotateCcw,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { AccountMenu } from "@/components/AccountMenu";
 import { BrandLogo } from "@/components/BrandLogo";
 import type { DeviceAccount } from "@/lib/auth";
-import { todayKey } from "@/lib/dates";
 import { clearOfflineLearningData } from "@/lib/offline-review";
 import type { PluginId } from "@/lib/plugins/registry";
 import type { ModulePref } from "@/lib/repo/settings";
@@ -50,6 +49,8 @@ export type NavItem = {
   moduleKey?: ModulePref["key"];
   pluginId?: PluginId;
   mobileOverflow?: boolean;
+  activeAliases?: string[];
+  parentActiveOnly?: boolean;
 };
 
 export function getNavigation(role: "admin" | "user", enabledPluginIds: PluginId[] = []): NavItem[] {
@@ -61,15 +62,15 @@ export function getNavigation(role: "admin" | "user", enabledPluginIds: PluginId
     ];
   }
   const links: NavItem[] = [
-    { href: "/", match: "/", exact: true, label: "总览", group: "计划", icon: Home },
-    { href: "/tasks", match: "/tasks", exact: false, label: "任务", group: "计划", icon: ListChecks },
-    { href: `/day/${todayKey()}`, match: "/day", exact: false, label: "今日执行", group: "计划", icon: ClipboardList },
-    { href: "/calendar", match: "/calendar", exact: false, label: "学习日历", group: "计划", icon: CalendarDays },
-    { href: "/subjects", match: "/subjects", exact: false, label: "知识体系", group: "学习", icon: BookOpen, moduleKey: "subjects" as const },
-    { href: "/mistakes", match: "/mistakes", exact: false, label: "错题回炉", group: "学习", icon: Tag, moduleKey: "mistakes" as const },
-    { href: "/mock-exams", match: "/mock-exams", exact: false, label: "模考冲刺", group: "学习", icon: GraduationCap, moduleKey: "mock-exams" as const },
-    { href: "/assets", match: "/assets", exact: false, label: "资料库", group: "洞察", icon: HardDrive, moduleKey: "assets" as const },
-    { href: "/analytics", match: "/analytics", exact: false, label: "学习分析", group: "洞察", icon: BarChart3, moduleKey: "analytics" as const },
+    { href: "/", match: "/", exact: true, label: "今天", group: "主要", icon: Home, activeAliases: ["/day"] },
+    { href: "/tasks", match: "/tasks", exact: false, label: "计划", group: "主要", icon: ListChecks, activeAliases: ["/calendar"] },
+    { href: "/subjects", match: "/subjects", exact: false, label: "学习", group: "主要", icon: BookOpen },
+    { href: "/review", match: "/review", exact: false, label: "复习", group: "主要", icon: RotateCcw, activeAliases: ["/mistakes"] },
+    { href: "/assets", match: "/assets", exact: false, label: "资料", group: "主要", icon: HardDrive, mobileOverflow: true },
+    { href: "/calendar", match: "/calendar", exact: false, label: "日历", group: "更多", icon: CalendarDays, parentActiveOnly: true, mobileOverflow: true },
+    { href: "/mistakes", match: "/mistakes", exact: false, label: "错题本", group: "更多", icon: Tag, moduleKey: "mistakes" as const, parentActiveOnly: true, mobileOverflow: true },
+    { href: "/mock-exams", match: "/mock-exams", exact: false, label: "模考", group: "更多", icon: GraduationCap, moduleKey: "mock-exams" as const, mobileOverflow: true },
+    { href: "/analytics", match: "/analytics", exact: false, label: "分析", group: "更多", icon: BarChart3, moduleKey: "analytics" as const, mobileOverflow: true },
   ];
   if (enabledPluginIds.includes("algorithms")) {
     links.push({
@@ -77,7 +78,7 @@ export function getNavigation(role: "admin" | "user", enabledPluginIds: PluginId
       match: "/practice/algorithms",
       exact: false,
       label: "算法训练",
-      group: "扩展",
+      group: "更多",
       icon: Code2,
       pluginId: "algorithms",
       mobileOverflow: true,
@@ -88,28 +89,23 @@ export function getNavigation(role: "admin" | "user", enabledPluginIds: PluginId
     match: "/extensions",
     exact: false,
     label: "扩展中心",
-    group: "系统",
+    group: "更多",
     icon: Puzzle,
     mobileOverflow: true,
   });
   return links;
 }
 
-/** 按用户板块偏好过滤并排序导航：核心项固定在前，可选板块按偏好顺序排列、关闭的隐藏 */
+/** 核心 IA 固定；旧模块偏好只控制「更多」中的可选入口是否可见。 */
 export function applyModulePrefs(links: NavItem[], modulePrefs?: ModulePref[]): NavItem[] {
   if (!modulePrefs?.length) return links;
-  const core = links.filter((item) => !item.moduleKey && !item.pluginId && !item.mobileOverflow);
-  const optionalByKey = new Map(links.filter((item) => item.moduleKey).map((item) => [item.moduleKey!, item]));
-  const optional = modulePrefs
-    .filter((pref) => pref.enabled)
-    .map((pref) => optionalByKey.get(pref.key))
-    .filter((item): item is NavItem => Boolean(item));
-  const plugins = links.filter((item) => item.pluginId);
-  const overflow = links.filter((item) => item.mobileOverflow && !item.pluginId);
-  return [...core, ...optional, ...plugins, ...overflow];
+  const enabled = new Set(modulePrefs.filter((pref) => pref.enabled).map((pref) => pref.key));
+  return links.filter((item) => !item.moduleKey || enabled.has(item.moduleKey));
 }
 
 function isLinkActive(pathname: string, item: NavItem): boolean {
+  if (item.parentActiveOnly) return false;
+  if (item.activeAliases?.some((match) => pathname === match || pathname.startsWith(`${match}/`))) return true;
   if (item.exact) return pathname === item.match;
   return pathname === item.href || pathname === item.match || pathname.startsWith(`${item.match}/`);
 }
@@ -206,10 +202,10 @@ export function MobileNav({
   const [moreOpen, setMoreOpen] = useState(false);
   const mobileLinks = role === "admin"
     ? links
-    : links.filter((item) => !item.moduleKey && !item.pluginId && !item.mobileOverflow);
+    : links.filter((item) => item.group === "主要" && !item.mobileOverflow);
   const moreLinks = role === "admin"
     ? []
-    : links.filter((item) => item.moduleKey || item.pluginId || item.mobileOverflow);
+    : links.filter((item) => item.group !== "主要" || item.mobileOverflow);
 
   return (
     <nav className="mobileNav" aria-label="移动端主导航" data-testid="mobile-nav">

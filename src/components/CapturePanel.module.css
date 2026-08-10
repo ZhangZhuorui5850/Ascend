@@ -18,7 +18,7 @@
   color: var(--muted);
   display: inline-flex;
   flex-direction: column;
-  font-size: .72rem;
+  font-size: var(--type-caption);
   gap: 4px;
   justify-content: center;
   min-height: 52px;
@@ -150,7 +150,7 @@
 
 .footer > span {
   color: var(--muted);
-  font-size: .7rem;
+  font-size: var(--type-caption);
 }
 
 .footer button {
@@ -161,6 +161,7 @@
   color: var(--accent-ink);
   display: inline-flex;
   font-weight: 750;
+  font-size: var(--type-body);
   gap: 7px;
   justify-content: center;
   min-height: 44px;
@@ -233,7 +234,7 @@
 
 .fileMeta small {
   color: var(--muted);
-  font-size: .68rem;
+  font-size: var(--type-caption);
 }
 
 .remove,
@@ -292,7 +293,7 @@
 
 @media (max-width: 390px) {
   .intentTabs button {
-    font-size: .66rem;
+    font-size: var(--type-caption);
   }
 
   .detailFields {

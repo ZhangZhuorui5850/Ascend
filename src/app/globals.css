@@ -66,6 +66,7 @@ body {
       color-mix(in srgb, var(--paper-grid) calc(var(--grid-alpha) * 100%), transparent) 27px 28px),
     var(--bg);
   font-family: var(--font-sans);
+  font-size: var(--type-body);
   line-height: 1.65;
   -webkit-font-smoothing: antialiased;
 }
