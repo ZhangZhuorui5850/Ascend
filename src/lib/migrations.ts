@@ -1419,6 +1419,320 @@ const migrations: Migration[] = [
     version: "0030_learning_evidence_foundation",
     sql: LEARNING_EVIDENCE_SCHEMA_V0030_SQL,
   },
+  {
+    version: "0031_legacy_learning_backfill",
+    run: (database) => {
+      const requiredTables = [
+        "day_tasks",
+        "study_sessions",
+        "knowledge_points",
+        "planner_tasks",
+        "learning_task_links",
+        "learning_evidence",
+      ];
+      if (!requiredTables.every((table) => tableExists(database, table))) return;
+      migrateLegacyDayTasks(database);
+
+      const conflicts: string[] = [];
+      const collect = (label: string, sql: string) => {
+        const rows = database.prepare(sql).all() as Array<{ ref: string }>;
+        if (rows.length) conflicts.push(`${label}: ${rows.slice(0, 20).map((row) => row.ref).join(", ")}`);
+      };
+
+      collect("缺少 Planner mirror", `
+        SELECT d.workspace_id || '/day_task/' || d.id AS ref
+        FROM day_tasks d
+        LEFT JOIN planner_tasks p
+          ON p.workspace_id = d.workspace_id AND p.legacy_day_task_id = d.id
+        WHERE p.id IS NULL
+        ORDER BY d.workspace_id, d.id
+      `);
+      collect("day task 引用不存在或跨空间的知识点", `
+        SELECT d.workspace_id || '/day_task/' || d.id || '/point/' || d.knowledge_point_id AS ref
+        FROM day_tasks d
+        LEFT JOIN knowledge_points k
+          ON k.workspace_id = d.workspace_id AND k.id = d.knowledge_point_id
+        WHERE d.knowledge_point_id IS NOT NULL AND k.id IS NULL
+        ORDER BY d.workspace_id, d.id
+      `);
+      collect("study session 引用不存在或跨空间的知识点", `
+        SELECT s.workspace_id || '/study_session/' || s.id || '/point/' || s.knowledge_point_id AS ref
+        FROM study_sessions s
+        LEFT JOIN knowledge_points k
+          ON k.workspace_id = s.workspace_id AND k.id = s.knowledge_point_id
+        WHERE s.knowledge_point_id IS NOT NULL AND k.id IS NULL
+        ORDER BY s.workspace_id, s.id
+      `);
+      collect("study session 引用不存在或跨空间的 day task", `
+        SELECT s.workspace_id || '/study_session/' || s.id || '/task/' || s.task_id AS ref
+        FROM study_sessions s
+        LEFT JOIN day_tasks d
+          ON d.workspace_id = s.workspace_id AND d.id = s.task_id
+        WHERE s.task_id IS NOT NULL AND d.id IS NULL
+        ORDER BY s.workspace_id, s.id
+      `);
+      collect("task/session 知识点冲突", `
+        SELECT d.workspace_id || '/day_task/' || d.id || '/study_session/' || s.id AS ref
+        FROM day_tasks d
+        JOIN study_sessions s
+          ON s.workspace_id = d.workspace_id AND s.task_id = d.id
+        WHERE d.knowledge_point_id IS NOT NULL
+          AND s.knowledge_point_id IS NOT NULL
+          AND d.knowledge_point_id != s.knowledge_point_id
+        ORDER BY d.workspace_id, d.id
+      `);
+      collect("legacy source 字段不成对", `
+        SELECT 'day_task/' || workspace_id || '/' || id AS ref
+        FROM day_tasks
+        WHERE (TRIM(source_type) = '') != (TRIM(source_id) = '')
+        UNION ALL
+        SELECT 'study_session/' || workspace_id || '/' || id AS ref
+        FROM study_sessions
+        WHERE (TRIM(source_type) = '') != (TRIM(source_id) = '')
+        ORDER BY ref
+      `);
+      collect("legacy activity type 非法", `
+        SELECT workspace_id || '/day_task/' || id || '/activity/' || activity_type AS ref
+        FROM day_tasks
+        WHERE activity_type NOT IN ('unspecified', 'study', 'practice', 'recall', 'review', 'mock', 'mixed')
+        ORDER BY workspace_id, id
+      `);
+      collect("legacy 日期非法", `
+        SELECT 'day_task/' || workspace_id || '/' || id || '/' || day AS ref
+        FROM day_tasks
+        WHERE length(day) != 10 OR date(day) IS NULL OR date(day) != day
+        UNION ALL
+        SELECT 'study_session/' || workspace_id || '/' || id || '/' || day AS ref
+        FROM study_sessions
+        WHERE length(day) != 10 OR date(day) IS NULL OR date(day) != day
+        ORDER BY ref
+      `);
+      collect("legacy 学习时长越界", `
+        SELECT 'day_task/' || workspace_id || '/' || id || '/' || actual_minutes AS ref
+        FROM day_tasks
+        WHERE actual_minutes IS NOT NULL AND (actual_minutes < 0 OR actual_minutes > 1440)
+        UNION ALL
+        SELECT 'study_session/' || workspace_id || '/' || id || '/' || duration_minutes AS ref
+        FROM study_sessions
+        WHERE duration_minutes < 0 OR duration_minutes > 1440
+        ORDER BY ref
+      `);
+      collect("legacy 文本超过 canonical 上限", `
+        SELECT workspace_id || '/day_task/' || id AS ref
+        FROM day_tasks
+        WHERE length(completion_criteria) > 500
+           OR length(planned_verification_method) > 200
+           OR length(completion_output) > 4000
+           OR length(verification_method) > 200
+           OR length(verification_result) > 1000
+           OR length(verification_outcome) > 100
+           OR length(TRIM(source_type)) > 50
+           OR length(TRIM(source_id)) > 200
+        UNION ALL
+        SELECT workspace_id || '/study_session/' || id AS ref
+        FROM study_sessions
+        WHERE length(output) > 4000
+           OR length(TRIM(source_type)) > 50
+           OR length(TRIM(source_id)) > 200
+        ORDER BY ref
+      `);
+      collect("learning link source 冲突", `
+        SELECT d.workspace_id || '/day_task/' || d.id || '/source/' ||
+               TRIM(d.source_type) || ':' || TRIM(d.source_id) AS ref
+        FROM day_tasks d
+        JOIN planner_tasks p
+          ON p.workspace_id = d.workspace_id AND p.legacy_day_task_id = d.id
+        JOIN learning_task_links l
+          ON l.workspace_id = d.workspace_id
+         AND l.source_type = TRIM(d.source_type)
+         AND l.source_id = TRIM(d.source_id)
+         AND l.task_id != p.id
+        WHERE TRIM(d.source_type) != '' AND TRIM(d.source_id) != ''
+        UNION ALL
+        SELECT workspace_id || '/duplicate-source/' || TRIM(source_type) || ':' || TRIM(source_id) AS ref
+        FROM day_tasks
+        WHERE TRIM(source_type) != '' AND TRIM(source_id) != ''
+        GROUP BY workspace_id, TRIM(source_type), TRIM(source_id)
+        HAVING COUNT(*) > 1
+        ORDER BY ref
+      `);
+      collect("learning_evidence projection 悬空", `
+        SELECT s.workspace_id || '/study_session/' || s.id || '/evidence/' || s.source_id AS ref
+        FROM study_sessions s
+        LEFT JOIN learning_evidence e
+          ON e.workspace_id = s.workspace_id AND e.id = s.source_id
+        WHERE s.source_type = 'learning_evidence' AND e.id IS NULL
+        ORDER BY s.workspace_id, s.id
+      `);
+      collect("legacy study source 对应多条 canonical evidence", `
+        SELECT s.workspace_id || '/study_session/' || s.id || '/source/' ||
+               TRIM(s.source_type) || ':' || TRIM(s.source_id) AS ref
+        FROM study_sessions s
+        JOIN learning_evidence e
+          ON e.workspace_id = s.workspace_id
+         AND e.source_type = TRIM(s.source_type)
+         AND e.source_id = TRIM(s.source_id)
+        WHERE s.task_id IS NULL
+          AND s.source_type != 'learning_evidence'
+          AND TRIM(s.source_type) != ''
+        GROUP BY s.workspace_id, s.id
+        HAVING COUNT(*) > 1
+        ORDER BY s.workspace_id, s.id
+      `);
+      collect("legacy study 与同源 canonical evidence 内容冲突", `
+        SELECT s.workspace_id || '/study_session/' || s.id || '/evidence/' || e.id AS ref
+        FROM study_sessions s
+        JOIN learning_evidence e
+          ON e.workspace_id = s.workspace_id
+         AND e.source_type = TRIM(s.source_type)
+         AND e.source_id = TRIM(s.source_id)
+        WHERE s.task_id IS NULL
+          AND s.source_type != 'learning_evidence'
+          AND TRIM(s.source_type) != ''
+          AND (
+            e.task_id IS NOT NULL
+            OR e.day != s.day
+            OR e.knowledge_point_id IS NOT s.knowledge_point_id
+            OR e.actual_minutes IS NOT CASE
+                 WHEN s.duration_minutes BETWEEN 1 AND 1440 THEN s.duration_minutes ELSE NULL
+               END
+            OR e.output != s.output
+          )
+        ORDER BY s.workspace_id, s.id
+      `);
+      collect("legacy evidence 稳定键冲突", `
+        SELECT d.workspace_id || '/day_task/' || d.id || '/evidence/' || e.id AS ref
+        FROM day_tasks d
+        JOIN planner_tasks p
+          ON p.workspace_id = d.workspace_id AND p.legacy_day_task_id = d.id
+        LEFT JOIN study_sessions s
+          ON s.workspace_id = d.workspace_id AND s.task_id = d.id
+        JOIN learning_evidence e
+          ON e.workspace_id = d.workspace_id
+         AND (
+           e.id = 'legacy-day-task:' || d.id
+           OR e.idempotency_key = 'legacy-day-task-completion:' || d.id
+         )
+        WHERE (d.done = 1 OR s.id IS NOT NULL) AND e.task_id IS NOT p.id
+        UNION ALL
+        SELECT s.workspace_id || '/study_session/' || s.id || '/evidence/' || e.id AS ref
+        FROM study_sessions s
+        JOIN learning_evidence e
+          ON e.workspace_id = s.workspace_id
+         AND (
+           e.id = 'legacy-study-session:' || s.id
+           OR e.idempotency_key = 'legacy-study-session:' || s.id
+         )
+        WHERE s.task_id IS NULL
+          AND (
+            e.task_id IS NOT NULL
+            OR e.day != s.day
+            OR e.knowledge_point_id IS NOT s.knowledge_point_id
+          )
+        ORDER BY ref
+      `);
+
+      if (conflicts.length) {
+        throw new Error(`0031 legacy learning backfill 冲突报告\n${conflicts.join("\n")}`);
+      }
+
+      database.exec(`
+        INSERT INTO learning_task_links
+          (workspace_id, task_id, knowledge_point_id, activity_type,
+           completion_criteria, planned_verification_method, source_type, source_id,
+           created_at, updated_at, version)
+        SELECT d.workspace_id, p.id, d.knowledge_point_id, d.activity_type,
+               d.completion_criteria, d.planned_verification_method,
+               TRIM(d.source_type), TRIM(d.source_id), d.created_at,
+               COALESCE(d.done_at, d.created_at), 1
+        FROM day_tasks d
+        JOIN planner_tasks p
+          ON p.workspace_id = d.workspace_id AND p.legacy_day_task_id = d.id
+        LEFT JOIN learning_task_links l
+          ON l.workspace_id = d.workspace_id AND l.task_id = p.id
+        WHERE l.task_id IS NULL
+          AND (
+            d.knowledge_point_id IS NOT NULL
+            OR d.activity_type != 'unspecified'
+            OR TRIM(d.completion_criteria) != ''
+            OR TRIM(d.planned_verification_method) != ''
+            OR TRIM(d.source_type) != ''
+          );
+
+        INSERT INTO learning_evidence
+          (id, workspace_id, task_id, completion_cycle, day, knowledge_point_id,
+           activity_type, actual_minutes, output, outcome, difficulty,
+           verification_method, verification_result, verification_outcome, confidence,
+           source_type, source_id, idempotency_key, created_at)
+        SELECT 'legacy-day-task:' || d.id, d.workspace_id, p.id, 1,
+               COALESCE(s.day, d.day), COALESCE(d.knowledge_point_id, s.knowledge_point_id),
+               d.activity_type,
+               CASE
+                 WHEN d.actual_minutes BETWEEN 1 AND 1440 THEN d.actual_minutes
+                 WHEN s.duration_minutes BETWEEN 1 AND 1440 THEN s.duration_minutes
+                 ELSE NULL
+               END,
+               CASE WHEN TRIM(d.completion_output) != '' THEN d.completion_output ELSE COALESCE(s.output, '') END,
+               'completed', '', d.verification_method, d.verification_result,
+               d.verification_outcome, NULL,
+               CASE
+                 WHEN TRIM(d.source_type) != '' THEN TRIM(d.source_type)
+                 WHEN s.source_type IS NOT NULL AND TRIM(s.source_type) != ''
+                      AND s.source_type != 'learning_evidence' THEN TRIM(s.source_type)
+                 ELSE 'legacy_day_task'
+               END,
+               CASE
+                 WHEN TRIM(d.source_type) != '' THEN TRIM(d.source_id)
+                 WHEN s.source_type IS NOT NULL AND TRIM(s.source_type) != ''
+                      AND s.source_type != 'learning_evidence' THEN TRIM(s.source_id)
+                 ELSE CAST(d.id AS TEXT)
+               END,
+               'legacy-day-task-completion:' || d.id,
+               COALESCE(d.done_at, s.created_at, d.created_at)
+        FROM day_tasks d
+        JOIN planner_tasks p
+          ON p.workspace_id = d.workspace_id AND p.legacy_day_task_id = d.id
+        LEFT JOIN study_sessions s
+          ON s.workspace_id = d.workspace_id AND s.task_id = d.id
+        WHERE (d.done = 1 OR s.id IS NOT NULL)
+          AND NOT EXISTS (
+            SELECT 1 FROM learning_evidence e
+            WHERE e.workspace_id = d.workspace_id AND e.task_id = p.id
+          );
+
+        INSERT INTO learning_evidence
+          (id, workspace_id, task_id, completion_cycle, day, knowledge_point_id,
+           activity_type, actual_minutes, output, outcome, difficulty,
+           verification_method, verification_result, verification_outcome, confidence,
+           source_type, source_id, idempotency_key, created_at)
+        SELECT 'legacy-study-session:' || s.id, s.workspace_id, NULL, 1, s.day,
+               s.knowledge_point_id, 'study',
+               CASE WHEN s.duration_minutes BETWEEN 1 AND 1440 THEN s.duration_minutes ELSE NULL END,
+               s.output, 'completed', '', '', '', '', NULL,
+               CASE WHEN TRIM(s.source_type) != '' THEN TRIM(s.source_type) ELSE 'legacy_study_session' END,
+               CASE WHEN TRIM(s.source_id) != '' THEN TRIM(s.source_id) ELSE CAST(s.id AS TEXT) END,
+               'legacy-study-session:' || s.id, s.created_at
+        FROM study_sessions s
+        WHERE s.task_id IS NULL
+          AND s.source_type != 'learning_evidence'
+          AND NOT EXISTS (
+            SELECT 1 FROM learning_evidence e
+            WHERE e.workspace_id = s.workspace_id
+              AND (
+                e.id = 'legacy-study-session:' || s.id
+                OR e.idempotency_key = 'legacy-study-session:' || s.id
+              )
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM learning_evidence e
+            WHERE e.workspace_id = s.workspace_id
+              AND TRIM(s.source_type) != ''
+              AND e.source_type = TRIM(s.source_type)
+              AND e.source_id = TRIM(s.source_id)
+          );
+      `);
+    },
+  },
 
 ];
 
@@ -1521,6 +1835,7 @@ export const MIGRATION_RUN_HASHES: Readonly<Record<string, string>> = {
   "0027_plugin_study_session_sources": "fbe5058f34747f85c8ad50815ff0db1a1dcfe31348df8e1777fd50cc3e03a2ea",
   "0018_planner_core": "e29e6c29b960be8ab8f629a83a6575dc98fa3e2b85ab51c1d477c700682445b5",
   "0029_planner_legacy_dual_write": "2ab7fcf86b74d5cde7f2d315494970c2e3d3ff0567e95f74046b1558b7b7d7ad",
+  "0031_legacy_learning_backfill": "3005ad64026028d261a3a38148d4c593c82b67022a82b222ef1e783db7c527c6",
 };
 
 const MIGRATION_RUN_HASH_ALIASES: Readonly<Record<string, readonly string[]>> = {

@@ -179,6 +179,155 @@ describe("runMigrations", () => {
     expect(db.prepare("SELECT sql FROM sqlite_master WHERE name = 'learning_evidence'").get()).toEqual(before);
   });
 
+  it("backfills legacy task links and task/manual study evidence without duplicating canonical projections", () => {
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    runMigrations(db, { throughVersion: "0030_learning_evidence_foundation" });
+    db.exec(`
+      INSERT INTO subjects (workspace_id, code, name, description)
+      VALUES ('${LEGACY_WORKSPACE_ID}', 'M1', '线性代数', '');
+      INSERT INTO subject_chapters (workspace_id, id, subject_code, title, sort_order)
+      VALUES ('${LEGACY_WORKSPACE_ID}', 'chapter:M1:matrix', 'M1', '矩阵', 1);
+      INSERT INTO knowledge_points
+        (workspace_id, id, subject_code, subject_name, submodule, tier, tier_name, title,
+         exam, status, mastery, reviews, chapter_id, sort_order)
+      VALUES
+        ('${LEGACY_WORKSPACE_ID}', 'kp1', 'M1', '线性代数', '矩阵', 'r', '精通', '矩阵乘法',
+         1, '未学', 0, 0, 'chapter:M1:matrix', 1);
+    `);
+    const legacyTaskId = Number(db.prepare(`
+      INSERT INTO day_tasks
+        (workspace_id, day, title, subject_code, done, done_at, knowledge_point_id,
+         activity_type, completion_criteria, source_type, source_id, actual_minutes,
+         completion_output, planned_verification_method, verification_method,
+         verification_result, verification_outcome)
+      VALUES
+        (?, '2026-08-01', '矩阵训练', 'M1', 1, '2026-08-01T10:00:00.000Z', 'kp1',
+         'practice', '独立完成 20 题', 'legacy_import', 'task-1', 45,
+         '完成并订正', '闭卷小测', '同类题', '8/10', 'improved')
+    `).run(LEGACY_WORKSPACE_ID).lastInsertRowid);
+    db.prepare(`
+      INSERT INTO study_sessions
+        (workspace_id, day, subject_code, knowledge_point_id, task_id, title,
+         duration_minutes, output)
+      VALUES (?, '2026-08-01', 'M1', 'kp1', ?, '矩阵训练', 40, '旧 session 产出')
+    `).run(LEGACY_WORKSPACE_ID, legacyTaskId);
+    const manualSessionId = Number(db.prepare(`
+      INSERT INTO study_sessions
+        (workspace_id, day, subject_code, knowledge_point_id, title, duration_minutes, output)
+      VALUES (?, '2026-08-02', 'M1', 'kp1', '手工复盘', 25, '复盘笔记')
+    `).run(LEGACY_WORKSPACE_ID).lastInsertRowid);
+    db.prepare(`
+      INSERT INTO learning_evidence
+        (id, workspace_id, completion_cycle, day, activity_type, output,
+         source_type, source_id, idempotency_key)
+      VALUES ('canonical-existing', ?, 1, '2026-08-03', 'study', 'canonical',
+              'manual', 'existing', 'canonical-existing')
+    `).run(LEGACY_WORKSPACE_ID);
+    db.prepare(`
+      INSERT INTO study_sessions
+        (workspace_id, day, title, duration_minutes, output, source_type, source_id)
+      VALUES (?, '2026-08-03', 'canonical projection', 15, 'canonical',
+              'learning_evidence', 'canonical-existing')
+    `).run(LEGACY_WORKSPACE_ID);
+
+    runMigrations(db);
+
+    const planner = db.prepare(`
+      SELECT id, status FROM planner_tasks
+      WHERE workspace_id = ? AND legacy_day_task_id = ?
+    `).get(LEGACY_WORKSPACE_ID, legacyTaskId) as { id: string; status: string };
+    expect(planner.status).toBe("completed");
+    expect(db.prepare(`
+      SELECT knowledge_point_id, activity_type, completion_criteria,
+             planned_verification_method, source_type, source_id
+      FROM learning_task_links WHERE workspace_id = ? AND task_id = ?
+    `).get(LEGACY_WORKSPACE_ID, planner.id)).toEqual({
+      knowledge_point_id: "kp1",
+      activity_type: "practice",
+      completion_criteria: "独立完成 20 题",
+      planned_verification_method: "闭卷小测",
+      source_type: "legacy_import",
+      source_id: "task-1",
+    });
+    expect(db.prepare(`
+      SELECT task_id, day, knowledge_point_id, activity_type, actual_minutes, output,
+             outcome, verification_method, verification_result, verification_outcome,
+             source_type, source_id, idempotency_key
+      FROM learning_evidence WHERE id = ?
+    `).get(`legacy-day-task:${legacyTaskId}`)).toEqual({
+      task_id: planner.id,
+      day: "2026-08-01",
+      knowledge_point_id: "kp1",
+      activity_type: "practice",
+      actual_minutes: 45,
+      output: "完成并订正",
+      outcome: "completed",
+      verification_method: "同类题",
+      verification_result: "8/10",
+      verification_outcome: "improved",
+      source_type: "legacy_import",
+      source_id: "task-1",
+      idempotency_key: `legacy-day-task-completion:${legacyTaskId}`,
+    });
+    expect(db.prepare(`
+      SELECT task_id, actual_minutes, output, source_type, source_id, idempotency_key
+      FROM learning_evidence WHERE id = ?
+    `).get(`legacy-study-session:${manualSessionId}`)).toEqual({
+      task_id: null,
+      actual_minutes: 25,
+      output: "复盘笔记",
+      source_type: "legacy_study_session",
+      source_id: String(manualSessionId),
+      idempotency_key: `legacy-study-session:${manualSessionId}`,
+    });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM learning_evidence").get()).toEqual({ count: 3 });
+    expect(getAppliedMigrations(db)).toContain("0031_legacy_learning_backfill");
+
+    db.prepare("DELETE FROM schema_migrations WHERE version = '0031_legacy_learning_backfill'").run();
+    runMigrations(db);
+    expect(db.prepare("SELECT COUNT(*) AS count FROM learning_task_links").get()).toEqual({ count: 1 });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM learning_evidence").get()).toEqual({ count: 3 });
+  });
+
+  it("fails the legacy learning backfill loudly and atomically on orphan references", () => {
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    runMigrations(db, { throughVersion: "0030_learning_evidence_foundation" });
+    const taskId = Number(db.prepare(`
+      INSERT INTO day_tasks
+        (workspace_id, day, title, knowledge_point_id, activity_type)
+      VALUES (?, '2026-08-04', '孤儿知识点任务', 'missing-point', 'study')
+    `).run(LEGACY_WORKSPACE_ID).lastInsertRowid);
+    db.prepare(`
+      INSERT INTO study_sessions
+        (workspace_id, day, task_id, title, duration_minutes)
+      VALUES (?, '2026-08-04', 999999, '孤儿任务 session', 30)
+    `).run(LEGACY_WORKSPACE_ID);
+    db.prepare(`
+      INSERT INTO learning_evidence
+        (id, workspace_id, completion_cycle, day, activity_type, actual_minutes, output,
+         source_type, source_id, idempotency_key)
+      VALUES ('existing-source', ?, 1, '2026-08-05', 'study', 20, 'canonical output',
+              'plugin:test', 'attempt-1', 'existing-source')
+    `).run(LEGACY_WORKSPACE_ID);
+    db.prepare(`
+      INSERT INTO study_sessions
+        (workspace_id, day, title, duration_minutes, output, source_type, source_id)
+      VALUES (?, '2026-08-05', '同源冲突 session', 20, 'legacy output',
+              'plugin:test', 'attempt-1')
+    `).run(LEGACY_WORKSPACE_ID);
+
+    expect(() => runMigrations(db)).toThrow(
+      /day task 引用不存在或跨空间的知识点[\s\S]*study session 引用不存在或跨空间的 day task[\s\S]*legacy study 与同源 canonical evidence 内容冲突/,
+    );
+    expect(getAppliedMigrations(db)).not.toContain("0031_legacy_learning_backfill");
+    expect(db.prepare(`
+      SELECT COUNT(*) AS count FROM planner_tasks WHERE legacy_day_task_id = ?
+    `).get(taskId)).toEqual({ count: 0 });
+    expect(db.prepare("SELECT id FROM learning_evidence ORDER BY id").all()).toEqual([{ id: "existing-source" }]);
+  });
+
   it("adds onboarding and mock-exam product state", () => {
     const db = new Database(":memory:");
     initializeDatabase(db);
