@@ -3,7 +3,7 @@ import type { WorkspaceScope } from "../access-context";
 import { buildCalendarSummaries } from "../calendar-summary";
 import { assertDateKey, shiftDateKey, weekRange } from "../dates";
 import type { CalendarSummary } from "../types";
-import { listDayTaskItems } from "./task-read-model";
+import { listCanonicalTaskPlacements, listDayTaskItems } from "./task-read-model";
 
 export type DaySnapshot = {
   assets: number;
@@ -138,16 +138,16 @@ export function getWeeklyCapacity(
     WHERE workspace_id = @workspaceId AND day BETWEEN @start AND @end
     GROUP BY day
   `).all({ workspaceId: scope.workspaceId, start, end }) as Array<{ day: string; minutes: number }>;
-  const taskRows = db.prepare(`
-    SELECT day, COALESCE(SUM(estimated_minutes), 0) AS minutes
-    FROM day_tasks
-    WHERE workspace_id = @workspaceId
-      AND day BETWEEN @start AND @end
-      AND done = 0
-    GROUP BY day
-  `).all({ workspaceId: scope.workspaceId, start, end }) as Array<{ day: string; minutes: number }>;
   const studiedByDay = new Map(studiedRows.map((row) => [row.day, Number(row.minutes)]));
-  const plannedByDay = new Map(taskRows.map((row) => [row.day, Number(row.minutes)]));
+  const plannedByDay = new Map<string, number>();
+  for (const { day, task } of listCanonicalTaskPlacements(db, scope)) {
+    if (
+      day < start
+      || day > end
+      || (task.status !== "open" && task.status !== "waiting")
+    ) continue;
+    plannedByDay.set(day, (plannedByDay.get(day) ?? 0) + task.estimated_minutes);
+  }
   const days = Array.from({ length: 7 }, (_, index): WeeklyCapacityDay => {
     const day = shiftDateKey(start, index);
     return {
@@ -159,9 +159,9 @@ export function getWeeklyCapacity(
   });
   const studiedMinutes = days.reduce((sum, day) => sum + day.studiedMinutes, 0);
   const plannedMinutes = days.reduce((sum, day) => sum + day.plannedMinutes, 0);
-  const overdueOpenMinutes = taskRows
-    .filter((row) => row.day < today)
-    .reduce((sum, row) => sum + Number(row.minutes), 0);
+  const overdueOpenMinutes = [...plannedByDay]
+    .filter(([day]) => day < today)
+    .reduce((sum, [, minutes]) => sum + minutes, 0);
   const remainingToTarget = Math.max(0, targetMinutes - studiedMinutes);
   const unallocatedMinutes = Math.max(0, targetMinutes - studiedMinutes - plannedMinutes);
   const overloadMinutes = Math.max(0, studiedMinutes + plannedMinutes - targetMinutes);
@@ -606,58 +606,105 @@ function getOutcomeSignals(
         SELECT 1
         FROM review_events r
         WHERE r.workspace_id = t.workspace_id
-          AND r.knowledge_point_id = t.knowledge_point_id
-          AND r.created_at > t.done_at
+          AND r.knowledge_point_id = COALESCE(e.knowledge_point_id, l.knowledge_point_id)
+          AND julianday(r.created_at) > julianday(e.created_at)
           AND r.day <= @end
           AND r.attempt_mode != 'unknown'
       )
       OR EXISTS (
         SELECT 1
-        FROM day_tasks rt
+        FROM planner_tasks rt
+        LEFT JOIN learning_task_links rl
+          ON rl.workspace_id = rt.workspace_id AND rl.task_id = rt.id
+        JOIN learning_evidence re
+          ON re.workspace_id = rt.workspace_id AND re.task_id = rt.id
         WHERE rt.workspace_id = t.workspace_id
-          AND rt.source_type = 'training_retest'
-          AND rt.source_id = CAST(t.id AS TEXT)
-          AND rt.done = 1
-          AND TRIM(rt.verification_outcome) != ''
-          AND rt.day <= @end
+          AND rt.deleted_at IS NULL
+          AND rt.status = 'completed'
+          AND COALESCE(NULLIF(rl.source_type, ''), re.source_type) = 'training_retest'
+          AND (
+            COALESCE(NULLIF(rl.source_id, ''), re.source_id) = t.id
+            OR substr(COALESCE(NULLIF(rl.source_id, ''), re.source_id), 1, length(t.id) + 1) = t.id || ':'
+          )
+          AND re.voided_at IS NULL
+          AND re.corrected_by IS NULL
+          AND re.outcome != 'reopened'
+          AND TRIM(re.verification_outcome) != ''
+          AND re.day <= @end
       ) AS verified,
       EXISTS (
         SELECT 1
         FROM review_events r
         WHERE r.workspace_id = t.workspace_id
-          AND r.knowledge_point_id = t.knowledge_point_id
-          AND r.created_at > t.done_at
+          AND r.knowledge_point_id = COALESCE(e.knowledge_point_id, l.knowledge_point_id)
+          AND julianday(r.created_at) > julianday(e.created_at)
           AND r.day <= @end
           AND r.attempt_mode != 'unknown'
           AND r.score >= 2
       )
       OR EXISTS (
         SELECT 1
-        FROM day_tasks rt
+        FROM planner_tasks rt
+        LEFT JOIN learning_task_links rl
+          ON rl.workspace_id = rt.workspace_id AND rl.task_id = rt.id
+        JOIN learning_evidence re
+          ON re.workspace_id = rt.workspace_id AND re.task_id = rt.id
         WHERE rt.workspace_id = t.workspace_id
-          AND rt.source_type = 'training_retest'
-          AND rt.source_id = CAST(t.id AS TEXT)
-          AND rt.done = 1
-          AND rt.verification_outcome = 'improved'
-          AND rt.day <= @end
+          AND rt.deleted_at IS NULL
+          AND rt.status = 'completed'
+          AND COALESCE(NULLIF(rl.source_type, ''), re.source_type) = 'training_retest'
+          AND (
+            COALESCE(NULLIF(rl.source_id, ''), re.source_id) = t.id
+            OR substr(COALESCE(NULLIF(rl.source_id, ''), re.source_id), 1, length(t.id) + 1) = t.id || ':'
+          )
+          AND re.voided_at IS NULL
+          AND re.corrected_by IS NULL
+          AND re.outcome != 'reopened'
+          AND re.verification_outcome = 'improved'
+          AND re.day <= @end
       ) AS successful
-    FROM day_tasks t
+    FROM planner_tasks t
+    JOIN learning_evidence e
+      ON e.workspace_id = t.workspace_id AND e.task_id = t.id
+    LEFT JOIN learning_task_links l
+      ON l.workspace_id = t.workspace_id AND l.task_id = t.id
     WHERE t.workspace_id = @workspaceId
-      AND t.day BETWEEN @windowStart AND @end
-      AND t.done = 1
-      AND t.done_at IS NOT NULL
-      AND t.knowledge_point_id IS NOT NULL
-      AND TRIM(t.source_type) != ''
+      AND t.deleted_at IS NULL
+      AND t.status = 'completed'
+      AND e.voided_at IS NULL
+      AND e.corrected_by IS NULL
+      AND e.outcome != 'reopened'
+      AND e.day BETWEEN @windowStart AND @end
+      AND COALESCE(e.knowledge_point_id, l.knowledge_point_id) IS NOT NULL
+      AND COALESCE(NULLIF(l.source_type, ''), e.source_type) != ''
       AND (
-        t.actual_minutes IS NOT NULL
-        OR TRIM(t.completion_output) != ''
-        OR TRIM(t.verification_result) != ''
+        e.actual_minutes IS NOT NULL
+        OR TRIM(e.output) != ''
+        OR TRIM(e.verification_result) != ''
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM learning_evidence newer
+        WHERE newer.workspace_id = e.workspace_id
+          AND newer.task_id = e.task_id
+          AND newer.voided_at IS NULL
+          AND newer.corrected_by IS NULL
+          AND newer.outcome != 'reopened'
+          AND (
+            newer.completion_cycle > e.completion_cycle
+            OR (
+              newer.completion_cycle = e.completion_cycle
+              AND (newer.created_at > e.created_at OR (
+                newer.created_at = e.created_at AND newer.id > e.id
+              ))
+            )
+          )
       )
   `).all({
     workspaceId: scope.workspaceId,
     windowStart,
     end,
-  }) as Array<{ id: number; verified: number; successful: number }>;
+  }) as Array<{ id: string; verified: number; successful: number }>;
   const verified = interventionRows.filter((row) => row.verified).length;
 
   return {

@@ -1,6 +1,8 @@
 import type Database from "better-sqlite3";
 import type { WorkspaceScope } from "../access-context";
 import { getAlgorithmProviderDescriptor } from "../algorithm-providers";
+import type { PlannerTaskStatus } from "../planner/types";
+import { resolveTaskPlacement } from "./task-read-model";
 
 export type SearchEntityKind = "knowledge_point" | "mistake" | "task" | "note" | "asset" | "algorithm_problem";
 
@@ -128,25 +130,56 @@ export function searchWorkspace(
 
   const tasks = db.prepare(`
     SELECT
-      id, day, title, subject_code, done, notes, completion_criteria,
-      completion_output, verification_result
-    FROM day_tasks
-    WHERE workspace_id = @workspaceId
+      p.id, p.title, p.subject_code, p.status, p.notes,
+      p.due_date, p.due_at, p.due_timezone,
+      p.scheduled_start_at, p.scheduled_timezone, p.scheduled_all_day,
+      COALESCE(l.completion_criteria, '') AS completion_criteria,
+      COALESCE((
+        SELECT e.output
+        FROM learning_evidence e
+        WHERE e.workspace_id = p.workspace_id AND e.task_id = p.id
+          AND e.voided_at IS NULL AND e.corrected_by IS NULL
+        ORDER BY e.completion_cycle DESC, e.created_at DESC, e.id DESC
+        LIMIT 1
+      ), '') AS completion_output,
+      COALESCE((
+        SELECT e.verification_result
+        FROM learning_evidence e
+        WHERE e.workspace_id = p.workspace_id AND e.task_id = p.id
+          AND e.voided_at IS NULL AND e.corrected_by IS NULL
+        ORDER BY e.completion_cycle DESC, e.created_at DESC, e.id DESC
+        LIMIT 1
+      ), '') AS verification_result
+    FROM planner_tasks p
+    LEFT JOIN learning_task_links l
+      ON l.workspace_id = p.workspace_id AND l.task_id = p.id
+    WHERE p.workspace_id = @workspaceId
+      AND p.deleted_at IS NULL
+      AND p.status != 'canceled'
       AND (
-        title LIKE @pattern ESCAPE '\\'
-        OR notes LIKE @pattern ESCAPE '\\'
-        OR completion_criteria LIKE @pattern ESCAPE '\\'
-        OR completion_output LIKE @pattern ESCAPE '\\'
-        OR verification_result LIKE @pattern ESCAPE '\\'
+        p.title LIKE @pattern ESCAPE '\\'
+        OR p.notes LIKE @pattern ESCAPE '\\'
+        OR COALESCE(l.completion_criteria, '') LIKE @pattern ESCAPE '\\'
+        OR EXISTS (
+          SELECT 1 FROM learning_evidence e
+          WHERE e.workspace_id = p.workspace_id
+            AND e.task_id = p.id
+            AND e.voided_at IS NULL
+            AND e.corrected_by IS NULL
+            AND (
+              e.output LIKE @pattern ESCAPE '\\'
+              OR e.verification_result LIKE @pattern ESCAPE '\\'
+            )
+        )
       )
     ORDER BY
       CASE
-        WHEN title = @query COLLATE NOCASE THEN 0
-        WHEN title LIKE @prefix ESCAPE '\\' THEN 1
+        WHEN p.title = @query COLLATE NOCASE THEN 0
+        WHEN p.title LIKE @prefix ESCAPE '\\' THEN 1
         ELSE 2
       END,
-      day DESC,
-      id DESC
+      p.updated_at DESC,
+      p.id DESC
     LIMIT @limit
   `).all({
     workspaceId: scope.workspaceId,
@@ -155,16 +188,22 @@ export function searchWorkspace(
     prefix,
     limit: perKindLimit,
   }) as Array<{
-    id: number;
-    day: string;
+    id: string;
     title: string;
     subject_code: string | null;
-    done: number;
+    status: PlannerTaskStatus;
     notes: string;
+    due_date: string | null;
+    due_at: string | null;
+    due_timezone: string | null;
+    scheduled_start_at: string | null;
+    scheduled_timezone: string | null;
+    scheduled_all_day: 0 | 1;
     completion_criteria: string;
     completion_output: string;
     verification_result: string;
   }>;
+  const placedTasks = tasks.map((task) => ({ ...task, ...resolveTaskPlacement(task) }));
 
   const notes = db.prepare(`
     SELECT id, day, content, created_at
@@ -317,7 +356,7 @@ export function searchWorkspace(
         notes: `由全局搜索中的错题创建；原记录日期 ${mistake.day}。独立重做并完成一道同类题。`,
       },
     })),
-    ...tasks.map((task): WorkspaceSearchResult => ({
+    ...placedTasks.map((task): WorkspaceSearchResult => ({
       key: `task:${task.id}`,
       kind: "task",
       group: GROUP_LABELS.task,
@@ -329,8 +368,10 @@ export function searchWorkspace(
         || task.notes,
         query,
       ),
-      meta: [task.day, task.subject_code, task.done ? "已完成" : "未完成"].filter(Boolean).join(" · "),
-      href: `/day/${task.day}#task-${task.id}`,
+      meta: [task.day, task.subject_code, taskStatusLabel(task.status)].filter(Boolean).join(" · "),
+      href: task.day
+        ? `/day/${task.day}#task-${encodeURIComponent(task.id)}`
+        : `/tasks?task=${encodeURIComponent(task.id)}`,
       training: null,
     })),
     ...notes.map((note): WorkspaceSearchResult => ({
@@ -374,6 +415,12 @@ export function searchWorkspace(
 function algorithmProviderLabel(value: string): string {
   if (value === "ascend") return "Ascend 原创";
   return getAlgorithmProviderDescriptor(value).label;
+}
+
+function taskStatusLabel(value: PlannerTaskStatus): string {
+  if (value === "completed") return "已完成";
+  if (value === "waiting") return "等待中";
+  return "未完成";
 }
 
 function algorithmDifficultyLabel(value: string): string {

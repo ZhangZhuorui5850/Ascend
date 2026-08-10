@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { createTask, completeTask } from "../application/tasks/commands";
+import {
+  completeTask,
+  createTask,
+  deleteTask,
+  updateTask,
+} from "../application/tasks/commands";
 import { getDaySnapshot, getHomeSnapshot, getLearningAnalytics, getStudyStreak, getWeeklyCapacity } from "./stats";
 import { createTestDb, createTestWorkspace, seedSubjectWithChapter } from "./testing";
 import { LEGACY_WORKSPACE_ID } from "./workspaces";
@@ -88,10 +93,16 @@ describe("learning analytics", () => {
       INSERT INTO assets (day, original_name, safe_name, relative_path)
       VALUES ('2026-07-02', '讲义.pdf', 'lecture.pdf', 'lecture.pdf')
     `).run();
-    db.prepare(`
-      INSERT INTO day_tasks (day, title, done)
-      VALUES ('2026-07-03', '只打勾的任务', 1)
-    `).run();
+    const checkedTask = createTask(db, legacyScope, {
+      clientMutationId: "active-day-task",
+      title: "只打勾的任务",
+      dueDate: "2026-07-03",
+    });
+    completeTask(db, legacyScope, {
+      id: checkedTask.id,
+      expectedVersion: checkedTask.version,
+      day: "2026-07-03",
+    });
 
     const analytics = getLearningAnalytics(db, legacyScope, "2026-07-03");
 
@@ -222,15 +233,44 @@ describe("learning analytics", () => {
       INSERT INTO study_sessions (day, title, duration_minutes)
       VALUES ('2026-07-20', '周一学习', 60), ('2026-07-25', '周六学习', 60)
     `).run();
-    db.prepare(`
-      INSERT INTO day_tasks (day, title, estimated_minutes, done)
-      VALUES
-        ('2026-07-21', '过期未完成', 60, 0),
-        ('2026-07-25', '今天计划', 60, 0),
-        ('2026-07-26', '周日计划', 120, 0),
-        ('2026-07-26', '已经完成', 999, 1),
-        ('2026-07-27', '下周任务', 999, 0)
-    `).run();
+    createTask(db, legacyScope, {
+      clientMutationId: "capacity-overdue",
+      title: "过期未完成",
+      dueDate: "2026-07-21",
+      estimatedMinutes: 60,
+    });
+    createTask(db, legacyScope, {
+      clientMutationId: "capacity-today",
+      title: "今天计划",
+      dueDate: "2026-07-25",
+      estimatedMinutes: 60,
+    });
+    createTask(db, legacyScope, {
+      clientMutationId: "capacity-scheduled-over-due",
+      title: "周日到期但周六执行",
+      dueDate: "2026-07-26",
+      scheduledStartAt: "2026-07-25T01:00:00.000Z",
+      scheduledEndAt: "2026-07-25T03:00:00.000Z",
+      scheduledTimezone: "Asia/Shanghai",
+      estimatedMinutes: 120,
+    });
+    const completed = createTask(db, legacyScope, {
+      clientMutationId: "capacity-completed",
+      title: "已经完成",
+      dueDate: "2026-07-26",
+      estimatedMinutes: 999,
+    });
+    completeTask(db, legacyScope, {
+      id: completed.id,
+      expectedVersion: completed.version,
+      day: "2026-07-25",
+    });
+    createTask(db, legacyScope, {
+      clientMutationId: "capacity-next-week",
+      title: "下周任务",
+      dueDate: "2026-07-27",
+      estimatedMinutes: 999,
+    });
 
     const capacity = getWeeklyCapacity(db, legacyScope, {
       today: "2026-07-25",
@@ -250,6 +290,8 @@ describe("learning analytics", () => {
       completionPercent: 20,
     });
     expect(capacity.days.reduce((sum, day) => sum + day.suggestedMinutes, 0)).toBe(300);
+    expect(capacity.days.find((day) => day.day === "2026-07-25")?.plannedMinutes).toBe(180);
+    expect(capacity.days.find((day) => day.day === "2026-07-26")?.plannedMinutes).toBe(0);
     expect(capacity.days.filter((day) => day.suggestedMinutes > 0).map((day) => day.day))
       .toEqual(["2026-07-25", "2026-07-26"]);
   });
@@ -262,10 +304,18 @@ describe("learning analytics", () => {
       INSERT INTO study_sessions (workspace_id, day, title, duration_minutes)
       VALUES (?, '2026-07-24', '我的学习', 250), (?, '2026-07-24', '别人的学习', 900)
     `).run(mine.workspaceId, theirs.workspaceId);
-    db.prepare(`
-      INSERT INTO day_tasks (workspace_id, day, title, estimated_minutes)
-      VALUES (?, '2026-07-25', '我的计划', 100), (?, '2026-07-25', '别人的计划', 900)
-    `).run(mine.workspaceId, theirs.workspaceId);
+    createTask(db, mine, {
+      clientMutationId: "mine-capacity",
+      title: "我的计划",
+      dueDate: "2026-07-25",
+      estimatedMinutes: 100,
+    });
+    createTask(db, theirs, {
+      clientMutationId: "their-capacity",
+      title: "别人的计划",
+      dueDate: "2026-07-25",
+      estimatedMinutes: 900,
+    });
 
     const capacity = getWeeklyCapacity(db, mine, {
       today: "2026-07-25",
@@ -279,6 +329,52 @@ describe("learning analytics", () => {
       overloadMinutes: 50,
     });
     expect(capacity.days.every((day) => day.suggestedMinutes === 0)).toBe(true);
+  });
+
+  it("excludes deleted, canceled, and completed canonical tasks from weekly capacity", () => {
+    const db = createTestDb();
+    const scope = createTestWorkspace(db);
+    const deleted = createTask(db, scope, {
+      clientMutationId: "capacity-deleted",
+      title: "Deleted",
+      dueDate: "2026-07-25",
+      estimatedMinutes: 400,
+    });
+    deleteTask(db, scope, {
+      id: deleted.id,
+      expectedVersion: deleted.version,
+      clientMutationId: "capacity-delete-op",
+    });
+    const canceled = createTask(db, scope, {
+      clientMutationId: "capacity-canceled",
+      title: "Canceled",
+      dueDate: "2026-07-25",
+      estimatedMinutes: 400,
+    });
+    updateTask(db, scope, {
+      id: canceled.id,
+      expectedVersion: canceled.version,
+      status: "canceled",
+    });
+    const completed = createTask(db, scope, {
+      clientMutationId: "capacity-done",
+      title: "Done",
+      dueDate: "2026-07-25",
+      estimatedMinutes: 400,
+    });
+    completeTask(db, scope, {
+      id: completed.id,
+      expectedVersion: completed.version,
+      day: "2026-07-25",
+    });
+
+    expect(getWeeklyCapacity(db, scope, {
+      today: "2026-07-25",
+      targetMinutes: 300,
+    })).toMatchObject({
+      plannedMinutes: 0,
+      overdueOpenMinutes: 0,
+    });
   });
 
   it("validates weekly target bounds", () => {
@@ -317,23 +413,92 @@ describe("learning analytics", () => {
         ('2026-06-01', '较老积压', 0, '2026-06-25'),
         ('2026-07-20', '今天到期', 0, '2026-07-25')
     `).run();
+    const reviewed = createTask(db, legacyScope, {
+      clientMutationId: "outcome-reviewed",
+      title: "已复测干预",
+      dueDate: "2026-07-15",
+    });
+    completeTask(db, legacyScope, {
+      id: reviewed.id,
+      expectedVersion: reviewed.version,
+      day: "2026-07-15",
+      evidence: {
+        knowledgePointId: "kp1",
+        sourceType: "weak_point",
+        sourceId: "reviewed-intervention",
+        output: "完成训练",
+      },
+    });
+    const structuredParent = createTask(db, legacyScope, {
+      clientMutationId: "outcome-structured",
+      title: "结构化复测干预",
+      dueDate: "2026-07-15",
+    });
+    completeTask(db, legacyScope, {
+      id: structuredParent.id,
+      expectedVersion: structuredParent.version,
+      day: "2026-07-15",
+      evidence: {
+        knowledgePointId: "kp2",
+        sourceType: "weak_point",
+        sourceId: "structured-intervention",
+        output: "完成训练",
+        outcome: "practiced",
+      },
+    });
+    const unverified = createTask(db, legacyScope, {
+      clientMutationId: "outcome-unverified",
+      title: "未复测干预",
+      dueDate: "2026-07-15",
+    });
+    completeTask(db, legacyScope, {
+      id: unverified.id,
+      expectedVersion: unverified.version,
+      day: "2026-07-15",
+      evidence: {
+        knowledgePointId: "kp2",
+        sourceType: "weak_point",
+        sourceId: "unverified-intervention",
+        output: "完成训练",
+      },
+    });
+    const noEvidence = createTask(db, legacyScope, {
+      clientMutationId: "outcome-no-evidence",
+      title: "无完成证据",
+      dueDate: "2026-07-15",
+    });
+    completeTask(db, legacyScope, {
+      id: noEvidence.id,
+      expectedVersion: noEvidence.version,
+      day: "2026-07-15",
+      evidence: {
+        knowledgePointId: "kp2",
+        sourceType: "weak_point",
+        sourceId: "no-evidence-intervention",
+      },
+    });
+    const retest = createTask(db, legacyScope, {
+      clientMutationId: "outcome-retest",
+      title: "短复测",
+      dueDate: "2026-07-18",
+    });
+    completeTask(db, legacyScope, {
+      id: retest.id,
+      expectedVersion: retest.version,
+      day: "2026-07-18",
+      evidence: {
+        knowledgePointId: "kp2",
+        sourceType: "training_retest",
+        sourceId: `${structuredParent.id}:${structuredParent.version + 1}`,
+        outcome: "verified",
+        verificationOutcome: "improved",
+      },
+    });
     db.prepare(`
-      INSERT INTO day_tasks
-        (day, title, done, done_at, knowledge_point_id, source_type, completion_output)
-      VALUES
-        ('2026-07-15', '已复测干预', 1, '2026-07-15 10:00:00', 'kp1', 'weak_point', '完成训练'),
-        ('2026-07-15', '结构化复测干预', 1, '2026-07-15 10:00:00', 'kp2', 'weak_point', '完成训练'),
-        ('2026-07-15', '未复测干预', 1, '2026-07-15 10:00:00', 'kp2', 'weak_point', '完成训练'),
-        ('2026-07-15', '无完成证据', 1, '2026-07-15 10:00:00', 'kp2', 'weak_point', '')
+      UPDATE review_events
+      SET created_at = '2099-01-01 00:00:00'
+      WHERE knowledge_point_id = 'kp1'
     `).run();
-    const structuredParent = db.prepare(`
-      SELECT id FROM day_tasks WHERE title = '结构化复测干预'
-    `).get() as { id: number };
-    db.prepare(`
-      INSERT INTO day_tasks
-        (day, title, done, done_at, knowledge_point_id, source_type, source_id, verification_outcome)
-      VALUES ('2026-07-18', '短复测', 1, '2026-07-18 10:00:00', 'kp2', 'training_retest', ?, 'improved')
-    `).run(String(structuredParent.id));
 
     const outcomes = getLearningAnalytics(db, legacyScope, "2026-07-25").outcomes;
 

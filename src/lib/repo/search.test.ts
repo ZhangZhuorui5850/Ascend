@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { addNote, addTask } from "./planner";
+import {
+  completeTask,
+  createTask,
+  deleteTask,
+  updateTask,
+} from "../application/tasks/commands";
+import { addNote } from "./planner";
 import { createMistake } from "./reviews";
 import { searchWorkspace } from "./search";
 import { createAlgorithmProblem } from "./algorithms";
@@ -11,11 +17,11 @@ describe("workspace search", () => {
     const db = createTestDb();
     const scope = createTestWorkspace(db, { email: "search@example.com" });
     seedSubjectWithChapter(db, scope);
-    const task = addTask(db, scope, {
-      day: "2026-07-25",
+    const task = createTask(db, scope, {
+      clientMutationId: "search-matrix-task",
+      dueDate: "2026-07-25",
       title: "矩阵乘法训练",
-      knowledgePointId: "kp1",
-      completionCriteria: "完成矩阵乘法 20 题",
+      subjectCode: "M1",
     });
     const note = addNote(db, scope, {
       day: "2026-07-25",
@@ -80,9 +86,21 @@ describe("workspace search", () => {
     const db = createTestDb();
     const mine = createTestWorkspace(db, { email: "mine-search@example.com" });
     const theirs = createTestWorkspace(db, { email: "their-search@example.com" });
-    addTask(db, mine, { day: "2026-07-25", title: "完成率 100%_核对" });
-    addTask(db, mine, { day: "2026-07-25", title: "普通任务" });
-    addTask(db, theirs, { day: "2026-07-25", title: "完成率 100%_别人的秘密" });
+    createTask(db, mine, {
+      clientMutationId: "mine-literal",
+      dueDate: "2026-07-25",
+      title: "完成率 100%_核对",
+    });
+    createTask(db, mine, {
+      clientMutationId: "mine-ordinary",
+      dueDate: "2026-07-25",
+      title: "普通任务",
+    });
+    createTask(db, theirs, {
+      clientMutationId: "theirs-literal",
+      dueDate: "2026-07-25",
+      title: "完成率 100%_别人的秘密",
+    });
 
     const results = searchWorkspace(db, mine, "%_");
 
@@ -94,7 +112,11 @@ describe("workspace search", () => {
     const db = createTestDb();
     const scope = createTestWorkspace(db);
     for (let index = 0; index < 8; index += 1) {
-      addTask(db, scope, { day: "2026-07-25", title: `同名训练 ${index}` });
+      createTask(db, scope, {
+        clientMutationId: `bounded-${index}`,
+        dueDate: "2026-07-25",
+        title: `同名训练 ${index}`,
+      });
     }
 
     expect(searchWorkspace(db, scope, "   ")).toEqual([]);
@@ -116,5 +138,57 @@ describe("workspace search", () => {
     setPluginEnabled(db, scope, "algorithms", false);
     expect(searchWorkspace(db, scope, "二分").map((result) => result.kind))
       .not.toContain("algorithm_problem");
+  });
+
+  it("uses scheduled timezone placement, searches completion evidence, and hides deleted or canceled tasks", () => {
+    const db = createTestDb();
+    const scope = createTestWorkspace(db);
+    const timed = createTask(db, scope, {
+      clientMutationId: "search-timed",
+      title: "普通学习任务",
+      dueDate: "2026-08-12",
+      scheduledStartAt: "2026-08-09T16:30:00.000Z",
+      scheduledEndAt: "2026-08-09T17:00:00.000Z",
+      scheduledTimezone: "Asia/Shanghai",
+    });
+    expect(timed.legacy_day_task_id).toBeNull();
+    completeTask(db, scope, {
+      id: timed.id,
+      expectedVersion: timed.version,
+      day: "2026-08-10",
+      evidence: { output: "独特矩阵产出" },
+    });
+    const deleted = createTask(db, scope, {
+      clientMutationId: "search-deleted",
+      title: "隐藏矩阵任务",
+      dueDate: "2026-08-10",
+    });
+    deleteTask(db, scope, {
+      id: deleted.id,
+      expectedVersion: deleted.version,
+      clientMutationId: "delete-search-task",
+    });
+    const canceled = createTask(db, scope, {
+      clientMutationId: "search-canceled",
+      title: "取消矩阵任务",
+      dueDate: "2026-08-10",
+    });
+    updateTask(db, scope, {
+      id: canceled.id,
+      expectedVersion: canceled.version,
+      status: "canceled",
+    });
+
+    const results = searchWorkspace(db, scope, "矩阵").filter((result) => result.kind === "task");
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        key: `task:${timed.id}`,
+        href: `/day/2026-08-10#task-${timed.id}`,
+        meta: expect.stringContaining("已完成"),
+      }),
+    ]);
+    expect(JSON.stringify(results)).not.toContain(deleted.id);
+    expect(JSON.stringify(results)).not.toContain(canceled.id);
   });
 });
