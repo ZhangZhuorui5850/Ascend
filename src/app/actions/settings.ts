@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { actionFailure } from "@/lib/action-failure";
+import { completeOnboardingFlow } from "@/lib/application/onboarding/complete-onboarding";
 import { getDb } from "@/lib/db";
 import {
-  completeOnboarding,
   saveModulePrefs,
   saveSettings,
   type ExamCountdown,
@@ -47,16 +47,20 @@ export async function saveModulePrefsAction(input: { modulePrefs: ModulePref[] }
 }
 
 export async function completeOnboardingAction(input: {
+  clientMutationId: string;
+  day: string;
   learningGoal: string;
-  weeklyMinutes: number;
-  enabledSubjectCodes: string[];
-  examCountdowns: ExamCountdown[];
-  dailyReviewLimit: number;
+  subject: { code: string; name?: string };
+  firstTaskTitle: string;
 }): Promise<ActionResult> {
   try {
     const access = await requireWorkspace();
-    completeOnboarding(getDb(), access, input);
+    completeOnboardingFlow(getDb(), access, input);
     revalidatePath("/");
+    revalidatePath("/tasks");
+    revalidatePath("/calendar");
+    revalidatePath(`/day/${input.day}`);
+    revalidatePath("/subjects");
     revalidatePath("/settings");
     return { ok: true };
   } catch (error) {
