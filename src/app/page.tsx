@@ -8,9 +8,9 @@ import { requirePageWorkspace } from "@/lib/page-auth";
 import { getPluginTodayRecommendations } from "@/lib/plugins/runtime";
 import { getTomorrowPlan } from "@/lib/repo/days";
 import { getSubjectOverviews, TRACK_NAMES } from "@/lib/repo/knowledge";
-import { listTasks } from "@/lib/repo/planner";
 import { getSettings } from "@/lib/repo/settings";
 import { getHomeSnapshot, getLearningAnalytics, getWeeklyCapacity } from "@/lib/repo/stats";
+import { listDayTaskItems } from "@/lib/repo/task-read-model";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +36,7 @@ export default async function HomePage() {
   const enabledCodes = new Set(subjects.map((subject) => subject.code));
 
   // 已排时任务按时刻前置，未排时按优先级尾随——这是「今日时间线」的克制版
-  const openTaskList = listTasks(db, access, today)
+  const openTaskList = listDayTaskItems(db, access, today)
     .filter((task) => !task.done)
     .sort((a, b) => {
       if (a.scheduled_start && b.scheduled_start) {

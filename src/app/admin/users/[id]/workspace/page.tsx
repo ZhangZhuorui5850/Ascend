@@ -5,8 +5,8 @@ import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { getAdminUser } from "@/lib/repo/admin";
 import { getSubjectOverviews } from "@/lib/repo/knowledge";
-import { listTasks } from "@/lib/repo/planner";
 import { getHomeSnapshot } from "@/lib/repo/stats";
+import { listDayTaskItems } from "@/lib/repo/task-read-model";
 
 export default async function AdminUserWorkspacePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -16,7 +16,7 @@ export default async function AdminUserWorkspacePage({ params }: { params: Promi
   const scope = { workspaceId: user.workspace_id };
   const today = todayKey();
   const snapshot = getHomeSnapshot(db, scope, today);
-  const tasks = listTasks(db, scope, today);
+  const tasks = listDayTaskItems(db, scope, today);
   const subjects = getSubjectOverviews(db, scope, today);
   const assets = db.prepare(`
     SELECT id, original_name, day, size FROM assets

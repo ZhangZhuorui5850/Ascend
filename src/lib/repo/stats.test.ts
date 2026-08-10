@@ -1,11 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { getDaySnapshot, getLearningAnalytics, getStudyStreak, getWeeklyCapacity } from "./stats";
+import { createTask, completeTask } from "../application/tasks/commands";
+import { getDaySnapshot, getHomeSnapshot, getLearningAnalytics, getStudyStreak, getWeeklyCapacity } from "./stats";
 import { createTestDb, createTestWorkspace, seedSubjectWithChapter } from "./testing";
 import { LEGACY_WORKSPACE_ID } from "./workspaces";
 
 const legacyScope = { workspaceId: LEGACY_WORKSPACE_ID };
 
 describe("learning analytics", () => {
+  it("counts canonical Planner-only tasks in the Home snapshot", () => {
+    const db = createTestDb();
+    const scope = createTestWorkspace(db);
+    const open = createTask(db, scope, {
+      clientMutationId: "home-open",
+      title: "Open",
+      dueDate: "2026-08-10",
+    });
+    const done = createTask(db, scope, {
+      clientMutationId: "home-done",
+      title: "Done",
+      dueDate: "2026-08-10",
+    });
+    completeTask(db, scope, { id: done.id, expectedVersion: done.version });
+
+    expect(getHomeSnapshot(db, scope, "2026-08-10")).toMatchObject({
+      openTasks: 1,
+      doneTasks: 1,
+    });
+    expect(open.legacy_day_task_id).toBeNull();
+  });
+
   it("isolates daily totals and streaks by workspace", () => {
     const db = createTestDb();
     const a = createTestWorkspace(db, { userId: "user-a", email: "a@example.com" });

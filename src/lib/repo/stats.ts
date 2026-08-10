@@ -3,6 +3,7 @@ import type { WorkspaceScope } from "../access-context";
 import { buildCalendarSummaries } from "../calendar-summary";
 import { assertDateKey, shiftDateKey, weekRange } from "../dates";
 import type { CalendarSummary } from "../types";
+import { listDayTaskItems } from "./task-read-model";
 
 export type DaySnapshot = {
   assets: number;
@@ -75,24 +76,19 @@ export function getHomeSnapshot(db: Database.Database, scope: WorkspaceScope, to
        WHERE workspace_id = @workspaceId AND next_review IS NOT NULL AND next_review <= @today) AS dueReviews,
       (SELECT COUNT(*) FROM mistakes
        WHERE workspace_id = @workspaceId AND graduated = 0
-         AND next_review IS NOT NULL AND next_review <= @today) AS dueMistakes,
-      (SELECT COUNT(*) FROM day_tasks
-       WHERE workspace_id = @workspaceId AND day = @today AND done = 0) AS openTasks,
-      (SELECT COUNT(*) FROM day_tasks
-       WHERE workspace_id = @workspaceId AND day = @today AND done = 1) AS doneTasks
+         AND next_review IS NOT NULL AND next_review <= @today) AS dueMistakes
   `).get({ workspaceId: scope.workspaceId, today }) as {
     dueReviews: number;
     dueMistakes: number;
-    openTasks: number;
-    doneTasks: number;
   };
+  const tasks = listDayTaskItems(db, scope, today);
 
   return {
     today: getDaySnapshot(db, scope, today),
     dueReviews: counts.dueReviews,
     dueMistakes: counts.dueMistakes,
-    openTasks: counts.openTasks,
-    doneTasks: counts.doneTasks,
+    openTasks: tasks.filter((task) => !task.done).length,
+    doneTasks: tasks.filter((task) => task.done).length,
     streak: getStudyStreak(db, scope, today),
   };
 }
