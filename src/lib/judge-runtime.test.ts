@@ -82,6 +82,18 @@ describe("judge runtime orchestration", () => {
     });
     const accepted = await refreshAlgorithmSubmission(db, scope, queued.id);
     expect(accepted).toMatchObject({ status: "AC", timeMs: 4, memoryKb: 900 });
+    expect(db.prepare(`
+      SELECT source_type, source_id, idempotency_key
+      FROM learning_evidence WHERE workspace_id = ?
+    `).get(scope.workspaceId)).toEqual({
+      source_type: "plugin:algorithms",
+      source_id: `attempt:${accepted.attemptId}`,
+      idempotency_key: `plugin:algorithms:attempt:${accepted.attemptId}:formal-evaluation`,
+    });
+    expect((await refreshAlgorithmSubmission(db, scope, queued.id)).status).toBe("AC");
+    expect(db.prepare(`
+      SELECT COUNT(*) AS count FROM learning_evidence WHERE workspace_id = ?
+    `).get(scope.workspaceId)).toEqual({ count: 1 });
     expect(request).toHaveBeenCalledTimes(2);
   });
 
@@ -113,6 +125,67 @@ describe("judge runtime orchestration", () => {
     })).rejects.toThrow("试点尚未获批");
     expect(request).not.toHaveBeenCalled();
     expect(db.prepare("SELECT COUNT(*) AS count FROM algorithm_submissions").get()).toEqual({ count: 0 });
+  });
+
+  it("does not downgrade a local evidence failure into a gateway retry state", async () => {
+    const db = createTestDb();
+    const scope = createTestWorkspace(db);
+    setPluginEnabled(db, scope, "algorithms", true);
+    ensureManagedAlgorithmCatalog(db, scope);
+    const problem = db.prepare(`
+      SELECT id FROM algorithm_problems
+      WHERE workspace_id = ? AND judge_problem_ref = 'ascend:foundation:sum-two:v1'
+    `).get(scope.workspaceId) as { id: number };
+    const request = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: "submission:runtime:atomic",
+        status: "QUEUED",
+      }), { status: 202 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: "submission:runtime:atomic",
+        status: "AC",
+        timeMs: 4,
+        memoryKb: 900,
+        publicFeedback: [],
+        judgedAt: "2026-07-26T11:00:00Z",
+      }), { status: 200 }));
+    vi.stubGlobal("fetch", request);
+    const queued = await submitAlgorithmCode(db, scope, {
+      operationId: "runtime:operation:atomic",
+      sessionId: "runtime:session:atomic",
+      problemId: problem.id,
+      day: "2026-07-26",
+      language: "python3",
+      sourceCode: "a,b=map(int,input().split());print(a+b)",
+      activeSeconds: 90,
+      preConfidence: 2,
+      planText: "读取两个整数后在常数时间内求和",
+    });
+    db.exec(`
+      CREATE TRIGGER reject_runtime_algorithm_evidence
+      BEFORE INSERT ON learning_evidence
+      WHEN NEW.source_type = 'plugin:algorithms'
+      BEGIN
+        SELECT RAISE(ABORT, 'forced runtime evidence failure');
+      END;
+    `);
+
+    await expect(refreshAlgorithmSubmission(db, scope, queued.id))
+      .rejects.toThrow("forced runtime evidence failure");
+    expect(db.prepare(`
+      SELECT status, failure_code FROM algorithm_submissions
+      WHERE workspace_id = ? AND id = ?
+    `).get(scope.workspaceId, queued.id)).toEqual({
+      status: "QUEUED",
+      failure_code: "",
+    });
+    expect(db.prepare(`
+      SELECT outcome, ended_at FROM algorithm_attempts
+      WHERE workspace_id = ? AND id = ?
+    `).get(scope.workspaceId, queued.attemptId)).toEqual({
+      outcome: "in_progress",
+      ended_at: null,
+    });
   });
 
   it("retries polling the same remote submission without creating duplicate work", async () => {

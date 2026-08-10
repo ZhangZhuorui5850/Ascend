@@ -101,7 +101,7 @@ describe("algorithm submission repo", () => {
     }, key, 0)).toThrow("幂等键");
   });
 
-  it("finalizes AC evidence, review and active study time exactly once", () => {
+  it("finalizes AC domain evidence and review without owning the study projection", () => {
     const { db, scope, problemId } = setup();
     const prepared = prepareAlgorithmSubmission(db, scope, {
       operationId: "submit:operation:ac01",
@@ -148,13 +148,8 @@ describe("algorithm submission repo", () => {
       WHERE workspace_id = ? AND source_attempt_id = ?
     `).get(scope.workspaceId, prepared.submission.attemptId)).toEqual({ count: 1 });
     expect(db.prepare(`
-      SELECT duration_minutes, output, source_id FROM study_sessions
-      WHERE workspace_id = ? AND source_type = 'plugin:algorithms'
-    `).get(scope.workspaceId)).toMatchObject({
-      duration_minutes: 3,
-      output: "AC · 正式评测",
-      source_id: String(prepared.submission.attemptId),
-    });
+      SELECT COUNT(*) AS count FROM study_sessions WHERE workspace_id = ?
+    `).get(scope.workspaceId)).toEqual({ count: 0 });
     expect(() => readAlgorithmCodeBlob(
       db,
       scope,

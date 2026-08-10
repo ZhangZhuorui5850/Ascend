@@ -38,6 +38,10 @@ const TERMINAL_STATUSES = new Set<JudgeStatus>([
 ]);
 const LEARNING_STATUSES = new Set<JudgeStatus>(["AC", "WA", "TLE", "MLE", "RE", "CE"]);
 
+export function isTerminalAlgorithmSubmissionStatus(status: JudgeStatus): boolean {
+  return TERMINAL_STATUSES.has(status);
+}
+
 export type AlgorithmSubmission = {
   id: number;
   attemptId: number;
@@ -56,6 +60,13 @@ export type AlgorithmSubmission = {
   failureCode: string;
   submittedAt: string;
   judgedAt: string | null;
+};
+
+export type AlgorithmAttemptStudyContext = {
+  attemptId: number;
+  day: string;
+  title: string;
+  activeSeconds: number;
 };
 
 type SubmissionRow = {
@@ -270,7 +281,7 @@ export function prepareAlgorithmSubmission(
       transferSource?.problemId ?? null,
     );
     const attempt = db.prepare(`
-      SELECT id, problem_id, language, review_kind, transfer_source_problem_id
+      SELECT id, problem_id, language, review_kind, transfer_source_problem_id, ended_at
       FROM algorithm_attempts
       WHERE workspace_id = ? AND session_id = ?
     `).get(scope.workspaceId, input.sessionId) as {
@@ -279,6 +290,7 @@ export function prepareAlgorithmSubmission(
       language: string;
       review_kind: string;
       transfer_source_problem_id: number | null;
+      ended_at: string | null;
     };
     if (
       attempt.problem_id !== problem.id
@@ -288,6 +300,7 @@ export function prepareAlgorithmSubmission(
     ) {
       throw new Error("同一训练会话不能切换题目、语言或训练类型");
     }
+    if (attempt.ended_at) throw new Error("训练会话已结束，请开始新训练");
     db.prepare(`
       UPDATE algorithm_attempts
       SET active_seconds = MAX(active_seconds, ?),
@@ -402,7 +415,10 @@ export function applyGatewaySubmissionResult(
   if (current.gatewaySubmissionId && current.gatewaySubmissionId !== result.id) {
     throw new Error("Judge submission ID 不匹配");
   }
-  const terminal = TERMINAL_STATUSES.has(result.status);
+  if (isTerminalAlgorithmSubmissionStatus(current.status) && current.status !== result.status) {
+    throw new Error("算法提交已进入不可变终态");
+  }
+  const terminal = isTerminalAlgorithmSubmissionStatus(result.status);
   db.transaction(() => {
     db.prepare(`
       UPDATE algorithm_submissions
@@ -463,6 +479,34 @@ export function getSubmissionByOperationId(
   return row ? mapSubmission(row) : null;
 }
 
+export function getAlgorithmAttemptStudyContext(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  attemptId: number,
+): AlgorithmAttemptStudyContext {
+  requirePluginEnabled(db, scope, "algorithms");
+  const normalizedId = boundedInteger(attemptId, 1, Number.MAX_SAFE_INTEGER, "训练记录");
+  const row = db.prepare(`
+    SELECT a.id, a.day, a.active_seconds, p.title
+    FROM algorithm_attempts a
+    JOIN algorithm_problems p
+      ON p.workspace_id = a.workspace_id AND p.id = a.problem_id
+    WHERE a.workspace_id = ? AND a.id = ?
+  `).get(scope.workspaceId, normalizedId) as {
+    id: number;
+    day: string;
+    active_seconds: number;
+    title: string;
+  } | undefined;
+  if (!row) throw new Error("算法训练记录不存在");
+  return {
+    attemptId: row.id,
+    day: row.day,
+    title: row.title,
+    activeSeconds: row.active_seconds,
+  };
+}
+
 function finalizeAttempt(
   db: Database.Database,
   scope: WorkspaceScope,
@@ -497,7 +541,6 @@ function finalizeAttempt(
       scope.workspaceId,
       attempt.id,
     );
-    upsertAlgorithmStudySession(db, scope, attempt, status);
     return;
   }
   const independent = status === "AC" && attempt.max_hint_level <= 1;
@@ -555,7 +598,6 @@ function finalizeAttempt(
     VALUES (?, ?, ?, ?, ?)
   `).run(scope.workspaceId, attempt.problem_id, attempt.id, reviewKind, nextReview);
 
-  upsertAlgorithmStudySession(db, scope, attempt, status);
   if (status !== "AC") {
     db.prepare(`
       INSERT OR IGNORE INTO algorithm_error_cases
@@ -603,42 +645,6 @@ function completePendingAlgorithmReview(
       WHERE workspace_id = ? AND id = ?
     `).run(scope.workspaceId, attempt.transfer_source_problem_id);
   }
-}
-
-function upsertAlgorithmStudySession(
-  db: Database.Database,
-  scope: WorkspaceScope,
-  attempt: {
-    id: number;
-    problem_id: number;
-    day: string;
-    active_seconds: number;
-  },
-  status: JudgeStatus,
-): void {
-  if (attempt.active_seconds <= 0) return;
-  const problem = db.prepare(`
-    SELECT title FROM algorithm_problems WHERE workspace_id = ? AND id = ?
-  `).get(scope.workspaceId, attempt.problem_id) as { title: string };
-  db.prepare(`
-    INSERT INTO study_sessions
-      (workspace_id, day, title, duration_minutes, output, source_type, source_id)
-    VALUES (?, ?, ?, ?, ?, 'plugin:algorithms', ?)
-    ON CONFLICT(workspace_id, source_type, source_id)
-      WHERE source_type != '' AND source_id != ''
-    DO UPDATE SET
-      day = excluded.day,
-      title = excluded.title,
-      duration_minutes = excluded.duration_minutes,
-      output = excluded.output
-  `).run(
-    scope.workspaceId,
-    attempt.day,
-    `算法训练：${problem.title}`,
-    Math.ceil(attempt.active_seconds / 60),
-    `${status} · 正式评测`,
-    String(attempt.id),
-  );
 }
 
 function resolveAlgorithmTaskId(

@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import type { WorkspaceScope } from "./access-context";
+import { finalizeAlgorithmSubmission } from "./application/learning/finalize-algorithm-submission";
 import {
   getJudgeCodeRetentionDays,
   loadJudgeCodeKey,
@@ -9,12 +10,13 @@ import {
   JudgeGatewayClient,
   JudgeGatewayError,
   loadJudgeGatewayConfig,
+  type JudgeGatewayResult,
   type JudgeLanguage,
 } from "./judge-gateway";
 import {
-  applyGatewaySubmissionResult,
   attachGatewaySubmission,
   getAlgorithmSubmission,
+  isTerminalAlgorithmSubmissionStatus,
   markGatewaySubmissionFailure,
   prepareAlgorithmSubmission,
   type AlgorithmSubmission,
@@ -128,19 +130,14 @@ export async function submitAlgorithmCode(
   }
   const client = requireGatewayClient();
   const startedAt = Date.now();
+  let remote: { id: string; status: "QUEUED" | "RUNNING" };
   try {
-    const remote = await client.createSubmission({
+    remote = await client.createSubmission({
       idempotencyKey: input.operationId,
       problemRef: prepared.problemRef,
       language: input.language,
       sourceCode: prepared.sourceCode,
       mode: input.submissionKind || "formal",
-    });
-    return attachGatewaySubmission(db, scope, {
-      submissionId: prepared.submission.id,
-      gatewaySubmissionId: remote.id,
-      status: remote.status,
-      gatewayLatencyMs: Date.now() - startedAt,
     });
   } catch (error) {
     const normalized = error instanceof JudgeGatewayError
@@ -156,17 +153,27 @@ export async function submitAlgorithmCode(
         retryable: true,
       });
     }
-    return applyGatewaySubmissionResult(db, scope, prepared.submission.id, {
-      id: "",
-      status: "JE",
-      timeMs: null,
-      memoryKb: null,
-      compilerExcerpt: "",
-      publicFeedback: [],
-      failureCode: normalized.code,
-      judgedAt: new Date().toISOString(),
-    }, retentionDays);
+    return finalizeAlgorithmSubmission(db, scope, {
+      submissionId: prepared.submission.id,
+      result: {
+        id: "",
+        status: "JE",
+        timeMs: null,
+        memoryKb: null,
+        compilerExcerpt: "",
+        publicFeedback: [],
+        failureCode: normalized.code,
+        judgedAt: new Date().toISOString(),
+      },
+      retentionDays,
+    });
   }
+  return attachGatewaySubmission(db, scope, {
+    submissionId: prepared.submission.id,
+    gatewaySubmissionId: remote.id,
+    status: remote.status,
+    gatewayLatencyMs: Date.now() - startedAt,
+  });
 }
 
 export async function refreshAlgorithmSubmission(
@@ -176,18 +183,27 @@ export async function refreshAlgorithmSubmission(
 ): Promise<AlgorithmSubmission> {
   requireAlgorithmPilotJudgeAccess(db, scope);
   const submission = getAlgorithmSubmission(db, scope, submissionId);
-  if (isTerminal(submission.status)) return submission;
+  if (isTerminalAlgorithmSubmissionStatus(submission.status)) {
+    return finalizeAlgorithmSubmission(db, scope, {
+      submissionId: submission.id,
+      result: {
+        id: submission.gatewaySubmissionId,
+        status: submission.status,
+        timeMs: submission.timeMs,
+        memoryKb: submission.memoryKb,
+        compilerExcerpt: submission.compilerExcerpt,
+        publicFeedback: submission.publicFeedback,
+        failureCode: submission.failureCode,
+        judgedAt: submission.judgedAt ?? new Date().toISOString(),
+      },
+      retentionDays: getJudgeCodeRetentionDays(),
+    });
+  }
   if (!submission.gatewaySubmissionId) return submission;
   const client = requireGatewayClient();
+  let result: JudgeGatewayResult;
   try {
-    const result = await client.getSubmission(submission.gatewaySubmissionId);
-    return applyGatewaySubmissionResult(
-      db,
-      scope,
-      submission.id,
-      result,
-      getJudgeCodeRetentionDays(),
-    );
+    result = await client.getSubmission(submission.gatewaySubmissionId);
   } catch (error) {
     const normalized = error instanceof JudgeGatewayError
       ? error
@@ -201,6 +217,11 @@ export async function refreshAlgorithmSubmission(
       retryable: true,
     });
   }
+  return finalizeAlgorithmSubmission(db, scope, {
+    submissionId: submission.id,
+    result,
+    retentionDays: getJudgeCodeRetentionDays(),
+  });
 }
 
 function requireGatewayClient(): JudgeGatewayClient {
@@ -218,8 +239,4 @@ function requireCodeKey() {
   const key = loadJudgeCodeKey();
   if (!key) throw new Error("尚未配置代码加密密钥");
   return key;
-}
-
-function isTerminal(status: AlgorithmSubmission["status"]): boolean {
-  return ["AC", "WA", "TLE", "MLE", "RE", "CE", "JE", "CANCELLED"].includes(status);
 }

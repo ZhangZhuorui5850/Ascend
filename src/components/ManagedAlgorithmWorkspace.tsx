@@ -155,7 +155,10 @@ export function ManagedAlgorithmWorkspace({
           return;
         }
         setSubmission(result.submission);
-        if (TERMINAL.has(result.submission.status)) setBusy(null);
+        if (TERMINAL.has(result.submission.status)) {
+          setBusy(null);
+          closeFormalSession(result.submission);
+        }
       });
     }, 1_500);
     return () => window.clearTimeout(timer);
@@ -274,6 +277,7 @@ export function ManagedAlgorithmWorkspace({
     if (TERMINAL.has(result.submission.status) || result.submission.status === "RETRYABLE_ERROR") {
       setBusy(null);
     }
+    closeFormalSession(result.submission);
   }
 
   async function retrySubmission(): Promise<void> {
@@ -297,6 +301,20 @@ export function ManagedAlgorithmWorkspace({
       TERMINAL.has(result.submission.status)
       || result.submission.status === "RETRYABLE_ERROR"
     ) setBusy(null);
+    closeFormalSession(result.submission);
+  }
+
+  function closeFormalSession(result: AlgorithmSubmission): void {
+    if (result.submissionKind !== "formal" || !TERMINAL.has(result.status)) return;
+    sessionIdRef.current = "";
+    setOperationId("");
+    setActiveSeconds(0);
+    setMaxHintLevel(0);
+    setHints([]);
+    setPlanText("");
+    setPreConfidence(null);
+    setReviewKind("original_retest");
+    setTransferSourceProblemId(null);
   }
 
   function ensureSessionId(): string {
