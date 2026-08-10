@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import type { WorkspaceScope } from "../../access-context";
+import { shiftDateKey } from "../../dates";
 import type {
   PlannerActionConflict,
   PlannerTask,
@@ -9,7 +10,10 @@ import { dateKeyInTimeZone } from "../../planner/time";
 import { recordStudy } from "../learning/record-study";
 import {
   appendLearningEvidence,
+  getLearningTaskLink,
   type AppendLearningEvidenceInput,
+  type UpsertLearningTaskLinkInput,
+  upsertLearningTaskLink,
 } from "../../repo/learning-evidence";
 import { ensurePlannerDefaults, plannerDefaultId } from "../../repo/planner-defaults";
 import {
@@ -25,11 +29,19 @@ import {
 
 export type TaskCommandResult = {
   entity?: PlannerTask;
+  retestTask?: PlannerTask;
   conflict?: PlannerActionConflict<PlannerTask>;
 };
 
+export type TaskLearningPatch = Omit<UpsertLearningTaskLinkInput, "taskId">;
+
 export type CreateTaskCommand = Omit<CreatePlannerTaskInput, "listId"> & {
   listId?: string;
+  learning?: TaskLearningPatch;
+};
+
+export type UpdateTaskCommand = UpdatePlannerTaskInput & {
+  learning?: TaskLearningPatch;
 };
 
 export type TaskSchedule =
@@ -59,42 +71,68 @@ export function createTask(
 ): PlannerTask {
   return db.transaction(() => {
     ensurePlannerDefaults(db, scope);
-    assertSubjectOwnership(db, scope, input.subjectCode);
-    return createPlannerTask(db, scope, {
-      ...input,
+    const { learning, ...taskInput } = input;
+    const subjectCode = resolveLearningSubject(db, scope, input.subjectCode, learning?.knowledgePointId);
+    const task = createPlannerTask(db, scope, {
+      ...taskInput,
+      subjectCode,
       listId: input.listId ?? plannerDefaultId(scope.workspaceId, "inbox"),
     });
+    if (learning) upsertLearningTaskLink(db, scope, { ...learning, taskId: task.id });
+    return task;
   })();
 }
 
 export function updateTask(
   db: Database.Database,
   scope: WorkspaceScope,
-  input: UpdatePlannerTaskInput,
+  input: UpdateTaskCommand,
 ): TaskCommandResult {
   return db.transaction(() => {
+    const { learning, ...taskInput } = input;
     const current = requireActiveTask(db, scope, input.id);
-    assertSubjectOwnership(
+    const currentLink = getLearningTaskLink(db, scope, input.id);
+    const knowledgePointId = learning?.knowledgePointId !== undefined
+      ? learning.knowledgePointId
+      : input.subjectCode !== undefined
+        ? currentLink?.knowledgePointId
+        : undefined;
+    const subjectCode = resolveLearningSubject(
       db,
       scope,
       input.subjectCode === undefined ? current.subject_code : input.subjectCode,
+      knowledgePointId,
     );
+    const normalizedInput = {
+      ...taskInput,
+      subjectCode: input.subjectCode !== undefined || learning?.knowledgePointId !== undefined
+        ? subjectCode
+        : undefined,
+    };
     const isCompletion = input.status === "completed" && current.status !== "completed";
     const isReopen = input.status === "open" && current.status === "completed";
     if (isCompletion || isReopen) {
-      const hasOtherPatch = Object.entries(input).some(([key, value]) =>
+      const hasOtherPatch = Object.entries(normalizedInput).some(([key, value]) =>
         key !== "id" && key !== "expectedVersion" && key !== "status" && value !== undefined);
       let expectedVersion = input.expectedVersion;
       if (hasOtherPatch) {
-        const intermediate = updatePlannerTask(db, scope, { ...input, status: undefined });
+        const intermediate = updatePlannerTask(db, scope, { ...normalizedInput, status: undefined });
         if (!intermediate.entity) return intermediate;
         expectedVersion = intermediate.entity.version;
       }
+      if (learning) upsertLearningTaskLink(db, scope, { ...learning, taskId: input.id });
       return isCompletion
         ? completeTask(db, scope, { id: input.id, expectedVersion })
         : reopenTask(db, scope, { id: input.id, expectedVersion });
     }
-    return updatePlannerTask(db, scope, input);
+    const hasTaskPatch = Object.entries(normalizedInput).some(([key, value]) =>
+      key !== "id" && key !== "expectedVersion" && value !== undefined);
+    const result: TaskCommandResult = hasTaskPatch
+      ? updatePlannerTask(db, scope, normalizedInput)
+      : { entity: current };
+    if (!result.entity) return result;
+    if (learning) upsertLearningTaskLink(db, scope, { ...learning, taskId: input.id });
+    return result;
   })();
 }
 
@@ -107,6 +145,7 @@ export function completeTask(
     day?: string;
     clientMutationId?: string;
     evidence?: CompleteTaskEvidence;
+    scheduleRetestAfterDays?: number;
   },
 ): TaskCommandResult {
   return db.transaction(() => {
@@ -118,17 +157,27 @@ export function completeTask(
     });
     if (!result.entity) return result;
     const completionCycle = nextCompletionCycle(db, scope, input.id);
+    const mutationId = input.clientMutationId
+      ?? `task-complete:${input.id}:version:${result.entity.version}`;
+    const completionDay = input.day ?? currentWorkspaceDay(db, scope);
     recordStudy(db, scope, {
       taskId: input.id,
       completionCycle,
-      day: input.day ?? currentWorkspaceDay(db, scope),
-      idempotencyKey: input.clientMutationId
-        ?? `task-complete:${input.id}:version:${result.entity.version}`,
+      day: completionDay,
+      idempotencyKey: mutationId,
       title: result.entity.title,
       ...input.evidence,
       outcome: input.evidence?.outcome ?? "completed",
     });
-    return result;
+    const retestTask = input.scheduleRetestAfterDays
+      ? createCompletionRetest(db, scope, result.entity, {
+          day: completionDay,
+          delayDays: input.scheduleRetestAfterDays,
+          clientMutationId: mutationId,
+          verificationMethod: input.evidence?.verificationMethod,
+        })
+      : undefined;
+    return { ...result, retestTask };
   })();
 }
 
@@ -256,6 +305,58 @@ function assertSubjectOwnership(
     SELECT 1 FROM subjects WHERE workspace_id = ? AND code = ?
   `).get(scope.workspaceId, subjectCode);
   if (!subject) throw new Error("科目不存在或不属于当前学习空间");
+}
+
+function resolveLearningSubject(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  subjectCode: string | null | undefined,
+  knowledgePointId: string | null | undefined,
+): string | null | undefined {
+  if (knowledgePointId === undefined || knowledgePointId === null || !knowledgePointId.trim()) {
+    assertSubjectOwnership(db, scope, subjectCode);
+    return subjectCode;
+  }
+  const point = db.prepare(`
+    SELECT subject_code FROM knowledge_points WHERE workspace_id = ? AND id = ?
+  `).get(scope.workspaceId, knowledgePointId.trim()) as { subject_code: string } | undefined;
+  if (!point) throw new Error("知识点不存在或不属于当前学习空间");
+  if (subjectCode && subjectCode !== point.subject_code) throw new Error("任务学科与知识点不一致");
+  return point.subject_code;
+}
+
+function createCompletionRetest(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  completed: PlannerTask,
+  input: {
+    day: string;
+    delayDays: number;
+    clientMutationId: string;
+    verificationMethod?: string;
+  },
+): PlannerTask | undefined {
+  if (![1, 3, 7].includes(input.delayDays)) throw new Error("复测间隔无效");
+  const link = getLearningTaskLink(db, scope, completed.id);
+  if (!link?.knowledgePointId) return undefined;
+  return createTask(db, scope, {
+    clientMutationId: `${input.clientMutationId}:retest:${input.delayDays}`,
+    title: `复测：${completed.title}`,
+    notes: `由任务「${completed.title}」完成后自动安排；先独立作答，再核对结果。`,
+    subjectCode: completed.subject_code,
+    priority: completed.priority,
+    estimatedMinutes: 15,
+    dueDate: shiftDateKey(input.day, input.delayDays),
+    learning: {
+      expectedVersion: 0,
+      knowledgePointId: link.knowledgePointId,
+      activityType: "recall",
+      completionCriteria: "不看原答案完成一次短复测，并记录相对训练前是改善、持平还是退步。",
+      plannedVerificationMethod: link.plannedVerificationMethod || input.verificationMethod || "同类小测",
+      sourceType: "training_retest",
+      sourceId: `${completed.id}:${completed.version}`,
+    },
+  });
 }
 
 function currentCompletionCycle(

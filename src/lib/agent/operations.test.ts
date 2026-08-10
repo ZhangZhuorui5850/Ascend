@@ -4,9 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveAgentContext } from "./context";
 import { agentOperations, executeAgentOperation, getAgentOperation, operationManifest } from "./operations";
-import { createTestDb, createTestWorkspace } from "../repo/testing";
+import { createTestDb, createTestWorkspace, seedSubjectWithChapter } from "../repo/testing";
 import { addTask } from "../repo/planner";
 import { getLearningTaskLink, listLearningEvidence } from "../repo/learning-evidence";
+import { createAlgorithmProblem } from "../repo/algorithms";
+import { setPluginEnabled } from "../repo/plugins";
 
 describe("Ascend Agent operations", () => {
   const databases: ReturnType<typeof createTestDb>[] = [];
@@ -167,12 +169,60 @@ describe("Ascend Agent operations", () => {
     `).get(context.workspaceId)).toEqual({ count: 1 });
   });
 
+  it("routes replay-safe manual algorithm attempts through canonical learning evidence", async () => {
+    const { db, context } = setup();
+    setPluginEnabled(db, context, "algorithms", true);
+    const problem = createAlgorithmProblem(db, context, {
+      sourceUrl: "https://example.com/problems/agent-manual-attempt",
+      title: "Agent Manual Attempt",
+    });
+    const input = {
+      operationId: "algorithm:agent:manual:0001",
+      problemId: problem.id,
+      day: "2026-07-19",
+      verdict: "WA",
+      durationMinutes: 25,
+      maxHintLevel: 0,
+      errorCategory: "边界遗漏",
+    };
+
+    const first = await executeAgentOperation(
+      { db, context },
+      getAgentOperation("algorithm.attempt.record"),
+      input,
+    ) as { id: number };
+    const replay = await executeAgentOperation(
+      { db, context },
+      getAgentOperation("algorithm.attempt.record"),
+      input,
+    ) as { id: number };
+
+    expect(replay).toEqual(first);
+    expect(db.prepare(`
+      SELECT COUNT(*) AS count FROM algorithm_attempts WHERE workspace_id = ?
+    `).get(context.workspaceId)).toEqual({ count: 1 });
+    expect(listLearningEvidence(db, context)).toMatchObject([{
+      activityType: "practice",
+      actualMinutes: 25,
+      outcome: "WA",
+      sourceType: "plugin:algorithms",
+      sourceId: String(first.id),
+      idempotencyKey: `algorithm-attempt:${input.operationId}`,
+    }]);
+    expect(db.prepare(`
+      SELECT COUNT(*) AS count FROM study_sessions WHERE workspace_id = ?
+    `).get(context.workspaceId)).toEqual({ count: 1 });
+  });
+
   it("exposes explicit canonical complete, reopen, reschedule, delete, and restore commands", async () => {
     const { db, context } = setup();
+    seedSubjectWithChapter(db, context);
     const created = (await executeAgentOperation({ db, context }, getAgentOperation("task.create"), {
       clientMutationId: "agent-explicit-lifecycle",
       day: "2026-07-19",
       title: "Explicit lifecycle",
+      knowledgePointId: "kp1",
+      activityType: "practice",
     })) as { id: string; version: number };
 
     const scheduled = (await executeAgentOperation({ db, context }, getAgentOperation("task.reschedule"), {
@@ -191,8 +241,13 @@ describe("Ascend Agent operations", () => {
       day: "2026-07-20",
       actualMinutes: 30,
       output: "完成并验证",
-    })) as { entity: { version: number; status: string } };
+      scheduleRetestAfterDays: 3,
+    })) as {
+      entity: { version: number; status: string };
+      retestTask: { due_date: string };
+    };
     expect(completed.entity.status).toBe("completed");
+    expect(completed.retestTask.due_date).toBe("2026-07-23");
     expect(listLearningEvidence(db, context, { taskId: created.id })).toMatchObject([
       { actualMinutes: 30, output: "完成并验证", outcome: "completed" },
     ]);

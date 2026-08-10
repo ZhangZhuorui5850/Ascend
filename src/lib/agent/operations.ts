@@ -16,6 +16,7 @@ import {
   updateTask as updateCanonicalTask,
 } from "../application/tasks/commands";
 import { recordStudy } from "../application/learning/record-study";
+import { recordAlgorithmAttemptCommand } from "../application/algorithms/record-attempt";
 import { revealAlgorithmHint } from "../repo/algorithm-hints";
 import {
   getAlgorithmLearningState,
@@ -25,7 +26,6 @@ import {
 import {
   createAlgorithmProblem,
   getAlgorithmDashboard,
-  recordAlgorithmAttempt,
 } from "../repo/algorithms";
 import { getDay, updateDayEntry } from "../repo/days";
 import {
@@ -85,7 +85,6 @@ import {
 } from "../repo/planner-tasks";
 import {
   getLearningTaskLink,
-  upsertLearningTaskLink,
 } from "../repo/learning-evidence";
 import { addMinutesToInstant, localDateTimeToUtc, utcToZonedDateTime } from "../planner/time";
 import { createMistake, createReviewEvent, getMistakeBook } from "../repo/reviews";
@@ -371,7 +370,7 @@ export const agentOperations: AgentOperation[] = [
     }),
     readOnly: false,
     entityType: "planner_task",
-    run: ({ db, context }, input) => db.transaction(() => {
+    run: ({ db, context }, input) => {
       const timeZone = agentWorkspaceTimeZone(db, context.workspaceId);
       const estimatedMinutes = input.estimatedMinutes ?? 30;
       const scheduledStartAt = input.scheduledStart
@@ -390,10 +389,7 @@ export const agentOperations: AgentOperation[] = [
           ? addMinutesToInstant(scheduledStartAt, estimatedMinutes)
           : null,
         scheduledTimezone: scheduledStartAt ? timeZone : null,
-      });
-      if (hasLearningTaskFields(input)) {
-        upsertLearningTaskLink(db, context, {
-          taskId: task.id,
+        learning: hasLearningTaskFields(input) ? {
           knowledgePointId: input.knowledgePointId,
           activityType: input.activityType,
           completionCriteria: input.completionCriteria,
@@ -401,10 +397,10 @@ export const agentOperations: AgentOperation[] = [
           sourceType: input.sourceType,
           sourceId: input.sourceId,
           expectedVersion: 0,
-        });
-      }
+        } : undefined,
+      });
       return { ...task, learning_task: getLearningTaskLink(db, context, task.id) };
-    })(),
+    },
   }),
   defineOperation({
     id: "task.update",
@@ -436,6 +432,7 @@ export const agentOperations: AgentOperation[] = [
       verificationMethod: z.string().max(200).optional(),
       verificationResult: z.string().max(200).optional(),
       verificationOutcome: z.enum(["improved", "unchanged", "regressed", "unknown"]).optional(),
+      scheduleRetestAfterDays: z.union([z.literal(1), z.literal(3), z.literal(7)]).optional(),
       clientMutationId: z.string().min(1).max(200).optional(),
     }),
     readOnly: false,
@@ -451,6 +448,7 @@ export const agentOperations: AgentOperation[] = [
         verificationMethod,
         verificationResult,
         verificationOutcome,
+        scheduleRetestAfterDays,
         clientMutationId,
         knowledgePointId,
         activityType,
@@ -467,12 +465,24 @@ export const agentOperations: AgentOperation[] = [
       const corePatch = Object.fromEntries(
         Object.entries(fields).filter(([, value]) => value !== undefined),
       );
-      if (Object.keys(corePatch).length) {
+      const learningProvided = knowledgePointId !== undefined
+        || activityType !== undefined
+        || completionCriteria !== undefined
+        || plannedVerificationMethod !== undefined;
+      if (Object.keys(corePatch).length || learningProvided) {
+        const currentLink = getLearningTaskLink(db, context, task.id);
         const updated = updateCanonicalTask(db, context, {
           id: task.id,
           expectedVersion: version,
           ...corePatch,
           priority: normalizePlannerPriority(input.priority),
+          learning: learningProvided ? {
+            knowledgePointId,
+            activityType,
+            completionCriteria,
+            plannedVerificationMethod,
+            expectedVersion: currentLink?.version ?? 0,
+          } : undefined,
         });
         if (!updated.entity) return updated;
         version = updated.entity.version;
@@ -502,22 +512,6 @@ export const agentOperations: AgentOperation[] = [
         if (!scheduled.entity) return scheduled;
         version = scheduled.entity.version;
       }
-      if (
-        knowledgePointId !== undefined
-        || activityType !== undefined
-        || completionCriteria !== undefined
-        || plannedVerificationMethod !== undefined
-      ) {
-        const currentLink = getLearningTaskLink(db, context, task.id);
-        upsertLearningTaskLink(db, context, {
-          taskId: task.id,
-          knowledgePointId,
-          activityType,
-          completionCriteria,
-          plannedVerificationMethod,
-          expectedVersion: currentLink?.version ?? 0,
-        });
-      }
       if (done !== undefined) {
         const statusResult = done
           ? completeCanonicalTask(db, context, {
@@ -525,6 +519,7 @@ export const agentOperations: AgentOperation[] = [
               expectedVersion: version,
               day,
               clientMutationId,
+              scheduleRetestAfterDays,
               evidence: {
                 actualMinutes,
                 output: completionOutput,
@@ -547,14 +542,16 @@ export const agentOperations: AgentOperation[] = [
         || verificationMethod !== undefined
         || verificationResult !== undefined
         || verificationOutcome !== undefined
+        || scheduleRetestAfterDays !== undefined
       ) {
-        throw new Error("完成证据只能在 done=true 时写入");
+        throw new Error("完成证据和复测只能在 done=true 时写入");
       }
       if (
         !Object.keys(corePatch).length
         && day === undefined
         && scheduledStart === undefined
         && done === undefined
+        && scheduleRetestAfterDays === undefined
         && knowledgePointId === undefined
         && activityType === undefined
         && completionCriteria === undefined
@@ -609,6 +606,7 @@ export const agentOperations: AgentOperation[] = [
       verificationResult: z.string().max(1000).optional(),
       verificationOutcome: z.string().max(100).optional(),
       confidence: z.number().int().min(0).max(100).nullable().optional(),
+      scheduleRetestAfterDays: z.union([z.literal(1), z.literal(3), z.literal(7)]).optional(),
     }),
     readOnly: false,
     entityType: "planner_task",
@@ -619,6 +617,7 @@ export const agentOperations: AgentOperation[] = [
         expectedVersion: input.expectedVersion ?? task.version,
         clientMutationId: input.clientMutationId,
         day: input.day,
+        scheduleRetestAfterDays: input.scheduleRetestAfterDays,
         evidence: {
           actualMinutes: input.actualMinutes,
           output: input.output,
@@ -1416,6 +1415,7 @@ export const agentOperations: AgentOperation[] = [
     title: "记录外部算法结果",
     description: "记录用户主动报告的外部平台结果；不会标记为 provider 验证。",
     schema: z.object({
+      operationId: z.string().regex(/^[A-Za-z0-9:_-]{8,160}$/).optional(),
       problemId: z.number().int().positive(),
       day: date,
       verdict: z.enum(["AC", "WA", "CE", "TLE", "MLE", "RE", "OTHER"]),
@@ -1429,7 +1429,10 @@ export const agentOperations: AgentOperation[] = [
     }),
     readOnly: false,
     entityType: "algorithm_attempt",
-    run: ({ db, context }, input) => recordAlgorithmAttempt(db, context, input),
+    run: ({ db, context }, input) => recordAlgorithmAttemptCommand(db, context, {
+      ...input,
+      operationId: input.operationId ?? randomUUID(),
+    }),
   }),
   defineOperation({
     id: "algorithm.hint.reveal",

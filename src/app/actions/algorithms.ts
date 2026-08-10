@@ -1,9 +1,11 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { actionFailure } from "@/lib/action-failure";
+import { recordAlgorithmAttemptCommand } from "@/lib/application/algorithms/record-attempt";
 import { getDb } from "@/lib/db";
-import { createAlgorithmProblem, recordAlgorithmAttempt } from "@/lib/repo/algorithms";
+import { createAlgorithmProblem } from "@/lib/repo/algorithms";
 import { requireWorkspace } from "@/lib/request-auth";
 import type { ActionResult } from "./day";
 
@@ -36,6 +38,7 @@ export async function createAlgorithmProblemAction(input: {
 }
 
 export async function recordAlgorithmAttemptAction(input: {
+  operationId?: string;
   problemId: number;
   day: string;
   verdict: string;
@@ -49,7 +52,10 @@ export async function recordAlgorithmAttemptAction(input: {
 }): Promise<ActionResult> {
   try {
     const access = await requireWorkspace();
-    recordAlgorithmAttempt(getDb(), access, input);
+    recordAlgorithmAttemptCommand(getDb(), access, {
+      ...input,
+      operationId: input.operationId ?? randomUUID(),
+    });
     revalidateAlgorithmViews(input.day);
     return { ok: true };
   } catch (error) {

@@ -77,6 +77,21 @@ export type AlgorithmDashboard = {
   };
 };
 
+export type RecordAlgorithmAttemptInput = {
+  problemId: number;
+  day: string;
+  verdict: string;
+  durationMinutes?: number;
+  maxHintLevel?: number;
+  preConfidence?: number | null;
+  reviewKind?: string;
+  transferSourceProblemId?: number | null;
+  errorCategory?: string;
+  reflection?: string;
+  /** Stable caller-generated key used to make a manual attempt replay-safe. */
+  operationId?: string;
+};
+
 type ProblemRow = {
   id: number;
   provider_id: string;
@@ -213,18 +228,7 @@ export function createAlgorithmProblem(
 export function recordAlgorithmAttempt(
   db: Database.Database,
   scope: WorkspaceScope,
-  input: {
-    problemId: number;
-    day: string;
-    verdict: string;
-    durationMinutes?: number;
-    maxHintLevel?: number;
-    preConfidence?: number | null;
-    reviewKind?: string;
-    transferSourceProblemId?: number | null;
-    errorCategory?: string;
-    reflection?: string;
-  },
+  input: RecordAlgorithmAttemptInput,
 ): AlgorithmAttempt {
   requirePluginEnabled(db, scope, "algorithms");
   const day = assertDateKey(input.day);
@@ -240,15 +244,48 @@ export function recordAlgorithmAttempt(
     ? null
     : boundedInteger(input.preConfidence, 0, 3, "作答前信心");
   const reviewKind = normalizeReviewKind(input.reviewKind);
-  const transferSource = resolveAlgorithmTransferSource(db, scope, {
-    targetProblemId: problemId,
-    sourceProblemId: input.transferSourceProblemId,
+  const requestedTransferSourceProblemId = normalizeRequestedTransferSourceProblemId(
+    input.transferSourceProblemId,
     reviewKind,
-    day,
-  });
+  );
   const errorCategory = (input.errorCategory || "").trim().slice(0, 80);
   const reflection = (input.reflection || "").trim().slice(0, 2_000);
   const independent = verdict === "AC" && maxHintLevel <= 1;
+  const operationId = normalizeOperationId(input.operationId);
+  if (operationId) {
+    const replay = db.prepare(`
+      SELECT id, problem_id, day, verdict, duration_minutes, max_hint_level,
+             pre_confidence, independent, review_kind, error_category,
+             reflection, source_verification, transfer_source_problem_id
+      FROM algorithm_attempts
+      WHERE workspace_id = ? AND session_id = ?
+    `).get(scope.workspaceId, operationId) as AttemptRow | undefined;
+    if (replay) {
+      if (
+        replay.problem_id !== problemId
+        || replay.day !== day
+        || replay.verdict !== verdict
+        || replay.duration_minutes !== durationMinutes
+        || replay.max_hint_level !== maxHintLevel
+        || replay.pre_confidence !== preConfidence
+        || replay.independent !== (independent ? 1 : 0)
+        || replay.review_kind !== reviewKind
+        || replay.error_category !== errorCategory
+        || replay.reflection !== reflection
+        || replay.transfer_source_problem_id !== requestedTransferSourceProblemId
+        || replay.source_verification !== "user_reported"
+      ) {
+        throw new Error("同一算法训练幂等键不能用于不同请求");
+      }
+      return mapAttempt(replay);
+    }
+  }
+  const transferSource = resolveAlgorithmTransferSource(db, scope, {
+    targetProblemId: problemId,
+    sourceProblemId: requestedTransferSourceProblemId,
+    reviewKind,
+    day,
+  });
   const prior = db.prepare(`
     SELECT day FROM algorithm_attempts
     WHERE workspace_id = ? AND problem_id = ?
@@ -277,8 +314,8 @@ export function recordAlgorithmAttempt(
       INSERT INTO algorithm_attempts
         (workspace_id, problem_id, day, verdict, duration_minutes, max_hint_level,
          pre_confidence, independent, review_kind, error_category, reflection,
-         transfer_source_problem_id, outcome, ended_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+         transfer_source_problem_id, outcome, ended_at, session_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
     `).run(
       scope.workspaceId,
       problemId,
@@ -293,6 +330,7 @@ export function recordAlgorithmAttempt(
       reflection,
       transferSource?.problemId ?? null,
       verdict,
+      operationId ?? "",
     );
     db.prepare(`
       UPDATE algorithm_problems
@@ -317,20 +355,6 @@ export function recordAlgorithmAttempt(
       nextReviewKind(evidenceStatus),
       nextReview,
     );
-    if (durationMinutes > 0) {
-      db.prepare(`
-        INSERT INTO study_sessions
-          (workspace_id, day, title, duration_minutes, output, source_type, source_id)
-        VALUES (?, ?, ?, ?, ?, 'plugin:algorithms', ?)
-      `).run(
-        scope.workspaceId,
-        day,
-        `算法训练：${problem.title}`,
-        durationMinutes,
-        `${verdict} · 最高提示 L${maxHintLevel} · ${reviewKind}`,
-        String(attemptId),
-      );
-    }
     return attemptId;
   })();
 
@@ -344,7 +368,7 @@ export function recordAlgorithmAttempt(
   return mapAttempt(row);
 }
 
-function getAlgorithmProblem(
+export function getAlgorithmProblem(
   db: Database.Database,
   scope: WorkspaceScope,
   id: number,
@@ -360,6 +384,26 @@ function getAlgorithmProblem(
   `).get(scope.workspaceId, id) as ProblemRow | undefined;
   if (!row) throw new Error("算法题不存在");
   return mapProblem(row, []);
+}
+
+function normalizeOperationId(value: string | undefined): string | null {
+  if (value === undefined) return null;
+  const operationId = value.trim();
+  if (!/^[A-Za-z0-9:_-]{8,160}$/.test(operationId)) throw new Error("算法训练幂等键无效");
+  return operationId;
+}
+
+function normalizeRequestedTransferSourceProblemId(
+  value: number | null | undefined,
+  reviewKind: AlgorithmReviewKind,
+): number | null {
+  const isTransfer = reviewKind === "isomorphic_variant" || reviewKind === "unseen_variant";
+  if (!isTransfer) {
+    if (value !== undefined && value !== null) throw new Error("只有变式训练可以关联迁移来源题");
+    return null;
+  }
+  if (value === undefined || value === null) throw new Error("变式训练必须选择一道人已独立完成的来源题");
+  return boundedInteger(value, 1, Number.MAX_SAFE_INTEGER, "迁移来源题");
 }
 
 function mapProblem(row: ProblemRow, attempts: AlgorithmAttempt[]): AlgorithmProblem {

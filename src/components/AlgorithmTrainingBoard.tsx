@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useState, type FormEvent } from "react";
+import { startTransition, useRef, useState, type FormEvent } from "react";
 import {
   ArrowUpRight,
   CalendarClock,
@@ -311,13 +311,16 @@ function AttemptRecorder({
   const [errorCategory, setErrorCategory] = useState("");
   const [reflection, setReflection] = useState("");
   const [busy, setBusy] = useState(false);
+  const operationIdRef = useRef<string | null>(null);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
     setBusy(true);
+    operationIdRef.current ??= crypto.randomUUID();
     startTransition(async () => {
       const result = await recordAlgorithmAttemptAction({
+        operationId: operationIdRef.current!,
         problemId: problem.id,
         day,
         verdict,
@@ -334,6 +337,7 @@ function AttemptRecorder({
         notify(result.error || "训练结果保存失败", "error");
         return;
       }
+      operationIdRef.current = null;
       setOpen(false);
       setErrorCategory("");
       setReflection("");
@@ -387,7 +391,15 @@ function AttemptRecorder({
       <label><span>错误类别</span><input maxLength={80} onChange={(event) => setErrorCategory(event.target.value)} placeholder="例如：边界遗漏、复杂度判断错误" value={errorCategory} /></label>
       <label><span>纠正规则与复盘</span><textarea maxLength={2000} onChange={(event) => setReflection(event.target.value)} placeholder="下次遇到什么信号？先检查什么？" rows={3} value={reflection} /></label>
       <div className="algorithmAttemptActions">
-        <button className="secondaryButton" disabled={busy} onClick={() => setOpen(false)} type="button">取消</button>
+        <button
+          className="secondaryButton"
+          disabled={busy}
+          onClick={() => {
+            operationIdRef.current = null;
+            setOpen(false);
+          }}
+          type="button"
+        >取消</button>
         <button className="primaryButton" disabled={busy} type="submit"><Save size={14} />{busy ? "保存中…" : "保存证据"}</button>
       </div>
     </form>

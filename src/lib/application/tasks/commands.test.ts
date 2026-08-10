@@ -8,9 +8,9 @@ import {
   restoreTask,
   updateTask,
 } from "./commands";
-import { createTestDb, createTestWorkspace } from "../../repo/testing";
+import { createTestDb, createTestWorkspace, seedSubjectWithChapter } from "../../repo/testing";
 import { plannerDefaultId } from "../../repo/planner-defaults";
-import { listLearningEvidence } from "../../repo/learning-evidence";
+import { getLearningTaskLink, listLearningEvidence } from "../../repo/learning-evidence";
 
 describe("canonical task application commands", () => {
   it("creates in the canonical inbox and rejects a foreign subject", () => {
@@ -170,6 +170,51 @@ describe("canonical task application commands", () => {
     expect(completed).toMatchObject({ title: "Updated and completed", status: "completed", version: 3 });
     expect(listLearningEvidence(db, scope, { taskId: task.id })).toMatchObject([
       { completionCycle: 1, outcome: "completed" },
+    ]);
+  });
+
+  it("owns learning links and completion retests inside the canonical transaction", () => {
+    const db = createTestDb();
+    const scope = createTestWorkspace(db);
+    seedSubjectWithChapter(db, scope);
+    const task = createTask(db, scope, {
+      clientMutationId: "linked-create",
+      title: "矩阵专项",
+      dueDate: "2026-08-10",
+      learning: {
+        expectedVersion: 0,
+        knowledgePointId: "kp1",
+        activityType: "practice",
+        sourceType: "weak_point",
+        sourceId: "kp1-plan",
+      },
+    });
+    expect(task.subject_code).toBe("M1");
+    expect(getLearningTaskLink(db, scope, task.id)).toMatchObject({
+      knowledgePointId: "kp1",
+      activityType: "practice",
+    });
+
+    const completed = completeTask(db, scope, {
+      id: task.id,
+      expectedVersion: task.version,
+      clientMutationId: "linked-complete",
+      day: "2026-08-10",
+      evidence: { output: "完成 20 题", verificationMethod: "闭卷小测" },
+      scheduleRetestAfterDays: 3,
+    });
+
+    expect(completed.entity?.status).toBe("completed");
+    expect(completed.retestTask).toMatchObject({ due_date: "2026-08-13", subject_code: "M1" });
+    expect(getLearningTaskLink(db, scope, completed.retestTask!.id)).toMatchObject({
+      knowledgePointId: "kp1",
+      activityType: "recall",
+      sourceType: "training_retest",
+      sourceId: `${task.id}:${completed.entity!.version}`,
+      plannedVerificationMethod: "闭卷小测",
+    });
+    expect(listLearningEvidence(db, scope, { taskId: task.id })).toMatchObject([
+      { knowledgePointId: "kp1", activityType: "practice", output: "完成 20 题" },
     ]);
   });
 });

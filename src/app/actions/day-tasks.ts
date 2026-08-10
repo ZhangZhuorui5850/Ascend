@@ -15,7 +15,7 @@ import { getDb } from "@/lib/db";
 import type { LearningActivityType } from "@/lib/learning/types";
 import { addMinutesToInstant, localDateTimeToUtc } from "@/lib/planner/time";
 import type { PlannerActionConflict, PlannerTask } from "@/lib/planner/types";
-import { getLearningTaskLink, upsertLearningTaskLink } from "@/lib/repo/learning-evidence";
+import { getLearningTaskLink } from "@/lib/repo/learning-evidence";
 import { getPlannerTask } from "@/lib/repo/planner-tasks";
 import { listDayTaskItems, type DayTaskItem } from "@/lib/repo/task-read-model";
 import { requireWorkspace } from "@/lib/request-auth";
@@ -51,38 +51,33 @@ export async function createDayTaskAction(input: {
     const access = await requireWorkspace();
     const db = getDb();
     const timeZone = workspaceTimeZone(db, access.workspaceId);
-    const task = db.transaction(() => {
-      const subjectCode = resolveSubjectCode(db, access.workspaceId, input.subjectCode, input.knowledgePointId);
-      const startAt = input.scheduledStart
-        ? localDateTimeToUtc({ date: input.day, time: input.scheduledStart, timeZone })
-        : null;
-      const estimatedMinutes = input.estimatedMinutes ?? 30;
-      const entity = createTask(db, access, {
-        clientMutationId: input.clientMutationId,
-        title: input.title,
-        notes: input.notes,
-        subjectCode,
-        priority: input.priority,
-        estimatedMinutes,
-        dueDate: startAt ? null : input.day,
-        scheduledStartAt: startAt,
-        scheduledEndAt: startAt ? addMinutesToInstant(startAt, estimatedMinutes) : null,
-        scheduledTimezone: startAt ? timeZone : null,
-      });
-      if (hasLearningPatch(input)) {
-        upsertLearningTaskLink(db, access, {
-          taskId: entity.id,
-          expectedVersion: 0,
-          knowledgePointId: input.knowledgePointId,
-          activityType: input.activityType,
-          completionCriteria: input.completionCriteria,
-          plannedVerificationMethod: input.plannedVerificationMethod,
-          sourceType: input.sourceType,
-          sourceId: input.sourceId,
-        });
-      }
-      return requireDayTask(db, access, input.day, entity.id);
-    })();
+    const subjectCode = resolveSubjectCode(db, access.workspaceId, input.subjectCode, input.knowledgePointId);
+    const startAt = input.scheduledStart
+      ? localDateTimeToUtc({ date: input.day, time: input.scheduledStart, timeZone })
+      : null;
+    const estimatedMinutes = input.estimatedMinutes ?? 30;
+    const entity = createTask(db, access, {
+      clientMutationId: input.clientMutationId,
+      title: input.title,
+      notes: input.notes,
+      subjectCode,
+      priority: input.priority,
+      estimatedMinutes,
+      dueDate: startAt ? null : input.day,
+      scheduledStartAt: startAt,
+      scheduledEndAt: startAt ? addMinutesToInstant(startAt, estimatedMinutes) : null,
+      scheduledTimezone: startAt ? timeZone : null,
+      learning: hasLearningPatch(input) ? {
+        expectedVersion: 0,
+        knowledgePointId: input.knowledgePointId,
+        activityType: input.activityType,
+        completionCriteria: input.completionCriteria,
+        plannedVerificationMethod: input.plannedVerificationMethod,
+        sourceType: input.sourceType,
+        sourceId: input.sourceId,
+      } : undefined,
+    });
+    const task = requireDayTask(db, access, input.day, entity.id);
     revalidateTaskViews(input.day);
     return { ok: true, task };
   } catch (error) {
@@ -105,56 +100,50 @@ export async function updateDayTaskAction(input: {
     const access = await requireWorkspace();
     const db = getDb();
     const timeZone = workspaceTimeZone(db, access.workspaceId);
-    const result = db.transaction(() => {
-      const currentTask = getPlannerTask(db, access, input.id);
-      if (!currentTask || currentTask.deleted_at) throw new Error("任务不存在");
-      const currentLink = getLearningTaskLink(db, access, input.id);
-      const knowledgePointId = input.knowledgePointId === undefined
-        ? input.subjectCode === undefined
-          ? undefined
-          : keepPointForSubject(db, access.workspaceId, currentLink?.knowledgePointId ?? null, input.subjectCode)
-        : input.knowledgePointId;
-      const subjectCode = resolveSubjectCode(db, access.workspaceId, input.subjectCode, knowledgePointId);
-      const scheduleProvided = input.scheduledStart !== undefined;
-      const startAt = scheduleProvided && input.scheduledStart
-        ? localDateTimeToUtc({ date: input.day, time: input.scheduledStart, timeZone })
-        : scheduleProvided
-          ? null
-          : undefined;
-      const mutation = updateTask(db, access, {
-        id: input.id,
-        expectedVersion: input.expectedVersion,
-        title: input.title,
-        subjectCode,
-        priority: input.priority,
-        estimatedMinutes: input.estimatedMinutes,
-        notes: input.notes,
-        dueDate: scheduleProvided ? (startAt ? null : input.day) : undefined,
-        scheduledStartAt: startAt,
-        scheduledEndAt: startAt === undefined
-          ? input.estimatedMinutes !== undefined && currentTask.scheduled_start_at
-            ? addMinutesToInstant(currentTask.scheduled_start_at, input.estimatedMinutes)
-            : undefined
-          : startAt
-            ? addMinutesToInstant(startAt, input.estimatedMinutes ?? mutationEstimatedMinutes(db, access.workspaceId, input.id))
-            : null,
-        scheduledTimezone: startAt === undefined ? undefined : startAt ? timeZone : null,
-      });
-      if (mutation.conflict) return mutation;
-      if (hasLearningPatch(input) || knowledgePointId !== undefined) {
-        upsertLearningTaskLink(db, access, {
-          taskId: input.id,
-          expectedVersion: input.linkExpectedVersion,
-          knowledgePointId,
-          activityType: input.activityType,
-          completionCriteria: input.completionCriteria,
-          plannedVerificationMethod: input.plannedVerificationMethod,
-          sourceType: input.sourceType,
-          sourceId: input.sourceId,
-        });
-      }
-      return mutation;
-    })();
+    const currentTask = getPlannerTask(db, access, input.id);
+    if (!currentTask || currentTask.deleted_at) throw new Error("任务不存在");
+    const currentLink = getLearningTaskLink(db, access, input.id);
+    const knowledgePointId = input.knowledgePointId === undefined
+      ? input.subjectCode === undefined
+        ? undefined
+        : keepPointForSubject(db, access.workspaceId, currentLink?.knowledgePointId ?? null, input.subjectCode)
+      : input.knowledgePointId;
+    const subjectCode = resolveSubjectCode(db, access.workspaceId, input.subjectCode, knowledgePointId);
+    const scheduleProvided = input.scheduledStart !== undefined;
+    const startAt = scheduleProvided && input.scheduledStart
+      ? localDateTimeToUtc({ date: input.day, time: input.scheduledStart, timeZone })
+      : scheduleProvided
+        ? null
+        : undefined;
+    const learningProvided = hasLearningPatch(input) || knowledgePointId !== undefined;
+    const result = updateTask(db, access, {
+      id: input.id,
+      expectedVersion: input.expectedVersion,
+      title: input.title,
+      subjectCode,
+      priority: input.priority,
+      estimatedMinutes: input.estimatedMinutes,
+      notes: input.notes,
+      dueDate: scheduleProvided ? (startAt ? null : input.day) : undefined,
+      scheduledStartAt: startAt,
+      scheduledEndAt: startAt === undefined
+        ? input.estimatedMinutes !== undefined && currentTask.scheduled_start_at
+          ? addMinutesToInstant(currentTask.scheduled_start_at, input.estimatedMinutes)
+          : undefined
+        : startAt
+          ? addMinutesToInstant(startAt, input.estimatedMinutes ?? mutationEstimatedMinutes(db, access.workspaceId, input.id))
+          : null,
+      scheduledTimezone: startAt === undefined ? undefined : startAt ? timeZone : null,
+      learning: learningProvided ? {
+        expectedVersion: input.linkExpectedVersion,
+        knowledgePointId,
+        activityType: input.activityType,
+        completionCriteria: input.completionCriteria,
+        plannedVerificationMethod: input.plannedVerificationMethod,
+        sourceType: input.sourceType,
+        sourceId: input.sourceId,
+      } : undefined,
+    });
     if (result.conflict) return conflict(result.conflict);
     revalidateTaskViews(input.day);
     return { ok: true, task: requireDayTask(db, access, input.day, input.id) };
@@ -195,25 +184,21 @@ async function setDayTaskCompletion(input: CompleteDayTaskInput, done: boolean):
     }
     const access = await requireWorkspace();
     const db = getDb();
-    const result = db.transaction(() => {
-      const mutation = done
-        ? completeTask(db, access, {
-            id: input.id,
-            expectedVersion: input.expectedVersion,
-            day: input.day,
-            clientMutationId: input.clientMutationId,
-            evidence: input.evidence,
-          })
-        : reopenTask(db, access, {
-            id: input.id,
-            expectedVersion: input.expectedVersion,
-            day: input.day,
-            clientMutationId: input.clientMutationId,
-          });
-      if (mutation.conflict || !mutation.entity || !done || !input.scheduleRetestAfterDays) return mutation;
-      createCanonicalRetest(db, access, mutation.entity, input);
-      return mutation;
-    })();
+    const result = done
+      ? completeTask(db, access, {
+          id: input.id,
+          expectedVersion: input.expectedVersion,
+          day: input.day,
+          clientMutationId: input.clientMutationId,
+          evidence: input.evidence,
+          scheduleRetestAfterDays: input.scheduleRetestAfterDays,
+        })
+      : reopenTask(db, access, {
+          id: input.id,
+          expectedVersion: input.expectedVersion,
+          day: input.day,
+          clientMutationId: input.clientMutationId,
+        });
     if (result.conflict) return conflict(result.conflict);
     revalidateTaskViews(input.day);
     if (done) {
@@ -307,36 +292,6 @@ export async function carryDayTasksAction(input: {
   } catch (error) {
     return failure(error);
   }
-}
-
-function createCanonicalRetest(
-  db: ReturnType<typeof getDb>,
-  scope: { workspaceId: string },
-  completed: PlannerTask,
-  input: { id: string; clientMutationId: string; day: string; scheduleRetestAfterDays?: number; evidence?: CompleteTaskEvidence },
-): void {
-  const link = getLearningTaskLink(db, scope, completed.id);
-  if (!link?.knowledgePointId || !input.scheduleRetestAfterDays) return;
-  const retestDay = shiftDateKey(input.day, input.scheduleRetestAfterDays);
-  const retest = createTask(db, scope, {
-    clientMutationId: `${input.clientMutationId}:retest:${input.scheduleRetestAfterDays}`,
-    title: `复测：${completed.title}`,
-    notes: `由任务「${completed.title}」完成后自动安排；先独立作答，再核对结果。`,
-    subjectCode: completed.subject_code,
-    priority: completed.priority,
-    estimatedMinutes: 15,
-    dueDate: retestDay,
-  });
-  upsertLearningTaskLink(db, scope, {
-    taskId: retest.id,
-    expectedVersion: 0,
-    knowledgePointId: link.knowledgePointId,
-    activityType: "recall",
-    completionCriteria: "不看原答案完成一次短复测，并记录相对训练前是改善、持平还是退步。",
-    plannedVerificationMethod: link.plannedVerificationMethod || input.evidence?.verificationMethod || "同类小测",
-    sourceType: "training_retest",
-    sourceId: `${completed.id}:${completed.version}`,
-  });
 }
 
 function requireDayTask(

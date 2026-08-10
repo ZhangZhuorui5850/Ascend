@@ -51,16 +51,8 @@ describe("algorithm training repo", () => {
     });
     expect(guided.independent).toBe(false);
     expect(db.prepare(`
-      SELECT day, title, duration_minutes, source_type, source_id
-      FROM study_sessions
-      WHERE workspace_id = ?
-    `).get(scope.workspaceId)).toMatchObject({
-      day: "2026-07-20",
-      title: "算法训练：动态规划基础",
-      duration_minutes: 45,
-      source_type: "plugin:algorithms",
-      source_id: String(guided.id),
-    });
+      SELECT COUNT(*) AS count FROM study_sessions WHERE workspace_id = ?
+    `).get(scope.workspaceId)).toEqual({ count: 0 });
     expect(getAlgorithmDashboard(db, scope, "2026-07-20").problems[0]).toMatchObject({
       evidenceStatus: "guided_completed",
       nextReview: "2026-07-21",
@@ -186,6 +178,39 @@ describe("algorithm training repo", () => {
       verdict: "AC",
       maxHintLevel: 5,
     })).toThrow("提示级别");
+  });
+
+  it("makes caller-keyed manual attempts replay-safe without owning study projections", () => {
+    const db = createTestDb();
+    const scope = createTestWorkspace(db);
+    setPluginEnabled(db, scope, "algorithms", true);
+    const problem = createAlgorithmProblem(db, scope, {
+      sourceUrl: "https://example.com/problems/idempotent",
+      title: "Idempotent Attempt",
+    });
+    const input = {
+      operationId: "algorithm:manual:repo:0001",
+      problemId: problem.id,
+      day: "2026-07-26",
+      verdict: "WA",
+      durationMinutes: 20,
+      errorCategory: "边界遗漏",
+    };
+
+    const first = recordAlgorithmAttempt(db, scope, input);
+    const replay = recordAlgorithmAttempt(db, scope, input);
+
+    expect(replay).toEqual(first);
+    expect(db.prepare(`
+      SELECT COUNT(*) AS count FROM algorithm_attempts WHERE workspace_id = ?
+    `).get(scope.workspaceId)).toEqual({ count: 1 });
+    expect(db.prepare(`
+      SELECT COUNT(*) AS count FROM study_sessions WHERE workspace_id = ?
+    `).get(scope.workspaceId)).toEqual({ count: 0 });
+    expect(() => recordAlgorithmAttempt(db, scope, {
+      ...input,
+      verdict: "AC",
+    })).toThrow("同一算法训练幂等键不能用于不同请求");
   });
 
   it("assigns a stable external id when a root URL has no path identifier", () => {
