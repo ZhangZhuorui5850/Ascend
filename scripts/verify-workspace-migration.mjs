@@ -29,11 +29,12 @@ try {
   for (const table of ["learning_task_links", "learning_evidence"]) {
     if (!tableExists(table)) issues.push({ type: "missing_table", table });
   }
-  const learningBackfillMigration = db.prepare(`
-    SELECT 1 FROM schema_migrations WHERE version = '0031_legacy_learning_backfill'
-  `).get();
-  if (!learningBackfillMigration) {
-    issues.push({ type: "missing_migration", version: "0031_legacy_learning_backfill" });
+  for (const version of [
+    "0031_legacy_learning_backfill",
+    "0032_canonical_completion_evidence_backfill",
+  ]) {
+    const migration = db.prepare("SELECT 1 FROM schema_migrations WHERE version = ?").get(version);
+    if (!migration) issues.push({ type: "missing_migration", version });
   }
 
   for (const table of scopedTables) {
@@ -160,6 +161,16 @@ try {
           WHERE e.workspace_id = d.workspace_id AND e.task_id = t.id
         )
       ORDER BY d.workspace_id, d.id
+    `);
+    runReferenceCheck("canonical_completed_task_missing_evidence", `
+      SELECT t.workspace_id || '/planner_task/' || t.id AS ref
+      FROM planner_tasks t
+      WHERE t.status = 'completed'
+        AND NOT EXISTS (
+          SELECT 1 FROM learning_evidence e
+          WHERE e.workspace_id = t.workspace_id AND e.task_id = t.id
+        )
+      ORDER BY t.workspace_id, t.id
     `);
     runReferenceCheck("legacy_manual_session_missing_evidence", `
       SELECT s.workspace_id || '/study_session/' || s.id AS ref

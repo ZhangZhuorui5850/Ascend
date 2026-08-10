@@ -224,6 +224,16 @@ describe("runMigrations", () => {
       VALUES ('canonical-existing', ?, 1, '2026-08-03', 'study', 'canonical',
               'manual', 'existing', 'canonical-existing')
     `).run(LEGACY_WORKSPACE_ID);
+    const inboxId = (db.prepare(`
+      SELECT id FROM task_lists WHERE workspace_id = ? AND is_inbox = 1
+    `).get(LEGACY_WORKSPACE_ID) as { id: string }).id;
+    db.prepare(`
+      INSERT INTO planner_tasks
+        (id, workspace_id, list_id, title, status, due_date, completed_at, created_at, updated_at)
+      VALUES
+        ('planner-only-completed', ?, ?, 'Planner-only 历史完成', 'completed', '2026-08-06',
+         '2026-08-06T02:00:00.000Z', '2026-08-05T02:00:00.000Z', '2026-08-06T02:00:00.000Z')
+    `).run(LEGACY_WORKSPACE_ID, inboxId);
     db.prepare(`
       INSERT INTO study_sessions
         (workspace_id, day, title, duration_minutes, output, source_type, source_id)
@@ -281,13 +291,30 @@ describe("runMigrations", () => {
       source_id: String(manualSessionId),
       idempotency_key: `legacy-study-session:${manualSessionId}`,
     });
-    expect(db.prepare("SELECT COUNT(*) AS count FROM learning_evidence").get()).toEqual({ count: 3 });
-    expect(getAppliedMigrations(db)).toContain("0031_legacy_learning_backfill");
+    expect(db.prepare(`
+      SELECT task_id, day, outcome, source_type, source_id, idempotency_key
+      FROM learning_evidence WHERE id = 'legacy-planner-task:planner-only-completed'
+    `).get()).toEqual({
+      task_id: "planner-only-completed",
+      day: "2026-08-06",
+      outcome: "completed",
+      source_type: "legacy_planner_task",
+      source_id: "planner-only-completed",
+      idempotency_key: "legacy-planner-completion:planner-only-completed",
+    });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM learning_evidence").get()).toEqual({ count: 4 });
+    expect(getAppliedMigrations(db)).toEqual(expect.arrayContaining([
+      "0031_legacy_learning_backfill",
+      "0032_canonical_completion_evidence_backfill",
+    ]));
 
-    db.prepare("DELETE FROM schema_migrations WHERE version = '0031_legacy_learning_backfill'").run();
+    db.prepare(`
+      DELETE FROM schema_migrations
+      WHERE version IN ('0031_legacy_learning_backfill', '0032_canonical_completion_evidence_backfill')
+    `).run();
     runMigrations(db);
     expect(db.prepare("SELECT COUNT(*) AS count FROM learning_task_links").get()).toEqual({ count: 1 });
-    expect(db.prepare("SELECT COUNT(*) AS count FROM learning_evidence").get()).toEqual({ count: 3 });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM learning_evidence").get()).toEqual({ count: 4 });
   });
 
   it("fails the legacy learning backfill loudly and atomically on orphan references", () => {
@@ -326,6 +353,24 @@ describe("runMigrations", () => {
       SELECT COUNT(*) AS count FROM planner_tasks WHERE legacy_day_task_id = ?
     `).get(taskId)).toEqual({ count: 0 });
     expect(db.prepare("SELECT id FROM learning_evidence ORDER BY id").all()).toEqual([{ id: "existing-source" }]);
+  });
+
+  it("fails canonical completion evidence backfill on an invalid completion timestamp", () => {
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    runMigrations(db, { throughVersion: "0031_legacy_learning_backfill" });
+    const inboxId = (db.prepare(`
+      SELECT id FROM task_lists WHERE workspace_id = ? AND is_inbox = 1
+    `).get(LEGACY_WORKSPACE_ID) as { id: string }).id;
+    db.prepare(`
+      INSERT INTO planner_tasks
+        (id, workspace_id, list_id, title, status, completed_at)
+      VALUES ('bad-completion-time', ?, ?, '坏时间戳任务', 'completed', 'not-a-date')
+    `).run(LEGACY_WORKSPACE_ID, inboxId);
+
+    expect(() => runMigrations(db)).toThrow(/0032 canonical completion evidence backfill 冲突报告[\s\S]*时间戳非法/);
+    expect(getAppliedMigrations(db)).not.toContain("0032_canonical_completion_evidence_backfill");
+    expect(db.prepare("SELECT COUNT(*) AS count FROM learning_evidence").get()).toEqual({ count: 0 });
   });
 
   it("adds onboarding and mock-exam product state", () => {

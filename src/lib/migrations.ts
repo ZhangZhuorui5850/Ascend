@@ -1733,6 +1733,83 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: "0032_canonical_completion_evidence_backfill",
+    run: (database) => {
+      const requiredTables = ["planner_tasks", "knowledge_points", "learning_task_links", "learning_evidence"];
+      if (!requiredTables.every((table) => tableExists(database, table))) return;
+      const conflicts: string[] = [];
+      const collect = (label: string, sql: string) => {
+        const rows = database.prepare(sql).all() as Array<{ ref: string }>;
+        if (rows.length) conflicts.push(`${label}: ${rows.slice(0, 20).map((row) => row.ref).join(", ")}`);
+      };
+      collect("canonical completed task 无法生成稳定 evidence key", `
+        SELECT p.workspace_id || '/planner_task/' || p.id AS ref
+        FROM planner_tasks p
+        WHERE p.status = 'completed'
+          AND length('legacy-planner-completion:' || p.id) > 200
+          AND NOT EXISTS (
+            SELECT 1 FROM learning_evidence e
+            WHERE e.workspace_id = p.workspace_id AND e.task_id = p.id
+          )
+        ORDER BY p.workspace_id, p.id
+      `);
+      collect("canonical completed task 时间戳非法", `
+        SELECT p.workspace_id || '/planner_task/' || p.id || '/' || COALESCE(p.completed_at, 'NULL') AS ref
+        FROM planner_tasks p
+        WHERE p.status = 'completed'
+          AND (
+            p.completed_at IS NULL
+            OR length(SUBSTR(p.completed_at, 1, 10)) != 10
+            OR date(SUBSTR(p.completed_at, 1, 10)) IS NULL
+            OR date(SUBSTR(p.completed_at, 1, 10)) != SUBSTR(p.completed_at, 1, 10)
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM learning_evidence e
+            WHERE e.workspace_id = p.workspace_id AND e.task_id = p.id
+          )
+        ORDER BY p.workspace_id, p.id
+      `);
+      collect("canonical completed task evidence 稳定键冲突", `
+        SELECT p.workspace_id || '/planner_task/' || p.id || '/evidence/' || e.id AS ref
+        FROM planner_tasks p
+        JOIN learning_evidence e
+          ON e.workspace_id = p.workspace_id
+         AND (
+           e.id = 'legacy-planner-task:' || p.id
+           OR e.idempotency_key = 'legacy-planner-completion:' || p.id
+         )
+        WHERE p.status = 'completed' AND e.task_id IS NOT p.id
+        ORDER BY p.workspace_id, p.id
+      `);
+      if (conflicts.length) {
+        throw new Error(`0032 canonical completion evidence backfill 冲突报告\n${conflicts.join("\n")}`);
+      }
+      database.exec(`
+        INSERT INTO learning_evidence
+          (id, workspace_id, task_id, completion_cycle, day, knowledge_point_id,
+           activity_type, actual_minutes, output, outcome, difficulty,
+           verification_method, verification_result, verification_outcome, confidence,
+           source_type, source_id, idempotency_key, created_at)
+        SELECT 'legacy-planner-task:' || p.id, p.workspace_id, p.id, 1,
+               SUBSTR(p.completed_at, 1, 10), l.knowledge_point_id,
+               COALESCE(l.activity_type, 'unspecified'), NULL, '', 'completed', '', '', '', '', NULL,
+               CASE WHEN l.source_type IS NOT NULL AND TRIM(l.source_type) != ''
+                    THEN l.source_type ELSE 'legacy_planner_task' END,
+               CASE WHEN l.source_id IS NOT NULL AND TRIM(l.source_id) != ''
+                    THEN l.source_id ELSE p.id END,
+               'legacy-planner-completion:' || p.id, p.completed_at
+        FROM planner_tasks p
+        LEFT JOIN learning_task_links l
+          ON l.workspace_id = p.workspace_id AND l.task_id = p.id
+        WHERE p.status = 'completed'
+          AND NOT EXISTS (
+            SELECT 1 FROM learning_evidence e
+            WHERE e.workspace_id = p.workspace_id AND e.task_id = p.id
+          );
+      `);
+    },
+  },
 
 ];
 
@@ -1836,6 +1913,7 @@ export const MIGRATION_RUN_HASHES: Readonly<Record<string, string>> = {
   "0018_planner_core": "e29e6c29b960be8ab8f629a83a6575dc98fa3e2b85ab51c1d477c700682445b5",
   "0029_planner_legacy_dual_write": "2ab7fcf86b74d5cde7f2d315494970c2e3d3ff0567e95f74046b1558b7b7d7ad",
   "0031_legacy_learning_backfill": "3005ad64026028d261a3a38148d4c593c82b67022a82b222ef1e783db7c527c6",
+  "0032_canonical_completion_evidence_backfill": "f3424361d603a51ae2cffd975533ef72b3b865b9ec69817055926a4ca1f33ff5",
 };
 
 const MIGRATION_RUN_HASH_ALIASES: Readonly<Record<string, readonly string[]>> = {
