@@ -1,6 +1,6 @@
 import type { EventInput } from "@fullcalendar/core";
 import type { CalendarEvent, PlannerCalendar } from "@/lib/planner/types";
-import type { DayTask } from "@/lib/repo/planner";
+import type { CalendarTask } from "@/lib/repo/planner-calendar-tasks";
 import type { ExamCountdown } from "@/lib/repo/settings";
 import { utcToZonedDateTime } from "@/lib/planner/time";
 
@@ -13,7 +13,7 @@ export type CalendarEventMutation =
 
 export type CalendarAgendaRow = {
   day: string;
-  tasks: DayTask[];
+  tasks: CalendarTask[];
   exams: ExamCountdown[];
   events: CalendarEvent[];
 };
@@ -58,7 +58,7 @@ export function buildCalendarEvents({
   calendars: PlannerCalendar[];
   exams: ExamCountdown[];
   plannerEvents: CalendarEvent[];
-  tasks: DayTask[];
+  tasks: CalendarTask[];
 }): EventInput[] {
   const taskEvents: EventInput[] = tasks
     .filter((task) => Boolean(task.day))
@@ -81,7 +81,7 @@ export function buildCalendarEvents({
           entityType: "task",
           kind: "task",
           taskId: task.id,
-          previousDay: task.day,
+          taskVersion: task.version,
         },
       };
     });
@@ -123,7 +123,7 @@ export function buildCalendarEvents({
 }
 
 export function collectAgendaDays(
-  tasks: DayTask[],
+  tasks: CalendarTask[],
   exams: ExamCountdown[],
   events: CalendarEvent[],
 ): string[] {
@@ -142,7 +142,7 @@ export function buildCalendarAgendaRows({
 }: {
   events: CalendarEvent[];
   exams: ExamCountdown[];
-  tasks: DayTask[];
+  tasks: CalendarTask[];
 }): CalendarAgendaRow[] {
   const rows = new Map<string, CalendarAgendaRow>();
   const rowFor = (day: string) => {

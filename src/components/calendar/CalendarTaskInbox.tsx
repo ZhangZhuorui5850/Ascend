@@ -3,24 +3,33 @@
 import { CheckCircle2, Clock3 } from "lucide-react";
 import { useState } from "react";
 import { PlannerDateTimeField } from "@/components/ui/PlannerFormFields";
-import { scheduleTaskAction } from "@/app/actions/planner";
 import { useFeedback } from "@/components/FeedbackProvider";
-import { runPlannerMutation } from "@/components/planner/planner-mutations";
-import type { DayTask } from "@/lib/repo/planner";
+import type { CalendarTask } from "@/lib/repo/planner-calendar-tasks";
 import styles from "@/styles/planner/calendar.module.css";
+
+type MutationResult = { ok: boolean; error?: string };
 
 export function CalendarTaskInbox({
   tasks,
   timeZone,
+  onSchedule,
 }: {
-  tasks: DayTask[];
+  tasks: CalendarTask[];
   timeZone: string;
+  onSchedule: (task: CalendarTask, day: string, time: string) => Promise<MutationResult>;
 }) {
   return (
     <div className={styles.taskInbox}>
       <p className={styles.taskInboxIntro}>给任务分配开始时间，它会进入周时间轴。拖拽和这里的日期时间输入使用同一 Action。</p>
       <div className={styles.taskInboxList}>
-        {tasks.map((task) => <CalendarTaskInboxRow key={task.id} task={task} timeZone={timeZone} />)}
+        {tasks.map((task) => (
+          <CalendarTaskInboxRow
+            key={task.id}
+            onSchedule={onSchedule}
+            task={task}
+            timeZone={timeZone}
+          />
+        ))}
         {tasks.length === 0 ? (
           <div className={styles.empty}><span><CheckCircle2 size={24} />任务均已安排</span></div>
         ) : null}
@@ -29,7 +38,15 @@ export function CalendarTaskInbox({
   );
 }
 
-function CalendarTaskInboxRow({ task, timeZone }: { task: DayTask; timeZone: string }) {
+function CalendarTaskInboxRow({
+  task,
+  timeZone,
+  onSchedule,
+}: {
+  task: CalendarTask;
+  timeZone: string;
+  onSchedule: (task: CalendarTask, day: string, time: string) => Promise<MutationResult>;
+}) {
   const { notify } = useFeedback();
   const [day, setDay] = useState(task.day || dateKeyForZone(new Date(), timeZone));
   const [time, setTime] = useState("09:00");
@@ -39,15 +56,7 @@ function CalendarTaskInboxRow({ task, timeZone }: { task: DayTask; timeZone: str
   async function schedule(): Promise<void> {
     if (busy) return;
     setBusy(true);
-    const result = await runPlannerMutation(
-      () => scheduleTaskAction({
-        id: task.id,
-        previousDay: task.day,
-        day,
-        scheduledStart: time,
-      }),
-      "网络异常，任务保持待排状态",
-    );
+    const result = await onSchedule(task, day, time);
     setBusy(false);
     if (result.ok) {
       notify("任务已进入时间轴");

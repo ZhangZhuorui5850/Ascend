@@ -6,11 +6,11 @@ import type {
   PlannerCalendar,
   PlannerReminder,
 } from "@/lib/planner/types";
-import type { DayTask } from "@/lib/repo/planner";
+import type { CalendarTask } from "@/lib/repo/planner-calendar-tasks";
 import type { ExamCountdown } from "@/lib/repo/settings";
 
 export function CalendarView(props: {
-  tasks: DayTask[];
+  tasks: CalendarTask[];
   exams: ExamCountdown[];
   plannerEvents: CalendarEvent[];
   calendars: PlannerCalendar[];

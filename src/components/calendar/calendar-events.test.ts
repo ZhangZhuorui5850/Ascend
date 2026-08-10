@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CalendarEvent, PlannerCalendar } from "@/lib/planner/types";
-import type { DayTask } from "@/lib/repo/planner";
+import type { CalendarTask } from "@/lib/repo/planner-calendar-tasks";
 import type { ExamCountdown } from "@/lib/repo/settings";
 import {
   buildCalendarAgendaRows,
@@ -10,30 +10,19 @@ import {
   collectAgendaDays,
   createCalendarRangeGate,
 } from "./calendar-events";
+import { calendarTaskReducer } from "./calendar-tasks";
 
-function task(id: number, patch: Partial<DayTask> = {}): DayTask {
+function task(id: string, patch: Partial<CalendarTask> = {}): CalendarTask {
   return {
     id,
+    version: 1,
     day: "2026-07-31",
     title: `任务 ${id}`,
     subject_code: null,
     done: 0,
-    sort_order: 0,
     priority: 2,
     estimated_minutes: 30,
     scheduled_start: null,
-    notes: "",
-    knowledge_point_id: null,
-    activity_type: "unspecified",
-    completion_criteria: "",
-    source_type: "",
-    source_id: "",
-    actual_minutes: null,
-    completion_output: "",
-    planned_verification_method: "",
-    verification_method: "",
-    verification_result: "",
-    verification_outcome: "",
     ...patch,
   };
 }
@@ -83,8 +72,8 @@ const calendars = [{
 
 describe("Calendar event projection and optimistic state", () => {
   it("skips a completely unscheduled task in the time canvas and keeps agenda sorting safe", () => {
-    const unscheduled = task(1, { day: null as unknown as string });
-    const scheduled = task(2, { day: "2026-08-01", scheduled_start: "09:00" });
+    const unscheduled = task("task-unscheduled", { day: "" });
+    const scheduled = task("task-scheduled", { day: "2026-08-01", scheduled_start: "09:00" });
 
     const projected = buildCalendarEvents({
       calendars,
@@ -93,7 +82,7 @@ describe("Calendar event projection and optimistic state", () => {
       tasks: [unscheduled, scheduled],
     });
 
-    expect(projected.map((item) => item.id)).toEqual(["task-2"]);
+    expect(projected.map((item) => item.id)).toEqual(["task-task-scheduled"]);
     expect(collectAgendaDays([unscheduled, scheduled], [], [])).toEqual(["2026-08-01"]);
   });
 
@@ -103,11 +92,15 @@ describe("Calendar event projection and optimistic state", () => {
       calendars,
       exams,
       plannerEvents: [event("event-a")],
-      tasks: [task(1)],
+      tasks: [task("task-a")],
     });
 
     expect(projected.map((item) => item.extendedProps?.entityType))
       .toEqual(["task", "event", "milestone"]);
+    expect(projected[0].extendedProps).toMatchObject({
+      taskId: "task-a",
+      taskVersion: 1,
+    });
   });
 
   it("groups timed events by their event timezone across UTC midnight", () => {
@@ -131,7 +124,7 @@ describe("Calendar event projection and optimistic state", () => {
         }),
       ],
       exams: [{ name: "省考", date: "2026-08-02", targetScore: 130 }] as ExamCountdown[],
-      tasks: [task(1)],
+      tasks: [task("task-a")],
     });
 
     expect(rows.map((row) => row.day)).toEqual([
@@ -152,6 +145,21 @@ describe("Calendar event projection and optimistic state", () => {
 
     expect(gate.accepts(first)).toBe(false);
     expect(gate.accepts(second)).toBe(true);
+  });
+
+  it("keeps canonical task identity and version through optimistic mutations", () => {
+    const original = task("canonical-task", { version: 4 });
+    const patched = calendarTaskReducer([original], {
+      type: "patch",
+      id: original.id,
+      patch: { done: 1, version: 5 },
+    });
+    expect(patched[0]).toMatchObject({ id: "canonical-task", done: 1, version: 5 });
+
+    const removed = calendarTaskReducer(patched, { type: "remove", id: original.id });
+    expect(removed).toEqual([]);
+    expect(calendarTaskReducer(removed, { type: "restore", task: original, index: 0 }))
+      .toEqual([original]);
   });
 
   it("patches, restores, replaces drafts, and removes calendar entities", () => {

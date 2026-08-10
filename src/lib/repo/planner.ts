@@ -2,10 +2,8 @@ import type Database from "better-sqlite3";
 import type { WorkspaceScope } from "../access-context";
 import { assertDateKey, shiftDateKey, todayKey } from "../dates";
 import { addMinutesToInstant, localDateTimeToUtc } from "../planner/time";
-import type { PlannerTask } from "../planner/types";
 import { ensureDay } from "./days";
 import { ensurePlannerDefaults, plannerDefaultId } from "./planner-defaults";
-import { projectPlannerTaskToDayTask } from "./planner-tasks";
 
 export type DayTask = {
   id: number;
@@ -182,7 +180,7 @@ export function listCalendarTasks(
   input?: { from: string; to: string; includeDone?: boolean; limit?: number },
 ): DayTask[] {
   if (!input) {
-    const legacyTasks = db.prepare(`
+    return db.prepare(`
       SELECT ${TASK_SELECT}
       FROM day_tasks
       WHERE workspace_id = @workspaceId
@@ -190,34 +188,6 @@ export function listCalendarTasks(
                CASE WHEN scheduled_start IS NULL THEN 1 ELSE 0 END ASC,
                scheduled_start ASC, priority ASC, sort_order ASC, id ASC
     `).all({ workspaceId: scope.workspaceId }) as DayTask[];
-    const plannerOnly = db.prepare(`
-      SELECT rowid AS compatibility_id, *
-      FROM planner_tasks
-      WHERE workspace_id = ? AND deleted_at IS NULL AND legacy_day_task_id IS NULL
-    `).all(scope.workspaceId) as Array<PlannerTask & { compatibility_id: number }>;
-    return [
-      ...legacyTasks,
-      ...plannerOnly.map((task): DayTask => ({
-        ...projectPlannerTaskToDayTask(task, task.compatibility_id),
-        knowledge_point_id: null,
-        activity_type: "unspecified",
-        completion_criteria: "",
-        source_type: "",
-        source_id: "",
-        actual_minutes: null,
-        completion_output: "",
-        planned_verification_method: "",
-        verification_method: "",
-        verification_result: "",
-        verification_outcome: "",
-      })),
-    ].sort((a, b) => (
-      a.day.localeCompare(b.day)
-      || (a.scheduled_start ?? "").localeCompare(b.scheduled_start ?? "")
-      || a.priority - b.priority
-      || a.sort_order - b.sort_order
-      || a.id - b.id
-    ));
   }
   const from = assertDateKey(input.from);
   const to = assertDateKey(input.to);

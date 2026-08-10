@@ -11,7 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
-import type { DayTask } from "@/lib/repo/planner";
+import type { CalendarTask } from "@/lib/repo/planner-calendar-tasks";
 import type { ExamCountdown } from "@/lib/repo/settings";
 
 export type CalendarDayPopoverState = {
@@ -19,7 +19,7 @@ export type CalendarDayPopoverState = {
   anchorElement: HTMLElement;
 };
 
-type OptimisticCalendarTask = DayTask & { pending?: boolean };
+type OptimisticCalendarTask = CalendarTask & { pending?: boolean };
 type MutationResult = { ok: boolean; error?: string };
 
 export function CalendarDayPopover({
@@ -34,18 +34,18 @@ export function CalendarDayPopover({
   exams: ExamCountdown[];
   onAdd: (title: string) => void;
   onClose: () => void;
-  onRemove: (task: DayTask) => Promise<MutationResult>;
-  onToggle: (task: DayTask, done: boolean) => Promise<MutationResult>;
+  onRemove: (task: CalendarTask) => Promise<MutationResult>;
+  onToggle: (task: CalendarTask, done: boolean) => Promise<MutationResult>;
   popover: CalendarDayPopoverState;
   tasks: OptimisticCalendarTask[];
 }) {
-  const [pendingTaskIds, setPendingTaskIds] = useState<Set<number>>(() => new Set());
+  const [pendingTaskIds, setPendingTaskIds] = useState<Set<string>>(() => new Set());
   const [draft, setDraft] = useState("");
   const doneCount = tasks.filter((task) => task.done).length;
   const totalMinutes = tasks.filter((task) => !task.done)
     .reduce((sum, task) => sum + task.estimated_minutes, 0);
 
-  async function toggle(task: DayTask): Promise<void> {
+  async function toggle(task: CalendarTask): Promise<void> {
     if (pendingTaskIds.has(task.id)) return;
     const done = !Boolean(task.done);
     setPendingTaskIds((current) => new Set(current).add(task.id));

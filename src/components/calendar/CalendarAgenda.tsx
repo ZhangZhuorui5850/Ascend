@@ -1,7 +1,7 @@
 "use client";
 
 import type { CalendarEvent } from "@/lib/planner/types";
-import type { DayTask } from "@/lib/repo/planner";
+import type { CalendarTask } from "@/lib/repo/planner-calendar-tasks";
 import type { ExamCountdown } from "@/lib/repo/settings";
 import {
   buildCalendarAgendaRows,
@@ -17,7 +17,7 @@ export function CalendarAgenda({
   events: CalendarEvent[];
   exams: ExamCountdown[];
   onOpenDay: (day: string, trigger: HTMLButtonElement) => void;
-  tasks: DayTask[];
+  tasks: CalendarTask[];
 }) {
   const rows = buildCalendarAgendaRows({ tasks, exams, events });
   const days = rows.map((row) => row.day);

@@ -29,9 +29,9 @@ describe("calendar day schedule popover", () => {
   });
 
   it("keeps task completion and full-detail navigation in the day card", () => {
-    expect(source).toContain("toggleTaskAction");
-    expect(source).toContain("completionOverrides");
-    expect(source).toContain("setTaskCompletion(task.id, done)");
+    expect(source).toContain("toggleCalendarTaskAction");
+    expect(source).toContain("expectedVersion: task.version");
+    expect(source).toContain('applyOptimisticTask({ type: "patch"');
     expect(dayPopover).toContain('role="checkbox"');
     expect(dayPopover).toContain('href={`/day/${popover.day}`}');
     expect(dayPopover).toContain("进入当日详情");
@@ -39,14 +39,24 @@ describe("calendar day schedule popover", () => {
   });
 
   it("supports quick task management (add/remove) inside the day card", () => {
-    expect(source).toContain("addTaskAction");
-    expect(source).toContain("deleteTaskAction");
+    expect(source).toContain("createCalendarTaskAction");
+    expect(source).toContain("deleteCalendarTaskAction");
     expect(source).toContain("useOptimistic(");
     expect(source).toContain("startTransition(");
     expect(dayPopover).toContain("calendarDayComposer");
     expect(dayPopover).toContain("calendarDayTaskRemove");
     expect(styles).toContain(".calendarDayComposer");
     expect(styles).toContain(".calendarDayTaskRemove");
+  });
+
+  it("keeps Calendar tasks on canonical UUID and versioned Planner mutations", () => {
+    expect(page).toContain("listCanonicalCalendarTasks");
+    expect(page).not.toContain("listCalendarTasks");
+    expect(source).toContain("rescheduleCalendarTaskAction");
+    expect(source).toContain("taskVersion");
+    expect(source).not.toContain('from "@/app/actions/planner"');
+    expect(source).not.toContain("Number(info.event.extendedProps.taskId)");
+    expect(inbox).not.toContain('from "@/app/actions/planner"');
   });
 
   it("projects schedule items without loading activity summaries", () => {

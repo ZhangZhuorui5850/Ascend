@@ -47,6 +47,7 @@ describe("canonical task application commands", () => {
       id: created.id,
       expectedVersion: created.version,
       dueDate: "2026-08-11",
+      estimatedMinutes: 45,
       schedule: {
         kind: "timed",
         startAt: "2026-08-10T01:00:00.000Z",
@@ -58,6 +59,7 @@ describe("canonical task application commands", () => {
       due_date: "2026-08-11",
       scheduled_start_at: "2026-08-10T01:00:00.000Z",
       scheduled_timezone: "Asia/Shanghai",
+      estimated_minutes: 45,
       version: 2,
     });
 

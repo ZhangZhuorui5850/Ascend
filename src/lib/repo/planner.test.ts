@@ -22,6 +22,7 @@ import { createTestDb, createTestWorkspace, seedSubjectWithChapter } from "./tes
 import { LEGACY_WORKSPACE_ID } from "./workspaces";
 import { ensurePlannerDefaults, plannerDefaultId } from "./planner-defaults";
 import { createPlannerTask } from "./planner-tasks";
+import { listCanonicalCalendarTasks } from "./planner-calendar-tasks";
 
 const legacyScope = { workspaceId: LEGACY_WORKSPACE_ID };
 
@@ -314,8 +315,9 @@ describe("day tasks", () => {
       title: "无日期任务",
     });
 
-    expect(() => listCalendarTasks(db, legacyScope)).not.toThrow();
-    expect(listCalendarTasks(db, legacyScope).find((task) => task.title === "无日期任务")?.day)
+    expect(() => listCanonicalCalendarTasks(db, legacyScope, "Asia/Shanghai")).not.toThrow();
+    expect(listCanonicalCalendarTasks(db, legacyScope, "Asia/Shanghai")
+      .find((task) => task.title === "无日期任务")?.day)
       .toBe("");
   });
 

@@ -107,6 +107,7 @@ export function rescheduleTask(
     expectedVersion: number;
     schedule: TaskSchedule;
     dueDate?: string | null;
+    estimatedMinutes?: number;
   },
 ): TaskCommandResult {
   return db.transaction(() => {
@@ -128,6 +129,7 @@ export function rescheduleTask(
       id: input.id,
       expectedVersion: input.expectedVersion,
       dueDate: input.dueDate,
+      estimatedMinutes: input.estimatedMinutes,
       ...schedulePatch,
     });
   })();

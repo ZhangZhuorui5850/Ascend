@@ -11,7 +11,12 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { addTaskAction, deleteTaskAction, scheduleTaskAction, toggleTaskAction } from "@/app/actions/planner";
+import {
+  createCalendarTaskAction,
+  deleteCalendarTaskAction,
+  rescheduleCalendarTaskAction,
+  toggleCalendarTaskAction,
+} from "@/app/actions/calendar-tasks";
 import {
   createPlannerEventAction,
   deletePlannerEventAction,
@@ -50,6 +55,10 @@ import {
   buildCalendarEvents,
   createCalendarRangeGate,
 } from "@/components/calendar/calendar-events";
+import {
+  calendarTaskReducer,
+  type OptimisticCalendarTask,
+} from "@/components/calendar/calendar-tasks";
 import { runPlannerMutation } from "@/components/planner/planner-mutations";
 import { MotionProvider } from "@/components/ui/MotionProvider";
 import type { PlannerMutationStatus } from "@/components/ui/PlannerStatusIndicator";
@@ -61,12 +70,12 @@ import type {
   PlannerEventKind,
   PlannerReminder,
 } from "@/lib/planner/types";
-import type { DayTask } from "@/lib/repo/planner";
+import type { CalendarTask } from "@/lib/repo/planner-calendar-tasks";
 import type { ExamCountdown } from "@/lib/repo/settings";
 import styles from "@/styles/planner/calendar.module.css";
 
 type CalendarViewProps = {
-  tasks: DayTask[];
+  tasks: CalendarTask[];
   exams: ExamCountdown[];
   plannerEvents: CalendarEvent[];
   calendars: PlannerCalendar[];
@@ -77,7 +86,10 @@ type CalendarViewProps = {
 type NewEventDraft = NewCalendarEventDraft;
 
 type MutationResult = { ok: boolean; error?: string };
-type OptimisticCalendarTask = DayTask & { pending?: boolean };
+type CalendarTaskMutationResult = MutationResult & {
+  entity?: CalendarTask;
+  conflict?: unknown;
+};
 
 export function CalendarWorkspace({ tasks, exams, plannerEvents, calendars, timeZone, reminders: initialReminders }: CalendarViewProps) {
   const { confirm, notify } = useFeedback();
@@ -88,25 +100,18 @@ export function CalendarWorkspace({ tasks, exams, plannerEvents, calendars, time
   const [contextOpen, setContextOpen] = useState(false);
   const [mutationStatus, setMutationStatus] = useState<PlannerMutationStatus>("idle");
   const [dayPopover, setDayPopover] = useState<CalendarDayPopoverState | null>(null);
-  const [completionOverrides, setCompletionOverrides] = useState<Record<number, boolean>>({});
-  const [removedIds, setRemovedIds] = useState<Set<number>>(() => new Set());
   const [calendarEvents, setCalendarEvents] = useState(plannerEvents);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [reminders, setReminders] = useState(initialReminders);
-  const tempIdRef = useRef(-1);
   const calendarRef = useRef<FullCalendar | null>(null);
   const contextTriggerRef = useRef<HTMLElement | null>(null);
   const rangeGateRef = useRef(createCalendarRangeGate());
-  const [optimisticTasks, addOptimisticTask] = useOptimistic(
+  const [optimisticTasks, applyOptimisticTask] = useOptimistic(
     tasks as OptimisticCalendarTask[],
-    (state: OptimisticCalendarTask[], task: OptimisticCalendarTask) => [...state, task],
+    calendarTaskReducer,
   );
   const view = selectedView ?? (mobile ? "agenda" : "month");
-  const displayTasks = optimisticTasks
-    .filter((task) => !removedIds.has(task.id))
-    .map((task) => completionOverrides[task.id] === undefined
-      ? task
-      : { ...task, done: completionOverrides[task.id] ? 1 : 0 });
+  const displayTasks = optimisticTasks;
   const openTasks = displayTasks.filter((task) => !task.done);
   const inbox = openTasks.filter((task) => !task.scheduled_start).slice(0, 12);
   const scheduledMinutes = openTasks.reduce((sum, task) => sum + (task.scheduled_start ? task.estimated_minutes : 0), 0);
@@ -188,98 +193,117 @@ export function CalendarWorkspace({ tasks, exams, plannerEvents, calendars, time
     else api.today();
   }
 
-  async function toggleTask(task: DayTask, done: boolean): Promise<MutationResult> {
-    const previousDone = Boolean(task.done);
-    setTaskCompletion(task.id, done);
-    const result = await runPlannerMutation(
-      () => toggleTaskAction({ id: task.id, day: task.day, done }),
-      "网络异常，任务状态已恢复",
-    );
-    if (!result.ok) {
-      setTaskCompletion(task.id, previousDone);
-      notify(result.error || "任务状态更新失败", "error");
-    }
-    return result;
-  }
-
-  function setTaskCompletion(id: number, done: boolean) {
-    const serverDone = Boolean(tasks.find((task) => task.id === id)?.done);
-    setCompletionOverrides((current) => {
-      const next = { ...current };
-      if (done === serverDone) delete next[id];
-      else next[id] = done;
-      return next;
+  function toggleTask(task: CalendarTask, done: boolean): Promise<MutationResult> {
+    return new Promise((resolve) => {
+      startTransition(async () => {
+        applyOptimisticTask({ type: "patch", id: task.id, patch: { done: done ? 1 : 0 } });
+        const result = await runPlannerMutation(
+          () => toggleCalendarTaskAction({
+            id: task.id,
+            expectedVersion: task.version,
+            done,
+          }),
+          "网络异常，任务状态已恢复",
+        );
+        if (result.ok && result.entity) {
+          applyOptimisticTask({ type: "patch", id: task.id, patch: result.entity });
+        } else {
+          applyOptimisticTask({ type: "patch", id: task.id, patch: task });
+          setMutationStatus(result.conflict ? "conflict" : "restored");
+          notify(result.error || "任务状态更新失败", "error");
+        }
+        resolve(result);
+      });
     });
   }
 
-  // 弹窗内快速添加：乐观插入草稿行，action 的 revalidatePath 回流会带回真实任务
+  // 弹窗内快速添加：乐观插入草稿行，Planner action 的 revalidatePath 回流会带回真实任务。
   function addDayTask(day: string, title: string) {
     const trimmed = title.trim();
     if (!trimmed) return;
+    const temporaryId = `draft:${crypto.randomUUID()}`;
     const draft: OptimisticCalendarTask = {
-      id: tempIdRef.current--,
+      id: temporaryId,
+      version: 0,
       day,
       title: trimmed,
       subject_code: null,
       done: 0,
-      sort_order: 0,
       priority: 2,
       estimated_minutes: 30,
       scheduled_start: null,
-      notes: "",
-      knowledge_point_id: null,
-      activity_type: "unspecified",
-      completion_criteria: "",
-      source_type: "",
-      source_id: "",
-      actual_minutes: null,
-      completion_output: "",
-      planned_verification_method: "",
-      verification_method: "",
-      verification_result: "",
-      verification_outcome: "",
       pending: true,
     };
     startTransition(async () => {
-      addOptimisticTask(draft);
+      applyOptimisticTask({ type: "add", task: draft });
       const result = await runPlannerMutation(
-        () => addTaskAction({ day, title: trimmed }),
+        () => createCalendarTaskAction({
+          clientMutationId: crypto.randomUUID(),
+          day,
+          title: trimmed,
+        }),
         "网络异常，任务草稿将在刷新后清除",
       );
-      if (!result.ok) notify(result.error || "添加任务失败", "error");
+      if (result.ok && result.entity) {
+        applyOptimisticTask({ type: "replace", temporaryId, task: result.entity });
+      } else {
+        applyOptimisticTask({ type: "remove", id: temporaryId });
+        notify(result.error || "添加任务失败", "error");
+      }
     });
   }
 
-  async function removeDayTask(task: DayTask): Promise<MutationResult> {
-    const result = await runPlannerMutation(
-      () => deleteTaskAction({ id: task.id, day: task.day }),
-      "网络异常，任务保持原状",
-    );
-    if (result.ok) setRemovedIds((current) => new Set(current).add(task.id));
-    else notify(result.error || "删除任务失败", "error");
-    return result;
+  function removeDayTask(task: CalendarTask): Promise<MutationResult> {
+    const index = displayTasks.findIndex((item) => item.id === task.id);
+    return new Promise((resolve) => {
+      startTransition(async () => {
+        applyOptimisticTask({ type: "remove", id: task.id });
+        const result = await runPlannerMutation(
+          () => deleteCalendarTaskAction({
+            id: task.id,
+            expectedVersion: task.version,
+            clientMutationId: crypto.randomUUID(),
+          }),
+          "网络异常，任务保持原状",
+        );
+        if (!result.ok) {
+          applyOptimisticTask({ type: "restore", task, index });
+          setMutationStatus(result.conflict ? "conflict" : "restored");
+          notify(result.error || "删除任务失败", "error");
+        }
+        resolve(result);
+      });
+    });
   }
 
-  async function moveTask(info: EventDropArg) {
+  function moveTask(info: EventDropArg): void {
     if (info.event.extendedProps.kind !== "task" || !info.event.start) return;
+    const taskId = String(info.event.extendedProps.taskId);
+    const taskVersion = Number(info.event.extendedProps.taskVersion);
+    const task = displayTasks.find((item) => item.id === taskId);
+    if (!task || !Number.isInteger(taskVersion)) return;
     setMutationStatus("optimistic");
-    const result = await runPlannerMutation(
-      () => scheduleTaskAction({
-        id: Number(info.event.extendedProps.taskId),
-        previousDay: String(info.event.extendedProps.previousDay),
-        day: localDateKey(info.event.start!),
-        scheduledStart: info.event.allDay ? null : localTimeKey(info.event.start!),
-      }),
-      "网络异常，任务已恢复原时间",
-    );
-    if (!result.ok) {
-      info.revert();
-      setMutationStatus("restored");
-      notify(result.error || "任务改期失败", "error");
-      return;
-    }
-    setMutationStatus("saved");
-    notify("任务时间已更新", "success");
+    startTransition(async () => {
+      const result = await runPlannerMutation(
+        () => rescheduleCalendarTaskAction({
+          id: taskId,
+          expectedVersion: taskVersion,
+          day: localDateKey(info.event.start!),
+          scheduledStart: info.event.allDay ? null : localTimeKey(info.event.start!),
+          estimatedMinutes: task.estimated_minutes,
+        }),
+        "网络异常，任务已恢复原时间",
+      );
+      if (!result.ok || !result.entity) {
+        info.revert();
+        setMutationStatus(result.conflict ? "conflict" : "restored");
+        notify(result.error || "任务改期失败", "error");
+        return;
+      }
+      applyOptimisticTask({ type: "patch", id: taskId, patch: result.entity });
+      setMutationStatus("saved");
+      notify("任务时间已更新", "success");
+    });
   }
 
   async function moveEvent(info: EventDropArg | EventResizeDoneArg) {
@@ -324,32 +348,70 @@ export function CalendarWorkspace({ tasks, exams, plannerEvents, calendars, time
     notify(result.error || "事件时间更新失败", "error");
   }
 
-  async function resizeTask(info: EventResizeDoneArg) {
+  function resizeTask(info: EventResizeDoneArg): void {
     if (info.event.extendedProps.entityType === "event") {
-      await moveEvent(info);
+      void moveEvent(info);
       return;
     }
     if (info.event.extendedProps.kind !== "task" || !info.event.start || !info.event.end) return;
+    const taskId = String(info.event.extendedProps.taskId);
+    const taskVersion = Number(info.event.extendedProps.taskVersion);
+    if (!displayTasks.some((task) => task.id === taskId) || !Number.isInteger(taskVersion)) return;
     setMutationStatus("optimistic");
     const estimatedMinutes = Math.max(5, Math.round((info.event.end.getTime() - info.event.start.getTime()) / 60000));
-    const result = await runPlannerMutation(
-      () => scheduleTaskAction({
-        id: Number(info.event.extendedProps.taskId),
-        previousDay: String(info.event.extendedProps.previousDay),
-        day: localDateKey(info.event.start!),
-        scheduledStart: localTimeKey(info.event.start!),
-        estimatedMinutes,
-      }),
-      "网络异常，任务时长已恢复",
-    );
-    if (!result.ok) {
-      info.revert();
-      setMutationStatus("restored");
-      notify(result.error || "任务时长更新失败", "error");
-      return;
-    }
-    setMutationStatus("saved");
-    notify(`时间预算已调整为 ${estimatedMinutes} 分钟`, "success");
+    startTransition(async () => {
+      const result = await runPlannerMutation(
+        () => rescheduleCalendarTaskAction({
+          id: taskId,
+          expectedVersion: taskVersion,
+          day: localDateKey(info.event.start!),
+          scheduledStart: localTimeKey(info.event.start!),
+          estimatedMinutes,
+        }),
+        "网络异常，任务时长已恢复",
+      );
+      if (!result.ok || !result.entity) {
+        info.revert();
+        setMutationStatus(result.conflict ? "conflict" : "restored");
+        notify(result.error || "任务时长更新失败", "error");
+        return;
+      }
+      applyOptimisticTask({
+        type: "patch",
+        id: taskId,
+        patch: result.entity,
+      });
+      setMutationStatus("saved");
+      notify(`时间预算已调整为 ${estimatedMinutes} 分钟`, "success");
+    });
+  }
+
+  function scheduleInboxTask(
+    task: CalendarTask,
+    day: string,
+    scheduledStart: string,
+  ): Promise<CalendarTaskMutationResult> {
+    return new Promise((resolve) => {
+      startTransition(async () => {
+        const result = await runPlannerMutation(
+          () => rescheduleCalendarTaskAction({
+            id: task.id,
+            expectedVersion: task.version,
+            day,
+            scheduledStart,
+            estimatedMinutes: task.estimated_minutes,
+          }),
+          "网络异常，任务保持待排状态",
+        );
+        if (result.ok && result.entity) {
+          applyOptimisticTask({ type: "patch", id: task.id, patch: result.entity });
+          setMutationStatus("saved");
+        } else {
+          setMutationStatus(result.conflict ? "conflict" : "restored");
+        }
+        resolve(result);
+      });
+    });
   }
 
   async function loadEventRange(info: DatesSetArg): Promise<void> {
@@ -628,7 +690,13 @@ export function CalendarWorkspace({ tasks, exams, plannerEvents, calendars, time
         />
       );
     }
-    return <CalendarTaskInbox tasks={inbox} timeZone={timeZone} />;
+    return (
+      <CalendarTaskInbox
+        onSchedule={scheduleInboxTask}
+        tasks={inbox}
+        timeZone={timeZone}
+      />
+    );
   }
 
   return (

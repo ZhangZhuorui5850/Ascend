@@ -6,7 +6,7 @@ import { listPlannerCalendars } from "@/lib/repo/planner-calendars";
 import { ensurePlannerDefaults } from "@/lib/repo/planner-defaults";
 import { listCalendarEventRange } from "@/lib/repo/planner-events";
 import { listWorkspaceReminders } from "@/lib/repo/planner-reminders";
-import { listCalendarTasks } from "@/lib/repo/planner";
+import { listCanonicalCalendarTasks } from "@/lib/repo/planner-calendar-tasks";
 import { getSettings } from "@/lib/repo/settings";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +38,7 @@ export default async function CalendarPage() {
           endDateExclusive: dateKeyInTimeZone(rangeEnd, workspace.timezone),
         })}
         reminders={listWorkspaceReminders(db, access)}
-        tasks={listCalendarTasks(db, access)}
+        tasks={listCanonicalCalendarTasks(db, access, workspace.timezone)}
         timeZone={workspace.timezone}
       />
     </div>
