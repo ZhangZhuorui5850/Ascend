@@ -11504,3 +11504,14 @@ body[data-dragging] .mapTools {
 .viewerPdfFallback.iosForced {
   display: grid;
 }
+
+.commandGroup { display: grid; gap: 4px; }
+.commandGroup + .commandGroup { margin-top: 8px; }
+.commandGroupLabel { margin: 0; padding: 6px 10px 3px; color: var(--quiet); font-size: 9px; font-weight: 750; letter-spacing: .12em; }
+.commandResultRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; gap: 5px; }
+.commandResultPrimary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px; min-width: 0; padding: 10px 12px; border: 0; border-radius: 10px; color: inherit; background: transparent; text-align: left; }
+.commandResultPrimary.active { background: var(--accent-soft); }
+.commandResultPrimary > span { display: grid; gap: 3px; min-width: 0; }
+.commandResultPrimary strong,.commandResultPrimary small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.commandResultPrimary small { color: var(--quiet); font-size: 9px; }
+.commandTrainingAction { display: grid; width: 38px; place-items: center; border: 1px solid var(--accent-line); border-radius: 10px; color: var(--accent); background: var(--accent-soft); }
