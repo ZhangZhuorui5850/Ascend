@@ -2,9 +2,9 @@ import type Database from "better-sqlite3";
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { LEGACY_WORKSPACE_ID } from "./repo/workspaces";
 import { addMinutesToInstant, localDateTimeToUtc } from "./planner/time";
 import { ensurePlannerDefaults, plannerDefaultId } from "./repo/planner-defaults";
-import { LEGACY_WORKSPACE_ID } from "./repo/workspaces";
 
 type Migration = {
   version: string;
@@ -14,6 +14,7 @@ type Migration = {
 
 type MigrationOptions = {
   uploadRoot?: string;
+  /** 只应用到指定版本（含）为止；按迁移数组下标截断，版本必须存在。 */
   throughVersion?: string;
 };
 
@@ -756,23 +757,6 @@ const migrations: Migration[] = [
       const workspaces = database.prepare("SELECT id FROM workspaces ORDER BY id").all() as Array<{ id: string }>;
       for (const workspace of workspaces) ensurePlannerDefaults(database, { workspaceId: workspace.id });
       migrateLegacyDayTasks(database);
-      database.exec(`
-        CREATE TRIGGER day_tasks_planner_v2_readonly_insert
-        BEFORE INSERT ON day_tasks
-        BEGIN
-          SELECT RAISE(ABORT, 'day_tasks is read-only after Planner v2 migration');
-        END;
-        CREATE TRIGGER day_tasks_planner_v2_readonly_update
-        BEFORE UPDATE ON day_tasks
-        BEGIN
-          SELECT RAISE(ABORT, 'day_tasks is read-only after Planner v2 migration');
-        END;
-        CREATE TRIGGER day_tasks_planner_v2_readonly_delete
-        BEFORE DELETE ON day_tasks
-        BEGIN
-          SELECT RAISE(ABORT, 'day_tasks is read-only after Planner v2 migration');
-        END;
-      `);
     },
   },
   {
@@ -868,11 +852,576 @@ const migrations: Migration[] = [
         ON push_subscriptions(workspace_id, expired_at, id);
     `,
   },
+  {
+    version: "0029_planner_legacy_dual_write",
+    run: (database) => {
+      database.exec(`
+        DROP TRIGGER IF EXISTS day_tasks_planner_v2_readonly_insert;
+        DROP TRIGGER IF EXISTS day_tasks_planner_v2_readonly_update;
+        DROP TRIGGER IF EXISTS day_tasks_planner_v2_readonly_delete;
+      `);
+    },
+  },
+  {
+    version: "0018_mock_exam_diagnosis_status",
+    run: (db) => {
+      if (!tableExists(db, "mock_exams")) return;
+      addColumnIfMissing(
+        db,
+        "mock_exams",
+        "diagnosis_status",
+        "TEXT NOT NULL DEFAULT 'legacy'",
+      );
+    },
+  },
+  {
+    version: "0019_asset_links_integrity",
+    run: (database) => {
+      if (!tableExists(database, "asset_links")) return;
+      const columns = database.prepare("PRAGMA table_info(asset_links)").all() as Array<{ name: string }>;
+      const hasChapterId = columns.some((column) => column.name === "chapter_id");
+      const chapterExpression = hasChapterId ? "NULLIF(TRIM(l.chapter_id), '')" : "NULL";
+      const invalidLinks = database.prepare(`
+        SELECT COUNT(*) AS count
+        FROM asset_links l
+        LEFT JOIN assets a
+          ON a.id = l.asset_id
+          AND a.workspace_id = l.workspace_id
+        WHERE
+          a.id IS NULL
+          OR (
+            NULLIF(TRIM(l.subject_code), '') IS NULL
+            AND ${chapterExpression} IS NULL
+            AND NULLIF(TRIM(l.knowledge_point_id), '') IS NULL
+          )
+      `).get() as { count: number };
+      if (invalidLinks.count > 0) {
+        throw new Error(
+          `asset_links contains ${invalidLinks.count} invalid row(s); repair them before migration`,
+        );
+      }
+
+      database.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_assets_workspace_id
+          ON assets(workspace_id, id);
+        CREATE TABLE asset_links__normalized (
+          workspace_id TEXT NOT NULL,
+          asset_id INTEGER NOT NULL,
+          subject_code TEXT,
+          chapter_id TEXT,
+          knowledge_point_id TEXT,
+          CHECK (
+            subject_code IS NOT NULL
+            OR chapter_id IS NOT NULL
+            OR knowledge_point_id IS NOT NULL
+          ),
+          FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+          FOREIGN KEY (workspace_id, asset_id)
+            REFERENCES assets(workspace_id, id) ON DELETE CASCADE
+        )
+      `);
+      database.exec(`
+        INSERT INTO asset_links__normalized
+          (workspace_id, asset_id, subject_code, chapter_id, knowledge_point_id)
+        SELECT DISTINCT
+          l.workspace_id,
+          l.asset_id,
+          NULLIF(TRIM(l.subject_code), ''),
+          ${chapterExpression},
+          NULLIF(TRIM(l.knowledge_point_id), '')
+        FROM asset_links l
+        JOIN assets a ON a.id = l.asset_id AND a.workspace_id = l.workspace_id
+        WHERE
+          NULLIF(TRIM(l.subject_code), '') IS NOT NULL
+          OR ${chapterExpression} IS NOT NULL
+          OR NULLIF(TRIM(l.knowledge_point_id), '') IS NOT NULL
+      `);
+      database.exec(`
+        DROP TABLE asset_links;
+        ALTER TABLE asset_links__normalized RENAME TO asset_links;
+        CREATE UNIQUE INDEX idx_asset_links_identity
+          ON asset_links(
+            workspace_id,
+            asset_id,
+            COALESCE(subject_code, ''),
+            COALESCE(chapter_id, ''),
+            COALESCE(knowledge_point_id, '')
+          );
+        CREATE INDEX idx_asset_links_point
+          ON asset_links(workspace_id, knowledge_point_id);
+        CREATE INDEX idx_asset_links_chapter
+          ON asset_links(workspace_id, chapter_id);
+        CREATE INDEX idx_asset_links_subject
+          ON asset_links(workspace_id, subject_code);
+      `);
+    },
+  },
+  {
+    version: "0020_mock_exam_comparison_key",
+    run: (database) => {
+      if (!tableExists(database, "mock_exams")) return;
+      addColumnIfMissing(database, "mock_exams", "scope_label", "TEXT NOT NULL DEFAULT ''");
+      addColumnIfMissing(database, "mock_exams", "difficulty", "TEXT NOT NULL DEFAULT ''");
+    },
+  },
+  {
+    version: "0021_review_event_type",
+    run: (database) => {
+      if (!tableExists(database, "review_events")) return;
+      addColumnIfMissing(
+        database,
+        "review_events",
+        "event_type",
+        "TEXT NOT NULL DEFAULT 'point_review'",
+      );
+      database.prepare(`
+        UPDATE review_events
+        SET event_type = 'mistake_reattempt'
+        WHERE note = '错题回炉'
+      `).run();
+    },
+  },
+  {
+    version: "0022_learning_evidence_fields",
+    run: (database) => {
+      if (tableExists(database, "review_events")) {
+        addColumnIfMissing(
+          database,
+          "review_events",
+          "attempt_mode",
+          "TEXT NOT NULL DEFAULT 'unknown'",
+        );
+        addColumnIfMissing(
+          database,
+          "review_events",
+          "attempt_text",
+          "TEXT NOT NULL DEFAULT ''",
+        );
+        addColumnIfMissing(
+          database,
+          "review_events",
+          "attempt_duration_seconds",
+          "INTEGER NOT NULL DEFAULT 0",
+        );
+        addColumnIfMissing(database, "review_events", "pre_confidence", "INTEGER");
+      }
+      if (tableExists(database, "knowledge_points")) {
+        addColumnIfMissing(database, "knowledge_points", "self_confidence", "INTEGER");
+      }
+    },
+  },
+  {
+    version: "0023_task_learning_evidence",
+    run: (database) => {
+      if (!tableExists(database, "day_tasks")) return;
+      addColumnIfMissing(database, "day_tasks", "knowledge_point_id", "TEXT");
+      addColumnIfMissing(
+        database,
+        "day_tasks",
+        "activity_type",
+        "TEXT NOT NULL DEFAULT 'unspecified'",
+      );
+      addColumnIfMissing(
+        database,
+        "day_tasks",
+        "completion_criteria",
+        "TEXT NOT NULL DEFAULT ''",
+      );
+      addColumnIfMissing(database, "day_tasks", "source_type", "TEXT NOT NULL DEFAULT ''");
+      addColumnIfMissing(database, "day_tasks", "source_id", "TEXT NOT NULL DEFAULT ''");
+      addColumnIfMissing(database, "day_tasks", "actual_minutes", "INTEGER");
+      addColumnIfMissing(
+        database,
+        "day_tasks",
+        "completion_output",
+        "TEXT NOT NULL DEFAULT ''",
+      );
+      addColumnIfMissing(
+        database,
+        "day_tasks",
+        "verification_method",
+        "TEXT NOT NULL DEFAULT ''",
+      );
+      addColumnIfMissing(
+        database,
+        "day_tasks",
+        "planned_verification_method",
+        "TEXT NOT NULL DEFAULT ''",
+      );
+      addColumnIfMissing(
+        database,
+        "day_tasks",
+        "verification_result",
+        "TEXT NOT NULL DEFAULT ''",
+      );
+      database.exec(`
+        CREATE INDEX IF NOT EXISTS idx_tasks_knowledge_point
+          ON day_tasks(workspace_id, knowledge_point_id, day DESC)
+      `);
+      if (tableExists(database, "study_sessions")) {
+        addColumnIfMissing(database, "study_sessions", "task_id", "INTEGER");
+        database.exec(`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_study_sessions_task
+            ON study_sessions(workspace_id, task_id)
+            WHERE task_id IS NOT NULL
+        `);
+      }
+    },
+  },
+  {
+    version: "0024_task_retest_outcome",
+    run: (database) => {
+      if (!tableExists(database, "day_tasks")) return;
+      addColumnIfMissing(
+        database,
+        "day_tasks",
+        "verification_outcome",
+        "TEXT NOT NULL DEFAULT ''",
+      );
+      database.exec(`
+        CREATE INDEX IF NOT EXISTS idx_tasks_source
+          ON day_tasks(workspace_id, source_type, source_id, day DESC)
+      `);
+    },
+  },
+  {
+    version: "0025_operational_observability",
+    sql: `
+      CREATE TABLE IF NOT EXISTS web_vitals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        metric_id TEXT NOT NULL,
+        route TEXT NOT NULL,
+        metric_name TEXT NOT NULL,
+        value REAL NOT NULL,
+        rating TEXT NOT NULL DEFAULT '',
+        navigation_type TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(metric_id, metric_name)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_web_vitals_window
+        ON web_vitals(metric_name, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_web_vitals_route_window
+        ON web_vitals(route, metric_name, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS operational_metrics_hourly (
+        bucket_hour TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        scope TEXT NOT NULL DEFAULT '',
+        event_count INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (bucket_hour, event_type, scope)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_operational_metrics_window
+        ON operational_metrics_hourly(event_type, bucket_hour DESC);
+    `,
+  },
+  {
+    version: "0026_plugin_platform_algorithms",
+    sql: `
+      CREATE TABLE IF NOT EXISTS workspace_plugins (
+        workspace_id TEXT NOT NULL,
+        plugin_id TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 0,
+        nav_order INTEGER NOT NULL DEFAULT 0,
+        config_json TEXT NOT NULL DEFAULT '{}',
+        config_version INTEGER NOT NULL DEFAULT 1,
+        installed_version TEXT NOT NULL DEFAULT '',
+        state TEXT NOT NULL DEFAULT 'available',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, plugin_id),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_workspace_plugins_enabled
+        ON workspace_plugins(workspace_id, enabled, nav_order);
+
+      CREATE TABLE IF NOT EXISTS algorithm_problems (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workspace_id TEXT NOT NULL,
+        provider_id TEXT NOT NULL DEFAULT 'external',
+        external_problem_id TEXT NOT NULL DEFAULT '',
+        source_url TEXT NOT NULL,
+        title TEXT NOT NULL,
+        difficulty_band TEXT NOT NULL DEFAULT '',
+        tags_json TEXT NOT NULL DEFAULT '[]',
+        notes TEXT NOT NULL DEFAULT '',
+        evidence_status TEXT NOT NULL DEFAULT 'unseen',
+        next_review TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (workspace_id, provider_id, external_problem_id),
+        UNIQUE (workspace_id, source_url),
+        UNIQUE (workspace_id, id),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_algorithm_problems_review
+        ON algorithm_problems(workspace_id, next_review, updated_at DESC);
+
+      CREATE TABLE IF NOT EXISTS algorithm_attempts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workspace_id TEXT NOT NULL,
+        problem_id INTEGER NOT NULL,
+        day TEXT NOT NULL,
+        verdict TEXT NOT NULL,
+        duration_minutes INTEGER NOT NULL DEFAULT 0,
+        max_hint_level INTEGER NOT NULL DEFAULT 0,
+        pre_confidence INTEGER,
+        independent INTEGER NOT NULL DEFAULT 0,
+        review_kind TEXT NOT NULL DEFAULT 'initial',
+        error_category TEXT NOT NULL DEFAULT '',
+        reflection TEXT NOT NULL DEFAULT '',
+        source_verification TEXT NOT NULL DEFAULT 'user_reported',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (workspace_id, id),
+        FOREIGN KEY (workspace_id, problem_id)
+          REFERENCES algorithm_problems(workspace_id, id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_algorithm_attempts_problem
+        ON algorithm_attempts(workspace_id, problem_id, day DESC, id DESC);
+      CREATE INDEX IF NOT EXISTS idx_algorithm_attempts_day
+        ON algorithm_attempts(workspace_id, day DESC);
+    `,
+  },
+  {
+    version: "0027_plugin_study_session_sources",
+    run: (database) => {
+      if (!tableExists(database, "study_sessions")) return;
+      addColumnIfMissing(database, "study_sessions", "source_type", "TEXT NOT NULL DEFAULT ''");
+      addColumnIfMissing(database, "study_sessions", "source_id", "TEXT NOT NULL DEFAULT ''");
+      database.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_study_sessions_source
+          ON study_sessions(workspace_id, source_type, source_id)
+          WHERE source_type != '' AND source_id != ''
+      `);
+    },
+  },
+  {
+    version: "0028_algorithm_judge_foundation",
+    sql: `
+      ALTER TABLE algorithm_problems ADD COLUMN problem_mode TEXT NOT NULL DEFAULT 'external';
+      ALTER TABLE algorithm_problems ADD COLUMN statement_markdown TEXT NOT NULL DEFAULT '';
+      ALTER TABLE algorithm_problems ADD COLUMN input_specification TEXT NOT NULL DEFAULT '';
+      ALTER TABLE algorithm_problems ADD COLUMN output_specification TEXT NOT NULL DEFAULT '';
+      ALTER TABLE algorithm_problems ADD COLUMN examples_json TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE algorithm_problems ADD COLUMN judge_problem_ref TEXT NOT NULL DEFAULT '';
+      ALTER TABLE algorithm_problems ADD COLUMN time_limit_ms INTEGER NOT NULL DEFAULT 2000;
+      ALTER TABLE algorithm_problems ADD COLUMN memory_limit_kb INTEGER NOT NULL DEFAULT 262144;
+      ALTER TABLE algorithm_problems ADD COLUMN supported_languages_json TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE algorithm_problems ADD COLUMN hint_ladder_json TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE algorithm_problems ADD COLUMN license_metadata_json TEXT NOT NULL DEFAULT '{}';
+      ALTER TABLE algorithm_problems ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}';
+
+      ALTER TABLE algorithm_attempts ADD COLUMN language TEXT NOT NULL DEFAULT '';
+      ALTER TABLE algorithm_attempts ADD COLUMN started_at TEXT;
+      ALTER TABLE algorithm_attempts ADD COLUMN ended_at TEXT;
+      ALTER TABLE algorithm_attempts ADD COLUMN active_seconds INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE algorithm_attempts ADD COLUMN plan_text TEXT NOT NULL DEFAULT '';
+      ALTER TABLE algorithm_attempts ADD COLUMN outcome TEXT NOT NULL DEFAULT '';
+      ALTER TABLE algorithm_attempts ADD COLUMN session_id TEXT NOT NULL DEFAULT '';
+      ALTER TABLE algorithm_attempts ADD COLUMN source_task_id INTEGER REFERENCES day_tasks(id);
+      ALTER TABLE algorithm_attempts ADD COLUMN transfer_source_problem_id INTEGER REFERENCES algorithm_problems(id);
+
+      UPDATE algorithm_attempts
+      SET outcome = verdict
+      WHERE outcome = '';
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_algorithm_attempts_session
+        ON algorithm_attempts(workspace_id, session_id)
+        WHERE session_id != '';
+
+      CREATE TABLE IF NOT EXISTS algorithm_provider_connections (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workspace_id TEXT NOT NULL,
+        provider_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'disconnected',
+        account_label TEXT NOT NULL DEFAULT '',
+        encrypted_credentials BLOB,
+        credentials_version INTEGER NOT NULL DEFAULT 0,
+        last_sync_at TEXT,
+        sync_cursor TEXT NOT NULL DEFAULT '',
+        last_error_code TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (workspace_id, provider_id),
+        UNIQUE (workspace_id, id),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS algorithm_problem_skills (
+        workspace_id TEXT NOT NULL,
+        problem_id INTEGER NOT NULL,
+        skill_key TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'primary',
+        confidence REAL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, problem_id, skill_key),
+        FOREIGN KEY (workspace_id, problem_id)
+          REFERENCES algorithm_problems(workspace_id, id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS algorithm_code_blobs (
+        id TEXT NOT NULL,
+        workspace_id TEXT NOT NULL,
+        ciphertext BLOB NOT NULL,
+        iv BLOB NOT NULL,
+        auth_tag BLOB NOT NULL,
+        key_version INTEGER NOT NULL DEFAULT 1,
+        sha256 TEXT NOT NULL,
+        byte_size INTEGER NOT NULL,
+        expires_at TEXT,
+        deleted_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, id),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_algorithm_code_expiry
+        ON algorithm_code_blobs(expires_at, deleted_at);
+
+      CREATE TABLE IF NOT EXISTS algorithm_code_drafts (
+        workspace_id TEXT NOT NULL,
+        problem_id INTEGER NOT NULL,
+        language TEXT NOT NULL,
+        code_blob_id TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, problem_id, language),
+        FOREIGN KEY (workspace_id, problem_id)
+          REFERENCES algorithm_problems(workspace_id, id) ON DELETE CASCADE,
+        FOREIGN KEY (workspace_id, code_blob_id)
+          REFERENCES algorithm_code_blobs(workspace_id, id)
+      );
+
+      CREATE TABLE IF NOT EXISTS algorithm_hint_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workspace_id TEXT NOT NULL,
+        problem_id INTEGER NOT NULL,
+        session_id TEXT NOT NULL,
+        hint_level INTEGER NOT NULL,
+        source TEXT NOT NULL DEFAULT 'static',
+        revealed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (workspace_id, session_id, hint_level),
+        UNIQUE (workspace_id, id),
+        FOREIGN KEY (workspace_id, problem_id)
+          REFERENCES algorithm_problems(workspace_id, id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_algorithm_hint_events_session
+        ON algorithm_hint_events(workspace_id, session_id, hint_level DESC);
+
+      CREATE TABLE IF NOT EXISTS algorithm_submissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workspace_id TEXT NOT NULL,
+        attempt_id INTEGER NOT NULL,
+        problem_id INTEGER NOT NULL,
+        operation_id TEXT NOT NULL,
+        gateway_submission_id TEXT NOT NULL DEFAULT '',
+        code_blob_id TEXT,
+        code_sha256 TEXT NOT NULL,
+        language TEXT NOT NULL,
+        submission_kind TEXT NOT NULL DEFAULT 'formal',
+        status TEXT NOT NULL DEFAULT 'CREATING',
+        time_ms INTEGER,
+        memory_kb INTEGER,
+        compiler_excerpt TEXT NOT NULL DEFAULT '',
+        public_feedback_json TEXT NOT NULL DEFAULT '[]',
+        failure_code TEXT NOT NULL DEFAULT '',
+        gateway_latency_ms INTEGER,
+        submitted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        judged_at TEXT,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (workspace_id, operation_id),
+        UNIQUE (workspace_id, id),
+        FOREIGN KEY (workspace_id, attempt_id)
+          REFERENCES algorithm_attempts(workspace_id, id) ON DELETE CASCADE,
+        FOREIGN KEY (workspace_id, problem_id)
+          REFERENCES algorithm_problems(workspace_id, id) ON DELETE CASCADE,
+        FOREIGN KEY (workspace_id, code_blob_id)
+          REFERENCES algorithm_code_blobs(workspace_id, id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_algorithm_submissions_attempt
+        ON algorithm_submissions(workspace_id, attempt_id, id DESC);
+      CREATE INDEX IF NOT EXISTS idx_algorithm_submissions_status
+        ON algorithm_submissions(status, updated_at);
+
+      CREATE TABLE IF NOT EXISTS algorithm_reflections (
+        workspace_id TEXT NOT NULL,
+        attempt_id INTEGER NOT NULL,
+        error_category TEXT NOT NULL DEFAULT '',
+        correction_rule TEXT NOT NULL DEFAULT '',
+        complexity_time TEXT NOT NULL DEFAULT '',
+        complexity_space TEXT NOT NULL DEFAULT '',
+        takeaway TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, attempt_id),
+        FOREIGN KEY (workspace_id, attempt_id)
+          REFERENCES algorithm_attempts(workspace_id, id) ON DELETE CASCADE
+      );
+
+      INSERT OR IGNORE INTO algorithm_reflections
+        (workspace_id, attempt_id, error_category, correction_rule, takeaway)
+      SELECT workspace_id, id, error_category, reflection, reflection
+      FROM algorithm_attempts
+      WHERE error_category != '' OR reflection != '';
+
+      CREATE TABLE IF NOT EXISTS algorithm_reviews (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workspace_id TEXT NOT NULL,
+        problem_id INTEGER NOT NULL,
+        source_attempt_id INTEGER NOT NULL,
+        review_kind TEXT NOT NULL,
+        due_day TEXT NOT NULL,
+        completed_at TEXT,
+        attempt_id INTEGER,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (workspace_id, source_attempt_id, review_kind, due_day),
+        UNIQUE (workspace_id, id),
+        FOREIGN KEY (workspace_id, problem_id)
+          REFERENCES algorithm_problems(workspace_id, id) ON DELETE CASCADE,
+        FOREIGN KEY (workspace_id, source_attempt_id)
+          REFERENCES algorithm_attempts(workspace_id, id) ON DELETE CASCADE,
+        FOREIGN KEY (workspace_id, attempt_id)
+          REFERENCES algorithm_attempts(workspace_id, id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_algorithm_reviews_due
+        ON algorithm_reviews(workspace_id, due_day, completed_at);
+
+      CREATE TABLE IF NOT EXISTS algorithm_error_cases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workspace_id TEXT NOT NULL,
+        problem_id INTEGER NOT NULL,
+        attempt_id INTEGER NOT NULL,
+        mistake_id INTEGER,
+        error_category TEXT NOT NULL,
+        correction_rule TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'candidate',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (workspace_id, attempt_id),
+        UNIQUE (workspace_id, id),
+        FOREIGN KEY (workspace_id, problem_id)
+          REFERENCES algorithm_problems(workspace_id, id) ON DELETE CASCADE,
+        FOREIGN KEY (workspace_id, attempt_id)
+          REFERENCES algorithm_attempts(workspace_id, id) ON DELETE CASCADE,
+        FOREIGN KEY (mistake_id) REFERENCES mistakes(id)
+      );
+    `,
+  },
+
 ];
 
 function migrateLegacyDayTasks(database: Database.Database): void {
   if (!tableExists(database, "day_tasks") || !tableExists(database, "planner_tasks")) return;
-  const legacyTasks = database.prepare(`
+  const legacyTasks = database
+    .prepare(
+      `
     SELECT d.workspace_id, d.id, d.day, d.title, d.subject_code, d.done, d.sort_order,
            d.created_at, d.done_at, d.priority, d.estimated_minutes, d.scheduled_start, d.notes,
            COALESCE(w.timezone, 'Asia/Shanghai') AS timezone
@@ -882,7 +1431,9 @@ function migrateLegacyDayTasks(database: Database.Database): void {
       ON p.workspace_id = d.workspace_id AND p.legacy_day_task_id = d.id
     WHERE p.id IS NULL
     ORDER BY d.workspace_id, d.id
-  `).all() as Array<{
+  `,
+    )
+    .all() as Array<{
     workspace_id: string;
     id: number;
     day: string;
@@ -936,6 +1487,44 @@ function migrateLegacyDayTasks(database: Database.Database): void {
     });
   }
 }
+
+/**
+ * 函数迁移的源码锁。CI 会从 migrations.ts AST 重新计算每个 run 函数的 SHA-256；
+ * 运行时使用这里的稳定值，避免生产 bundle 的函数序列化差异影响 checksum。
+ */
+export const MIGRATION_RUN_HASHES: Readonly<Record<string, string>> = {
+  "0004_knowledge_unification": "1313b9d63f9d6d06941b343e599a2ac6d49b777ebeb277c400fb0eb0a42ae985",
+  "0005_day_planning": "5a28b7da3d8f49f36b8b7e6f4b6e4f44c504c9ebe86c991a4bc3ce7dbc7cfa8f",
+  "0006_identity_workspaces": "d8249e1d5d7fc0ebdb4acf753c78f257e0c6e80da2a67b9688ae98b0b1f71513",
+  "0007_workspace_scope": "2f57b375d2a1f36807e3b9c3f09c3504ea9ba1613103984e4dd5e9c19a1a839f",
+  "0008_workspace_blob_storage": "bb39d219c29a4ae9da3b729703eb99ad325384a2c93951f03347ad607c103cd5",
+  "0009_user_profile": "ea4f9e702ce54175a12599ef1febaac0949ed061f1c68a3b2a8391b72df9cd4e",
+  "0010_point_created_at": "e0a2ac4c4be9c439955f120257cad777dfff8eb85f3d67765d9efeb8a1d422b2",
+  "0011_chapter_tree": "2ad9080bd1d793f6152b9190907c097b609e28e5799329f54845dac20613e8a6",
+  "0012_point_tree": "af21c5f3529bd7723b4f84078dc31ffafbdcc154cff34741754d94704a18c32f",
+  "0013_learning_engine": "fdf1df016d6482121df0811d4d12be91899d1df311c957166874a5fd5aabeb6d",
+  "0014_learning_product": "0552f2920b0a2439480e01a937d4196ada2289da1462aaf94f5e0284adc18fe9",
+  "0015_recovery_audit": "7298c2c1d4c1a65b0b22d136df16147f2081fa3d393ee9a2d1bec4d5504a7331",
+  "0016_task_schedule": "4cfc465fdeb02ff13189bf6927fe45d2158c61d59e28d5955b75cebb0704df1b",
+  "0018_mock_exam_diagnosis_status": "26db00d6e7047c888dae1d5e167f3df1c9cbde2c3c88dbf7b53cd4c67c74c4ce",
+  "0019_asset_links_integrity": "e58af1557fe28bf92fa2ba5f7f83133a2d9e88537d44790984701fd9353508fb",
+  "0020_mock_exam_comparison_key": "294d849629e3767fa74f1cf4f3732e38ab4d20e23b07c0295b0f85f24436c476",
+  "0021_review_event_type": "a97bd4c1b770b8e9f099498dddb9786b700f1dbe9f0d83c4932105ce74e9cb6f",
+  "0022_learning_evidence_fields": "b4c2e0120bf091d62ac311ad5b392a0b4ed5962bf12ba1338b83a7daff7a5281",
+  "0023_task_learning_evidence": "e4ad27cadcff925bf6f93eb1a9c68c994b78e50100e2bf9ed10b2383cec846f6",
+  "0024_task_retest_outcome": "6c71b6d1d8aa5a6b577c13b62ef8e3531d639b69b9574974f762b41e3f089dac",
+  "0027_plugin_study_session_sources": "fbe5058f34747f85c8ad50815ff0db1a1dcfe31348df8e1777fd50cc3e03a2ea",
+  "0018_planner_core": "e29e6c29b960be8ab8f629a83a6575dc98fa3e2b85ab51c1d477c700682445b5",
+  "0029_planner_legacy_dual_write": "2ab7fcf86b74d5cde7f2d315494970c2e3d3ff0567e95f74046b1558b7b7d7ad",
+};
+
+const MIGRATION_RUN_HASH_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  "0018_planner_core": [
+    "1ab96876201e60e77589eec259096fce793a63c372387cbd5c530771ac31db14",
+    "07f1c5392a1c92303e92d81a644302e2d5f60140ab0302ee5a20b32eb87d4815",
+    "5f51d07feddc46115f81d6cfd66970ee52a8db416bc3fc5afa1056076289b743",
+  ],
+};
 
 function addColumnIfMissing(database: Database.Database, table: string, column: string, definition: string): void {
   const columns = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
@@ -1083,10 +1672,14 @@ function rebuildTableWithWorkspace(
   database.exec(`ALTER TABLE ${input.table} RENAME TO ${legacyTable}`);
   database.exec(input.create);
   const names = input.columns.join(", ");
-  database.prepare(`
+  database
+    .prepare(
+      `
     INSERT INTO ${input.table} (workspace_id, ${names})
     SELECT ?, ${names} FROM ${legacyTable}
-  `).run(LEGACY_WORKSPACE_ID);
+  `,
+    )
+    .run(LEGACY_WORKSPACE_ID);
   database.exec(`DROP TABLE ${legacyTable}`);
 }
 
@@ -1113,12 +1706,28 @@ export function runMigrations(database: Database.Database, options: MigrationOpt
       }),
   );
   const insert = database.prepare("INSERT INTO schema_migrations (version, checksum) VALUES (?, ?)");
+  const upgradeChecksum = database.prepare("UPDATE schema_migrations SET checksum = ? WHERE version = ?");
 
-  for (const migration of migrations) {
-    if (options.throughVersion && migration.version > options.throughVersion) break;
-    const expectedChecksum = checksum(migration.sql ?? migration.version);
+  let throughIndex = migrations.length;
+  if (options.throughVersion) {
+    throughIndex = migrations.findIndex((migration) => migration.version === options.throughVersion) + 1;
+    if (!throughIndex) throw new Error(`未知迁移版本: ${options.throughVersion}`);
+  }
+
+  for (const migration of migrations.slice(0, throughIndex)) {
+    const expectedChecksum = migration.sql ? checksum(migration.sql) : MIGRATION_RUN_HASHES[migration.version];
+    if (!expectedChecksum) throw new Error(`Missing run migration hash for ${migration.version}`);
     const appliedChecksum = applied.get(migration.version);
     if (appliedChecksum) {
+      const legacyRunChecksum = migration.run ? checksum(migration.version) : null;
+      const acceptedRunChecksums = MIGRATION_RUN_HASH_ALIASES[migration.version] ?? [];
+      if (
+        (legacyRunChecksum && appliedChecksum === legacyRunChecksum) ||
+        acceptedRunChecksums.includes(appliedChecksum)
+      ) {
+        upgradeChecksum.run(expectedChecksum, migration.version);
+        continue;
+      }
       if (appliedChecksum !== expectedChecksum) {
         throw new Error(`Migration checksum mismatch for ${migration.version}`);
       }
@@ -1159,9 +1768,13 @@ export function backfillKnowledgeHierarchy(database: Database.Database): void {
 
   const run = database.transaction(() => {
     // 1. Attach orphan knowledge points to chapters derived from their submodule text.
-    const orphanPoints = database.prepare(`
+    const orphanPoints = database
+      .prepare(
+        `
       SELECT workspace_id, id, subject_code, submodule FROM knowledge_points WHERE chapter_id IS NULL
-    `).all() as Array<{ workspace_id: string; id: string; subject_code: string; submodule: string }>;
+    `,
+      )
+      .all() as Array<{ workspace_id: string; id: string; subject_code: string; submodule: string }>;
     if (orphanPoints.length) {
       const insertChapter = database.prepare(`
         INSERT OR IGNORE INTO subject_chapters (workspace_id, id, subject_code, title, sort_order)
@@ -1178,9 +1791,10 @@ export function backfillKnowledgeHierarchy(database: Database.Database): void {
         const title = point.submodule?.trim() || "未分章";
         insertChapter.run({
           workspaceId: point.workspace_id,
-          id: point.workspace_id === LEGACY_WORKSPACE_ID
-            ? `chapter:${point.subject_code}:${migrationSlug(title)}`
-            : `${point.workspace_id}:chapter:${point.subject_code}:${migrationSlug(title)}`,
+          id:
+            point.workspace_id === LEGACY_WORKSPACE_ID
+              ? `chapter:${point.subject_code}:${migrationSlug(title)}`
+              : `${point.workspace_id}:chapter:${point.subject_code}:${migrationSlug(title)}`,
           subjectCode: point.subject_code,
           title,
         });
@@ -1190,13 +1804,17 @@ export function backfillKnowledgeHierarchy(database: Database.Database): void {
     }
 
     // 2. Promote legacy knowledge_tags to knowledge_points (skip names that already exist in the chapter).
-    const tags = database.prepare(`
+    const tags = database
+      .prepare(
+        `
       SELECT t.workspace_id, t.id AS tag_id, t.chapter_id, t.name,
              c.subject_code, c.title AS chapter_title, s.name AS subject_name
       FROM knowledge_tags t
       JOIN subject_chapters c ON c.id = t.chapter_id AND c.workspace_id = t.workspace_id
       JOIN subjects s ON s.code = c.subject_code AND s.workspace_id = c.workspace_id
-    `).all() as Array<{
+    `,
+      )
+      .all() as Array<{
       workspace_id: string;
       tag_id: string;
       chapter_id: string;
@@ -1219,15 +1837,15 @@ export function backfillKnowledgeHierarchy(database: Database.Database): void {
     const tagToPoint = new Map<string, string>();
     for (const tag of tags) {
       const existing = pointByChapterTitle.get(tag.workspace_id, tag.chapter_id, tag.name) as
-        | { id: string }
-        | undefined;
+        { id: string } | undefined;
       if (existing) {
         tagToPoint.set(tag.tag_id, existing.id);
         continue;
       }
-      const id = tag.workspace_id === LEGACY_WORKSPACE_ID
-        ? `kp:${tag.chapter_id}:${migrationSlug(tag.name)}`
-        : `${tag.workspace_id}:kp:${tag.chapter_id}:${migrationSlug(tag.name)}`;
+      const id =
+        tag.workspace_id === LEGACY_WORKSPACE_ID
+          ? `kp:${tag.chapter_id}:${migrationSlug(tag.name)}`
+          : `${tag.workspace_id}:kp:${tag.chapter_id}:${migrationSlug(tag.name)}`;
       insertPoint.run({
         workspaceId: tag.workspace_id,
         id,
@@ -1242,12 +1860,16 @@ export function backfillKnowledgeHierarchy(database: Database.Database): void {
 
     // 3. Migrate asset_knowledge_tags links into asset_links.
     if (tableExists(database, "asset_knowledge_tags")) {
-      const links = database.prepare(`
+      const links = database
+        .prepare(
+          `
         SELECT akt.workspace_id, akt.asset_id, akt.knowledge_tag_id, c.subject_code, c.id AS chapter_id
         FROM asset_knowledge_tags akt
         JOIN knowledge_tags t ON t.id = akt.knowledge_tag_id AND t.workspace_id = akt.workspace_id
         JOIN subject_chapters c ON c.id = t.chapter_id AND c.workspace_id = t.workspace_id
-      `).all() as Array<{
+      `,
+        )
+        .all() as Array<{
         workspace_id: string;
         asset_id: number;
         knowledge_tag_id: string;
@@ -1291,12 +1913,16 @@ function backfillAssetBlobs(database: Database.Database, uploadRoot?: string): v
 
   // 只处理还没有对应 blob 行的 asset：迁移完成后 relative_path 即 storage_key，
   // 此查询命中 0 行，冷启动不再全量读文件重哈希。
-  const assets = database.prepare(`
+  const assets = database
+    .prepare(
+      `
     SELECT a.workspace_id, a.id, a.original_name, a.relative_path
     FROM assets a
     LEFT JOIN blobs b ON b.workspace_id = a.workspace_id AND b.storage_key = a.relative_path
     WHERE b.id IS NULL
-  `).all() as Array<{
+  `,
+    )
+    .all() as Array<{
     workspace_id: string;
     id: number;
     original_name: string;
@@ -1341,7 +1967,9 @@ function backfillAssetBlobs(database: Database.Database, uploadRoot?: string): v
       updateAsset.run(storageKey, size, asset.workspace_id, asset.id);
     }
 
-    database.prepare(`
+    database
+      .prepare(
+        `
       UPDATE blobs
       SET ref_count = (
         SELECT COUNT(*)
@@ -1349,7 +1977,9 @@ function backfillAssetBlobs(database: Database.Database, uploadRoot?: string): v
         WHERE assets.workspace_id = blobs.workspace_id
           AND assets.relative_path = blobs.storage_key
       )
-    `).run();
+    `,
+      )
+      .run();
   });
 
   backfill();

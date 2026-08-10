@@ -87,8 +87,10 @@ describe("Planner migrations", () => {
     const before = db.prepare("SELECT COUNT(*) AS count FROM planner_tasks").get();
     runMigrations(db);
     expect(db.prepare("SELECT COUNT(*) AS count FROM planner_tasks").get()).toEqual(before);
-    expect(() => db.prepare("UPDATE day_tasks SET title = 'changed' WHERE id = 1").run())
-      .toThrow("day_tasks is read-only after Planner v2 migration");
+    expect(db.prepare(`
+      SELECT COUNT(*) AS count FROM sqlite_master
+      WHERE type = 'trigger' AND name LIKE 'day_tasks_planner_v2_readonly_%'
+    `).get()).toEqual({ count: 0 });
   });
 
   it("adds recurrence, reminder, notification, and encrypted subscription storage append-only", () => {
