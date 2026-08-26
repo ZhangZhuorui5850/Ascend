@@ -1,6 +1,7 @@
 const confirmation = process.env.ASCEND_JUDGE_ATTACK_CONFIRM;
 const rawUrl = process.env.ASCEND_JUDGE_ATTACK_GATEWAY_URL?.trim();
 const token = process.env.ASCEND_JUDGE_ATTACK_GATEWAY_TOKEN?.trim();
+const problemRef = process.env.ASCEND_JUDGE_ATTACK_PROBLEM_REF?.trim();
 
 if (confirmation !== "isolated-worker-only") {
   throw new Error(
@@ -9,6 +10,9 @@ if (confirmation !== "isolated-worker-only") {
 }
 if (!rawUrl || !token || Buffer.byteLength(token, "utf8") < 32) {
   throw new Error("Set an isolated Gateway URL and a token of at least 32 bytes");
+}
+if (!problemRef) {
+  throw new Error("Set ASCEND_JUDGE_ATTACK_PROBLEM_REF to an isolated addition problem");
 }
 const gatewayUrl = new URL(rawUrl);
 const isLoopback = ["localhost", "127.0.0.1", "::1"].includes(gatewayUrl.hostname);
@@ -24,7 +28,6 @@ gatewayUrl.pathname = gatewayUrl.pathname.replace(/\/+$/, "");
 gatewayUrl.search = "";
 gatewayUrl.hash = "";
 
-const PROBLEM_REF = "ascend:foundation:sum-two:v1";
 const probes = [
   {
     id: "baseline",
@@ -118,7 +121,7 @@ int main(){
 const report = {
   startedAt: new Date().toISOString(),
   gateway: `${gatewayUrl.protocol}//${gatewayUrl.host}`,
-  problemRef: PROBLEM_REF,
+  problemRef,
   results: [],
 };
 
@@ -131,7 +134,7 @@ for (const probe of probes) {
       "idempotency-key": operationId,
     },
     body: JSON.stringify({
-      problemRef: PROBLEM_REF,
+      problemRef,
       language: probe.language,
       sourceCode: probe.sourceCode.trim(),
       mode: "sample",

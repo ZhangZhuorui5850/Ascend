@@ -30,7 +30,7 @@ import { RichText } from "@/components/RichText";
 import type { JudgeLanguage } from "@/lib/judge-gateway";
 import type { JudgeRuntimeAvailability } from "@/lib/judge-runtime";
 import type { AlgorithmLearningState } from "@/lib/repo/algorithm-learning";
-import type { AlgorithmSubmission } from "@/lib/repo/algorithm-submissions";
+import type { AlgorithmDraftConflict, AlgorithmSubmission } from "@/lib/repo/algorithm-submissions";
 import type { AlgorithmProblem, AlgorithmReviewKind } from "@/lib/repo/algorithms";
 
 type SessionTab = "problem" | "plan" | "code" | "result";
@@ -55,6 +55,7 @@ export function ManagedAlgorithmWorkspace({
   const sourceCodeRef = useRef(problem.starterCode[problem.supportedLanguages[0] || "cpp17"] || "");
   const languageRef = useRef<JudgeLanguage>(problem.supportedLanguages[0] || "cpp17");
   const editRevisionRef = useRef(0);
+  const draftRevisionRef = useRef(0);
   const draftSaveRef = useRef({ active: false, pending: false, notifyWhenDone: false });
   const [tab, setTab] = useState<SessionTab>("problem");
   const [language, setLanguage] = useState<JudgeLanguage>(problem.supportedLanguages[0] || "cpp17");
@@ -73,6 +74,7 @@ export function ManagedAlgorithmWorkspace({
   const [draftState, setDraftState] = useState(
     availability.configured ? "正在读取云端草稿…" : "Judge 未配置，草稿不会上传",
   );
+  const [draftConflict, setDraftConflict] = useState<AlgorithmDraftConflict | null>(null);
   const [activeSeconds, setActiveSeconds] = useState(0);
 
   useEffect(() => {
@@ -94,8 +96,11 @@ export function ManagedAlgorithmWorkspace({
         ) return;
         sourceCodeRef.current = result.sourceCode;
         setSourceCode(result.sourceCode);
+        draftRevisionRef.current = result.revision ?? 0;
+        setDraftConflict(null);
         setDraftState(result.updatedAt ? `已同步 ${formatTime(result.updatedAt)}` : "已载入云端草稿");
       } else {
+        draftRevisionRef.current = 0;
         setDraftState("尚无云端草稿");
       }
     });
@@ -103,14 +108,14 @@ export function ManagedAlgorithmWorkspace({
   }, [availability.configured, language, problem.id, problem.starterCode]);
 
   useEffect(() => {
-    if (!availability.configured || !sourceCode.trim()) return;
+    if (!availability.configured || !sourceCode.trim() || draftConflict) return;
     const timer = window.setTimeout(() => {
       void saveDraft(true);
     }, 1_500);
     return () => window.clearTimeout(timer);
     // saveDraft is intentionally driven by the latest rendered source.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [availability.configured, language, problem.id, sourceCode]);
+  }, [availability.configured, draftConflict, language, problem.id, sourceCode]);
 
   useEffect(() => {
     let lastActivity = Date.now();
@@ -185,14 +190,23 @@ export function ManagedAlgorithmWorkspace({
         const result = await saveAlgorithmDraftAction({
           problemId: problem.id,
           ...snapshot,
+          baseRevision: draftRevisionRef.current,
+          operationId: `draft:${crypto.randomUUID()}`,
         });
         if (!result.ok) {
-          setDraftState(result.error || "保存失败");
+          if (result.code === "DRAFT_CONFLICT" && result.conflict) {
+            setDraftConflict(result.conflict);
+            setDraftState(`云端 v${result.conflict.revision} 已更新`);
+          } else {
+            setDraftState(result.error || "保存失败");
+          }
           if (draftSaveRef.current.notifyWhenDone) {
             notify(result.error || "代码草稿保存失败", "error");
           }
           return;
         }
+        draftRevisionRef.current = result.revision ?? draftRevisionRef.current;
+        setDraftConflict(null);
         setDraftState(result.savedAt ? `已同步 ${formatTime(result.savedAt)}` : "已同步");
       } while (draftSaveRef.current.pending);
       if (draftSaveRef.current.notifyWhenDone) notify("代码草稿已加密保存", "success");
@@ -201,6 +215,27 @@ export function ManagedAlgorithmWorkspace({
       draftSaveRef.current.notifyWhenDone = false;
       setBusy((current) => current === "draft" ? null : current);
     }
+  }
+
+  async function loadCloudDraft(): Promise<void> {
+    const result = await getAlgorithmDraftAction({ problemId: problem.id, language: languageRef.current });
+    if (!result.ok || result.sourceCode === undefined) {
+      notify(result.error || "云端草稿读取失败", "error");
+      return;
+    }
+    editRevisionRef.current += 1;
+    sourceCodeRef.current = result.sourceCode;
+    setSourceCode(result.sourceCode);
+    draftRevisionRef.current = result.revision ?? 0;
+    setDraftConflict(null);
+    setDraftState(result.updatedAt ? `已载入云端 v${result.revision}` : "已载入云端草稿");
+  }
+
+  async function saveLocalAfterConflict(): Promise<void> {
+    if (!draftConflict) return;
+    draftRevisionRef.current = draftConflict.revision;
+    setDraftConflict(null);
+    await saveDraft(false);
   }
 
   async function revealNextHint() {
@@ -326,8 +361,10 @@ export function ManagedAlgorithmWorkspace({
     editRevisionRef.current += 1;
     languageRef.current = next;
     sourceCodeRef.current = problem.starterCode[next] || "";
+    draftRevisionRef.current = 0;
     setLanguage(next);
     setSourceCode(sourceCodeRef.current);
+    setDraftConflict(null);
     setDraftState(availability.configured ? "正在读取云端草稿…" : "Judge 未配置，草稿不会上传");
     setSubmission(null);
   }
@@ -488,9 +525,16 @@ export function ManagedAlgorithmWorkspace({
             {draftState} · 草稿加密持久化；提交源码
             {availability.retentionDays ? `${availability.retentionDays} 天后擦除` : "评测终态即擦除"}
           </small>
-          <button disabled={!availability.configured || busy !== null} onClick={() => void saveDraft(false)} type="button">
-            <Save size={14} />保存草稿
-          </button>
+          {draftConflict ? (
+            <span className="algorithmDraftConflictActions">
+              <button onClick={() => void loadCloudDraft()} type="button">载入云端 v{draftConflict.revision}</button>
+              <button onClick={() => void saveLocalAfterConflict()} type="button">保留本地并保存</button>
+            </span>
+          ) : (
+            <button disabled={!availability.configured || busy !== null} onClick={() => void saveDraft(false)} type="button">
+              <Save size={14} />保存草稿
+            </button>
+          )}
         </footer>
       </section>
 

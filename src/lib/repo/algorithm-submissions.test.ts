@@ -1,6 +1,5 @@
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { ensureManagedAlgorithmCatalog } from "../algorithm-catalog";
 import { readAlgorithmCodeBlob } from "../algorithm-code-crypto";
 import type { JudgeGatewayResult } from "../judge-gateway";
 import { getAlgorithmDashboard } from "./algorithms";
@@ -8,12 +7,13 @@ import { revealAlgorithmHint } from "./algorithm-hints";
 import {
   applyGatewaySubmissionResult,
   attachGatewaySubmission,
+  AlgorithmDraftConflictError,
   getAlgorithmDraft,
   prepareAlgorithmSubmission,
   saveAlgorithmDraft,
 } from "./algorithm-submissions";
 import { setPluginEnabled } from "./plugins";
-import { createTestDb, createTestWorkspace } from "./testing";
+import { createTestDb, createTestWorkspace, seedTestManagedAlgorithmProblems } from "./testing";
 
 const key = { key: randomBytes(32), version: 1 };
 
@@ -21,12 +21,8 @@ function setup() {
   const db = createTestDb();
   const scope = createTestWorkspace(db);
   setPluginEnabled(db, scope, "algorithms", true);
-  ensureManagedAlgorithmCatalog(db, scope);
-  const problem = db.prepare(`
-    SELECT id FROM algorithm_problems
-    WHERE workspace_id = ? AND judge_problem_ref = 'ascend:foundation:sum-two:v1'
-  `).get(scope.workspaceId) as { id: number };
-  return { db, scope, problemId: problem.id };
+  const { sourceProblemId, targetProblemId } = seedTestManagedAlgorithmProblems(db, scope);
+  return { db, scope, problemId: sourceProblemId, targetProblemId };
 }
 
 function result(
@@ -52,25 +48,86 @@ function result(
 }
 
 describe("algorithm submission repo", () => {
-  it("persists encrypted cross-device drafts and redacts superseded code", () => {
+  it("persists encrypted cross-device drafts and keeps version history", () => {
     const { db, scope, problemId } = setup();
     const first = saveAlgorithmDraft(db, scope, {
       problemId,
       language: "cpp17",
       sourceCode: "int main(){return 0;}",
+      baseRevision: 0,
+      operationId: "draft:first:0001",
     }, key);
     expect(getAlgorithmDraft(db, scope, { problemId, language: "cpp17" }, [key]))
-      .toMatchObject({ sourceCode: "int main(){return 0;}" });
+      .toMatchObject({ sourceCode: "int main(){return 0;}", revision: 1, sha256: first.sha256 });
 
     const second = saveAlgorithmDraft(db, scope, {
       problemId,
       language: "cpp17",
       sourceCode: "int main(){return 1;}",
+      baseRevision: 1,
+      operationId: "draft:second:0001",
     }, key);
     expect(second.codeBlobId).not.toBe(first.codeBlobId);
-    expect(() => readAlgorithmCodeBlob(db, scope, first.codeBlobId, [key])).toThrow("已删除");
+    expect(readAlgorithmCodeBlob(db, scope, first.codeBlobId, [key])).toBe("int main(){return 0;}");
     expect(getAlgorithmDraft(db, scope, { problemId, language: "cpp17" }, [key]))
       .toMatchObject({ sourceCode: "int main(){return 1;}" });
+    expect(db.prepare(`
+      SELECT revision, version_kind, code_sha256
+      FROM algorithm_code_versions
+      WHERE workspace_id = ? AND problem_id = ?
+      ORDER BY revision
+    `).all(scope.workspaceId, problemId)).toEqual([
+      expect.objectContaining({ revision: 1, version_kind: "autosave", code_sha256: first.sha256 }),
+      expect.objectContaining({ revision: 2, version_kind: "autosave", code_sha256: second.sha256 }),
+    ]);
+  });
+
+  it("rejects a stale draft write and preserves the current revision", () => {
+    const { db, scope, problemId } = setup();
+    saveAlgorithmDraft(db, scope, {
+      problemId,
+      language: "cpp17",
+      sourceCode: "int main(){return 0;}",
+      baseRevision: 0,
+      operationId: "draft:conflict:first",
+    }, key);
+    const current = saveAlgorithmDraft(db, scope, {
+      problemId,
+      language: "cpp17",
+      sourceCode: "int main(){return 2;}",
+      baseRevision: 1,
+      operationId: "draft:conflict:second",
+    }, key);
+
+    expect(() => saveAlgorithmDraft(db, scope, {
+      problemId,
+      language: "cpp17",
+      sourceCode: "int main(){return 3;}",
+      baseRevision: 1,
+      operationId: "draft:conflict:stale",
+    }, key)).toThrow(AlgorithmDraftConflictError);
+    expect(getAlgorithmDraft(db, scope, { problemId, language: "cpp17" }, [key]))
+      .toMatchObject({ sourceCode: "int main(){return 2;}", revision: 2, sha256: current.sha256 });
+  });
+
+  it("replays draft operations idempotently", () => {
+    const { db, scope, problemId } = setup();
+    const input = {
+      problemId,
+      language: "cpp17" as const,
+      sourceCode: "int main(){return 0;}",
+      baseRevision: 0,
+      operationId: "draft:replay:0001",
+    };
+    const first = saveAlgorithmDraft(db, scope, input, key);
+    const replay = saveAlgorithmDraft(db, scope, input, key);
+
+    expect(replay).toEqual(first);
+    expect(db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM algorithm_code_versions
+      WHERE workspace_id = ? AND problem_id = ?
+    `).get(scope.workspaceId, problemId)).toEqual({ count: 1 });
   });
 
   it("uses an operation id to prevent duplicate formal evaluations", () => {
@@ -356,16 +413,12 @@ describe("algorithm submission repo", () => {
   });
 
   it("requires and persists a mastered related source for managed transfer evidence", () => {
-    const { db, scope, problemId: sourceProblemId } = setup();
-    const target = db.prepare(`
-      SELECT id FROM algorithm_problems
-      WHERE workspace_id = ? AND judge_problem_ref = 'ascend:foundation:range-sum:v1'
-    `).get(scope.workspaceId) as { id: number };
+    const { db, scope, problemId: sourceProblemId, targetProblemId } = setup();
     db.prepare(`
       INSERT INTO algorithm_problem_skills
         (workspace_id, problem_id, skill_key, role, confidence)
       VALUES (?, ?, 'integer-arithmetic', 'secondary', 1)
-    `).run(scope.workspaceId, target.id);
+    `).run(scope.workspaceId, targetProblemId);
 
     const first = prepareAlgorithmSubmission(db, scope, {
       operationId: "submit:transfer:source:first",
@@ -394,7 +447,7 @@ describe("algorithm submission repo", () => {
     const transfer = prepareAlgorithmSubmission(db, scope, {
       operationId: "submit:transfer:target",
       sessionId: "session:transfer:target",
-      problemId: target.id,
+      problemId: targetProblemId,
       day: "2026-07-26",
       language: "python3",
       sourceCode: "l,r=map(int,input().split());print((l+r)*(r-l+1)//2)",
@@ -413,7 +466,7 @@ describe("algorithm submission repo", () => {
       outcome: "AC",
     });
     expect(getAlgorithmDashboard(db, scope, "2026-07-26").problems
-      .find((problem) => problem.id === target.id)).toMatchObject({
+      .find((problem) => problem.id === targetProblemId)).toMatchObject({
       evidenceStatus: "transfer_verified",
       nextReview: "2026-08-25",
     });

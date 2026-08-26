@@ -23,16 +23,9 @@ try {
 
   await page.goto(`${baseUrl}/practice/algorithms`, { waitUntil: "networkidle" });
   const managedProblems = page.locator(".algorithmProblemCard").filter({ hasText: "Ascend 原创" });
-  if (await managedProblems.count() !== 30) {
-    throw new Error(`expected 30 managed pilot problems, found ${await managedProblems.count()}`);
+  if (await managedProblems.count() !== 0) {
+    throw new Error(`expected an empty managed catalog, found ${await managedProblems.count()}`);
   }
-  const managedProblem = page.locator(".algorithmProblemCard").filter({ hasText: "两数求和" });
-  await managedProblem.waitFor({ state: "visible" });
-  await managedProblem.getByRole("button", { name: "开始训练" }).click();
-  await expectText(managedProblem, "题目与约束", "managed problem statement");
-  await expectText(managedProblem, "先写思路，再写代码", "plan-before-code workflow");
-  await expectText(managedProblem, "草稿加密持久化", "encrypted draft disclosure");
-  await expectText(managedProblem, "正式 Judge 尚未开放", "safe no-gateway state");
 
   await page.getByLabel("题目链接").fill(`https://bailian.openjudge.cn/practice/${unique}/`);
   await page.getByLabel("题目名称").fill(problemTitle);

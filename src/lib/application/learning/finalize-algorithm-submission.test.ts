@@ -1,13 +1,16 @@
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { ensureManagedAlgorithmCatalog } from "../../algorithm-catalog";
 import type { JudgeGatewayResult } from "../../judge-gateway";
 import {
   applyGatewaySubmissionResult,
   prepareAlgorithmSubmission,
 } from "../../repo/algorithm-submissions";
 import { setPluginEnabled } from "../../repo/plugins";
-import { createTestDb, createTestWorkspace } from "../../repo/testing";
+import {
+  createTestDb,
+  createTestWorkspace,
+  seedTestManagedAlgorithmProblems,
+} from "../../repo/testing";
 import { finalizeAlgorithmSubmission } from "./finalize-algorithm-submission";
 
 const key = { key: randomBytes(32), version: 1 };
@@ -16,15 +19,11 @@ function setup() {
   const db = createTestDb();
   const scope = createTestWorkspace(db);
   setPluginEnabled(db, scope, "algorithms", true);
-  ensureManagedAlgorithmCatalog(db, scope);
-  const problem = db.prepare(`
-    SELECT id FROM algorithm_problems
-    WHERE workspace_id = ? AND judge_problem_ref = 'ascend:foundation:sum-two:v1'
-  `).get(scope.workspaceId) as { id: number };
+  const { sourceProblemId } = seedTestManagedAlgorithmProblems(db, scope);
   const prepared = prepareAlgorithmSubmission(db, scope, {
     operationId: "application:algorithm:submission",
     sessionId: "application:algorithm:session",
-    problemId: problem.id,
+    problemId: sourceProblemId,
     day: "2026-08-10",
     language: "python3",
     sourceCode: "a,b=map(int,input().split());print(a+b)",
@@ -32,7 +31,7 @@ function setup() {
     preConfidence: 2,
     planText: "读取两个整数后在常数时间内求和并输出",
   }, key, 7);
-  return { db, scope, prepared, problemId: problem.id };
+  return { db, scope, prepared, problemId: sourceProblemId };
 }
 
 function acceptedResult(): JudgeGatewayResult {

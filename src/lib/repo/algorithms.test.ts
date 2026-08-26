@@ -1,9 +1,48 @@
 import { describe, expect, it } from "vitest";
-import { createAlgorithmProblem, getAlgorithmDashboard, recordAlgorithmAttempt } from "./algorithms";
+import {
+  createAlgorithmProblem,
+  getAlgorithmDashboard,
+  recordAlgorithmAttempt,
+  updateAlgorithmProblemDetails,
+} from "./algorithms";
 import { setPluginEnabled } from "./plugins";
 import { createTestDb, createTestWorkspace } from "./testing";
 
 describe("algorithm training repo", () => {
+  it("updates VS Code quick-edit metadata within the active workspace", () => {
+    const db = createTestDb();
+    const scope = createTestWorkspace(db);
+    setPluginEnabled(db, scope, "algorithms", true);
+    const problem = createAlgorithmProblem(db, scope, {
+      sourceUrl: "https://bailian.openjudge.cn/practice/9991/",
+      title: "待编辑题目",
+    });
+    expect(
+      updateAlgorithmProblemDetails(db, scope, problem.id, {
+        title: "区间动态规划",
+        difficultyBand: "challenge",
+        tags: ["动态规划", "区间 DP"],
+        notes: "先枚举区间长度",
+        materialStatus: "doing",
+        priorityBand: "P1",
+        phaseKey: "W3",
+        nextReview: "2026-08-28",
+      }),
+    ).toMatchObject({
+      title: "区间动态规划",
+      difficultyBand: "challenge",
+      tags: ["动态规划", "区间 DP"],
+      notes: "先枚举区间长度",
+      materialStatus: "doing",
+      priorityBand: "P1",
+      phaseKey: "W3",
+      nextReview: "2026-08-28",
+    });
+    expect(() => updateAlgorithmProblemDetails(db, scope, problem.id, { materialStatus: "invalid" })).toThrow(
+      "训练状态无效",
+    );
+  });
+
   it("requires the plugin and keeps problem data workspace-scoped", () => {
     const db = createTestDb();
     const first = createTestWorkspace(db, { email: "algorithm-first@example.com" });
@@ -50,9 +89,15 @@ describe("algorithm training repo", () => {
       reflection: "状态定义不清",
     });
     expect(guided.independent).toBe(false);
-    expect(db.prepare(`
+    expect(
+      db
+        .prepare(
+          `
       SELECT COUNT(*) AS count FROM study_sessions WHERE workspace_id = ?
-    `).get(scope.workspaceId)).toEqual({ count: 0 });
+    `,
+        )
+        .get(scope.workspaceId),
+    ).toEqual({ count: 0 });
     expect(getAlgorithmDashboard(db, scope, "2026-07-20").problems[0]).toMatchObject({
       evidenceStatus: "guided_completed",
       nextReview: "2026-07-21",
@@ -83,17 +128,25 @@ describe("algorithm training repo", () => {
       reviewKind: "unseen_variant",
       transferSourceProblemId: problem.id,
     });
-    expect(getAlgorithmDashboard(db, scope, "2026-07-31").problems
-      .find((item) => item.id === variant.id)).toMatchObject({
+    expect(
+      getAlgorithmDashboard(db, scope, "2026-07-31").problems.find((item) => item.id === variant.id),
+    ).toMatchObject({
       evidenceStatus: "transfer_verified",
       nextReview: "2026-08-30",
     });
-    expect(getAlgorithmDashboard(db, scope, "2026-07-31").problems
-      .find((item) => item.id === problem.id)?.nextReview).toBeNull();
-    expect(db.prepare(`
+    expect(
+      getAlgorithmDashboard(db, scope, "2026-07-31").problems.find((item) => item.id === problem.id)?.nextReview,
+    ).toBeNull();
+    expect(
+      db
+        .prepare(
+          `
       SELECT outcome, ended_at IS NOT NULL AS ended, transfer_source_problem_id
       FROM algorithm_attempts WHERE workspace_id = ? AND id = ?
-    `).get(scope.workspaceId, guided.id)).toEqual({
+    `,
+        )
+        .get(scope.workspaceId, guided.id),
+    ).toEqual({
       outcome: "AC",
       ended: 1,
       transfer_source_problem_id: null,
@@ -114,19 +167,23 @@ describe("algorithm training repo", () => {
       title: "陌生变式",
       tags: ["双指针"],
     });
-    expect(() => recordAlgorithmAttempt(db, scope, {
-      problemId: target.id,
-      day: "2026-07-26",
-      verdict: "AC",
-      reviewKind: "unseen_variant",
-    })).toThrow("必须选择");
-    expect(() => recordAlgorithmAttempt(db, scope, {
-      problemId: target.id,
-      day: "2026-07-26",
-      verdict: "AC",
-      reviewKind: "unseen_variant",
-      transferSourceProblemId: source.id,
-    })).toThrow("先前独立 AC");
+    expect(() =>
+      recordAlgorithmAttempt(db, scope, {
+        problemId: target.id,
+        day: "2026-07-26",
+        verdict: "AC",
+        reviewKind: "unseen_variant",
+      }),
+    ).toThrow("必须选择");
+    expect(() =>
+      recordAlgorithmAttempt(db, scope, {
+        problemId: target.id,
+        day: "2026-07-26",
+        verdict: "AC",
+        reviewKind: "unseen_variant",
+        transferSourceProblemId: source.id,
+      }),
+    ).toThrow("先前独立 AC");
 
     recordAlgorithmAttempt(db, scope, {
       problemId: source.id,
@@ -138,23 +195,27 @@ describe("algorithm training repo", () => {
       title: "不相关变式",
       tags: ["图论"],
     });
-    expect(() => recordAlgorithmAttempt(db, scope, {
-      problemId: unrelated.id,
-      day: "2026-07-26",
-      verdict: "AC",
-      reviewKind: "unseen_variant",
-      transferSourceProblemId: source.id,
-    })).toThrow("共同技能标签");
+    expect(() =>
+      recordAlgorithmAttempt(db, scope, {
+        problemId: unrelated.id,
+        day: "2026-07-26",
+        verdict: "AC",
+        reviewKind: "unseen_variant",
+        transferSourceProblemId: source.id,
+      }),
+    ).toThrow("共同技能标签");
   });
 
   it("treats external results as user reported and validates unsafe input", () => {
     const db = createTestDb();
     const scope = createTestWorkspace(db);
     setPluginEnabled(db, scope, "algorithms", true);
-    expect(() => createAlgorithmProblem(db, scope, {
-      sourceUrl: "javascript:alert(1)",
-      title: "不安全链接",
-    })).toThrow("HTTP 或 HTTPS");
+    expect(() =>
+      createAlgorithmProblem(db, scope, {
+        sourceUrl: "javascript:alert(1)",
+        title: "不安全链接",
+      }),
+    ).toThrow("HTTP 或 HTTPS");
 
     const problem = createAlgorithmProblem(db, scope, {
       sourceUrl: "https://example.com/problems/two-sum",
@@ -172,12 +233,14 @@ describe("algorithm training repo", () => {
       independent: false,
       sourceVerification: "user_reported",
     });
-    expect(() => recordAlgorithmAttempt(db, scope, {
-      problemId: problem.id,
-      day: "2026-07-26",
-      verdict: "AC",
-      maxHintLevel: 5,
-    })).toThrow("提示级别");
+    expect(() =>
+      recordAlgorithmAttempt(db, scope, {
+        problemId: problem.id,
+        day: "2026-07-26",
+        verdict: "AC",
+        maxHintLevel: 5,
+      }),
+    ).toThrow("提示级别");
   });
 
   it("makes caller-keyed manual attempts replay-safe without owning study projections", () => {
@@ -201,16 +264,30 @@ describe("algorithm training repo", () => {
     const replay = recordAlgorithmAttempt(db, scope, input);
 
     expect(replay).toEqual(first);
-    expect(db.prepare(`
+    expect(
+      db
+        .prepare(
+          `
       SELECT COUNT(*) AS count FROM algorithm_attempts WHERE workspace_id = ?
-    `).get(scope.workspaceId)).toEqual({ count: 1 });
-    expect(db.prepare(`
+    `,
+        )
+        .get(scope.workspaceId),
+    ).toEqual({ count: 1 });
+    expect(
+      db
+        .prepare(
+          `
       SELECT COUNT(*) AS count FROM study_sessions WHERE workspace_id = ?
-    `).get(scope.workspaceId)).toEqual({ count: 0 });
-    expect(() => recordAlgorithmAttempt(db, scope, {
-      ...input,
-      verdict: "AC",
-    })).toThrow("同一算法训练幂等键不能用于不同请求");
+    `,
+        )
+        .get(scope.workspaceId),
+    ).toEqual({ count: 0 });
+    expect(() =>
+      recordAlgorithmAttempt(db, scope, {
+        ...input,
+        verdict: "AC",
+      }),
+    ).toThrow("同一算法训练幂等键不能用于不同请求");
   });
 
   it("assigns a stable external id when a root URL has no path identifier", () => {

@@ -34,9 +34,15 @@ yarn-error.log*
 # local runtime data
 /data/
 /backups/
+/dist/
+**/node_modules/
+**/__pycache__/
+*.pyc
 /.superpowers/
 /.worktrees/
 /undefined/
+extensions/ascend-practice/.vscode-test/
+extensions/ascend-practice/dist/
 
 # env files (can opt-in for committing if needed)
 .env*

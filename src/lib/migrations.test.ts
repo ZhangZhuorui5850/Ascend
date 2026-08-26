@@ -603,6 +603,43 @@ describe("runMigrations", () => {
     expect(getAppliedMigrations(db).filter((version) => version === "0001_foundation")).toHaveLength(1);
   });
 
+  it("removes the retired Ascend pilot catalog while preserving imported problems", () => {
+    const db = new Database(":memory:");
+    initializeDatabase(db);
+    runMigrations(db);
+    db.prepare("DELETE FROM schema_migrations WHERE version = ?")
+      .run("0039_remove_ascend_pilot_catalog");
+    const retired = db.prepare(`
+      INSERT INTO algorithm_problems
+        (workspace_id, provider_id, external_problem_id, source_url, title)
+      VALUES (?, 'ascend', 'ascend:test:retired:v1', 'ascend://catalog/retired', '退役试点题')
+    `).run(LEGACY_WORKSPACE_ID);
+    db.prepare(`
+      INSERT INTO algorithm_problem_skills
+        (workspace_id, problem_id, skill_key)
+      VALUES (?, ?, 'test-skill')
+    `).run(LEGACY_WORKSPACE_ID, retired.lastInsertRowid);
+    db.prepare(`
+      INSERT INTO algorithm_problems
+        (workspace_id, provider_id, external_problem_id, source_url, title)
+      VALUES (?, 'openjudge', '1000', 'https://example.test/problems/1000', '保留导入题')
+    `).run(LEGACY_WORKSPACE_ID);
+
+    runMigrations(db);
+
+    expect(db.prepare(`
+      SELECT provider_id, external_problem_id
+      FROM algorithm_problems
+      WHERE workspace_id = ?
+    `).all(LEGACY_WORKSPACE_ID)).toEqual([
+      { provider_id: "openjudge", external_problem_id: "1000" },
+    ]);
+    expect(db.prepare(`
+      SELECT COUNT(*) AS count FROM algorithm_problem_skills WHERE workspace_id = ?
+    `).get(LEGACY_WORKSPACE_ID)).toEqual({ count: 0 });
+    expect(getAppliedMigrations(db)).toContain("0039_remove_ascend_pilot_catalog");
+  });
+
   it("runs the newly added migrations only after Planner dual-write and preserves already-applied IDs", () => {
     const db = new Database(":memory:");
 

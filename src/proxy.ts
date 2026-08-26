@@ -1,8 +1,15 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE } from "./src/lib/auth-constants";
+import { SESSION_COOKIE } from "./lib/auth-constants";
 
-const PUBLIC_PATHS = ["/login", "/invite", "/api/health", "/api/mcp"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/invite",
+  "/api/health",
+  "/api/mcp",
+  "/api/algorithm/v1",
+  "/api/algorithm/vscode",
+];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -26,5 +33,7 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png|apple-touch-icon.png|apple-touch-icon-precomposed.png|site.webmanifest|icons/|brand/|sw.js|offline.html).*)",
+  ],
 };

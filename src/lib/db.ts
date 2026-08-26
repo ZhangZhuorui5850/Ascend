@@ -1,7 +1,6 @@
 import Database from "better-sqlite3";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { seedManagedAlgorithmCatalogForEnabledWorkspaces } from "./algorithm-catalog";
 import { redactExpiredAlgorithmCodeBlobs } from "./algorithm-code-crypto";
 import { buildFallbackKnowledgeSeed, extractKnowledgeSeed } from "./knowledge-map";
 import { logError } from "./log";
@@ -34,7 +33,6 @@ export function getDb(): Database.Database {
     initializeDatabase(db);
     runMigrations(db, { uploadRoot: getUploadRoot() });
     redactExpiredAlgorithmCodeBlobs(db);
-    seedManagedAlgorithmCatalogForEnabledWorkspaces(db);
     seedKnowledgeMapIfEmpty(db);
     instrumentSlowQueries(db);
   } catch (error) {

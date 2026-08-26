@@ -3,4 +3,6 @@ node_modules
 npm-debug.log
 data
 backups
-.env.local
+.env
+.env.*
+!.env.example

@@ -1,28 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { ensureManagedAlgorithmCatalog } from "../algorithm-catalog";
 import { getSessionMaxHintLevel, revealAlgorithmHint } from "./algorithm-hints";
 import { setPluginEnabled } from "./plugins";
-import { createTestDb, createTestWorkspace } from "./testing";
+import { createTestDb, createTestWorkspace, seedTestManagedAlgorithmProblems } from "./testing";
 
 describe("algorithm hint evidence", () => {
   it("returns one requested level and records the maximum without exposing the ladder", () => {
     const db = createTestDb();
     const scope = createTestWorkspace(db);
     setPluginEnabled(db, scope, "algorithms", true);
-    ensureManagedAlgorithmCatalog(db, scope);
-    const problem = db.prepare(`
-      SELECT id FROM algorithm_problems
-      WHERE workspace_id = ? AND judge_problem_ref = 'ascend:foundation:sum-two:v1'
-    `).get(scope.workspaceId) as { id: number };
+    const { sourceProblemId } = seedTestManagedAlgorithmProblems(db, scope);
     const sessionId = "hint:session:0001";
 
     expect(revealAlgorithmHint(db, scope, {
-      problemId: problem.id,
+      problemId: sourceProblemId,
       sessionId,
       level: 1,
     })).toMatchObject({ level: 1, source: "static" });
     expect(revealAlgorithmHint(db, scope, {
-      problemId: problem.id,
+      problemId: sourceProblemId,
       sessionId,
       level: 3,
     })).toMatchObject({ level: 3, source: "static" });

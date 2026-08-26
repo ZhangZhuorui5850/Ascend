@@ -2,7 +2,6 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import problems from "../../services/judge-gateway/problems.json";
 
 const root = path.resolve(import.meta.dirname, "../..");
 const compose = readFileSync(
@@ -21,21 +20,11 @@ describe("Judge0 staging contract", () => {
     );
   });
 
-  it("makes the Judge0 instance strict enough for every managed problem request", () => {
-    const maximumProblemTimeMs = Math.max(
-      ...problems.map((problem) => problem.timeLimitMs),
-    );
-    const maximumProblemMemoryKb = Math.max(
-      ...problems.map((problem) => problem.memoryLimitKb),
-    );
-    const maximumCases = Math.max(
-      ...problems.map((problem) => problem.cases.length),
-    );
-
+  it("keeps strict Judge0 resource boundaries while the managed catalog is empty", () => {
     const settings = composeSettings(compose);
-    expect(Number(settings.MAX_CPU_TIME_LIMIT) * 1000).toBeGreaterThanOrEqual(maximumProblemTimeMs);
-    expect(Number(settings.MAX_MEMORY_LIMIT)).toBeGreaterThanOrEqual(maximumProblemMemoryKb);
-    expect(Number(settings.MAX_SUBMISSION_BATCH_SIZE)).toBeGreaterThanOrEqual(maximumCases);
+    expect(Number(settings.MAX_CPU_TIME_LIMIT)).toBeGreaterThanOrEqual(1);
+    expect(Number(settings.MAX_MEMORY_LIMIT)).toBeGreaterThanOrEqual(131_072);
+    expect(Number(settings.MAX_SUBMISSION_BATCH_SIZE)).toBeGreaterThanOrEqual(1);
     expect(settings.MAX_PROCESSES_AND_OR_THREADS).toBe("1");
     expect(settings.MAX_MAX_PROCESSES_AND_OR_THREADS).toBe("1");
     expect(settings.ALLOW_ENABLE_NETWORK).toBe("false");

@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { actionFailure } from "@/lib/action-failure";
-import { ensureManagedAlgorithmCatalog } from "@/lib/algorithm-catalog";
 import { getDb } from "@/lib/db";
 import {
   requestAlgorithmPilot,
@@ -25,12 +24,7 @@ export async function setPluginEnabledAction(input: {
   try {
     const access = await requireWorkspace();
     const db = getDb();
-    db.transaction(() => {
-      setPluginEnabled(db, access, input.pluginId, input.enabled);
-      if (input.enabled && input.pluginId === "algorithms") {
-        ensureManagedAlgorithmCatalog(db, access);
-      }
-    })();
+    setPluginEnabled(db, access, input.pluginId, input.enabled);
     revalidatePluginSurfaces();
     return { ok: true };
   } catch (error) {

@@ -1,6 +1,5 @@
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { ensureManagedAlgorithmCatalog } from "../algorithm-catalog";
 import { applyGatewaySubmissionResult, prepareAlgorithmSubmission } from "./algorithm-submissions";
 import {
   getAlgorithmLearningState,
@@ -8,7 +7,7 @@ import {
   saveAlgorithmReflection,
 } from "./algorithm-learning";
 import { setPluginEnabled } from "./plugins";
-import { createTestDb, createTestWorkspace } from "./testing";
+import { createTestDb, createTestWorkspace, seedTestManagedAlgorithmProblems } from "./testing";
 
 const key = { key: randomBytes(32), version: 1 };
 
@@ -16,15 +15,11 @@ function setup() {
   const db = createTestDb();
   const scope = createTestWorkspace(db);
   setPluginEnabled(db, scope, "algorithms", true);
-  ensureManagedAlgorithmCatalog(db, scope);
-  const problem = db.prepare(`
-    SELECT id FROM algorithm_problems
-    WHERE workspace_id = ? AND judge_problem_ref = 'ascend:foundation:sum-two:v1'
-  `).get(scope.workspaceId) as { id: number };
+  const { sourceProblemId } = seedTestManagedAlgorithmProblems(db, scope);
   const prepared = prepareAlgorithmSubmission(db, scope, {
     operationId: "learning:operation:0001",
     sessionId: "learning:session:0001",
-    problemId: problem.id,
+    problemId: sourceProblemId,
     day: "2026-07-26",
     language: "python3",
     sourceCode: "print(0)",

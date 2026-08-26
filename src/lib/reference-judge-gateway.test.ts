@@ -6,8 +6,20 @@ import {
   ReferenceJudgeGateway,
   validateProblemDefinitions,
 } from "../../services/judge-gateway/core.mjs";
-import definitions from "../../services/judge-gateway/problems.json";
 
+const TEST_PROBLEM_REF = "test:gateway:add:v1";
+const definitions = [{
+  ref: TEST_PROBLEM_REF,
+  license: { id: "CC0-1.0", origin: "test fixture", redistribution: true },
+  languages: ["cpp17", "python3"],
+  timeLimitMs: 1_000,
+  memoryLimitKb: 131_072,
+  cases: [
+    { visibility: "public", input: "1 2\n", output: "3\n" },
+    { visibility: "public", input: "-1 1\n", output: "0\n" },
+    { visibility: "hidden", input: "20 22\n", output: "42\n" },
+  ],
+}];
 const problems = validateProblemDefinitions(definitions);
 type GatewayProblem = {
   cases: Array<{ visibility: "public" | "hidden"; input: string; output: string }>;
@@ -31,7 +43,7 @@ describe("reference judge gateway", () => {
     });
     const input = {
       idempotencyKey: "operation:gateway:0001",
-      problemRef: "ascend:foundation:sum-two:v1",
+      problemRef: TEST_PROBLEM_REF,
       language: "cpp17",
       sourceCode: "int main(){return 0;}",
     };
@@ -41,7 +53,7 @@ describe("reference judge gateway", () => {
     expect(request).toHaveBeenCalledTimes(1);
     const body = JSON.parse(request.mock.calls[0][1].body);
     expect(body.submissions).toHaveLength(
-      (problems.get("ascend:foundation:sum-two:v1") as GatewayProblem).cases.length,
+      (problems.get(TEST_PROBLEM_REF) as GatewayProblem).cases.length,
     );
     expect(body.submissions.every((submission: { enable_network: boolean }) => (
       submission.enable_network === false
@@ -62,7 +74,7 @@ describe("reference judge gateway", () => {
   });
 
   it("never returns hidden input, expected output, or stdout", () => {
-    const problem = problems.get("ascend:foundation:sum-two:v1") as GatewayProblem;
+    const problem = problems.get(TEST_PROBLEM_REF) as GatewayProblem;
     const submissions = problem.cases.map((testCase, index: number) => ({
       status: { id: index === 2 ? 4 : 3, description: index === 2 ? "Wrong Answer" : "Accepted" },
       stdout: Buffer.from(index === 2 ? "hidden-produced-value" : testCase.output).toString("base64"),
@@ -80,7 +92,7 @@ describe("reference judge gateway", () => {
   });
 
   it("only exposes a failed public sample with bounded expected output", () => {
-    const problem = problems.get("ascend:foundation:sum-two:v1") as GatewayProblem;
+    const problem = problems.get(TEST_PROBLEM_REF) as GatewayProblem;
     const submissions = problem.cases.map((testCase, index: number) => ({
       status: { id: index === 0 ? 4 : 3, description: index === 0 ? "Wrong Answer" : "Accepted" },
       stdout: Buffer.from(index === 0 ? "2\n" : testCase.output).toString("base64"),
@@ -115,7 +127,7 @@ describe("reference judge gateway", () => {
     });
     await gateway.createSubmission({
       idempotencyKey: "operation:sample:0001",
-      problemRef: "ascend:foundation:sum-two:v1",
+      problemRef: TEST_PROBLEM_REF,
       language: "python3",
       sourceCode: "print(sum(map(int,input().split())))",
       mode: "sample",
@@ -125,7 +137,7 @@ describe("reference judge gateway", () => {
   });
 
   it("validates licensed problem manifests before serving", () => {
-    expect(() => validateProblemDefinitions([])).toThrow("At least one problem");
+    expect(validateProblemDefinitions([]).size).toBe(0);
     expect(() => validateProblemDefinitions([{
       ref: "short",
       license: { id: "CC0-1.0", redistribution: true },
@@ -164,7 +176,7 @@ describe("reference judge gateway", () => {
     });
     await expect(gateway.createSubmission({
       idempotencyKey: "operation:large-response",
-      problemRef: "ascend:foundation:sum-two:v1",
+      problemRef: TEST_PROBLEM_REF,
       language: "cpp17",
       sourceCode: "int main(){return 0;}",
     })).rejects.toMatchObject({
@@ -194,7 +206,7 @@ describe("reference judge gateway", () => {
         (id, idempotency_key, request_sha256, problem_ref, language)
       VALUES
         ('submission:legacy:0001', 'operation:legacy:0001', 'hash',
-         'ascend:foundation:sum-two:v1', 'cpp17');
+         'test:gateway:add:v1', 'cpp17');
     `);
     new ReferenceJudgeGateway({
       db,
@@ -227,7 +239,7 @@ describe("reference judge gateway", () => {
     });
     const input = {
       idempotencyKey: "operation:queue-retry:0001",
-      problemRef: "ascend:foundation:sum-two:v1",
+      problemRef: TEST_PROBLEM_REF,
       language: "cpp17",
       sourceCode: "int main(){return 0;}",
     };
@@ -260,7 +272,7 @@ describe("reference judge gateway", () => {
       maxActive: 1,
     });
     const base = {
-      problemRef: "ascend:foundation:sum-two:v1",
+      problemRef: TEST_PROBLEM_REF,
       language: "cpp17",
       sourceCode: "int main(){return 0;}",
     };

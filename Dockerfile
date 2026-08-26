@@ -2,7 +2,16 @@ FROM node:24-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 # 生产服务器在大陆，官方 registry 单请求 ~6s，走 npmmirror
-RUN npm config set registry https://registry.npmmirror.com && npm ci
+# better-sqlite3 的预编译包不可用时，node-gyp 使用这套工具链完成兜底编译。
+RUN sed -i \
+      -e 's|deb.debian.org/debian|mirrors.aliyun.com/debian|g' \
+      -e 's|security.debian.org/debian-security|mirrors.aliyun.com/debian-security|g' \
+      /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm config set registry https://registry.npmmirror.com \
+    && npm ci
 
 FROM node:24-bookworm-slim AS builder
 WORKDIR /app

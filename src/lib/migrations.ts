@@ -1810,7 +1810,347 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: "0033_algorithm_practice_workspace",
+    sql: `
+      ALTER TABLE algorithm_problems ADD COLUMN content_mode TEXT NOT NULL DEFAULT 'external_link';
+      ALTER TABLE algorithm_problems ADD COLUMN evaluation_mode TEXT NOT NULL DEFAULT 'manual';
+      ALTER TABLE algorithm_problems ADD COLUMN material_status TEXT NOT NULL DEFAULT 'todo';
+      ALTER TABLE algorithm_problems ADD COLUMN priority_band TEXT NOT NULL DEFAULT '';
+      ALTER TABLE algorithm_problems ADD COLUMN phase_key TEXT NOT NULL DEFAULT '';
 
+      UPDATE algorithm_problems
+      SET content_mode = CASE WHEN problem_mode = 'managed' THEN 'managed' ELSE 'external_link' END,
+          evaluation_mode = CASE WHEN problem_mode = 'managed' THEN 'judge' ELSE 'manual' END;
+
+      CREATE TABLE algorithm_collections (
+        workspace_id TEXT NOT NULL,
+        id TEXT NOT NULL,
+        source_key TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        collection_kind TEXT NOT NULL DEFAULT 'custom',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, id),
+        UNIQUE (workspace_id, source_key),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE algorithm_collection_items (
+        workspace_id TEXT NOT NULL,
+        collection_id TEXT NOT NULL,
+        problem_id INTEGER NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, collection_id, problem_id),
+        FOREIGN KEY (workspace_id, collection_id)
+          REFERENCES algorithm_collections(workspace_id, id) ON DELETE CASCADE,
+        FOREIGN KEY (workspace_id, problem_id)
+          REFERENCES algorithm_problems(workspace_id, id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX idx_algorithm_collection_items_problem
+        ON algorithm_collection_items(workspace_id, problem_id);
+
+      CREATE TABLE algorithm_import_sources (
+        workspace_id TEXT NOT NULL,
+        id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        source_kind TEXT NOT NULL DEFAULT 'folder_upload',
+        root_locator TEXT NOT NULL DEFAULT '',
+        content_sha256 TEXT NOT NULL DEFAULT '',
+        item_count INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'ready',
+        errors_json TEXT NOT NULL DEFAULT '[]',
+        last_scanned_at TEXT,
+        last_imported_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, id),
+        UNIQUE (workspace_id, source_kind, root_locator),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE algorithm_import_items (
+        workspace_id TEXT NOT NULL,
+        source_id TEXT NOT NULL,
+        source_path TEXT NOT NULL,
+        problem_id INTEGER NOT NULL,
+        content_sha256 TEXT NOT NULL,
+        import_status TEXT NOT NULL DEFAULT 'imported',
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, source_id, source_path),
+        FOREIGN KEY (workspace_id, source_id)
+          REFERENCES algorithm_import_sources(workspace_id, id) ON DELETE CASCADE,
+        FOREIGN KEY (workspace_id, problem_id)
+          REFERENCES algorithm_problems(workspace_id, id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX idx_algorithm_import_items_problem
+        ON algorithm_import_items(workspace_id, problem_id);
+
+      CREATE TABLE algorithm_problem_assets (
+        workspace_id TEXT NOT NULL,
+        problem_id INTEGER NOT NULL,
+        asset_id INTEGER NOT NULL,
+        role TEXT NOT NULL DEFAULT 'reference',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, problem_id, asset_id, role),
+        FOREIGN KEY (workspace_id, problem_id)
+          REFERENCES algorithm_problems(workspace_id, id) ON DELETE CASCADE,
+        FOREIGN KEY (workspace_id, asset_id)
+          REFERENCES assets(workspace_id, id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE algorithm_devices (
+        workspace_id TEXT NOT NULL,
+        id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        platform TEXT NOT NULL DEFAULT '',
+        token_prefix TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        local_root TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'active',
+        expires_at TEXT NOT NULL,
+        last_seen_at TEXT,
+        revoked_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, id),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX idx_algorithm_devices_active
+        ON algorithm_devices(workspace_id, status, expires_at);
+
+      CREATE TABLE algorithm_code_versions (
+        workspace_id TEXT NOT NULL,
+        id TEXT NOT NULL,
+        problem_id INTEGER NOT NULL,
+        code_blob_id TEXT NOT NULL,
+        device_id TEXT,
+        language TEXT NOT NULL,
+        revision INTEGER NOT NULL,
+        version_kind TEXT NOT NULL DEFAULT 'autosave',
+        label TEXT NOT NULL DEFAULT '',
+        code_sha256 TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, id),
+        UNIQUE (workspace_id, problem_id, language, revision),
+        FOREIGN KEY (workspace_id, problem_id)
+          REFERENCES algorithm_problems(workspace_id, id) ON DELETE CASCADE,
+        FOREIGN KEY (workspace_id, code_blob_id)
+          REFERENCES algorithm_code_blobs(workspace_id, id),
+        FOREIGN KEY (workspace_id, device_id)
+          REFERENCES algorithm_devices(workspace_id, id)
+      );
+
+      CREATE INDEX idx_algorithm_code_versions_problem
+        ON algorithm_code_versions(workspace_id, problem_id, language, revision DESC);
+    `,
+  },
+  {
+    version: "0034_algorithm_device_pairings",
+    sql: `
+      CREATE TABLE algorithm_device_pairings (
+        id TEXT PRIMARY KEY,
+        device_code_hash TEXT NOT NULL UNIQUE,
+        user_code TEXT NOT NULL UNIQUE,
+        device_name TEXT NOT NULL,
+        platform TEXT NOT NULL DEFAULT '',
+        environment TEXT NOT NULL DEFAULT '',
+        request_fingerprint TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'pending',
+        workspace_id TEXT,
+        approved_by_user_id TEXT,
+        device_id TEXT,
+        expires_at TEXT NOT NULL,
+        approved_at TEXT,
+        consumed_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+        FOREIGN KEY (approved_by_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (workspace_id, device_id)
+          REFERENCES algorithm_devices(workspace_id, id) ON DELETE SET NULL
+      );
+
+      CREATE INDEX idx_algorithm_device_pairings_status
+        ON algorithm_device_pairings(status, expires_at);
+      CREATE INDEX idx_algorithm_device_pairings_fingerprint
+        ON algorithm_device_pairings(request_fingerprint, created_at);
+    `,
+  },
+  {
+    version: "0035_algorithm_library_tree",
+    sql: `
+      CREATE TABLE algorithm_library_folders (
+        workspace_id TEXT NOT NULL,
+        id TEXT NOT NULL,
+        parent_id TEXT,
+        name TEXT NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, id),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+        FOREIGN KEY (workspace_id, parent_id)
+          REFERENCES algorithm_library_folders(workspace_id, id)
+      );
+
+      CREATE INDEX idx_algorithm_library_folders_parent
+        ON algorithm_library_folders(workspace_id, parent_id, sort_order, id);
+
+      CREATE TABLE algorithm_library_items (
+        workspace_id TEXT NOT NULL,
+        problem_id INTEGER NOT NULL,
+        folder_id TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        library_number INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, problem_id),
+        UNIQUE (workspace_id, library_number),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+        FOREIGN KEY (workspace_id, problem_id)
+          REFERENCES algorithm_problems(workspace_id, id) ON DELETE CASCADE,
+        FOREIGN KEY (workspace_id, folder_id)
+          REFERENCES algorithm_library_folders(workspace_id, id)
+      );
+
+      CREATE INDEX idx_algorithm_library_items_folder
+        ON algorithm_library_items(workspace_id, folder_id, sort_order, library_number);
+
+      INSERT INTO algorithm_library_items
+        (workspace_id, problem_id, folder_id, sort_order, library_number)
+      SELECT workspace_id, id, NULL,
+             ROW_NUMBER() OVER (PARTITION BY workspace_id ORDER BY id),
+             ROW_NUMBER() OVER (PARTITION BY workspace_id ORDER BY id)
+      FROM algorithm_problems;
+    `,
+  },
+  {
+    version: "0036_algorithm_problem_overrides",
+    sql: `
+      CREATE TABLE algorithm_problem_overrides (
+        workspace_id TEXT NOT NULL,
+        problem_id INTEGER NOT NULL,
+        title TEXT,
+        difficulty_band TEXT,
+        tags_json TEXT,
+        notes TEXT,
+        material_status TEXT,
+        priority_band TEXT,
+        phase_key TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, problem_id),
+        FOREIGN KEY (workspace_id, problem_id)
+          REFERENCES algorithm_problems(workspace_id, id) ON DELETE CASCADE
+      );
+    `,
+  },
+  {
+    version: "0037_algorithm_sync_identity",
+    sql: `
+      CREATE TABLE system_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      INSERT INTO system_metadata (key, value)
+      VALUES ('server_instance_id', 'ascend-' || lower(hex(randomblob(16))));
+
+      ALTER TABLE algorithm_code_drafts
+        ADD COLUMN revision INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE algorithm_code_drafts
+        ADD COLUMN last_device_id TEXT NOT NULL DEFAULT '';
+
+      UPDATE algorithm_code_drafts
+      SET revision = COALESCE((
+        SELECT MAX(v.revision)
+        FROM algorithm_code_versions v
+        WHERE v.workspace_id = algorithm_code_drafts.workspace_id
+          AND v.problem_id = algorithm_code_drafts.problem_id
+          AND v.language = algorithm_code_drafts.language
+      ), 1);
+
+      CREATE TABLE algorithm_draft_operations (
+        workspace_id TEXT NOT NULL,
+        problem_id INTEGER NOT NULL,
+        language TEXT NOT NULL,
+        operation_id TEXT NOT NULL,
+        base_revision INTEGER NOT NULL,
+        saved_revision INTEGER NOT NULL,
+        code_blob_id TEXT NOT NULL,
+        code_sha256 TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, operation_id),
+        FOREIGN KEY (workspace_id, problem_id)
+          REFERENCES algorithm_problems(workspace_id, id) ON DELETE CASCADE,
+        FOREIGN KEY (workspace_id, code_blob_id)
+          REFERENCES algorithm_code_blobs(workspace_id, id)
+      );
+
+      CREATE INDEX idx_algorithm_draft_operations_target
+        ON algorithm_draft_operations(workspace_id, problem_id, language, created_at DESC);
+    `,
+  },
+  {
+    version: "0038_algorithm_cross_client_sessions",
+    sql: `
+      ALTER TABLE algorithm_attempts
+        ADD COLUMN client_kind TEXT NOT NULL DEFAULT 'web';
+      ALTER TABLE algorithm_attempts
+        ADD COLUMN device_id TEXT NOT NULL DEFAULT '';
+
+      CREATE INDEX idx_algorithm_attempts_active_session
+        ON algorithm_attempts(workspace_id, outcome, started_at DESC);
+    `,
+  },
+  {
+    version: "0039_remove_ascend_pilot_catalog",
+    run: (database) => {
+      if (!tableExists(database, "algorithm_problems")) return;
+      const targetCount = database.prepare(`
+        SELECT COUNT(*) AS count
+        FROM algorithm_problems
+        WHERE provider_id = 'ascend'
+          AND source_url LIKE 'ascend://catalog/%'
+      `).get() as { count: number };
+      if (!targetCount.count) return;
+      database.exec(`
+        UPDATE algorithm_attempts
+        SET transfer_source_problem_id = NULL
+        WHERE transfer_source_problem_id IN (
+          SELECT id FROM algorithm_problems
+          WHERE provider_id = 'ascend'
+            AND source_url LIKE 'ascend://catalog/%'
+        );
+
+        UPDATE algorithm_reviews
+        SET attempt_id = NULL
+        WHERE attempt_id IN (
+          SELECT a.id
+          FROM algorithm_attempts a
+          JOIN algorithm_problems p
+            ON p.workspace_id = a.workspace_id AND p.id = a.problem_id
+          WHERE p.provider_id = 'ascend'
+            AND p.source_url LIKE 'ascend://catalog/%'
+        );
+
+        DELETE FROM algorithm_problems
+        WHERE provider_id = 'ascend'
+          AND source_url LIKE 'ascend://catalog/%';
+      `);
+    },
+  },
 ];
 
 function migrateLegacyDayTasks(database: Database.Database): void {
@@ -1889,6 +2229,7 @@ function migrateLegacyDayTasks(database: Database.Database): void {
  * 运行时使用这里的稳定值，避免生产 bundle 的函数序列化差异影响 checksum。
  */
 export const MIGRATION_RUN_HASHES: Readonly<Record<string, string>> = {
+  "0039_remove_ascend_pilot_catalog": "e4ffc9d7c39b7fd70afbad7b31539810e764201fd800da5f4294281c29b57a52",
   "0004_knowledge_unification": "1313b9d63f9d6d06941b343e599a2ac6d49b777ebeb277c400fb0eb0a42ae985",
   "0005_day_planning": "5a28b7da3d8f49f36b8b7e6f4b6e4f44c504c9ebe86c991a4bc3ce7dbc7cfa8f",
   "0006_identity_workspaces": "d8249e1d5d7fc0ebdb4acf753c78f257e0c6e80da2a67b9688ae98b0b1f71513",

@@ -290,7 +290,7 @@ export function authenticateBearer(header, expectedToken) {
 }
 
 export function validateProblemDefinitions(raw) {
-  if (!Array.isArray(raw) || !raw.length) throw new Error("At least one problem is required");
+  if (!Array.isArray(raw)) throw new Error("Problem definitions must be an array");
   const map = new Map();
   for (const problem of raw) {
     if (!problem || typeof problem !== "object") throw new Error("Invalid problem definition");

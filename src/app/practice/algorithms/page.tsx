@@ -1,10 +1,14 @@
 import { notFound } from "next/navigation";
 import { AlgorithmTrainingBoard } from "@/components/AlgorithmTrainingBoard";
+import { configuredAlgorithmImportRoots } from "@/lib/algorithm-import";
+import { loadJudgeCodeKey } from "@/lib/algorithm-code-crypto";
 import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { getJudgeRuntimeAvailability } from "@/lib/judge-runtime";
 import { requirePageWorkspace } from "@/lib/page-auth";
 import { getAlgorithmDashboard } from "@/lib/repo/algorithms";
+import { listAlgorithmCollections, listAlgorithmImportSources } from "@/lib/repo/algorithm-import";
+import { listAlgorithmDevices } from "@/lib/repo/algorithm-devices";
 import { requirePluginEnabled } from "@/lib/repo/plugins";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +27,11 @@ export default async function AlgorithmTrainingPage({
   }
   const today = todayKey();
   const dashboard = getAlgorithmDashboard(db, access, today);
+  const collections = listAlgorithmCollections(db, access);
+  const importSources = listAlgorithmImportSources(db, access);
+  const devices = listAlgorithmDevices(db, access);
   const judgeAvailability = getJudgeRuntimeAvailability(db, access);
+  const codeStorageAvailable = hasCodeStorage();
   const query = await searchParams;
   const initialProblemId = parsePositiveId(query.problem);
   const initialTaskId = parsePositiveId(query.task);
@@ -37,7 +45,8 @@ export default async function AlgorithmTrainingPage({
           <p>连接正式题目，区分引导完成、独立完成、延迟稳定和未见变式迁移。</p>
         </div>
         <span className="algorithmJudgeState" data-ready={judgeAvailability.submissionAllowed}>
-          <ShieldAlertIcon />{judgeAvailability.submissionAllowed
+          <ShieldAlertIcon />
+          {judgeAvailability.submissionAllowed
             ? "在线评测可用"
             : judgeAvailability.configured
               ? "在线评测待批准"
@@ -46,6 +55,11 @@ export default async function AlgorithmTrainingPage({
       </header>
       <AlgorithmTrainingBoard
         dashboard={dashboard}
+        collections={collections}
+        codeStorageAvailable={codeStorageAvailable}
+        devices={devices}
+        importRoots={configuredAlgorithmImportRoots()}
+        importSources={importSources}
         initialProblemId={initialProblemId}
         initialTaskId={initialTaskId}
         judgeAvailability={judgeAvailability}
@@ -53,6 +67,14 @@ export default async function AlgorithmTrainingPage({
       />
     </div>
   );
+}
+
+function hasCodeStorage(): boolean {
+  try {
+    return Boolean(loadJudgeCodeKey());
+  } catch {
+    return false;
+  }
 }
 
 function parsePositiveId(value: string | string[] | undefined): number | null {
@@ -64,7 +86,13 @@ function parsePositiveId(value: string | string[] | undefined): number | null {
 function ShieldAlertIcon() {
   return (
     <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 24 24" width="16">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+      <path
+        d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
       <path d="M12 8v4M12 16h.01" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
     </svg>
   );

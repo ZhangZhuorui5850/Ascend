@@ -12,7 +12,13 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "extensions/ascend-practice/.vscode-test/**",
+    "extensions/ascend-practice/dist/**",
   ]),
+  {
+    files: ["extensions/ascend-practice/**/*.js"],
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
 ]);
 
 export default eslintConfig;

@@ -1,9 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ensureManagedAlgorithmCatalog } from "./algorithm-catalog";
 import { getJudgeRuntimeAvailability, refreshAlgorithmSubmission, submitAlgorithmCode } from "./judge-runtime";
 import { setPluginEnabled } from "./repo/plugins";
-import { createTestDb, createTestWorkspace } from "./repo/testing";
+import { createTestDb, createTestWorkspace, seedTestManagedAlgorithmProblems } from "./repo/testing";
 
 const originalEnv = {
   url: process.env.ASCEND_JUDGE_GATEWAY_URL,
@@ -13,6 +12,14 @@ const originalEnv = {
   nodeEnv: process.env.NODE_ENV,
   pilotRequired: process.env.ASCEND_JUDGE_PILOT_REQUIRED,
 };
+
+function setupManagedProblem() {
+  const db = createTestDb();
+  const scope = createTestWorkspace(db);
+  setPluginEnabled(db, scope, "algorithms", true);
+  const { sourceProblemId } = seedTestManagedAlgorithmProblems(db, scope);
+  return { db, scope, problemId: sourceProblemId };
+}
 
 describe("judge runtime orchestration", () => {
   beforeEach(() => {
@@ -42,14 +49,7 @@ describe("judge runtime orchestration", () => {
   });
 
   it("creates and polls a normalized asynchronous submission", async () => {
-    const db = createTestDb();
-    const scope = createTestWorkspace(db);
-    setPluginEnabled(db, scope, "algorithms", true);
-    ensureManagedAlgorithmCatalog(db, scope);
-    const problem = db.prepare(`
-      SELECT id FROM algorithm_problems
-      WHERE workspace_id = ? AND judge_problem_ref = 'ascend:foundation:sum-two:v1'
-    `).get(scope.workspaceId) as { id: number };
+    const { db, scope, problemId } = setupManagedProblem();
     const request = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(JSON.stringify({
         id: "submission:runtime:0001",
@@ -68,7 +68,7 @@ describe("judge runtime orchestration", () => {
     const queued = await submitAlgorithmCode(db, scope, {
       operationId: "runtime:operation:0001",
       sessionId: "runtime:session:0001",
-      problemId: problem.id,
+      problemId,
       day: "2026-07-26",
       language: "python3",
       sourceCode: "a,b=map(int,input().split());print(a+b)",
@@ -99,14 +99,7 @@ describe("judge runtime orchestration", () => {
 
   it("blocks the submit path before any encrypted submission or network call when pilot approval is required", async () => {
     process.env.ASCEND_JUDGE_PILOT_REQUIRED = "true";
-    const db = createTestDb();
-    const scope = createTestWorkspace(db);
-    setPluginEnabled(db, scope, "algorithms", true);
-    ensureManagedAlgorithmCatalog(db, scope);
-    const problem = db.prepare(`
-      SELECT id FROM algorithm_problems
-      WHERE workspace_id = ? AND judge_problem_ref = 'ascend:foundation:sum-two:v1'
-    `).get(scope.workspaceId) as { id: number };
+    const { db, scope, problemId } = setupManagedProblem();
     const request = vi.fn<typeof fetch>();
     vi.stubGlobal("fetch", request);
 
@@ -118,7 +111,7 @@ describe("judge runtime orchestration", () => {
     await expect(submitAlgorithmCode(db, scope, {
       operationId: "runtime:operation:blocked",
       sessionId: "runtime:session:blocked",
-      problemId: problem.id,
+      problemId,
       day: "2026-07-26",
       language: "python3",
       sourceCode: "print(1)",
@@ -128,14 +121,7 @@ describe("judge runtime orchestration", () => {
   });
 
   it("does not downgrade a local evidence failure into a gateway retry state", async () => {
-    const db = createTestDb();
-    const scope = createTestWorkspace(db);
-    setPluginEnabled(db, scope, "algorithms", true);
-    ensureManagedAlgorithmCatalog(db, scope);
-    const problem = db.prepare(`
-      SELECT id FROM algorithm_problems
-      WHERE workspace_id = ? AND judge_problem_ref = 'ascend:foundation:sum-two:v1'
-    `).get(scope.workspaceId) as { id: number };
+    const { db, scope, problemId } = setupManagedProblem();
     const request = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(JSON.stringify({
         id: "submission:runtime:atomic",
@@ -153,7 +139,7 @@ describe("judge runtime orchestration", () => {
     const queued = await submitAlgorithmCode(db, scope, {
       operationId: "runtime:operation:atomic",
       sessionId: "runtime:session:atomic",
-      problemId: problem.id,
+      problemId,
       day: "2026-07-26",
       language: "python3",
       sourceCode: "a,b=map(int,input().split());print(a+b)",
@@ -189,14 +175,7 @@ describe("judge runtime orchestration", () => {
   });
 
   it("retries polling the same remote submission without creating duplicate work", async () => {
-    const db = createTestDb();
-    const scope = createTestWorkspace(db);
-    setPluginEnabled(db, scope, "algorithms", true);
-    ensureManagedAlgorithmCatalog(db, scope);
-    const problem = db.prepare(`
-      SELECT id FROM algorithm_problems
-      WHERE workspace_id = ? AND judge_problem_ref = 'ascend:foundation:sum-two:v1'
-    `).get(scope.workspaceId) as { id: number };
+    const { db, scope, problemId } = setupManagedProblem();
     const request = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(JSON.stringify({
         id: "submission:runtime:retry",
@@ -217,7 +196,7 @@ describe("judge runtime orchestration", () => {
     const queued = await submitAlgorithmCode(db, scope, {
       operationId: "runtime:operation:retry",
       sessionId: "runtime:session:retry",
-      problemId: problem.id,
+      problemId,
       day: "2026-07-26",
       language: "python3",
       sourceCode: "a,b=map(int,input().split());print(a+b)",

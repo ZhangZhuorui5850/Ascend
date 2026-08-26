@@ -5,12 +5,12 @@ import { actionFailure } from "@/lib/action-failure";
 import { loadJudgeCodeKey, loadJudgeCodeKeys } from "@/lib/algorithm-code-crypto";
 import { getDb } from "@/lib/db";
 import type { JudgeLanguage } from "@/lib/judge-gateway";
+import { refreshAlgorithmSubmission, submitAlgorithmCode } from "@/lib/judge-runtime";
 import {
-  refreshAlgorithmSubmission,
-  submitAlgorithmCode,
-} from "@/lib/judge-runtime";
-import {
+  AlgorithmDraftConflictError,
   getAlgorithmDraft,
+  listAlgorithmCodeVersions,
+  readAlgorithmCodeVersion,
   saveAlgorithmDraft,
   type AlgorithmSubmission,
 } from "@/lib/repo/algorithm-submissions";
@@ -41,13 +41,36 @@ export async function saveAlgorithmDraftAction(input: {
   problemId: number;
   language: JudgeLanguage;
   sourceCode: string;
-}): Promise<{ ok: boolean; error?: string; savedAt?: string }> {
+  baseRevision?: number;
+  operationId?: string;
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  code?: "DRAFT_CONFLICT";
+  savedAt?: string;
+  revision?: number;
+  sha256?: string;
+  conflict?: AlgorithmDraftConflictError["current"];
+}> {
   try {
     const access = await requireWorkspace();
     const key = requireCodeKey();
-    saveAlgorithmDraft(getDb(), access, input, key);
-    return { ok: true, savedAt: new Date().toISOString() };
+    const saved = saveAlgorithmDraft(getDb(), access, input, key);
+    return {
+      ok: true,
+      savedAt: saved.savedAt,
+      revision: saved.revision,
+      sha256: saved.sha256,
+    };
   } catch (error) {
+    if (error instanceof AlgorithmDraftConflictError) {
+      return {
+        ok: false,
+        code: error.code,
+        error: error.message,
+        conflict: error.current,
+      };
+    }
     return actionFailure("algorithm_judge", error, "代码草稿保存失败");
   }
 }
@@ -55,7 +78,16 @@ export async function saveAlgorithmDraftAction(input: {
 export async function getAlgorithmDraftAction(input: {
   problemId: number;
   language: JudgeLanguage;
-}): Promise<{ ok: boolean; error?: string; sourceCode?: string; updatedAt?: string }> {
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  sourceCode?: string;
+  updatedAt?: string;
+  revision?: number;
+  sha256?: string;
+  deviceId?: string;
+  deviceName?: string;
+}> {
   try {
     const access = await requireWorkspace();
     requireCodeKey();
@@ -64,9 +96,38 @@ export async function getAlgorithmDraftAction(input: {
       ok: true,
       sourceCode: draft?.sourceCode,
       updatedAt: draft?.updatedAt,
+      revision: draft?.revision,
+      sha256: draft?.sha256,
+      deviceId: draft?.deviceId,
+      deviceName: draft?.deviceName,
     };
   } catch (error) {
     return actionFailure("algorithm_judge", error, "代码草稿读取失败");
+  }
+}
+
+export async function getAlgorithmCodeVersionsAction(input: { problemId: number; language: JudgeLanguage }): Promise<{
+  ok: boolean;
+  error?: string;
+  versions?: ReturnType<typeof listAlgorithmCodeVersions>;
+}> {
+  try {
+    const access = await requireWorkspace();
+    return { ok: true, versions: listAlgorithmCodeVersions(getDb(), access, input) };
+  } catch (error) {
+    return actionFailure("algorithm_judge", error, "代码版本读取失败");
+  }
+}
+
+export async function readAlgorithmCodeVersionAction(input: {
+  versionId: string;
+}): Promise<{ ok: boolean; error?: string; sourceCode?: string }> {
+  try {
+    const access = await requireWorkspace();
+    const result = readAlgorithmCodeVersion(getDb(), access, input.versionId, loadJudgeCodeKeys());
+    return { ok: true, sourceCode: result.sourceCode };
+  } catch (error) {
+    return actionFailure("algorithm_judge", error, "代码版本恢复失败");
   }
 }
 

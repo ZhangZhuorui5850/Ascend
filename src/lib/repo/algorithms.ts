@@ -1,10 +1,7 @@
 import type Database from "better-sqlite3";
 import { createHash } from "node:crypto";
 import type { WorkspaceScope } from "../access-context";
-import {
-  getAlgorithmProviderDescriptor,
-  identifyAlgorithmProvider,
-} from "../algorithm-providers";
+import { getAlgorithmProviderDescriptor, identifyAlgorithmProvider } from "../algorithm-providers";
 import { assertDateKey, shiftDateKey } from "../dates";
 import type { JudgeLanguage } from "../judge-gateway";
 import { requirePluginEnabled } from "./plugins";
@@ -17,12 +14,7 @@ export type AlgorithmVerdict = (typeof ALGORITHM_VERDICTS)[number];
 export type AlgorithmReviewKind = (typeof ALGORITHM_REVIEW_KINDS)[number];
 export type AlgorithmDifficulty = (typeof ALGORITHM_DIFFICULTIES)[number];
 export type AlgorithmEvidenceStatus =
-  | "unseen"
-  | "attempted"
-  | "guided_completed"
-  | "independent_completed"
-  | "delayed_stable"
-  | "transfer_verified";
+  "unseen" | "attempted" | "guided_completed" | "independent_completed" | "delayed_stable" | "transfer_verified";
 
 export type AlgorithmAttempt = {
   id: number;
@@ -52,7 +44,13 @@ export type AlgorithmProblem = {
   notes: string;
   evidenceStatus: AlgorithmEvidenceStatus;
   nextReview: string | null;
-  problemMode: "external" | "managed";
+  problemMode: "external" | "managed" | "imported";
+  contentMode: "external_link" | "managed" | "imported_private";
+  evaluationMode: "manual" | "judge" | "sample";
+  materialStatus: "todo" | "doing" | "review" | "done";
+  priorityBand: "" | "P1" | "P2" | "P3";
+  phaseKey: string;
+  collectionIds: string[];
   statementMarkdown: string;
   inputSpecification: string;
   outputSpecification: string;
@@ -62,6 +60,7 @@ export type AlgorithmProblem = {
   memoryLimitKb: number;
   supportedLanguages: JudgeLanguage[];
   starterCode: Partial<Record<JudgeLanguage, string>>;
+  referenceCode: Partial<Record<JudgeLanguage, string>>;
   attempts: AlgorithmAttempt[];
 };
 
@@ -113,6 +112,11 @@ type ProblemRow = {
   memory_limit_kb: number;
   supported_languages_json: string;
   metadata_json: string;
+  content_mode: string;
+  evaluation_mode: string;
+  material_status: string;
+  priority_band: string;
+  phase_key: string;
 };
 
 type AttemptRow = {
@@ -129,53 +133,86 @@ type AttemptRow = {
   reflection: string;
   source_verification: string;
   transfer_source_problem_id: number | null;
+  outcome: string;
 };
 
-export function getAlgorithmDashboard(
-  db: Database.Database,
-  scope: WorkspaceScope,
-  today: string,
-): AlgorithmDashboard {
+export function getAlgorithmDashboard(db: Database.Database, scope: WorkspaceScope, today: string): AlgorithmDashboard {
   requirePluginEnabled(db, scope, "algorithms");
   assertDateKey(today);
-  const problemRows = db.prepare(`
-    SELECT id, provider_id, external_problem_id, source_url, title, difficulty_band,
-           tags_json, notes, evidence_status, next_review, problem_mode,
-           statement_markdown, input_specification, output_specification,
-           examples_json, judge_problem_ref, time_limit_ms, memory_limit_kb,
-           supported_languages_json, metadata_json
-    FROM algorithm_problems
-    WHERE workspace_id = ?
+  const problemRows = db
+    .prepare(
+      `
+    SELECT p.id, p.provider_id, p.external_problem_id, p.source_url,
+           COALESCE(o.title, p.title) AS title,
+           COALESCE(o.difficulty_band, p.difficulty_band) AS difficulty_band,
+           COALESCE(o.tags_json, p.tags_json) AS tags_json,
+           COALESCE(o.notes, p.notes) AS notes,
+           p.evidence_status, p.next_review, p.problem_mode,
+           p.statement_markdown, p.input_specification, p.output_specification,
+           p.examples_json, p.judge_problem_ref, p.time_limit_ms, p.memory_limit_kb,
+           p.supported_languages_json, p.metadata_json, p.content_mode, p.evaluation_mode,
+           COALESCE(o.material_status, p.material_status) AS material_status,
+           COALESCE(o.priority_band, p.priority_band) AS priority_band,
+           COALESCE(o.phase_key, p.phase_key) AS phase_key
+    FROM algorithm_problems p
+    LEFT JOIN algorithm_problem_overrides o
+      ON o.workspace_id = p.workspace_id AND o.problem_id = p.id
+    WHERE p.workspace_id = ?
     ORDER BY
-      CASE WHEN next_review IS NOT NULL AND next_review <= ? THEN 0 ELSE 1 END,
-      updated_at DESC,
-      id DESC
-  `).all(scope.workspaceId, today) as ProblemRow[];
-  const attempts = db.prepare(`
+      CASE WHEN p.next_review IS NOT NULL AND p.next_review <= ? THEN 0 ELSE 1 END,
+      p.updated_at DESC,
+      p.id DESC
+  `,
+    )
+    .all(scope.workspaceId, today) as ProblemRow[];
+  const attempts = db
+    .prepare(
+      `
     SELECT id, problem_id, day, verdict, duration_minutes, max_hint_level,
            pre_confidence, independent, review_kind, error_category,
-           reflection, source_verification, transfer_source_problem_id
+           reflection, source_verification, transfer_source_problem_id, outcome
     FROM algorithm_attempts
     WHERE workspace_id = ?
       AND outcome NOT IN ('in_progress', 'JE', 'CANCELLED')
     ORDER BY day DESC, id DESC
-  `).all(scope.workspaceId) as AttemptRow[];
+  `,
+    )
+    .all(scope.workspaceId) as AttemptRow[];
   const attemptsByProblem = new Map<number, AlgorithmAttempt[]>();
   for (const row of attempts) {
     const list = attemptsByProblem.get(row.problem_id) ?? [];
     list.push(mapAttempt(row));
     attemptsByProblem.set(row.problem_id, list);
   }
-  const problems = problemRows.map((row) => mapProblem(row, attemptsByProblem.get(row.id) ?? []));
+  const collectionRows = db
+    .prepare(
+      `
+    SELECT problem_id, collection_id
+    FROM algorithm_collection_items
+    WHERE workspace_id = ?
+  `,
+    )
+    .all(scope.workspaceId) as Array<{ problem_id: number; collection_id: string }>;
+  const collectionsByProblem = new Map<number, string[]>();
+  for (const row of collectionRows) {
+    const list = collectionsByProblem.get(row.problem_id) ?? [];
+    list.push(row.collection_id);
+    collectionsByProblem.set(row.problem_id, list);
+  }
+  const problems = problemRows.map((row) =>
+    mapProblem(row, attemptsByProblem.get(row.id) ?? [], collectionsByProblem.get(row.id) ?? []),
+  );
   return {
     problems,
     dueProblems: problems.filter((problem) => problem.nextReview !== null && problem.nextReview <= today),
     metrics: {
       problemCount: problems.length,
       attemptedCount: problems.filter((problem) => problem.attempts.length > 0).length,
-      independentCount: problems.filter((problem) => (
-        ["independent_completed", "delayed_stable", "transfer_verified"] as AlgorithmEvidenceStatus[]
-      ).includes(problem.evidenceStatus)).length,
+      independentCount: problems.filter((problem) =>
+        (["independent_completed", "delayed_stable", "transfer_verified"] as AlgorithmEvidenceStatus[]).includes(
+          problem.evidenceStatus,
+        ),
+      ).length,
       transferCount: problems.filter((problem) => problem.evidenceStatus === "transfer_verified").length,
       dueCount: problems.filter((problem) => problem.nextReview !== null && problem.nextReview <= today).length,
     },
@@ -200,29 +237,121 @@ export function createAlgorithmProblem(
   if (!title) throw new Error("请填写题目名称");
   const providerId = inferProviderId(sourceUrl);
   const externalProblemId = (
-    input.externalProblemId
-    || inferExternalProblemId(sourceUrl)
-    || `url:${createHash("sha256").update(sourceUrl).digest("hex").slice(0, 24)}`
-  ).trim().slice(0, 120);
+    input.externalProblemId ||
+    inferExternalProblemId(sourceUrl) ||
+    `url:${createHash("sha256").update(sourceUrl).digest("hex").slice(0, 24)}`
+  )
+    .trim()
+    .slice(0, 120);
   const difficultyBand = normalizeDifficulty(input.difficultyBand);
   const tags = normalizeTags(input.tags);
   const notes = (input.notes || "").trim().slice(0, 2_000);
-  const result = db.prepare(`
+  const result = db
+    .prepare(
+      `
     INSERT INTO algorithm_problems
       (workspace_id, provider_id, external_problem_id, source_url, title,
        difficulty_band, tags_json, notes)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    scope.workspaceId,
-    providerId,
-    externalProblemId,
-    sourceUrl,
-    title,
-    difficultyBand,
-    JSON.stringify(tags),
-    notes,
-  );
+  `,
+    )
+    .run(
+      scope.workspaceId,
+      providerId,
+      externalProblemId,
+      sourceUrl,
+      title,
+      difficultyBand,
+      JSON.stringify(tags),
+      notes,
+    );
   return getAlgorithmProblem(db, scope, Number(result.lastInsertRowid));
+}
+
+export function updateAlgorithmProblemDetails(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  problemIdInput: number,
+  input: {
+    title?: string;
+    difficultyBand?: string;
+    tags?: string[];
+    notes?: string;
+    materialStatus?: string;
+    priorityBand?: string;
+    phaseKey?: string;
+    nextReview?: string | null;
+  },
+): AlgorithmProblem {
+  requirePluginEnabled(db, scope, "algorithms");
+  const problemId = boundedInteger(problemIdInput, 1, Number.MAX_SAFE_INTEGER, "算法题编号");
+  const current = getAlgorithmProblem(db, scope, problemId);
+  const title = input.title === undefined ? current.title : input.title.trim().slice(0, 160);
+  if (!title) throw new Error("题目名称必填");
+  const difficultyBand =
+    input.difficultyBand === undefined ? current.difficultyBand : normalizeDifficulty(input.difficultyBand);
+  const tags = input.tags === undefined ? current.tags : normalizeTags(input.tags);
+  const notes = input.notes === undefined ? current.notes : input.notes.trim().slice(0, 2_000);
+  const materialStatus =
+    input.materialStatus === undefined ? current.materialStatus : normalizeMaterialStatusStrict(input.materialStatus);
+  const priorityBand =
+    input.priorityBand === undefined ? current.priorityBand : normalizePriorityBandStrict(input.priorityBand);
+  const phaseKey = input.phaseKey === undefined ? current.phaseKey : normalizePhaseKey(input.phaseKey);
+  const nextReview =
+    input.nextReview === undefined
+      ? current.nextReview
+      : input.nextReview === null || input.nextReview === ""
+        ? null
+        : assertDateKey(input.nextReview);
+  db.transaction(() => {
+    db.prepare(
+      `
+      INSERT INTO algorithm_problem_overrides
+        (workspace_id, problem_id, title, difficulty_band, tags_json, notes,
+         material_status, priority_band, phase_key)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(workspace_id, problem_id) DO UPDATE SET
+        title = COALESCE(excluded.title, title),
+        difficulty_band = COALESCE(excluded.difficulty_band, difficulty_band),
+        tags_json = COALESCE(excluded.tags_json, tags_json),
+        notes = COALESCE(excluded.notes, notes),
+        material_status = COALESCE(excluded.material_status, material_status),
+        priority_band = COALESCE(excluded.priority_band, priority_band),
+        phase_key = COALESCE(excluded.phase_key, phase_key),
+        updated_at = CURRENT_TIMESTAMP
+    `,
+    ).run(
+      scope.workspaceId,
+      problemId,
+      input.title === undefined ? null : title,
+      input.difficultyBand === undefined ? null : difficultyBand,
+      input.tags === undefined ? null : JSON.stringify(tags),
+      input.notes === undefined ? null : notes,
+      input.materialStatus === undefined ? null : materialStatus,
+      input.priorityBand === undefined ? null : priorityBand,
+      input.phaseKey === undefined ? null : phaseKey,
+    );
+    db.prepare(
+      `
+      UPDATE algorithm_problems
+      SET title = ?, difficulty_band = ?, tags_json = ?, notes = ?, material_status = ?,
+          priority_band = ?, phase_key = ?, next_review = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE workspace_id = ? AND id = ?
+    `,
+    ).run(
+      title,
+      difficultyBand,
+      JSON.stringify(tags),
+      notes,
+      materialStatus,
+      priorityBand,
+      phaseKey,
+      nextReview,
+      scope.workspaceId,
+      problemId,
+    );
+  })();
+  return getAlgorithmProblem(db, scope, problemId);
 }
 
 export function recordAlgorithmAttempt(
@@ -233,16 +362,21 @@ export function recordAlgorithmAttempt(
   requirePluginEnabled(db, scope, "algorithms");
   const day = assertDateKey(input.day);
   const problemId = Math.round(Number(input.problemId));
-  const problem = db.prepare(`
+  const problem = db
+    .prepare(
+      `
     SELECT id, title FROM algorithm_problems WHERE workspace_id = ? AND id = ?
-  `).get(scope.workspaceId, problemId) as { id: number; title: string } | undefined;
+  `,
+    )
+    .get(scope.workspaceId, problemId) as { id: number; title: string } | undefined;
   if (!problem) throw new Error("算法题不存在");
   const verdict = normalizeVerdict(input.verdict);
   const durationMinutes = boundedInteger(input.durationMinutes ?? 0, 0, 1_440, "训练时长");
   const maxHintLevel = boundedInteger(input.maxHintLevel ?? 0, 0, 4, "提示级别");
-  const preConfidence = input.preConfidence === null || input.preConfidence === undefined
-    ? null
-    : boundedInteger(input.preConfidence, 0, 3, "作答前信心");
+  const preConfidence =
+    input.preConfidence === null || input.preConfidence === undefined
+      ? null
+      : boundedInteger(input.preConfidence, 0, 3, "作答前信心");
   const reviewKind = normalizeReviewKind(input.reviewKind);
   const requestedTransferSourceProblemId = normalizeRequestedTransferSourceProblemId(
     input.transferSourceProblemId,
@@ -252,32 +386,50 @@ export function recordAlgorithmAttempt(
   const reflection = (input.reflection || "").trim().slice(0, 2_000);
   const independent = verdict === "AC" && maxHintLevel <= 1;
   const operationId = normalizeOperationId(input.operationId);
+  let replay: AttemptRow | undefined;
   if (operationId) {
-    const replay = db.prepare(`
+    replay = db
+      .prepare(
+        `
       SELECT id, problem_id, day, verdict, duration_minutes, max_hint_level,
              pre_confidence, independent, review_kind, error_category,
-             reflection, source_verification, transfer_source_problem_id
+             reflection, source_verification, transfer_source_problem_id, outcome
       FROM algorithm_attempts
       WHERE workspace_id = ? AND session_id = ?
-    `).get(scope.workspaceId, operationId) as AttemptRow | undefined;
+    `,
+      )
+      .get(scope.workspaceId, operationId) as AttemptRow | undefined;
     if (replay) {
-      if (
-        replay.problem_id !== problemId
-        || replay.day !== day
-        || replay.verdict !== verdict
-        || replay.duration_minutes !== durationMinutes
-        || replay.max_hint_level !== maxHintLevel
-        || replay.pre_confidence !== preConfidence
-        || replay.independent !== (independent ? 1 : 0)
-        || replay.review_kind !== reviewKind
-        || replay.error_category !== errorCategory
-        || replay.reflection !== reflection
-        || replay.transfer_source_problem_id !== requestedTransferSourceProblemId
-        || replay.source_verification !== "user_reported"
-      ) {
-        throw new Error("同一算法训练幂等键不能用于不同请求");
+      if (replay.outcome === "in_progress") {
+        if (
+          replay.problem_id !== problemId
+          || replay.day !== day
+          || replay.review_kind !== reviewKind
+          || (replay.pre_confidence !== null && replay.pre_confidence !== preConfidence)
+          || replay.transfer_source_problem_id !== requestedTransferSourceProblemId
+          || replay.source_verification !== "user_reported"
+        ) {
+          throw new Error("同一算法训练会话不能切换题目、日期或训练类型");
+        }
+      } else {
+        if (
+          replay.problem_id !== problemId ||
+          replay.day !== day ||
+          replay.verdict !== verdict ||
+          replay.duration_minutes !== durationMinutes ||
+          replay.max_hint_level !== maxHintLevel ||
+          replay.pre_confidence !== preConfidence ||
+          replay.independent !== (independent ? 1 : 0) ||
+          replay.review_kind !== reviewKind ||
+          replay.error_category !== errorCategory ||
+          replay.reflection !== reflection ||
+          replay.transfer_source_problem_id !== requestedTransferSourceProblemId ||
+          replay.source_verification !== "user_reported"
+        ) {
+          throw new Error("同一算法训练幂等键不能用于不同请求");
+        }
+        return mapAttempt(replay);
       }
-      return mapAttempt(replay);
     }
   }
   const transferSource = resolveAlgorithmTransferSource(db, scope, {
@@ -286,21 +438,22 @@ export function recordAlgorithmAttempt(
     reviewKind,
     day,
   });
-  const prior = db.prepare(`
+  const prior = db
+    .prepare(
+      `
     SELECT day FROM algorithm_attempts
     WHERE workspace_id = ? AND problem_id = ?
     ORDER BY day DESC, id DESC
     LIMIT 1
-  `).get(scope.workspaceId, problemId) as { day: string } | undefined;
+  `,
+    )
+    .get(scope.workspaceId, problemId) as { day: string } | undefined;
   const evidenceStatus = nextAlgorithmEvidenceStatus({
     verdict,
     independent,
     maxHintLevel,
     reviewKind,
-    hasPriorCrossDayAttempt: Boolean(
-      (prior && prior.day < day)
-      || transferSource?.hasPriorCrossDayAttempt,
-    ),
+    hasPriorCrossDayAttempt: Boolean((prior && prior.day < day) || transferSource?.hasPriorCrossDayAttempt),
   });
   const nextReview = nextAlgorithmReviewDay(day, {
     verdict,
@@ -310,80 +463,130 @@ export function recordAlgorithmAttempt(
   });
 
   const result = db.transaction(() => {
-    const inserted = db.prepare(`
+    let attemptId: number;
+    if (replay?.outcome === "in_progress") {
+      db.prepare(`
+        UPDATE algorithm_attempts
+        SET verdict = ?, duration_minutes = MAX(duration_minutes, ?),
+            max_hint_level = MAX(max_hint_level, ?),
+            pre_confidence = COALESCE(pre_confidence, ?), independent = ?,
+            review_kind = ?, error_category = ?, reflection = ?,
+            transfer_source_problem_id = ?, outcome = ?, ended_at = CURRENT_TIMESTAMP
+        WHERE workspace_id = ? AND id = ? AND outcome = 'in_progress'
+      `).run(
+        verdict,
+        durationMinutes,
+        maxHintLevel,
+        preConfidence,
+        independent ? 1 : 0,
+        reviewKind,
+        errorCategory,
+        reflection,
+        transferSource?.problemId ?? null,
+        verdict,
+        scope.workspaceId,
+        replay.id,
+      );
+      attemptId = replay.id;
+    } else {
+      const inserted = db.prepare(`
       INSERT INTO algorithm_attempts
         (workspace_id, problem_id, day, verdict, duration_minutes, max_hint_level,
          pre_confidence, independent, review_kind, error_category, reflection,
          transfer_source_problem_id, outcome, ended_at, session_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
-    `).run(
-      scope.workspaceId,
-      problemId,
-      day,
-      verdict,
-      durationMinutes,
-      maxHintLevel,
-      preConfidence,
-      independent ? 1 : 0,
-      reviewKind,
-      errorCategory,
-      reflection,
-      transferSource?.problemId ?? null,
-      verdict,
-      operationId ?? "",
-    );
-    db.prepare(`
+    `,
+      )
+      .run(
+        scope.workspaceId,
+        problemId,
+        day,
+        verdict,
+        durationMinutes,
+        maxHintLevel,
+        preConfidence,
+        independent ? 1 : 0,
+        reviewKind,
+        errorCategory,
+        reflection,
+        transferSource?.problemId ?? null,
+        verdict,
+        operationId ?? "",
+      );
+      attemptId = Number(inserted.lastInsertRowid);
+    }
+    db.prepare(
+      `
       UPDATE algorithm_problems
       SET evidence_status = ?, next_review = ?, updated_at = CURRENT_TIMESTAMP
       WHERE workspace_id = ? AND id = ?
-    `).run(evidenceStatus, nextReview, scope.workspaceId, problemId);
-    const attemptId = Number(inserted.lastInsertRowid);
+    `,
+    ).run(evidenceStatus, nextReview, scope.workspaceId, problemId);
     completeManualAlgorithmReview(db, scope, {
       attemptId,
       problemId,
       transferSourceProblemId: transferSource?.problemId ?? null,
       reviewKind,
     });
-    db.prepare(`
+    db.prepare(
+      `
       INSERT OR IGNORE INTO algorithm_reviews
         (workspace_id, problem_id, source_attempt_id, review_kind, due_day)
       VALUES (?, ?, ?, ?, ?)
-    `).run(
-      scope.workspaceId,
-      problemId,
-      attemptId,
-      nextReviewKind(evidenceStatus),
-      nextReview,
-    );
+    `,
+    ).run(scope.workspaceId, problemId, attemptId, nextReviewKind(evidenceStatus), nextReview);
     return attemptId;
   })();
 
-  const row = db.prepare(`
+  const row = db
+    .prepare(
+      `
     SELECT id, problem_id, day, verdict, duration_minutes, max_hint_level,
            pre_confidence, independent, review_kind, error_category,
-           reflection, source_verification, transfer_source_problem_id
+           reflection, source_verification, transfer_source_problem_id, outcome
     FROM algorithm_attempts
     WHERE workspace_id = ? AND id = ?
-  `).get(scope.workspaceId, result) as AttemptRow;
+  `,
+    )
+    .get(scope.workspaceId, result) as AttemptRow;
   return mapAttempt(row);
 }
 
-export function getAlgorithmProblem(
-  db: Database.Database,
-  scope: WorkspaceScope,
-  id: number,
-): AlgorithmProblem {
-  const row = db.prepare(`
-    SELECT id, provider_id, external_problem_id, source_url, title, difficulty_band,
-           tags_json, notes, evidence_status, next_review, problem_mode,
-           statement_markdown, input_specification, output_specification,
-           examples_json, judge_problem_ref, time_limit_ms, memory_limit_kb,
-           supported_languages_json, metadata_json
-    FROM algorithm_problems
-    WHERE workspace_id = ? AND id = ?
-  `).get(scope.workspaceId, id) as ProblemRow | undefined;
+export function getAlgorithmProblem(db: Database.Database, scope: WorkspaceScope, id: number): AlgorithmProblem {
+  const row = db
+    .prepare(
+      `
+    SELECT p.id, p.provider_id, p.external_problem_id, p.source_url,
+           COALESCE(o.title, p.title) AS title,
+           COALESCE(o.difficulty_band, p.difficulty_band) AS difficulty_band,
+           COALESCE(o.tags_json, p.tags_json) AS tags_json,
+           COALESCE(o.notes, p.notes) AS notes,
+           p.evidence_status, p.next_review, p.problem_mode,
+           p.statement_markdown, p.input_specification, p.output_specification,
+           p.examples_json, p.judge_problem_ref, p.time_limit_ms, p.memory_limit_kb,
+           p.supported_languages_json, p.metadata_json, p.content_mode, p.evaluation_mode,
+           COALESCE(o.material_status, p.material_status) AS material_status,
+           COALESCE(o.priority_band, p.priority_band) AS priority_band,
+           COALESCE(o.phase_key, p.phase_key) AS phase_key
+    FROM algorithm_problems p
+    LEFT JOIN algorithm_problem_overrides o
+      ON o.workspace_id = p.workspace_id AND o.problem_id = p.id
+    WHERE p.workspace_id = ? AND p.id = ?
+  `,
+    )
+    .get(scope.workspaceId, id) as ProblemRow | undefined;
   if (!row) throw new Error("算法题不存在");
-  return mapProblem(row, []);
+  const collectionIds = db
+    .prepare(
+      `
+    SELECT collection_id FROM algorithm_collection_items
+    WHERE workspace_id = ? AND problem_id = ?
+    ORDER BY collection_id
+  `,
+    )
+    .all(scope.workspaceId, id)
+    .map((item) => (item as { collection_id: string }).collection_id);
+  return mapProblem(row, [], collectionIds);
 }
 
 function normalizeOperationId(value: string | undefined): string | null {
@@ -406,7 +609,7 @@ function normalizeRequestedTransferSourceProblemId(
   return boundedInteger(value, 1, Number.MAX_SAFE_INTEGER, "迁移来源题");
 }
 
-function mapProblem(row: ProblemRow, attempts: AlgorithmAttempt[]): AlgorithmProblem {
+function mapProblem(row: ProblemRow, attempts: AlgorithmAttempt[], collectionIds: string[] = []): AlgorithmProblem {
   return {
     id: row.id,
     providerId: row.provider_id,
@@ -419,7 +622,13 @@ function mapProblem(row: ProblemRow, attempts: AlgorithmAttempt[]): AlgorithmPro
     notes: row.notes,
     evidenceStatus: normalizeEvidenceStatus(row.evidence_status),
     nextReview: row.next_review,
-    problemMode: row.problem_mode === "managed" ? "managed" : "external",
+    problemMode: normalizeProblemMode(row.problem_mode),
+    contentMode: normalizeContentMode(row.content_mode),
+    evaluationMode: normalizeEvaluationMode(row.evaluation_mode),
+    materialStatus: normalizeMaterialStatus(row.material_status),
+    priorityBand: normalizePriorityBand(row.priority_band),
+    phaseKey: row.phase_key || "",
+    collectionIds,
     statementMarkdown: row.statement_markdown,
     inputSpecification: row.input_specification,
     outputSpecification: row.output_specification,
@@ -429,6 +638,7 @@ function mapProblem(row: ProblemRow, attempts: AlgorithmAttempt[]): AlgorithmPro
     memoryLimitKb: row.memory_limit_kb,
     supportedLanguages: parseJudgeLanguages(row.supported_languages_json),
     starterCode: parseStarterCode(row.metadata_json),
+    referenceCode: parseReferenceCode(row.metadata_json),
     attempts,
   };
 }
@@ -461,8 +671,7 @@ export function resolveAlgorithmTransferSource(
     day: string;
   },
 ): { problemId: number; hasPriorCrossDayAttempt: boolean } | null {
-  const isTransfer = input.reviewKind === "isomorphic_variant"
-    || input.reviewKind === "unseen_variant";
+  const isTransfer = input.reviewKind === "isomorphic_variant" || input.reviewKind === "unseen_variant";
   if (!isTransfer) {
     if (input.sourceProblemId !== undefined && input.sourceProblemId !== null) {
       throw new Error("只有变式训练可以关联迁移来源题");
@@ -472,31 +681,40 @@ export function resolveAlgorithmTransferSource(
   if (input.sourceProblemId === undefined || input.sourceProblemId === null) {
     throw new Error("变式训练必须选择一道人已独立完成的来源题");
   }
-  const sourceProblemId = boundedInteger(
-    input.sourceProblemId,
-    1,
-    Number.MAX_SAFE_INTEGER,
-    "迁移来源题",
-  );
+  const sourceProblemId = boundedInteger(input.sourceProblemId, 1, Number.MAX_SAFE_INTEGER, "迁移来源题");
   if (sourceProblemId === input.targetProblemId) throw new Error("迁移来源题不能与当前题相同");
-  const source = db.prepare(`
+  const source = db
+    .prepare(
+      `
     SELECT id, tags_json
     FROM algorithm_problems
     WHERE workspace_id = ? AND id = ?
-  `).get(scope.workspaceId, sourceProblemId) as {
-    id: number;
-    tags_json: string;
-  } | undefined;
-  const target = db.prepare(`
+  `,
+    )
+    .get(scope.workspaceId, sourceProblemId) as
+    | {
+        id: number;
+        tags_json: string;
+      }
+    | undefined;
+  const target = db
+    .prepare(
+      `
     SELECT id, tags_json
     FROM algorithm_problems
     WHERE workspace_id = ? AND id = ?
-  `).get(scope.workspaceId, input.targetProblemId) as {
-    id: number;
-    tags_json: string;
-  } | undefined;
+  `,
+    )
+    .get(scope.workspaceId, input.targetProblemId) as
+    | {
+        id: number;
+        tags_json: string;
+      }
+    | undefined;
   if (!source || !target) throw new Error("迁移来源题不存在");
-  const prior = db.prepare(`
+  const prior = db
+    .prepare(
+      `
     SELECT day
     FROM algorithm_attempts
     WHERE workspace_id = ? AND problem_id = ? AND verdict = 'AC' AND independent = 1
@@ -504,7 +722,9 @@ export function resolveAlgorithmTransferSource(
       AND outcome NOT IN ('in_progress', 'JE', 'CANCELLED')
     ORDER BY day DESC, id DESC
     LIMIT 1
-  `).get(scope.workspaceId, sourceProblemId, input.day) as { day: string } | undefined;
+  `,
+    )
+    .get(scope.workspaceId, sourceProblemId, input.day) as { day: string } | undefined;
   if (!prior) throw new Error("迁移来源题尚无先前独立 AC 证据");
   const sourceSkills = getAlgorithmProblemSkillKeys(db, scope, sourceProblemId, source.tags_json);
   const targetSkills = getAlgorithmProblemSkillKeys(db, scope, input.targetProblemId, target.tags_json);
@@ -520,15 +740,16 @@ function getAlgorithmProblemSkillKeys(
   problemId: number,
   tagsJson: string,
 ): Set<string> {
-  const skills = db.prepare(`
+  const skills = db
+    .prepare(
+      `
     SELECT skill_key
     FROM algorithm_problem_skills
     WHERE workspace_id = ? AND problem_id = ?
-  `).all(scope.workspaceId, problemId) as Array<{ skill_key: string }>;
-  return new Set([
-    ...parseTags(tagsJson),
-    ...skills.map((skill) => skill.skill_key),
-  ]);
+  `,
+    )
+    .all(scope.workspaceId, problemId) as Array<{ skill_key: string }>;
+  return new Set([...parseTags(tagsJson), ...skills.map((skill) => skill.skill_key)]);
 }
 
 function completeManualAlgorithmReview(
@@ -543,31 +764,35 @@ function completeManualAlgorithmReview(
 ): void {
   if (input.reviewKind === "initial") return;
   const reviewedProblemId = input.transferSourceProblemId ?? input.problemId;
-  const review = db.prepare(`
+  const review = db
+    .prepare(
+      `
     SELECT id
     FROM algorithm_reviews
     WHERE workspace_id = ? AND problem_id = ? AND review_kind = ?
       AND completed_at IS NULL
     ORDER BY due_day ASC, id ASC
     LIMIT 1
-  `).get(
-    scope.workspaceId,
-    reviewedProblemId,
-    input.reviewKind,
-  ) as { id: number } | undefined;
+  `,
+    )
+    .get(scope.workspaceId, reviewedProblemId, input.reviewKind) as { id: number } | undefined;
   if (review) {
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE algorithm_reviews
       SET completed_at = CURRENT_TIMESTAMP, attempt_id = ?
       WHERE workspace_id = ? AND id = ?
-    `).run(input.attemptId, scope.workspaceId, review.id);
+    `,
+    ).run(input.attemptId, scope.workspaceId, review.id);
   }
   if (input.transferSourceProblemId !== null) {
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE algorithm_problems
       SET next_review = NULL, updated_at = CURRENT_TIMESTAMP
       WHERE workspace_id = ? AND id = ?
-    `).run(scope.workspaceId, input.transferSourceProblemId);
+    `,
+    ).run(scope.workspaceId, input.transferSourceProblemId);
   }
 }
 
@@ -604,12 +829,56 @@ function inferExternalProblemId(sourceUrl: string): string {
 
 function providerLabel(providerId: string): string {
   if (providerId === "ascend") return "Ascend 原创";
+  if (providerId === "zgca-official") return "中关村学院机试";
+  if (providerId === "local-import") return "本地题库";
+  if (providerId === "poj") return "POJ";
   return getAlgorithmProviderDescriptor(providerId).label;
+}
+
+function normalizeProblemMode(value: string): AlgorithmProblem["problemMode"] {
+  if (value === "managed" || value === "imported") return value;
+  return "external";
+}
+
+function normalizeContentMode(value: string): AlgorithmProblem["contentMode"] {
+  if (value === "managed" || value === "imported_private") return value;
+  return "external_link";
+}
+
+function normalizeEvaluationMode(value: string): AlgorithmProblem["evaluationMode"] {
+  if (value === "judge" || value === "sample") return value;
+  return "manual";
+}
+
+function normalizeMaterialStatus(value: string): AlgorithmProblem["materialStatus"] {
+  if (value === "doing" || value === "review" || value === "done") return value;
+  return "todo";
+}
+
+function normalizePriorityBand(value: string): AlgorithmProblem["priorityBand"] {
+  if (value === "P1" || value === "P2" || value === "P3") return value;
+  return "";
+}
+
+function normalizeMaterialStatusStrict(value: string): AlgorithmProblem["materialStatus"] {
+  if (!["todo", "doing", "review", "done"].includes(value)) throw new Error("题目训练状态无效");
+  return value as AlgorithmProblem["materialStatus"];
+}
+
+function normalizePriorityBandStrict(value: string): AlgorithmProblem["priorityBand"] {
+  if (!["", "P1", "P2", "P3"].includes(value)) throw new Error("题目优先级无效");
+  return value as AlgorithmProblem["priorityBand"];
+}
+
+function normalizePhaseKey(value: string): string {
+  const phaseKey = value.trim().slice(0, 40);
+  if (phaseKey && !/^[\p{L}\p{N}._-]+$/u.test(phaseKey)) throw new Error("题目阶段格式无效");
+  return phaseKey;
 }
 
 function normalizeDifficulty(value: string | undefined): AlgorithmDifficulty {
   return ALGORITHM_DIFFICULTIES.includes((value || "") as AlgorithmDifficulty)
-    ? (value || "") as AlgorithmDifficulty
+    ? ((value || "") as AlgorithmDifficulty)
     : "";
 }
 
@@ -621,7 +890,7 @@ function normalizeVerdict(value: string): AlgorithmVerdict {
 
 function normalizeReviewKind(value: string | undefined): AlgorithmReviewKind {
   return ALGORITHM_REVIEW_KINDS.includes((value || "initial") as AlgorithmReviewKind)
-    ? (value || "initial") as AlgorithmReviewKind
+    ? ((value || "initial") as AlgorithmReviewKind)
     : "initial";
 }
 
@@ -634,25 +903,24 @@ function normalizeEvidenceStatus(value: string): AlgorithmEvidenceStatus {
     "delayed_stable",
     "transfer_verified",
   ];
-  return values.includes(value as AlgorithmEvidenceStatus)
-    ? value as AlgorithmEvidenceStatus
-    : "unseen";
+  return values.includes(value as AlgorithmEvidenceStatus) ? (value as AlgorithmEvidenceStatus) : "unseen";
 }
 
 function normalizeTags(tags: string[] | undefined): string[] {
-  return [...new Set((tags || [])
-    .map((tag) => tag.trim())
-    .filter(Boolean)
-    .map((tag) => tag.slice(0, 40)))]
-    .slice(0, 12);
+  return [
+    ...new Set(
+      (tags || [])
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+        .map((tag) => tag.slice(0, 40)),
+    ),
+  ].slice(0, 12);
 }
 
 function parseTags(value: string): string[] {
   try {
     const parsed = JSON.parse(value);
-    return Array.isArray(parsed)
-      ? normalizeTags(parsed.filter((tag): tag is string => typeof tag === "string"))
-      : [];
+    return Array.isArray(parsed) ? normalizeTags(parsed.filter((tag): tag is string => typeof tag === "string")) : [];
   } catch {
     return [];
   }
@@ -666,13 +934,13 @@ function parseExamples(value: string): AlgorithmProblem["examples"] {
       if (!item || typeof item !== "object") return [];
       const row = item as Record<string, unknown>;
       if (typeof row.input !== "string" || typeof row.output !== "string") return [];
-      return [{
-        input: row.input.slice(0, 10_000),
-        output: row.output.slice(0, 10_000),
-        ...(typeof row.explanation === "string"
-          ? { explanation: row.explanation.slice(0, 2_000) }
-          : {}),
-      }];
+      return [
+        {
+          input: row.input.slice(0, 10_000),
+          output: row.output.slice(0, 10_000),
+          ...(typeof row.explanation === "string" ? { explanation: row.explanation.slice(0, 2_000) } : {}),
+        },
+      ];
     });
   } catch {
     return [];
@@ -683,9 +951,7 @@ function parseJudgeLanguages(value: string): JudgeLanguage[] {
   try {
     const parsed = JSON.parse(value);
     return Array.isArray(parsed)
-      ? parsed.filter((language): language is JudgeLanguage => (
-        language === "cpp17" || language === "python3"
-      ))
+      ? parsed.filter((language): language is JudgeLanguage => language === "cpp17" || language === "python3")
       : [];
   } catch {
     return [];
@@ -693,14 +959,26 @@ function parseJudgeLanguages(value: string): JudgeLanguage[] {
 }
 
 function parseStarterCode(value: string): Partial<Record<JudgeLanguage, string>> {
+  return parseMetadataCode(value, "starterCode");
+}
+
+function parseReferenceCode(value: string): Partial<Record<JudgeLanguage, string>> {
+  return parseMetadataCode(value, "referenceCode");
+}
+
+function parseMetadataCode(
+  value: string,
+  key: "starterCode" | "referenceCode",
+): Partial<Record<JudgeLanguage, string>> {
   try {
-    const metadata = JSON.parse(value) as { starterCode?: Record<string, unknown> };
+    const metadata = JSON.parse(value) as Record<string, Record<string, unknown> | undefined>;
+    const code = metadata[key];
     const result: Partial<Record<JudgeLanguage, string>> = {};
-    if (typeof metadata.starterCode?.cpp17 === "string") {
-      result.cpp17 = metadata.starterCode.cpp17.slice(0, 64 * 1024);
+    if (typeof code?.cpp17 === "string") {
+      result.cpp17 = code.cpp17.slice(0, 64 * 1024);
     }
-    if (typeof metadata.starterCode?.python3 === "string") {
-      result.python3 = metadata.starterCode.python3.slice(0, 64 * 1024);
+    if (typeof code?.python3 === "string") {
+      result.python3 = code.python3.slice(0, 64 * 1024);
     }
     return result;
   } catch {

@@ -20,7 +20,7 @@ Agent、MCP 与命令行接入见 [Ascend Agent Interface 手册](./docs/agent-i
 - `/mock-exams`：模考成绩、能力拆分、趋势和薄弱项分析。
 - `/analytics`：近七天统计、弱点优先级、模考摘要和科目进度。
 - `/extensions`：启用、停用和排序经过仓库审查的内置扩展；停用保留数据并关闭入口。
-- `/practice/algorithms`：算法题外链收录、训练结果、提示级别、错因、独立完成、延迟复测与迁移证据；当前不在主应用执行用户代码。
+- `/practice/algorithms`：本地题目导入、题库与题单、加密在线草稿、网盘附件、VS Code 同步、训练结果、错因与延迟复测；C++ 样例在本地 VS Code 执行，在线评测经独立 Judge Gateway 执行。
 - `/settings`：账户、学习目标、科目、考试倒计时、复习上限、扩展、Agent 令牌、登录设备和外观。
 - `/admin`：用户邀请、账号状态、密码重置、容量、只读工作区和审计日志。
 - `/invite/[token]`：一次性邀请激活页面。
