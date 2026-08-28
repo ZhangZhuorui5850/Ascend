@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { completeTask, createTask, deleteTask, reopenTask, rescheduleTask } from "@/lib/application/tasks/commands";
 import { getDb } from "@/lib/db";
 import { addMinutesToInstant, localDateTimeToUtc } from "@/lib/planner/time";
@@ -29,7 +30,7 @@ export async function createCalendarTaskAction(input: {
       title: input.title,
       dueDate: input.day,
     });
-    revalidateTaskViews();
+    scheduleTaskViewRevalidation();
     return { ok: true, entity: projectPlannerTaskToCalendarTask(entity, timeZone) };
   } catch (error) {
     return failure(error);
@@ -46,7 +47,7 @@ export async function toggleCalendarTaskAction(input: {
     const db = getDb();
     const result = input.done ? completeTask(db, access, input) : reopenTask(db, access, input);
     if (result.conflict) return conflict(result.conflict);
-    revalidateTaskViews();
+    scheduleTaskViewRevalidation();
     return {
       ok: true,
       entity: projectPlannerTaskToCalendarTask(result.entity!, workspaceTimeZone(db, access.workspaceId)),
@@ -86,7 +87,7 @@ export async function rescheduleCalendarTaskAction(input: {
       dueDate: startAt ? undefined : input.day,
     });
     if (result.conflict) return conflict(result.conflict);
-    revalidateTaskViews();
+    scheduleTaskViewRevalidation();
     return {
       ok: true,
       entity: projectPlannerTaskToCalendarTask(result.entity!, timeZone),
@@ -106,7 +107,7 @@ export async function deleteCalendarTaskAction(input: {
     const db = getDb();
     const result = deleteTask(db, access, input);
     if (result.conflict) return conflict(result.conflict);
-    revalidateTaskViews();
+    scheduleTaskViewRevalidation();
     return {
       ok: true,
       entity: projectPlannerTaskToCalendarTask(result.entity!, workspaceTimeZone(db, access.workspaceId)),
@@ -129,6 +130,13 @@ function revalidateTaskViews(): void {
   revalidatePath("/tasks");
   revalidatePath("/calendar");
   revalidatePath("/day/[date]", "page");
+}
+
+function scheduleTaskViewRevalidation(): void {
+  // Calendar owns an immediate local snapshot. Invalidating after the action
+  // response keeps other task views fresh without attaching a full Calendar
+  // RSC refresh to the user's click.
+  after(revalidateTaskViews);
 }
 
 function workspaceTimeZone(db: ReturnType<typeof getDb>, workspaceId: string): string {

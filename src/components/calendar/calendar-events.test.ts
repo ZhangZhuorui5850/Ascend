@@ -59,16 +59,18 @@ function event(id: string, patch: Partial<CalendarEvent> = {}): CalendarEvent {
   };
 }
 
-const calendars = [{
-  id: "calendar-a",
-  workspace_id: "workspace-a",
-  name: "学习",
-  color_token: "cinnabar",
-  is_default: 1,
-  archived_at: null,
-  created_at: "2026-07-31T00:00:00.000Z",
-  updated_at: "2026-07-31T00:00:00.000Z",
-}] as PlannerCalendar[];
+const calendars = [
+  {
+    id: "calendar-a",
+    workspace_id: "workspace-a",
+    name: "学习",
+    color_token: "cinnabar",
+    is_default: 1,
+    archived_at: null,
+    created_at: "2026-07-31T00:00:00.000Z",
+    updated_at: "2026-07-31T00:00:00.000Z",
+  },
+] as PlannerCalendar[];
 
 describe("Calendar event projection and optimistic state", () => {
   it("skips a completely unscheduled task in the time canvas and keeps agenda sorting safe", () => {
@@ -95,8 +97,7 @@ describe("Calendar event projection and optimistic state", () => {
       tasks: [task("task-a")],
     });
 
-    expect(projected.map((item) => item.extendedProps?.entityType))
-      .toEqual(["task", "event", "milestone"]);
+    expect(projected.map((item) => item.extendedProps?.entityType)).toEqual(["task", "event", "milestone"]);
     expect(projected[0].extendedProps).toMatchObject({
       taskId: "task-a",
       taskVersion: 1,
@@ -104,11 +105,15 @@ describe("Calendar event projection and optimistic state", () => {
   });
 
   it("groups timed events by their event timezone across UTC midnight", () => {
-    expect(calendarEventDay(event("event-zone", {
-      start_at: "2026-07-31T23:30:00.000Z",
-      end_at: "2026-08-01T00:30:00.000Z",
-      timezone: "Asia/Shanghai",
-    }))).toBe("2026-08-01");
+    expect(
+      calendarEventDay(
+        event("event-zone", {
+          start_at: "2026-07-31T23:30:00.000Z",
+          end_at: "2026-08-01T00:30:00.000Z",
+          timezone: "Asia/Shanghai",
+        }),
+      ),
+    ).toBe("2026-08-01");
   });
 
   it("groups agenda entities in one pass and expands all-day spans", () => {
@@ -127,11 +132,7 @@ describe("Calendar event projection and optimistic state", () => {
       tasks: [task("task-a")],
     });
 
-    expect(rows.map((row) => row.day)).toEqual([
-      "2026-07-31",
-      "2026-08-01",
-      "2026-08-02",
-    ]);
+    expect(rows.map((row) => row.day)).toEqual(["2026-07-31", "2026-08-01", "2026-08-02"]);
     expect(rows[0].tasks).toHaveLength(1);
     expect(rows[1].events.map((item) => item.id)).toEqual(["all-day"]);
     expect(rows[2].events.map((item) => item.id)).toEqual(["all-day"]);
@@ -158,8 +159,15 @@ describe("Calendar event projection and optimistic state", () => {
 
     const removed = calendarTaskReducer(patched, { type: "remove", id: original.id });
     expect(removed).toEqual([]);
-    expect(calendarTaskReducer(removed, { type: "restore", task: original, index: 0 }))
-      .toEqual([original]);
+    expect(calendarTaskReducer(removed, { type: "restore", task: original, index: 0 })).toEqual([original]);
+  });
+
+  it("does not duplicate a saved task when an optimistic draft rebases", () => {
+    const clientKey = "draft:calendar-task";
+    const saved = { ...task("canonical-task"), clientKey };
+    const draft = { ...task(clientKey), clientKey, pending: true };
+
+    expect(calendarTaskReducer([saved], { type: "add", task: draft })).toEqual([saved]);
   });
 
   it("patches, restores, replaces drafts, and removes calendar entities", () => {
@@ -184,7 +192,6 @@ describe("Calendar event projection and optimistic state", () => {
       event: event("event-b"),
     });
     expect(replaced.map((item) => item.id)).toEqual(["event-a", "event-b"]);
-    expect(calendarEventReducer(replaced, { type: "remove", id: "event-b" }))
-      .toEqual([original]);
+    expect(calendarEventReducer(replaced, { type: "remove", id: "event-b" })).toEqual([original]);
   });
 });

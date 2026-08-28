@@ -76,11 +76,16 @@
   gap: 4px;
 }
 
-.toolbarGroup { padding-inline: 2px; border-inline-start: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+.toolbarGroup {
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-soft) 60%, transparent);
+}
 
 .toolbar button {
   display: inline-flex;
-  min-height: 36px;
+  min-height: 40px;
   align-items: center;
   justify-content: center;
   gap: 5px;
@@ -90,6 +95,14 @@
   color: var(--muted);
   flex: 0 0 auto;
   white-space: nowrap;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard);
+}
+
+.toolbar button:active {
+  transform: scale(0.95);
 }
 
 .toolbarGroup,
@@ -106,6 +119,8 @@
 
 .toolbar button[data-active="true"] {
   color: var(--accent);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-xs);
 }
 
 .calendarCanvas {
@@ -183,6 +198,15 @@
   border-radius: 3px;
   background: color-mix(in srgb, var(--event-color, var(--accent)) 8%, transparent);
   color: var(--ink);
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-base) var(--motion-ease-standard);
+}
+
+.eventContent:hover {
+  background: color-mix(in srgb, var(--event-color, var(--accent)) 14%, transparent);
+  transform: translateY(calc(-1 * var(--motion-distance-1)));
 }
 
 .eventContent[data-entity="task"] {
@@ -277,7 +301,11 @@
   gap: 9px;
 }
 
-.propertyList { display: grid; grid-template-columns: 1fr; gap: 2px; }
+.propertyList {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+}
 
 .allDay {
   display: inline-flex;
@@ -355,7 +383,37 @@
   font-size: 12px;
 }
 
-.scheduleToggle { grid-column: 2; grid-row: 1 / span 2; align-self: center; min-height: 32px; border: 0; background: transparent; color: var(--accent); cursor: pointer; }
+.scheduleToggle {
+  display: inline-flex;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-height: 36px;
+  align-items: center;
+  align-self: center;
+  justify-content: center;
+  gap: 3px;
+  padding-inline: 9px;
+  border: 1px solid color-mix(in srgb, var(--accent-line) 70%, var(--line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent-soft) 42%, transparent);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard);
+}
+
+.scheduleToggle:hover {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+
+.scheduleToggle:active {
+  transform: scale(0.96);
+}
 
 .scheduleControls {
   grid-column: 1 / -1;
@@ -368,6 +426,14 @@
 .scheduleControls button {
   min-width: 0;
   height: 36px;
+}
+
+.scheduleControls button {
+  display: grid;
+  place-items: center;
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
 .empty {
@@ -398,6 +464,16 @@
   flex: 0 0 auto;
   border-color: var(--line);
   background: var(--surface);
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard),
+    color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard);
+}
+
+.agendaDateStrip button:active,
+.agendaDay:active {
+  transform: scale(0.98);
 }
 
 .agendaDateStrip button[data-today="true"] {
@@ -413,6 +489,10 @@
   border-color: var(--line);
   background: var(--surface);
   text-align: left;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard);
 }
 
 .agendaDay time {
@@ -434,6 +514,488 @@
 
 .mobileSheetBody {
   min-width: 0;
+}
+
+.dayPopoverPositioner {
+  position: fixed;
+  z-index: 90;
+  width: min(360px, calc(100vw - 24px));
+}
+
+.dayPopover {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  height: min(500px, calc(100dvh - 24px));
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent-line) 58%, var(--line));
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface-raised) 97%, transparent);
+  box-shadow:
+    0 24px 60px rgba(31, 28, 20, 0.2),
+    0 6px 18px rgba(31, 28, 20, 0.1);
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transform-origin: var(--transform-origin);
+  backdrop-filter: blur(18px);
+  transition:
+    opacity var(--motion-panel) var(--motion-ease-enter),
+    transform var(--motion-panel) var(--motion-ease-enter);
+  will-change: opacity, transform;
+}
+
+.dayPopover[data-side="bottom"][data-starting-style] {
+  opacity: 0;
+  transform: translateY(calc(-1 * var(--motion-distance-2))) scale(0.965);
+}
+
+.dayPopover[data-side="top"][data-starting-style] {
+  opacity: 0;
+  transform: translateY(var(--motion-distance-2)) scale(0.965);
+}
+
+.dayPopover[data-open][data-side="bottom"] {
+  animation: day-popover-enter-bottom var(--motion-panel) var(--motion-ease-enter) both;
+}
+
+.dayPopover[data-open][data-side="top"] {
+  animation: day-popover-enter-top var(--motion-panel) var(--motion-ease-enter) both;
+}
+
+.dayPopover[data-open][data-side="left"] {
+  animation: day-popover-enter-left var(--motion-panel) var(--motion-ease-enter) both;
+}
+
+.dayPopover[data-open][data-side="right"] {
+  animation: day-popover-enter-right var(--motion-panel) var(--motion-ease-enter) both;
+}
+
+/* Initial controlled-open mounts can skip Base UI's transient attribute before
+   the first painted frame. @starting-style provides the same physical entry
+   contract for that browser frame without affecting the faster exit path. */
+@starting-style {
+  .dayPopover[data-side="bottom"] {
+    opacity: 0;
+    transform: translateY(calc(-1 * var(--motion-distance-2))) scale(0.965);
+  }
+
+  .dayPopover[data-side="top"] {
+    opacity: 0;
+    transform: translateY(var(--motion-distance-2)) scale(0.965);
+  }
+}
+
+.dayPopover[data-side="bottom"][data-ending-style] {
+  opacity: 0;
+  transform: translateY(calc(-1 * var(--motion-distance-1))) scale(0.985);
+}
+
+.dayPopover[data-side="top"][data-ending-style] {
+  opacity: 0;
+  transform: translateY(var(--motion-distance-1)) scale(0.985);
+}
+
+.dayPopover[data-ending-style] {
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--motion-ease-exit);
+}
+
+.dayPopoverHeader {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 16px 13px;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--accent-soft) 62%, var(--surface-raised)),
+    var(--surface-raised)
+  );
+}
+
+.dayPopoverHeader > div {
+  display: grid;
+  gap: 2px;
+}
+
+.dayPopoverHeader span {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+
+.dayPopoverHeader h2 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 21px;
+}
+
+.dayPopoverClose {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-raised) 78%, transparent);
+  color: var(--muted);
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard),
+    color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard);
+}
+
+.dayPopoverClose:hover {
+  border-color: var(--accent-line);
+  background: var(--surface-raised);
+  color: var(--accent);
+}
+
+.dayPopoverClose:active {
+  transform: scale(0.94);
+}
+
+.dayProgress {
+  display: grid;
+  gap: 7px;
+  padding: 12px 16px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.dayProgress > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dayProgress > div:first-child span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.dayProgress > div:first-child strong {
+  color: var(--accent);
+  font-family: var(--font-num);
+  font-size: 12px;
+}
+
+.dayProgressTrack {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--line);
+}
+
+.dayProgressTrack span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transform-origin: left center;
+  transition: transform var(--motion-quick) var(--motion-ease-standard);
+}
+
+.dayProgress small {
+  color: var(--quiet);
+  font-size: 9px;
+}
+
+.dayTaskList {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-height: 0;
+  padding: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dayTask,
+.dayMilestone {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 58px;
+  padding: 7px 7px 7px 5px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-raised);
+}
+
+.dayTask::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--muted);
+  content: "";
+}
+
+.dayTask[data-priority="1"]::before {
+  background: var(--accent);
+}
+.dayTask[data-priority="2"]::before {
+  background: var(--summit-blue);
+}
+
+.dayTask[data-entering="true"] {
+  animation: day-task-draft-in var(--motion-quick) var(--motion-ease-enter) both;
+}
+
+.dayTaskCheck,
+.dayTaskRemove {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  place-items: center;
+  border-radius: 11px;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard),
+    color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard);
+}
+
+.dayTaskCheck {
+  border: 0;
+  background: transparent;
+  color: white;
+}
+
+.dayTaskCheckBox {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1.5px solid color-mix(in srgb, var(--accent-line) 84%, var(--line));
+  border-radius: 7px;
+  background: var(--surface-raised);
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard);
+}
+
+.dayTaskCheck:hover .dayTaskCheckBox {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.dayTaskCheck:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+
+.dayTask[data-done="true"] .dayTaskCheckBox {
+  border-color: var(--ok);
+  background: var(--ok);
+}
+
+.dayTask > div,
+.dayMilestone > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dayTask > div strong,
+.dayMilestone strong {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dayTask > div small,
+.dayMilestone small {
+  overflow: hidden;
+  color: var(--quiet);
+  font-size: 10px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dayTask > span {
+  color: var(--quiet);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.dayTask[data-pending="true"] > span {
+  color: var(--accent);
+}
+
+.dayTaskRemove {
+  border: 0;
+  background: transparent;
+  color: var(--quiet);
+}
+
+.dayTaskRemove:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.dayTaskCheck:active,
+.dayTaskRemove:active {
+  transform: scale(0.92);
+}
+
+.dayTaskCheck:active .dayTaskCheckBox {
+  transform: scale(0.88);
+}
+
+.dayTask[data-done="true"] {
+  opacity: 0.62;
+}
+
+.dayTask[data-done="true"] strong {
+  text-decoration: line-through;
+}
+
+.dayMilestone {
+  grid-template-columns: auto minmax(0, 1fr);
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn-soft) 38%, var(--surface-raised));
+}
+
+.dayMilestone small {
+  color: color-mix(in srgb, var(--warn) 64%, var(--muted));
+}
+
+.dayEmpty {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  gap: 4px;
+  padding: 24px 12px;
+  color: var(--accent);
+  text-align: center;
+}
+
+.dayEmpty strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+.dayEmpty span {
+  color: var(--quiet);
+  font-size: 10px;
+}
+
+.dayComposer {
+  display: flex;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+
+.dayComposer input {
+  height: 44px;
+  flex: 1;
+  min-width: 0;
+  padding-inline: 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-raised);
+  font-size: 12px;
+}
+
+.dayComposer input:focus-visible {
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  outline: none;
+}
+
+.dayComposer button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 11px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  transition:
+    opacity var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard);
+}
+
+.dayComposer button:active {
+  transform: scale(0.94);
+}
+
+.dayComposer button:disabled {
+  opacity: 0.42;
+}
+
+.dayDetailLink {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  transition: background-color var(--motion-fast) var(--motion-ease-standard);
+}
+
+.dayDetailLink:hover {
+  background: var(--accent-soft);
+}
+
+@keyframes day-task-draft-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-distance-2)) scale(0.985);
+  }
+}
+
+@keyframes day-popover-enter-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-1 * var(--motion-distance-2))) scale(0.965);
+  }
+}
+
+@keyframes day-popover-enter-top {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-distance-2)) scale(0.965);
+  }
+}
+
+@keyframes day-popover-enter-left {
+  from {
+    opacity: 0;
+    transform: translateX(var(--motion-distance-2)) scale(0.965);
+  }
+}
+
+@keyframes day-popover-enter-right {
+  from {
+    opacity: 0;
+    transform: translateX(calc(-1 * var(--motion-distance-2))) scale(0.965);
+  }
 }
 
 @media (max-width: 1179px) {
@@ -465,7 +1027,9 @@
     gap: 8px;
   }
 
-  .overview { margin-inline: 12px; }
+  .overview {
+    margin-inline: 12px;
+  }
 
   .layout {
     display: block;
@@ -523,14 +1087,40 @@
   .fieldGrid {
     grid-template-columns: 1fr;
   }
-}
 
-@media (prefers-reduced-motion: reduce) {
-  .eventContent {
-    transition-duration: var(--motion-instant);
+  .scheduleToggle,
+  .scheduleControls button,
+  .dayTaskCheck,
+  .dayTaskRemove {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .dayPopover {
+    height: min(390px, calc(100dvh - 24px));
   }
 }
 
-:global(html[data-motion="reduce"]) .eventContent {
+@media (prefers-reduced-motion: reduce) {
+  .eventContent,
+  .agendaDateStrip button,
+  .agendaDay,
+  .dayPopover,
+  .dayTask[data-entering="true"] {
+    animation-duration: var(--motion-instant);
+    transition-duration: var(--motion-instant);
+    transform: none;
+  }
+}
+
+:global(html[data-motion="reduce"]) .eventContent,
+:global(html[data-motion="reduce"]) .agendaDateStrip button,
+:global(html[data-motion="reduce"]) .agendaDay,
+:global(html[data-motion="reduce"]) .dayPopover,
+:global(html[data-motion="reduce"]) .dayTask[data-entering="true"],
+:global(html:active-view-transition) .dayPopover,
+:global(html:active-view-transition) .dayTask[data-entering="true"] {
+  animation-duration: var(--motion-instant);
   transition-duration: var(--motion-instant);
+  transform: none;
 }
