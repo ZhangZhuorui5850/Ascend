@@ -13,9 +13,10 @@ async function run() {
     "ascendPractice.recordResult",
     "ascendPractice.submitFormal",
     "ascendPractice.switchServer",
-    "ascendPractice.switchViewMode",
     "ascendPractice.selectCurrentCourse",
     "ascendPractice.moveToFolder",
+    "ascendPractice.addCurrentCpp",
+    "ascendPractice.addCppFolder",
   ]) {
     assert.ok(commands.includes(command), `${command} should be registered`);
   }

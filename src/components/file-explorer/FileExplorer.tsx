@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
+import type { AlgorithmTrainingTree } from "@/lib/repo/algorithm-training";
 import {
   ChevronRight,
   FolderInput,
@@ -46,12 +47,13 @@ import {
   sortFiles,
 } from "@/components/file-explorer/explorer-utils";
 
-export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, usage }: {
+export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, usage, algorithmTree }: {
   explorer: ExplorerState;
   hierarchy: CaptureSubject[];
   searchQuery: string;
   searchResults: ExplorerFile[] | null;
   usage?: { usedBytes: number; quotaBytes: number };
+  algorithmTree?: AlgorithmTrainingTree | null;
 }) {
   const router = useRouter();
   const { confirm, notify } = useFeedback();
@@ -239,6 +241,7 @@ export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, 
       }}
     >
       <FolderTreePanel
+        algorithmTree={algorithmTree}
         dragRef={dragRef}
         explorer={explorer}
         isSearch={isSearch}

@@ -63,6 +63,62 @@ export function getAlgorithmProviderDescriptor(providerId: string): AlgorithmPro
     || FALLBACK_ALGORITHM_PROVIDER;
 }
 
+/** 程序设计实习 MOOC 的课程归属建议（与导入时手动设置的 course_key 哈希方案天然一致） */
+export const CXSJ_MOOC_COURSE_NAME = "程序设计实习";
+
+export type AlgorithmCourseSuggestion = {
+  courseName: string;
+  stageKey: string;
+};
+
+/**
+ * 按来源链接推断课程归属。目前仅识别程设实习 MOOC 课程站：
+ * `/book/*` 是教材例题，其余学期作业组（如 /2023t2spring/…）是课后习题。
+ * 返回 null 表示没有可靠建议，导入弹窗退回用户手填的课程设置。
+ */
+export function suggestCourseForSource(value: string): AlgorithmCourseSuggestion | null {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  const host = url.hostname.toLowerCase();
+  if (host !== "cxsjsxmooc.openjudge.cn" && !host.endsWith(".cxsjsxmooc.openjudge.cn")) return null;
+  return {
+    courseName: CXSJ_MOOC_COURSE_NAME,
+    stageKey: /^\/book(?:\/|$)/i.test(url.pathname) ? "例题" : "课后习题",
+  };
+}
+
+/* ---------- 统一文件结构契约 ----------
+   资料库网盘、算法训练库、VS Code 插件共用同一棵目录树：
+     算法/<课程>/<阶段>/<题号-标题>.cpp
+   所有写入路径一律经由 algorithmAssetFolderPath() 生成，
+   禁止各端手写目录拼接。 */
+
+export const ALGORITHM_ASSET_ROOT = "算法";
+
+export function sanitizePathSegment(input: string): string {
+  return input.replace(/[<>:"/\\|?*]/g, "-").slice(0, 80);
+}
+
+export function algorithmAssetFolderPath(parts: {
+  courseName?: string;
+  stageKey?: string;
+  fileName?: string;
+}): string {
+  return [
+    ALGORITHM_ASSET_ROOT,
+    parts.courseName,
+    parts.stageKey,
+    parts.fileName,
+  ]
+    .filter((segment): segment is string => Boolean(segment))
+    .map(sanitizePathSegment)
+    .join("/");
+}
+
 function externalProvider(
   id: string,
   label: string,

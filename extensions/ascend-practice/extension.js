@@ -27,8 +27,9 @@ const {
   problemStatus,
   createPracticeSections,
   groupProblemsByPhase,
+  groupProblemsByStage,
+  insertionBeforeTarget,
   moveLibraryEntriesCompat,
-  normalizeViewMode,
   smartProblemMatches,
   createWorkspaceDocument,
 } = require("./library-tree");
@@ -55,7 +56,6 @@ const EXPANDED_FOLDERS_KEY = "ascendPractice.expandedFolders.v1";
 const LIBRARY_SORT_KEY = "ascendPractice.librarySort.v1";
 const LIBRARY_SELECTION_KEY = "ascendPractice.librarySelection.v1";
 const CURRENT_COURSE_KEY = "ascendPractice.currentCourse.v1";
-const VIEW_MODE_KEY = "ascendPractice.viewMode.v1";
 const META_FILE = ".ascend.json";
 const LIBRARY_DRAG_MIME = "application/vnd.code.tree.ascendpractice.library";
 
@@ -156,7 +156,6 @@ class PracticeTreeProvider {
     this.query = "";
     this.sortMode = context.workspaceState.get(LIBRARY_SORT_KEY, "manual");
     this.currentCourseId = context.workspaceState.get(CURRENT_COURSE_KEY, "");
-    this.viewMode = normalizeViewMode(context.workspaceState.get(VIEW_MODE_KEY, "learning"));
     this.lastMove = null;
     this.expandedFolderIds = new Set(context.workspaceState.get(EXPANDED_FOLDERS_KEY, []));
     this.dragMimeTypes = [LIBRARY_DRAG_MIME];
@@ -260,17 +259,8 @@ class PracticeTreeProvider {
     this.emitter.fire();
   }
 
-  async setViewMode(mode) {
-    this.viewMode = normalizeViewMode(mode);
-    this.query = "";
-    await this.context.workspaceState.update(VIEW_MODE_KEY, this.viewMode);
-    await vscode.commands.executeCommand("setContext", "ascendPractice.viewMode", this.viewMode);
-    await vscode.commands.executeCommand("setContext", "ascendPractice.hasProblemSearch", false);
-    this.emitter.fire();
-  }
-
   async setCurrentCourse(collectionId) {
-    if (!this.data?.collections.some((collection) => collection.id === collectionId)) {
+    if (!this.findCourseNode(collectionId)) {
       throw new Error("课程或题单已经不存在");
     }
     this.currentCourseId = collectionId;
@@ -300,7 +290,21 @@ class PracticeTreeProvider {
           }),
         ];
       }
-      return [viewModeRootItem(this)];
+      const sections = createPracticeSections(this.data);
+      return [
+        groupItem("今日训练", "todayPlan", sections.todayPlan.length, "calendar", "ascendTodayRoot", {
+          expanded: true,
+          tooltip: "网页端手动加入的今日训练",
+        }),
+        groupItem("到期复习", "smartView", sections.due.length, "history", "ascendReviewRoot", {
+          smartKey: "due",
+          tooltip: "今天到期的复习题",
+        }),
+        groupItem("题库", "catalogAll", this.data.problems.length, "library", "ascendCatalogRoot", {
+          tooltip: "Ascend 中的全部算法题",
+        }),
+        personalDirectoryItem(this.data, this.libraryIndex),
+      ];
     }
     if (element.group === "searchResults") {
       const results = this.problemItems(this.data.problems);
@@ -352,7 +356,10 @@ class PracticeTreeProvider {
         ),
       ];
     }
-    if (element.group === "catalogAll") return this.problemItems(this.data.problems);
+    if (element.group === "catalogAll") return this.catalogChildren();
+    if (element.group === "catalogUnsorted") {
+      return this.problemItems(this.data.problems.filter((problem) => !(problem.courses || []).length));
+    }
     if (element.group === "progress") {
       return [
         smartItem("尚未开始", "smartView", this.smartProblems("unseen").length, "circle-outline", {
@@ -413,7 +420,7 @@ class PracticeTreeProvider {
           return problem && this.matchesProblem(problem, libraryItem);
         })
       : [];
-    const problems = this.sortLibraryItems(libraryItems)
+    const problems = libraryItems
       .map((libraryItem) => {
         const problem = this.libraryIndex.problems.get(Number(libraryItem.problemId));
         return problem ? this.problemItem(problem, libraryItem, true, 0) : null;
@@ -431,10 +438,28 @@ class PracticeTreeProvider {
   }
 
   currentCourse() {
-    return this.data?.collections.find((collection) => collection.id === this.currentCourseId) || null;
+    return this.findCourseNode(this.currentCourseId);
+  }
+
+  /** 课程树（memberships）优先，兼容旧题单（collections）。 */
+  findCourseNode(courseId) {
+    const data = this.data;
+    if (!data || !courseId) return null;
+    return (data.courseTree || []).find((course) => course.id === courseId)
+      || data.collections.find((collection) => collection.id === courseId)
+      || null;
   }
 
   preferredCourses() {
+    const courseTree = this.data?.courseTree || [];
+    if (courseTree.length) {
+      // 课程树为主；已迁移进课程的旧题单不再重复出现，口径不明的旧题单（固定题单/变式等）保留为兼容分组
+      const migrated = new Set(["郭炜课程例题", "郭炜课程作业"]);
+      const legacy = (this.data?.collections || []).filter(
+        (collection) => collection.kind === "source" && !migrated.has(collection.name),
+      );
+      return [...courseTree, ...legacy].sort((left, right) => left.name.localeCompare(right.name, "zh-CN"));
+    }
     const collections = this.data?.collections || [];
     const primary = collections.filter((collection) => collection.kind !== "phase");
     return [...(primary.length ? primary : collections)].sort((left, right) =>
@@ -444,7 +469,30 @@ class PracticeTreeProvider {
 
   courseProblems(collectionId) {
     if (!collectionId) return [];
+    if (collectionId.startsWith("course:")) {
+      const courseKey = collectionId.slice("course:".length);
+      return this.data.problems.filter((problem) =>
+        (problem.courses || []).some((course) => course.courseKey === courseKey),
+      );
+    }
     return this.data.problems.filter((problem) => problem.collectionIds.includes(collectionId));
+  }
+
+  /** 题库 = 课程树（与网页/网盘同构）+ 未归类兜底；无课程数据时退回平铺。 */
+  catalogChildren() {
+    if (!this.data?.courseTree?.length) return this.problemItems(this.data.problems);
+    const items = [];
+    const grouped = new Set();
+    for (const course of this.data.courseTree) {
+      const problems = this.courseProblems(course.id);
+      problems.forEach((problem) => grouped.add(problem.id));
+      items.push(this.courseItem({ ...course, problemCount: problems.length }));
+    }
+    const rest = this.data.problems.filter((problem) => !grouped.has(problem.id));
+    if (rest.length) {
+      items.push(categoryItem("未归类", "catalogUnsorted", rest.length, "题", "question", "尚未归入任何课程阶段"));
+    }
+    return items;
   }
 
   courseItem(course) {
@@ -462,7 +510,10 @@ class PracticeTreeProvider {
   }
 
   coursePhaseItems(collectionId) {
-    const groups = groupProblemsByPhase(this.courseProblems(collectionId));
+    const problems = this.courseProblems(collectionId);
+    const groups = collectionId.startsWith("course:")
+      ? groupProblemsByStage(problems, collectionId.slice("course:".length))
+      : groupProblemsByPhase(problems);
     if (!groups.length) return [infoItem("当前课程还没有题目", "info")];
     return groups.map((group) => {
       const item = categoryItem(group.phaseKey, "coursePhase", group.problems.length, "题", "symbol-enum", "按课程阶段学习");
@@ -676,8 +727,12 @@ class PracticeTreeProvider {
       if (!transfer) return;
       const entries = compactMoveEntries(JSON.parse(await transfer.asString()), this.libraryIndex);
       if (!Array.isArray(entries) || !entries.length) return;
-      const destination = dropDestination(target);
-      if (!destination) throw new Error("请在目录模式中拖到“未整理”、个人文件夹或目录内题目上");
+      if (
+        (target?.contextValue === "ascendLibraryProblem" && entries.some((entry) => entry.kind === "problem" && Number(entry.id) === Number(target.problemId))) ||
+        (target?.contextValue === "ascendLibraryFolder" && entries.some((entry) => entry.kind === "folder" && entry.id === target.folderId))
+      ) return;
+      const destination = dropDestination(target, entries, this.libraryIndex);
+      if (!destination) throw new Error("请把题目或文件夹拖到目标行");
       await this.moveEntries(entries, destination);
     } catch (error) {
       vscode.window.showErrorMessage(String(error.message || error));
@@ -687,21 +742,42 @@ class PracticeTreeProvider {
   async moveEntries(inputEntries, destination) {
     const entries = compactMoveEntries(inputEntries, this.libraryIndex);
     if (!entries.length) return;
+    if (destination.entryKind && entries.some((entry) => entry.kind !== destination.entryKind)) {
+      throw new Error(destination.entryKind === "folder" ? "这条插入线用于调整文件夹顺序" : "这条插入线用于调整题目顺序");
+    }
     this.lastMove = this.captureMove(entries);
     vscode.commands.executeCommand("setContext", "ascendPractice.canUndoLibraryMove", true);
     let afterProblemId = destination.afterProblemId;
+    let afterFolderId = destination.afterFolderId;
+    let firstProblem = true;
+    let firstFolder = true;
     const moves = [];
     try {
       for (const entry of entries) {
         if (entry.kind === "problem" && Number(entry.id) === Number(afterProblemId)) continue;
+        if (entry.kind === "folder" && entry.id === afterFolderId) continue;
         if (entry.kind === "folder" && entry.id === destination.targetFolderId) continue;
-        moves.push({
-          kind: entry.kind,
-          id: entry.id,
-          targetFolderId: destination.targetFolderId,
-          afterProblemId: entry.kind === "problem" ? afterProblemId : null,
-        });
-        if (entry.kind === "problem") afterProblemId = Number(entry.id);
+        if (entry.kind === "problem") {
+          moves.push({
+            kind: entry.kind,
+            id: entry.id,
+            targetFolderId: destination.targetFolderId,
+            afterProblemId,
+            placeFirst: firstProblem && destination.placeFirst === true,
+          });
+          afterProblemId = Number(entry.id);
+          firstProblem = false;
+        } else {
+          moves.push({
+            kind: entry.kind,
+            id: entry.id,
+            targetFolderId: destination.targetFolderId,
+            afterFolderId,
+            placeFirst: firstFolder && destination.placeFirst === true,
+          });
+          afterFolderId = entry.id;
+          firstFolder = false;
+        }
       }
       if (!moves.length) {
         this.lastMove = null;
@@ -714,7 +790,8 @@ class PracticeTreeProvider {
       throw error;
     }
     await this.refresh({ notify: true });
-    const choice = await vscode.window.showInformationMessage(`已移动 ${moves.length} 项`, "撤销");
+    const position = destination.label ? `，${destination.label}` : "";
+    const choice = await vscode.window.showInformationMessage(`已移动 ${moves.length} 项${position}`, "撤销");
     if (choice === "撤销") await this.undoLastMove();
   }
 
@@ -803,31 +880,17 @@ function groupItem(label, group, count, icon, contextValue = "", options = {}) {
   item.group = group;
   item.contextValue = contextValue;
   item.id = `ascend-group:${group}`;
+  Object.assign(item, options);
   return item;
-}
-
-function viewModeRootItem(tree) {
-  if (tree.viewMode === "catalog") {
-    return groupItem("题库模式", "catalog", createPracticeSections(tree.data).libraryCount, "library", "ascendCatalogModeRoot", {
-      expanded: true,
-      tooltip: "按课程、知识点、来源、难度和学习状态浏览",
-    });
-  }
-  if (tree.viewMode === "directory") return personalDirectoryItem(tree.data, tree.libraryIndex);
-  return groupItem("学习模式", "learning", null, "mortar-board", "ascendLearningModeRoot", {
-    expanded: true,
-    description: tree.currentCourse()?.name || "选择课程",
-    tooltip: "当前课程、今日任务、到期复习和继续上次",
-  });
 }
 
 function personalDirectoryItem(data, index) {
   const folderCount = data?.library?.folders?.length || 0;
   const unfiledCount = index.itemsByFolder.get("")?.length || 0;
-  return groupItem("目录模式", "library", null, "root-folder", "ascendDirectoryModeRoot", {
-    expanded: true,
+  return groupItem("我的文件夹", "library", null, "root-folder", "ascendDirectoryRoot", {
+    expanded: false,
     description: `${folderCount} 个文件夹 · ${unfiledCount} 未整理`,
-    tooltip: "个人文件夹、手动顺序和未整理题目，可拖拽管理",
+    tooltip: "与 Ascend 网盘同步的个人题目文件夹",
   });
 }
 
@@ -927,7 +990,7 @@ function problemItem(
   item.description = [
     permanentNumber,
     status.label,
-    problem.phaseKey,
+    problem.courses?.[0] ? `${problem.courses[0].courseName} · ${problem.courses[0].stageKey}` : problem.phaseKey,
     problem.priorityBand,
     problemPathValue(localPathRecord) && "本地代码",
     problem.hasCloudDraft && "云端草稿",
@@ -939,6 +1002,7 @@ function problemItem(
   item.iconPath = new vscode.ThemeIcon(status.icon);
   item.contextValue = inLibraryTree ? "ascendLibraryProblem" : "ascendProblem";
   item.problemId = problem.id;
+  item.problemTitle = problem.title;
   if (inLibraryTree) item.id = `ascend-library-problem:${problem.id}`;
   item.libraryFolderId = inLibraryTree ? libraryItem?.folderId || null : undefined;
   item.command = { command: "ascendPractice.openProblem", title: "开始训练", arguments: [item] };
@@ -949,18 +1013,59 @@ function statusOrder(key) {
   return { due: 0, failed: 1, doing: 2, learning: 3, unseen: 4, completed: 5, stable: 6 }[key] ?? 9;
 }
 
-function dropDestination(target) {
+function dropDestination(target, entries, index) {
+  const kinds = new Set(entries.map((entry) => entry.kind));
   if (
-    target?.contextValue === "ascendDirectoryModeRoot" ||
+    !target ||
+    target?.contextValue === "ascendDirectoryRoot" ||
     target?.contextValue === "ascendLibraryUnfiled"
   ) {
-    return { targetFolderId: null, afterProblemId: null };
+    return { targetFolderId: null, afterProblemId: null, afterFolderId: null, label: "已移到未整理" };
   }
-  if (target.contextValue === "ascendLibraryFolder") {
-    return { targetFolderId: target.folderId, afterProblemId: null };
+  if (target?.contextValue === "ascendLibraryFolder") {
+    if (kinds.size === 1 && kinds.has("folder")) {
+      const parentId = target.parentFolderId || null;
+      const position = insertionBeforeTarget(
+        index.foldersByParent.get(parentId || "") || [],
+        "id",
+        target.folderId,
+        entries.map((entry) => entry.id),
+      );
+      if (!position) return null;
+      return {
+        targetFolderId: parentId,
+        afterFolderId: position.afterId,
+        placeFirst: position.placeFirst,
+        entryKind: "folder",
+        label: `已排在「${target.label}」之前`,
+      };
+    }
+    if (kinds.size === 1 && kinds.has("problem")) {
+      return {
+        targetFolderId: target.folderId,
+        afterProblemId: null,
+        label: `已移入「${target.label}」`,
+      };
+    }
+    return null;
   }
-  if (target.contextValue === "ascendLibraryProblem") {
-    return { targetFolderId: target.libraryFolderId || null, afterProblemId: target.problemId };
+  if (target?.contextValue === "ascendLibraryProblem") {
+    if (kinds.size !== 1 || !kinds.has("problem")) return null;
+    const folderId = target.libraryFolderId || null;
+    const position = insertionBeforeTarget(
+      index.itemsByFolder.get(folderId || "") || [],
+      "problemId",
+      target.problemId,
+      entries.map((entry) => entry.id),
+    );
+    if (!position) return null;
+    return {
+      targetFolderId: folderId,
+      afterProblemId: position.afterId,
+      placeFirst: position.placeFirst,
+      entryKind: "problem",
+      label: `已排在「${target.problemTitle || target.label}」之前`,
+    };
   }
   return null;
 }
@@ -1047,7 +1152,6 @@ async function activate(context) {
     register("ascendPractice.switchServer", () => switchServer(runtime)),
     register("ascendPractice.manageConnections", () => manageConnections(runtime)),
     register("ascendPractice.refresh", () => tree.refresh({ notify: true })),
-    register("ascendPractice.switchViewMode", () => switchViewMode(runtime)),
     register("ascendPractice.createFolder", (item) => createLibraryFolder(runtime, item)),
     register("ascendPractice.selectCurrentCourse", (item) => selectCurrentCourse(runtime, item)),
     register("ascendPractice.renameFolder", (item) => renameLibraryFolder(runtime, item)),
@@ -1098,6 +1202,8 @@ async function activate(context) {
     register("ascendPractice.openWeb", () =>
       vscode.env.openExternal(vscode.Uri.parse(`${api.baseUrl}/practice/algorithms`)),
     ),
+    register("ascendPractice.addCurrentCpp", (uri) => addCppFile(runtime, uri)),
+    register("ascendPractice.addCppFolder", (uri) => addCppFolder(runtime, uri)),
     vscode.window.registerUriHandler({
       handleUri: async (uri) => {
         try {
@@ -1131,11 +1237,8 @@ async function activate(context) {
       if (current) runtime.activity.mark(current.sessionKey);
     }),
   );
-  await vscode.commands.executeCommand("setContext", "ascendPractice.viewMode", tree.viewMode);
   await tree.refresh();
-  const savedSelection = tree.viewMode === "directory"
-    ? tree.findPersistentElement(context.workspaceState.get(LIBRARY_SELECTION_KEY, ""))
-    : null;
+  const savedSelection = tree.findPersistentElement(context.workspaceState.get(LIBRARY_SELECTION_KEY, ""));
   if (savedSelection) {
     try {
       await treeView.reveal(savedSelection, { select: true, focus: false, expand: true });
@@ -1145,28 +1248,68 @@ async function activate(context) {
   }
 }
 
-async function switchViewMode(runtime) {
-  const modes = [
-    {
-      label: "$(mortar-board) 学习模式",
-      description: "当前课程、今日任务、到期复习、继续上次",
-      mode: "learning",
+async function addCppFile(runtime, resource) {
+  const uri = resource?.scheme === "file" ? resource : vscode.window.activeTextEditor?.document.uri;
+  if (!uri || uri.scheme !== "file" || !/\.(?:cpp|cc|cxx)$/i.test(uri.fsPath)) {
+    throw new Error("请在资源管理器中选择一个 CPP 文件");
+  }
+  const result = await uploadCppUri(runtime, uri);
+  await runtime.tree.refresh();
+  vscode.window.showInformationMessage(
+    `${result.duplicate ? "已更新" : "已添加"}：${result.title || path.basename(uri.fsPath)}`,
+  );
+}
+
+async function addCppFolder(runtime, resource) {
+  if (!resource || resource.scheme !== "file") throw new Error("请在资源管理器中选择一个文件夹");
+  const files = await vscode.workspace.findFiles(
+    new vscode.RelativePattern(resource.fsPath, "**/*.{cpp,cc,cxx}"),
+    "**/{.git,node_modules,dist,build}/**",
+    200,
+  );
+  if (!files.length) {
+    vscode.window.showInformationMessage("这个文件夹中没有 CPP 文件");
+    return;
+  }
+  const result = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: "正在添加 CPP 到 Ascend", cancellable: false },
+    async (progress) => {
+      let created = 0;
+      let updated = 0;
+      let failed = 0;
+      const queue = [...files];
+      async function worker() {
+        while (queue.length) {
+          const uri = queue.shift();
+          try {
+            const imported = await uploadCppUri(runtime, uri);
+            if (imported.duplicate) updated += 1;
+            else created += 1;
+          } catch (error) {
+            failed += 1;
+            runtime.output.appendLine(`[import] ${uri.fsPath}: ${String(error.message || error)}`);
+          }
+          progress.report({ increment: 100 / files.length, message: path.basename(uri.fsPath) });
+        }
+      }
+      await Promise.all([worker(), worker(), worker()]);
+      return { created, updated, failed };
     },
-    {
-      label: "$(library) 题库模式",
-      description: "按课程、知识点、来源、难度和学习状态浏览",
-      mode: "catalog",
-    },
-    {
-      label: "$(root-folder) 目录模式",
-      description: "个人文件夹、未整理题目和拖拽管理",
-      mode: "directory",
-    },
-  ];
-  const picked = await vscode.window.showQuickPick(modes, {
-    placeHolder: "切换 Ascend 题目导航模式",
+  );
+  await runtime.tree.refresh();
+  vscode.window.showInformationMessage(`CPP 导入完成：新增 ${result.created}，更新 ${result.updated}，失败 ${result.failed}`);
+}
+
+async function uploadCppUri(runtime, uri) {
+  const bytes = await fs.readFile(uri.fsPath);
+  if (!bytes.length || bytes.length > 512 * 1024) throw new Error("CPP 文件大小需在 1 B 到 512 KB 之间");
+  const workspace = vscode.workspace.getWorkspaceFolder(uri);
+  const relativePath = workspace ? path.relative(workspace.uri.fsPath, uri.fsPath) : path.basename(uri.fsPath);
+  return runtime.api.importCpp({
+    filename: path.basename(uri.fsPath),
+    relativePath: relativePath.split(path.sep).join("/"),
+    content: bytes.toString("utf8"),
   });
-  if (picked) await runtime.tree.setViewMode(picked.mode);
 }
 
 async function createLibraryFolder(runtime, item) {

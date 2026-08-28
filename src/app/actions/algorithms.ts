@@ -4,12 +4,23 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { actionFailure } from "@/lib/action-failure";
 import { scanAlgorithmDirectory } from "@/lib/algorithm-import";
+import { shiftDateKey } from "@/lib/dates";
 import { recordAlgorithmAttemptCommand } from "@/lib/application/algorithms/record-attempt";
 import { getDb } from "@/lib/db";
 import { importAlgorithmScan } from "@/lib/repo/algorithm-import";
 import { approveAlgorithmDevicePairing } from "@/lib/repo/algorithm-device-pairings";
 import { createAlgorithmDevice, revokeAlgorithmDevice } from "@/lib/repo/algorithm-devices";
 import { createAlgorithmProblem, updateAlgorithmProblemDetails } from "@/lib/repo/algorithms";
+import {
+  completeAlgorithmPlan,
+  continueAlgorithmPlanTomorrow,
+  finishDueAlgorithmReview,
+  moveAlgorithmProblemsToFolder,
+  removeAlgorithmPlan,
+  reorderAlgorithmPlans,
+  scheduleAlgorithmProblems,
+  setAlgorithmCourseMemberships,
+} from "@/lib/repo/algorithm-training";
 import { requireWorkspace } from "@/lib/request-auth";
 import type { ActionResult } from "./day";
 
@@ -20,6 +31,116 @@ function revalidateAlgorithmViews(day?: string): void {
   if (day) {
     revalidatePath(`/day/${day}`);
     revalidatePath("/calendar");
+  }
+}
+
+export async function scheduleAlgorithmProblemsAction(input: {
+  problemIds: number[];
+  day: string;
+}): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    scheduleAlgorithmProblems(getDb(), access, input);
+    revalidateAlgorithmViews(input.day);
+    return { ok: true };
+  } catch (error) {
+    return actionFailure("algorithms", error, "加入训练计划失败");
+  }
+}
+
+export async function removeAlgorithmPlanAction(input: {
+  taskId: string;
+  expectedVersion: number;
+  day: string;
+}): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    removeAlgorithmPlan(getDb(), access, input);
+    revalidateAlgorithmViews(input.day);
+    return { ok: true };
+  } catch (error) {
+    return actionFailure("algorithms", error, "移出训练计划失败");
+  }
+}
+
+export async function finishAlgorithmPlanAction(input: {
+  taskId: string;
+  expectedVersion: number;
+  problemId: number;
+  day: string;
+  choice: "review" | "tomorrow" | "stop-review";
+}): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    if (input.choice === "tomorrow") {
+      continueAlgorithmPlanTomorrow(getDb(), access, input);
+    } else {
+      completeAlgorithmPlan(getDb(), access, { ...input, review: input.choice === "review" });
+    }
+    revalidateAlgorithmViews(input.day);
+    revalidateAlgorithmViews(shiftDateKey(input.day, 1));
+    return { ok: true };
+  } catch (error) {
+    return actionFailure("algorithms", error, "训练计划更新失败");
+  }
+}
+
+export async function finishDueAlgorithmReviewAction(input: {
+  problemId: number;
+  day: string;
+  choice: "review" | "tomorrow" | "stop-review";
+}): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    finishDueAlgorithmReview(getDb(), access, input);
+    revalidateAlgorithmViews(input.day);
+    revalidateAlgorithmViews(shiftDateKey(input.day, 1));
+    return { ok: true };
+  } catch (error) {
+    return actionFailure("algorithms", error, "复习计划更新失败");
+  }
+}
+
+export async function reorderAlgorithmPlansAction(input: {
+  day: string;
+  taskIds: string[];
+}): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    reorderAlgorithmPlans(getDb(), access, input);
+    revalidateAlgorithmViews(input.day);
+    return { ok: true };
+  } catch (error) {
+    return actionFailure("algorithms", error, "训练排序保存失败");
+  }
+}
+
+export async function setAlgorithmCourseAction(input: {
+  problemIds: number[];
+  courseName: string;
+  stageKey: string;
+}): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    setAlgorithmCourseMemberships(getDb(), access, input);
+    revalidateAlgorithmViews();
+    return { ok: true };
+  } catch (error) {
+    return actionFailure("algorithms", error, "课程属性保存失败");
+  }
+}
+
+export async function moveAlgorithmProblemsAction(input: {
+  problemIds: number[];
+  folderId: string | null;
+}): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    moveAlgorithmProblemsToFolder(getDb(), access, input);
+    revalidateAlgorithmViews();
+    return { ok: true };
+  } catch (error) {
+    return actionFailure("algorithms", error, "移动题目失败");
   }
 }
 

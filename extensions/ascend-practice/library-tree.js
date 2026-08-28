@@ -122,7 +122,7 @@ function smartProblemMatches(problem, key, today) {
 function createPracticeSections(data) {
   const problems = data?.problems || [];
   const today = data?.today || "";
-  const todayPlan = uniqueProblems(data?.due || [], data?.todayQueue || []);
+  const todayPlan = uniqueProblems(data?.todayQueue || []);
   const due = problems.filter((problem) => smartProblemMatches(problem, "due", today));
   const recent = problems
     .filter((problem) => smartProblemMatches(problem, "recent", today))
@@ -169,6 +169,21 @@ function phaseOrder(phaseKey) {
   return match ? Number(match[1]) : phaseKey === "未分阶段" ? 10_000 : 1_000;
 }
 
+/** 按课程归属的阶段分组（与网页「课程与阶段」同一套 memberships 数据）。 */
+function groupProblemsByStage(problems, courseKey) {
+  const groups = new Map();
+  for (const problem of problems || []) {
+    const membership = (problem?.courses || []).find((course) => course.courseKey === courseKey);
+    const key = String(membership?.stageKey || "").trim() || "未分阶段";
+    const list = groups.get(key) || [];
+    list.push(problem);
+    groups.set(key, list);
+  }
+  return [...groups.entries()]
+    .map(([phaseKey, items]) => ({ phaseKey, problems: items }))
+    .sort((left, right) => phaseOrder(left.phaseKey) - phaseOrder(right.phaseKey) || left.phaseKey.localeCompare(right.phaseKey, "zh-CN"));
+}
+
 function compactMoveEntries(entries, index) {
   const unique = [];
   const seen = new Set();
@@ -200,6 +215,17 @@ function compactMoveEntries(entries, index) {
   return unique.filter((entry) =>
     entry.kind === "folder" ? movingFolders.has(entry.id) : !problemMovesWithFolder(entry.id),
   );
+}
+
+function insertionBeforeTarget(entries, idKey, targetId, movingIds = []) {
+  const moving = new Set(movingIds.map(String));
+  const ordered = (entries || []).filter((entry) => !moving.has(String(entry[idKey])));
+  const targetIndex = ordered.findIndex((entry) => String(entry[idKey]) === String(targetId));
+  if (targetIndex < 0) return null;
+  return {
+    placeFirst: targetIndex === 0,
+    afterId: targetIndex > 0 ? ordered[targetIndex - 1][idKey] : null,
+  };
 }
 
 function normalizeViewMode(value) {
@@ -260,7 +286,9 @@ module.exports = {
   problemMatches,
   problemStatus,
   createPracticeSections,
+  groupProblemsByStage,
   compactMoveEntries,
+  insertionBeforeTarget,
   moveLibraryEntriesCompat,
   normalizeViewMode,
   shouldUseLegacyLibraryMove,

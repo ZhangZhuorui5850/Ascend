@@ -278,26 +278,21 @@ p {
   padding: 26px 30px 90px;
 }
 
+/* ICP 页脚：跟随内容滚动。短页面靠 appWorkspace 的 flex 列贴底，
+   长页面往下拉才出现（appWorkspace / mainPane 见「Modern shell」段） */
 .icpFooter {
-  position: fixed;
-  right: 0;
-  bottom: max(8px, env(safe-area-inset-bottom));
-  left: var(--sidebar-width);
-  z-index: 24;
+  flex-shrink: 0;
   display: flex;
   justify-content: center;
-  padding-inline: 12px;
+  padding: 18px 12px 24px;
   color: var(--quiet);
   font-size: 11px;
   line-height: 1.4;
-  pointer-events: none;
 }
 
 .icpFooter a {
   padding: 3px 8px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  pointer-events: auto;
 }
 
 .icpFooter a:hover {
@@ -2405,6 +2400,28 @@ body[data-dragging] .mapCard::after {
   padding-left: 4px;
 }
 
+/* 算法训练虚拟树：课程/阶段可折叠，题目为跳转链接 */
+.algoTree .driveTreeItem { width: 100%; }
+.algoTreeHeader {
+  color: var(--quiet);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: default;
+}
+.algoBranch > summary { list-style: none; }
+.algoBranch > summary::-webkit-details-marker { display: none; }
+.algoBranch > summary.driveTreeItem { cursor: pointer; }
+.algoProblem span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.algoProblem:hover { color: var(--accent); }
+
 .driveMain {
   display: flex;
   flex-direction: column;
@@ -3306,7 +3323,12 @@ body[data-dragging] .mapCard::after {
   }
 
   .mainPane {
-    padding: 18px 14px 110px;
+    padding: 18px 14px 24px;
+  }
+
+  /* 手机端底部导航悬浮在视口上，随内容滚动的页脚要避开它 */
+  .icpFooter {
+    padding-bottom: calc(var(--mobile-nav-height) + 12px);
   }
 
   .pageStack.fullHeight {
@@ -3465,7 +3487,10 @@ body[data-dragging] .mapCard::after {
 
 .appWorkspace {
   grid-column: 2;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  min-height: 100vh;
 }
 
 .sidebar {
@@ -3594,9 +3619,10 @@ body[data-dragging] .mapCard::after {
 }
 
 .mainPane {
+  flex: 1 0 auto;
   width: min(100%, 1560px);
   margin: 0 auto;
-  padding: 28px clamp(20px, 3vw, 48px) 96px;
+  padding: 28px clamp(20px, 3vw, 48px) 40px;
 }
 
 .mainPane:has(.pageStack.fullHeight) {
@@ -4533,7 +4559,7 @@ kbd {
   }
 
   .sidebar {
-    width: var(--sidebar-collapsed);
+    width: var(--sidebar-collapsed) !important;
   }
 
   .sidebar .brandCopy,

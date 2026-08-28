@@ -23,6 +23,16 @@ type AppShellProps = {
   children: React.ReactNode;
 };
 
+function IcpFooter() {
+  return (
+    <footer className="icpFooter">
+      <a href="https://beian.miit.gov.cn/" rel="noreferrer" target="_blank">
+        京ICP备2026044103号-1
+      </a>
+    </footer>
+  );
+}
+
 export function AppShell({ user, hierarchy, enabledPluginIds, modulePrefs, children }: AppShellProps) {
   const pathname = usePathname();
   const [captureOpen, setCaptureOpen] = useState(false);
@@ -78,7 +88,12 @@ export function AppShell({ user, hierarchy, enabledPluginIds, modulePrefs, child
   }
 
   if (pathname === "/login" || pathname === "/change-password" || pathname.startsWith("/invite/") || !user) {
-    return <>{children}</>;
+    return (
+      <>
+        {children}
+        <IcpFooter />
+      </>
+    );
   }
 
   return (
@@ -105,6 +120,7 @@ export function AppShell({ user, hierarchy, enabledPluginIds, modulePrefs, child
             {children}
           </ViewTransition>
         </main>
+        <IcpFooter />
       </div>
       {user.role === "user" ? (
         <>

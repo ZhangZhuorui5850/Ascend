@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { requirePageWorkspace } from "@/lib/page-auth";
 import { getExplorer, getStorageUsage, searchAssets } from "@/lib/repo/library";
 import { getCaptureHierarchy } from "@/lib/repo/knowledge";
+import { getAlgorithmTrainingTree, type AlgorithmTrainingTree } from "@/lib/repo/algorithm-training";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,13 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
   const searchResults = q ? searchAssets(db, access, q) : null;
   const usage = getStorageUsage(db, access);
   const hierarchy = getCaptureHierarchy(db, access);
+  // 算法插件未启用时（404 语义）树为空，不影响资料库本身
+  let algorithmTree: AlgorithmTrainingTree | null = null;
+  try {
+    algorithmTree = getAlgorithmTrainingTree(db, access);
+  } catch {
+    algorithmTree = null;
+  }
 
   return (
     <div className="pageStack fullHeight">
@@ -32,7 +40,7 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
         <h1>资料库</h1>
         <p>文件通过科目、章节、知识点与日期进入学习上下文。</p>
       </header>
-      <FileExplorer explorer={explorer} hierarchy={hierarchy} searchQuery={q} searchResults={searchResults} usage={usage} />
+      <FileExplorer explorer={explorer} hierarchy={hierarchy} searchQuery={q} searchResults={searchResults} usage={usage} algorithmTree={algorithmTree} />
     </div>
   );
 }

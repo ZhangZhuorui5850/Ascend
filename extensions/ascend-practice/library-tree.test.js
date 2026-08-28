@@ -10,10 +10,12 @@ const {
   problemStatus,
   createPracticeSections,
   compactMoveEntries,
+  insertionBeforeTarget,
   moveLibraryEntriesCompat,
   normalizeViewMode,
   shouldUseLegacyLibraryMove,
   groupProblemsByPhase,
+  groupProblemsByStage,
   smartProblemMatches,
   createWorkspaceDocument,
 } = require("./library-tree");
@@ -145,6 +147,33 @@ test("groups course problems by ordered phase", () => {
   assert.deepEqual(groups.map((group) => group.phaseKey), ["W1", "W2", "W3", "未分阶段"]);
 });
 
+test("groups course problems by membership stage for the requested course", () => {
+  const groups = groupProblemsByStage(
+    [
+      { id: 3, courses: [{ courseKey: "c1", stageKey: "例题" }, { courseKey: "c2", stageKey: "W9" }] },
+      { id: 1, courses: [{ courseKey: "c1", stageKey: "课后习题" }] },
+      { id: 2, courses: [{ courseKey: "c1", stageKey: "例题" }] },
+      { id: 4, courses: [] },
+    ],
+    "c1",
+  );
+  assert.deepEqual(groups.map((group) => group.phaseKey), ["课后习题", "例题", "未分阶段"]);
+  assert.deepEqual(groups[1].problems.map((problem) => problem.id), [3, 2]);
+  // c2 的归属不影响 c1 的分组
+  assert.equal(groups[1].problems[0].courses.length, 2);
+});
+
+test("stage grouping keeps numeric stage order across double digits", () => {
+  const groups = groupProblemsByStage(
+    [
+      { id: 1, courses: [{ courseKey: "c", stageKey: "W10" }] },
+      { id: 2, courses: [{ courseKey: "c", stageKey: "W2" }] },
+    ],
+    "c",
+  );
+  assert.deepEqual(groups.map((group) => group.phaseKey), ["W2", "W10"]);
+});
+
 test("compacts multi-selection when a selected folder already carries descendants", () => {
   const data = {
     problems: [{ id: 1 }, { id: 2 }],
@@ -173,6 +202,19 @@ test("compacts multi-selection when a selected folder already carries descendant
     { kind: "folder", id: "parent" },
     { kind: "problem", id: 2 },
   ]);
+});
+
+test("resolves a normal row drop to the position before the highlighted target", () => {
+  const entries = [{ problemId: 11 }, { problemId: 12 }, { problemId: 13 }, { problemId: 14 }];
+  assert.deepEqual(insertionBeforeTarget(entries, "problemId", 11, [13]), {
+    placeFirst: true,
+    afterId: null,
+  });
+  assert.deepEqual(insertionBeforeTarget(entries, "problemId", 14, [12]), {
+    placeFirst: false,
+    afterId: 13,
+  });
+  assert.equal(insertionBeforeTarget(entries, "problemId", 99), null);
 });
 
 test("uses at least three digits for a compact stable number", () => {

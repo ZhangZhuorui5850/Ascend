@@ -15,6 +15,8 @@ function problem(id: number, overrides: Partial<AlgorithmProblem> = {}): Algorit
     notes: "",
     evidenceStatus: "unseen",
     nextReview: null,
+    reviewEnabled: true,
+    reviewStep: 0,
     problemMode: "managed",
     contentMode: "managed",
     evaluationMode: "judge",

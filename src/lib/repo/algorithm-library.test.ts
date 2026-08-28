@@ -136,6 +136,32 @@ describe("algorithm library tree", () => {
     expect(promoted.items.find((item) => item.problemId === problem.id)).toMatchObject({ folderId: null });
   });
 
+  it("places a dragged folder at an exact insertion target", () => {
+    const db = createTestDb();
+    const scope = createTestWorkspace(db);
+    setPluginEnabled(db, scope, "algorithms", true);
+    const first = createAlgorithmLibraryFolder(db, scope, { name: "第一组" });
+    const second = createAlgorithmLibraryFolder(db, scope, { name: "第二组" });
+    const third = createAlgorithmLibraryFolder(db, scope, { name: "第三组" });
+
+    moveAlgorithmLibraryFolder(db, scope, {
+      folderId: third.id,
+      targetParentId: null,
+      placeFirst: true,
+    });
+    moveAlgorithmLibraryFolder(db, scope, {
+      folderId: first.id,
+      targetParentId: null,
+      afterFolderId: second.id,
+    });
+
+    expect(listAlgorithmLibrary(db, scope).folders.map((folder) => folder.id)).toEqual([
+      third.id,
+      second.id,
+      first.id,
+    ]);
+  });
+
   it("moves multiple entries atomically", () => {
     const db = createTestDb();
     const scope = createTestWorkspace(db);

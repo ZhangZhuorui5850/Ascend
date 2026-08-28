@@ -36,6 +36,8 @@ export async function PUT(request: Request): Promise<Response> {
         moveAlgorithmLibraryFolder(db, context, {
           folderId: String(body.id || ""),
           targetParentId: nullableString(body.targetFolderId),
+          afterFolderId: nullableString(body.afterFolderId),
+          placeFirst: body.placeFirst === true,
         });
       }
     } else {
@@ -69,6 +71,8 @@ function parseMoveEntry(value: unknown) {
       kind: "folder" as const,
       id: String(entry.id || ""),
       targetFolderId: nullableString(entry.targetFolderId),
+      afterFolderId: nullableString(entry.afterFolderId),
+      placeFirst: entry.placeFirst === true,
       direction: direction ? direction as "up" | "down" | "first" : undefined,
     };
   }

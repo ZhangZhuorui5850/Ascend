@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { findCatalogByIdentity, findCatalogCandidates } from "./algorithm-catalog";
 
 export type ParsedAlgorithmExercise = {
   sourcePath: string;
@@ -20,6 +21,8 @@ export type ParsedAlgorithmExercise = {
   outputSpecification: string;
   examples: Array<{ input: string; output: string }>;
   sourceCode: string;
+  matchStatus: "identified" | "confirm" | "incomplete";
+  matchCandidates: Array<{ providerId: string; externalProblemId: string; title: string }>;
   warnings: string[];
 };
 
@@ -37,9 +40,8 @@ const SECTION_HEADINGS = new Map([
 export function parseAlgorithmCpp(sourcePath: string, rawContent: string): ParsedAlgorithmExercise {
   const content = rawContent.replace(/^\uFEFF/, "").replaceAll("\r\n", "\n");
   const match = content.match(/^\s*\/\*([\s\S]*?)\*\/\s*([\s\S]*)$/);
-  if (!match) throw new Error(`${sourcePath} 缺少文件头块注释`);
-  const header = match[1];
-  const sourceCode = match[2].trimEnd() + "\n";
+  const header = match?.[1] ?? "";
+  const sourceCode = (match?.[2] ?? content).trimEnd() + "\n";
   const lines = header.split("\n").map((line) => line.replace(/\s+$/, ""));
   const metadata = new Map<string, string>();
   let title = "";
@@ -51,14 +53,20 @@ export function parseAlgorithmCpp(sourcePath: string, rawContent: string): Parse
     if (metadataMatch) metadata.set(metadataMatch[1].toLowerCase(), metadataMatch[2].trim());
   }
 
-  const sourceUrl = metadata.get("source") || "";
-  const { providerId, externalProblemId } = identifySource(sourceUrl, sourcePath);
+  const sourceUrl = metadata.get("source") || extractSourceUrl(header);
+  const identified = identifySource(sourceUrl, sourcePath);
+  const rawTitle = title || firstEffectiveHeaderLine(lines) || filenameTitle(sourcePath);
+  const exactCatalog = findCatalogByIdentity(identified.providerId, identified.externalProblemId);
+  const candidates = exactCatalog ? [exactCatalog] : findCatalogCandidates(rawTitle);
+  const catalog = exactCatalog ?? (candidates.length === 1 ? candidates[0] : null);
+  const providerId = catalog?.providerId ?? identified.providerId;
+  const externalProblemId = catalog?.externalProblemId ?? identified.externalProblemId;
   const examples = extractExamples(lines);
   const inputSpecification = extractSection(lines, ["输入", "输入格式"], ["输出", "输出格式"]);
   const outputSpecification = extractSection(lines, ["输出", "输出格式"], ["样例输入", "样例 1", "样例1", "样例"]);
   const warnings: string[] = [];
-  if (!title) warnings.push("缺少题目名称");
-  if (!sourceUrl) warnings.push("缺少来源");
+  if (!match) warnings.push("未找到文件头块注释，已从文件名识别");
+  if (!sourceUrl && !catalog) warnings.push("缺少可确认的平台链接或题号");
   if (!inputSpecification) warnings.push("缺少输入说明");
   if (!outputSpecification) warnings.push("缺少输出说明");
   if (!examples.length) warnings.push("缺少可解析样例");
@@ -66,23 +74,31 @@ export function parseAlgorithmCpp(sourcePath: string, rawContent: string): Parse
   return {
     sourcePath,
     contentSha256: createHash("sha256").update(content).digest("hex"),
-    title: title || filenameTitle(sourcePath),
+    title: catalog?.title ?? rawTitle,
     sourceUrl,
     providerId,
     externalProblemId,
-    phase: normalizePhase(metadata.get("phase")),
+    phase: normalizePhase(metadata.get("phase") || catalog?.stageKey),
     priority: normalizePriority(metadata.get("priority")),
-    topics: splitMetadataList(metadata.get("topics")),
+    topics: splitMetadataList(metadata.get("topics")).length
+      ? splitMetadataList(metadata.get("topics"))
+      : catalog?.topics ?? [],
     origins: splitMetadataList(metadata.get("origin"), /[+,，、]/),
     materialStatus: normalizeMaterialStatus(metadata.get("status")),
     statementConfidence: metadata.get("statement") || "",
     verified: metadata.get("verified") || "",
     fetched: metadata.get("fetched") || "",
-    statementMarkdown: buildStatementMarkdown(lines, title || filenameTitle(sourcePath)),
+    statementMarkdown: match ? buildStatementMarkdown(lines, catalog?.title ?? rawTitle) : `# ${catalog?.title ?? rawTitle}`,
     inputSpecification,
     outputSpecification,
     examples,
     sourceCode,
+    matchStatus: exactCatalog || sourceUrl ? "identified" : candidates.length ? "confirm" : "incomplete",
+    matchCandidates: candidates.map((item) => ({
+      providerId: item.providerId,
+      externalProblemId: item.externalProblemId,
+      title: item.title,
+    })),
     warnings,
   };
 }
@@ -202,10 +218,25 @@ function identifySource(
   if (/中关村学院/.test(source)) {
     return { providerId: "zgca-official", externalProblemId: sourcePath.replace(/\.cpp$/i, "") };
   }
+  const filenameId = (sourcePath.split(/[\\/]/).pop() || "").match(/^(\d{3,6})(?:[-_\s]|$)/)?.[1];
+  if (filenameId) return { providerId: "bailian", externalProblemId: filenameId };
   return {
     providerId: "local-import",
     externalProblemId: sourcePath.replace(/\.cpp$/i, ""),
   };
+}
+
+function extractSourceUrl(value: string): string {
+  return value.match(/https?:\/\/[^\s)）>]+/i)?.[0] ?? "";
+}
+
+function firstEffectiveHeaderLine(lines: string[]): string {
+  for (const rawLine of lines) {
+    const line = rawLine.trim().replace(/^\*\s?/, "");
+    if (!line || /^@[a-zA-Z_-]+\s+/.test(line) || /^(来源|描述|输入|输出|样例|提示)[：:]?$/.test(line)) continue;
+    return line.replace(/^#+\s*/, "").slice(0, 160);
+  }
+  return "";
 }
 
 function safeHostname(value: string): string {
@@ -243,7 +274,11 @@ function splitMetadataList(value: string | undefined, separator = /[;,，、]/):
 
 function filenameTitle(sourcePath: string): string {
   const filename = sourcePath.split(/[\\/]/).pop() || "未命名题目";
-  return filename.replace(/\.cpp$/i, "").replace(/^\d+[-_]/, "");
+  return filename
+    .replace(/\.cpp$/i, "")
+    .replace(/^\d+[-_\s]*/, "")
+    .replace(/[-_\s]*未完成$/, "")
+    .trim() || filename.replace(/\.cpp$/i, "");
 }
 
 function isSectionBoundary(value: string): boolean {

@@ -2,7 +2,7 @@
   "name": "ascend-practice",
   "displayName": "Ascend Practice",
   "description": "在 VS Code 中完成 Ascend 今日算法训练、样例运行与草稿同步。",
-  "version": "0.8.1",
+  "version": "0.9.2",
   "publisher": "zzr",
   "license": "UNLICENSED",
   "private": true,
@@ -57,203 +57,199 @@
     "commands": [
       {
         "command": "ascendPractice.connect",
-        "title": "Ascend: 浏览器配对新服务器",
+        "title": "浏览器配对新服务器",
         "icon": "$(add)"
       },
       {
         "command": "ascendPractice.connectWithToken",
-        "title": "Ascend: 使用设备令牌连接"
+        "title": "使用设备令牌连接"
       },
       {
         "command": "ascendPractice.switchServer",
-        "title": "Ascend: 切换 Ascend 服务器",
-        "icon": "$(server-process)"
+        "title": "连接与设置",
+        "icon": "$(gear)"
       },
       {
         "command": "ascendPractice.manageConnections",
-        "title": "Ascend: 管理连接档案"
+        "title": "管理连接档案"
       },
       {
         "command": "ascendPractice.refresh",
-        "title": "Ascend: 刷新题目",
+        "title": "刷新题目",
         "shortTitle": "刷新题目",
         "icon": "$(refresh)"
       },
       {
-        "command": "ascendPractice.switchViewMode",
-        "title": "Ascend: 切换题目导航模式",
-        "shortTitle": "切换模式",
-        "icon": "$(layout)"
-      },
-      {
         "command": "ascendPractice.createFolder",
-        "title": "Ascend: 新建个人文件夹",
+        "title": "新建个人文件夹",
         "shortTitle": "新建文件夹",
         "icon": "$(new-folder)"
       },
       {
         "command": "ascendPractice.selectCurrentCourse",
-        "title": "Ascend: 选择当前课程",
+        "title": "选择当前课程",
         "shortTitle": "设为当前课程",
         "icon": "$(bookmark)"
       },
       {
         "command": "ascendPractice.renameFolder",
-        "title": "Ascend: 重命名题目文件夹",
+        "title": "重命名题目文件夹",
         "shortTitle": "重命名文件夹",
         "icon": "$(edit)"
       },
       {
         "command": "ascendPractice.deleteFolder",
-        "title": "Ascend: 删除空题目文件夹",
+        "title": "删除空题目文件夹",
         "shortTitle": "删除文件夹",
         "icon": "$(trash)"
       },
       {
         "command": "ascendPractice.moveToLibraryRoot",
-        "title": "Ascend: 移到未整理",
+        "title": "移到未整理",
         "shortTitle": "移到未整理",
         "icon": "$(folder-opened)"
       },
       {
         "command": "ascendPractice.moveToFolder",
-        "title": "Ascend: 移动到个人文件夹",
+        "title": "移动到个人文件夹",
         "shortTitle": "移动到文件夹",
         "icon": "$(folder)"
       },
       {
         "command": "ascendPractice.searchProblems",
-        "title": "Ascend: 搜索题目",
+        "title": "搜索题目",
         "icon": "$(search)"
       },
       {
         "command": "ascendPractice.clearProblemSearch",
-        "title": "Ascend: 清除题目搜索",
+        "title": "清除题目搜索",
         "icon": "$(clear-all)"
       },
       {
         "command": "ascendPractice.sortProblems",
-        "title": "Ascend: 题目排序",
+        "title": "题目排序",
         "icon": "$(list-ordered)"
       },
       {
         "command": "ascendPractice.undoLibraryMove",
-        "title": "Ascend: 撤销题目移动",
+        "title": "撤销题目移动",
         "icon": "$(discard)"
       },
       {
         "command": "ascendPractice.moveFolderUp",
-        "title": "Ascend: 文件夹上移",
+        "title": "文件夹上移",
         "shortTitle": "文件夹上移",
         "icon": "$(arrow-up)"
       },
       {
         "command": "ascendPractice.moveFolderDown",
-        "title": "Ascend: 文件夹下移",
+        "title": "文件夹下移",
         "shortTitle": "文件夹下移",
         "icon": "$(arrow-down)"
       },
       {
         "command": "ascendPractice.pinFolder",
-        "title": "Ascend: 文件夹置顶",
+        "title": "文件夹置顶",
         "shortTitle": "文件夹置顶",
         "icon": "$(pin)"
       },
       {
         "command": "ascendPractice.editProblem",
-        "title": "Ascend: 编辑题目信息",
+        "title": "编辑题目信息",
         "shortTitle": "编辑题目信息",
         "icon": "$(edit)"
       },
       {
         "command": "ascendPractice.revealLocalCode",
-        "title": "Ascend: 打开并定位本地代码",
+        "title": "打开并定位本地代码",
         "shortTitle": "打开本地代码",
         "icon": "$(go-to-file)"
       },
       {
         "command": "ascendPractice.openLocalFolder",
-        "title": "Ascend: 在新窗口打开本地题目目录",
+        "title": "在新窗口打开本地题目目录",
         "shortTitle": "打开本地题目目录",
         "icon": "$(folder-opened)"
       },
       {
         "command": "ascendPractice.openFolderWorkspace",
-        "title": "Ascend: 打开文件夹代码工作区",
+        "title": "打开文件夹代码工作区",
         "shortTitle": "打开代码工作区",
         "icon": "$(window)"
       },
       {
         "command": "ascendPractice.openProblem",
-        "title": "Ascend: 打开题目",
+        "title": "打开题目",
         "shortTitle": "打开题目"
       },
       {
         "command": "ascendPractice.runSamples",
-        "title": "Ascend: Run Public Samples",
+        "title": "Run Public Samples",
         "icon": "$(play)"
       },
       {
         "command": "ascendPractice.openCustomInput",
-        "title": "Ascend: Edit Custom Input",
+        "title": "Edit Custom Input",
         "icon": "$(edit)"
       },
       {
         "command": "ascendPractice.runCustomInput",
-        "title": "Ascend: Run Custom Input",
+        "title": "Run Custom Input",
         "icon": "$(terminal)"
       },
       {
         "command": "ascendPractice.sync",
-        "title": "Ascend: Sync Current Draft",
+        "title": "Sync Current Draft",
         "icon": "$(cloud-upload)"
       },
       {
         "command": "ascendPractice.recordResult",
-        "title": "Ascend: Finish and Record Result",
+        "title": "Finish and Record Result",
         "icon": "$(pass-filled)"
       },
       {
         "command": "ascendPractice.submitFormal",
-        "title": "Ascend: Submit to Judge",
+        "title": "Submit to Judge",
         "icon": "$(rocket)"
       },
       {
         "command": "ascendPractice.revealReference",
-        "title": "Ascend: Reveal Reference Code",
+        "title": "Reveal Reference Code",
         "icon": "$(references)"
       },
       {
         "command": "ascendPractice.newAttemptFromTemplate",
-        "title": "Ascend: New Attempt from Template",
+        "title": "New Attempt from Template",
         "icon": "$(discard)"
       },
       {
         "command": "ascendPractice.openWeb",
-        "title": "Ascend: Open Web Workbench",
+        "title": "Open Web Workbench",
         "icon": "$(link-external)"
+      },
+      {
+        "command": "ascendPractice.addCurrentCpp",
+        "title": "添加当前 CPP",
+        "shortTitle": "添加当前 CPP 到 Ascend",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "ascendPractice.addCppFolder",
+        "title": "批量添加文件夹中的 CPP",
+        "shortTitle": "批量添加 CPP",
+        "icon": "$(cloud-upload)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "ascendPractice.switchViewMode",
+          "command": "ascendPractice.refresh",
           "when": "view == ascendPractice.today",
           "group": "navigation@1"
         },
         {
-          "command": "ascendPractice.refresh",
-          "when": "view == ascendPractice.today",
-          "group": "navigation@2"
-        },
-        {
           "command": "ascendPractice.switchServer",
           "when": "view == ascendPractice.today",
-          "group": "navigation@4"
-        },
-        {
-          "command": "ascendPractice.createFolder",
-          "when": "view == ascendPractice.today && ascendPractice.viewMode == directory",
           "group": "navigation@4"
         },
         {
@@ -265,24 +261,9 @@
           "command": "ascendPractice.clearProblemSearch",
           "when": "view == ascendPractice.today && ascendPractice.hasProblemSearch",
           "group": "navigation@2"
-        },
-        {
-          "command": "ascendPractice.sortProblems",
-          "when": "view == ascendPractice.today",
-          "group": "navigation@5"
-        },
-        {
-          "command": "ascendPractice.undoLibraryMove",
-          "when": "view == ascendPractice.today && ascendPractice.canUndoLibraryMove",
-          "group": "navigation@6"
         }
       ],
       "view/item/context": [
-        {
-          "command": "ascendPractice.switchViewMode",
-          "when": "view == ascendPractice.today && (viewItem == ascendLearningModeRoot || viewItem == ascendCatalogModeRoot || viewItem == ascendDirectoryModeRoot)",
-          "group": "mode@1"
-        },
         {
           "command": "ascendPractice.openProblem",
           "when": "view == ascendPractice.today && (viewItem == ascendProblem || viewItem == ascendLibraryProblem)",
@@ -290,7 +271,7 @@
         },
         {
           "command": "ascendPractice.createFolder",
-          "when": "view == ascendPractice.today && (viewItem == ascendDirectoryModeRoot || viewItem == ascendLibraryUnfiled || viewItem == ascendLibraryFolder)",
+          "when": "view == ascendPractice.today && (viewItem == ascendDirectoryRoot || viewItem == ascendLibraryUnfiled || viewItem == ascendLibraryFolder)",
           "group": "library@1"
         },
         {
@@ -359,6 +340,18 @@
           "group": "local@2"
         }
       ],
+      "explorer/context": [
+        {
+          "command": "ascendPractice.addCurrentCpp",
+          "when": "resourceScheme == file && resourceExtname == .cpp",
+          "group": "ascend@1"
+        },
+        {
+          "command": "ascendPractice.addCppFolder",
+          "when": "resourceScheme == file && explorerResourceIsFolder",
+          "group": "ascend@2"
+        }
+      ],
       "editor/title": [
         {
           "command": "ascendPractice.runSamples",
@@ -418,7 +411,7 @@
     "typecheck": "tsc --noEmit",
     "test": "npm run build && node --test *.test.js",
     "test:host": "npm run build && node ./test/runTest.js",
-    "package": "npm run build && npx @vscode/vsce package --no-dependencies --out ../../dist/ascend-practice-0.8.1.vsix"
+    "package": "npm run build && npx @vscode/vsce package --no-dependencies --out ../../dist/"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

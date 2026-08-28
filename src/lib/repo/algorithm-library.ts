@@ -34,6 +34,8 @@ export type AlgorithmLibraryMove =
       kind: "folder";
       id: string;
       targetFolderId?: string | null;
+      afterFolderId?: string | null;
+      placeFirst?: boolean;
       direction?: "up" | "down" | "first";
     };
 
@@ -140,6 +142,36 @@ export function deleteAlgorithmLibraryFolder(
   })();
 }
 
+/**
+ * 沿目录段逐级查找或创建（大小写不敏感），返回最末层文件夹。
+ * 供导入链路把题目自动放进「课程/阶段」层级，保证网盘、
+ * 算法训练与 VS Code 插件看到同一棵树。
+ */
+export function ensureAlgorithmLibraryFolderPath(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  segments: readonly string[],
+): AlgorithmLibraryFolder | null {
+  let parentId: string | null = null;
+  let folder: AlgorithmLibraryFolder | null = null;
+  for (const rawName of segments) {
+    const name = rawName.trim();
+    if (!name) continue;
+    const existing = db
+      .prepare(
+        `
+        SELECT id, parent_id AS parentId, name, sort_order AS sortOrder
+        FROM algorithm_library_folders
+        WHERE workspace_id = ? AND parent_id IS ? AND name = ? COLLATE NOCASE
+      `,
+      )
+      .get(scope.workspaceId, parentId, name) as AlgorithmLibraryFolder | undefined;
+    folder = existing ?? createAlgorithmLibraryFolder(db, scope, { name, parentId });
+    parentId = folder.id;
+  }
+  return folder;
+}
+
 export function moveAlgorithmLibraryProblem(
   db: Database.Database,
   scope: WorkspaceScope,
@@ -218,6 +250,8 @@ export function moveAlgorithmLibraryEntries(
         moveAlgorithmLibraryFolder(db, scope, {
           folderId: entry.id,
           targetParentId: entry.targetFolderId,
+          afterFolderId: entry.afterFolderId,
+          placeFirst: entry.placeFirst,
         });
       }
     }
@@ -227,7 +261,12 @@ export function moveAlgorithmLibraryEntries(
 export function moveAlgorithmLibraryFolder(
   db: Database.Database,
   scope: WorkspaceScope,
-  input: { folderId: string; targetParentId?: string | null },
+  input: {
+    folderId: string;
+    targetParentId?: string | null;
+    afterFolderId?: string | null;
+    placeFirst?: boolean;
+  },
 ): AlgorithmLibraryFolder {
   requirePluginEnabled(db, scope, "algorithms");
   const folder = getFolder(db, scope, input.folderId);
@@ -235,15 +274,34 @@ export function moveAlgorithmLibraryFolder(
   assertFolderExists(db, scope, targetParentId);
   assertFolderMoveHasNoCycle(db, scope, folder.id, targetParentId);
   assertFolderNameAvailable(db, scope, targetParentId, folder.name, folder.id);
-  const sortOrder = nextFolderSortOrder(db, scope, targetParentId, folder.id);
-  db.prepare(
+  const siblings = db
+    .prepare(
+      `
+      SELECT id FROM algorithm_library_folders
+      WHERE workspace_id = ? AND parent_id IS ? AND id != ?
+      ORDER BY sort_order, name COLLATE NOCASE, id
+    `,
+    )
+    .all(scope.workspaceId, targetParentId, folder.id) as Array<{ id: string }>;
+  let insertionIndex = input.placeFirst ? 0 : siblings.length;
+  if (!input.placeFirst && input.afterFolderId) {
+    const afterFolderId = normalizeFolderId(input.afterFolderId);
+    const targetIndex = siblings.findIndex((item) => item.id === afterFolderId);
+    if (targetIndex < 0) throw new Error("目标文件夹与目标位置不一致");
+    insertionIndex = targetIndex + 1;
+  }
+  siblings.splice(insertionIndex, 0, { id: folder.id });
+  const update = db.prepare(
     `
     UPDATE algorithm_library_folders
     SET parent_id = ?, sort_order = ?, updated_at = CURRENT_TIMESTAMP
     WHERE workspace_id = ? AND id = ?
   `,
-  ).run(targetParentId, sortOrder, scope.workspaceId, folder.id);
-  normalizeFolderOrder(db, scope, folder.parentId);
+  );
+  db.transaction(() => {
+    siblings.forEach((item, index) => update.run(targetParentId, index + 1, scope.workspaceId, item.id));
+    if (folder.parentId !== targetParentId) normalizeFolderOrder(db, scope, folder.parentId);
+  })();
   return getFolder(db, scope, folder.id);
 }
 

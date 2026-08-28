@@ -44,6 +44,8 @@ export type AlgorithmProblem = {
   notes: string;
   evidenceStatus: AlgorithmEvidenceStatus;
   nextReview: string | null;
+  reviewEnabled: boolean;
+  reviewStep: number;
   problemMode: "external" | "managed" | "imported";
   contentMode: "external_link" | "managed" | "imported_private";
   evaluationMode: "manual" | "judge" | "sample";
@@ -117,6 +119,8 @@ type ProblemRow = {
   material_status: string;
   priority_band: string;
   phase_key: string;
+  review_enabled: number;
+  review_step: number;
 };
 
 type AttemptRow = {
@@ -153,7 +157,8 @@ export function getAlgorithmDashboard(db: Database.Database, scope: WorkspaceSco
            p.supported_languages_json, p.metadata_json, p.content_mode, p.evaluation_mode,
            COALESCE(o.material_status, p.material_status) AS material_status,
            COALESCE(o.priority_band, p.priority_band) AS priority_band,
-           COALESCE(o.phase_key, p.phase_key) AS phase_key
+           COALESCE(o.phase_key, p.phase_key) AS phase_key,
+           p.review_enabled, p.review_step
     FROM algorithm_problems p
     LEFT JOIN algorithm_problem_overrides o
       ON o.workspace_id = p.workspace_id AND o.problem_id = p.id
@@ -204,7 +209,9 @@ export function getAlgorithmDashboard(db: Database.Database, scope: WorkspaceSco
   );
   return {
     problems,
-    dueProblems: problems.filter((problem) => problem.nextReview !== null && problem.nextReview <= today),
+    dueProblems: problems.filter(
+      (problem) => problem.reviewEnabled && problem.nextReview !== null && problem.nextReview <= today,
+    ),
     metrics: {
       problemCount: problems.length,
       attemptedCount: problems.filter((problem) => problem.attempts.length > 0).length,
@@ -214,7 +221,9 @@ export function getAlgorithmDashboard(db: Database.Database, scope: WorkspaceSco
         ),
       ).length,
       transferCount: problems.filter((problem) => problem.evidenceStatus === "transfer_verified").length,
-      dueCount: problems.filter((problem) => problem.nextReview !== null && problem.nextReview <= today).length,
+      dueCount: problems.filter(
+        (problem) => problem.reviewEnabled && problem.nextReview !== null && problem.nextReview <= today,
+      ).length,
     },
   };
 }
@@ -567,7 +576,8 @@ export function getAlgorithmProblem(db: Database.Database, scope: WorkspaceScope
            p.supported_languages_json, p.metadata_json, p.content_mode, p.evaluation_mode,
            COALESCE(o.material_status, p.material_status) AS material_status,
            COALESCE(o.priority_band, p.priority_band) AS priority_band,
-           COALESCE(o.phase_key, p.phase_key) AS phase_key
+           COALESCE(o.phase_key, p.phase_key) AS phase_key,
+           p.review_enabled, p.review_step
     FROM algorithm_problems p
     LEFT JOIN algorithm_problem_overrides o
       ON o.workspace_id = p.workspace_id AND o.problem_id = p.id
@@ -622,6 +632,8 @@ function mapProblem(row: ProblemRow, attempts: AlgorithmAttempt[], collectionIds
     notes: row.notes,
     evidenceStatus: normalizeEvidenceStatus(row.evidence_status),
     nextReview: row.next_review,
+    reviewEnabled: row.review_enabled === 1,
+    reviewStep: Math.max(0, row.review_step),
     problemMode: normalizeProblemMode(row.problem_mode),
     contentMode: normalizeContentMode(row.content_mode),
     evaluationMode: normalizeEvaluationMode(row.evaluation_mode),

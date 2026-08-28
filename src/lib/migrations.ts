@@ -2151,6 +2151,60 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: "0040_algorithm_training_simplification",
+    sql: `
+      ALTER TABLE algorithm_problems
+        ADD COLUMN review_enabled INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE algorithm_problems
+        ADD COLUMN review_step INTEGER NOT NULL DEFAULT 0;
+
+      CREATE TABLE algorithm_course_memberships (
+        workspace_id TEXT NOT NULL,
+        problem_id INTEGER NOT NULL,
+        course_key TEXT NOT NULL,
+        course_name TEXT NOT NULL,
+        stage_key TEXT NOT NULL DEFAULT '',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, problem_id, course_key),
+        FOREIGN KEY (workspace_id, problem_id)
+          REFERENCES algorithm_problems(workspace_id, id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX idx_algorithm_course_memberships_course
+        ON algorithm_course_memberships(workspace_id, course_key, stage_key, sort_order, problem_id);
+
+      CREATE TABLE algorithm_problem_aliases (
+        workspace_id TEXT NOT NULL,
+        alias_key TEXT NOT NULL,
+        alias_value TEXT NOT NULL,
+        provider_id TEXT NOT NULL,
+        external_problem_id TEXT NOT NULL,
+        problem_id INTEGER,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, alias_key),
+        FOREIGN KEY (workspace_id, problem_id)
+          REFERENCES algorithm_problems(workspace_id, id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX idx_algorithm_problem_aliases_identity
+        ON algorithm_problem_aliases(workspace_id, provider_id, external_problem_id);
+
+      INSERT OR IGNORE INTO algorithm_course_memberships
+        (workspace_id, problem_id, course_key, course_name, stage_key, sort_order)
+      SELECT DISTINCT p.workspace_id, p.id, c.source_key, c.name,
+             COALESCE(NULLIF(p.phase_key, ''), '未分阶段'), i.sort_order
+      FROM algorithm_problems p
+      JOIN algorithm_collection_items i
+        ON i.workspace_id = p.workspace_id AND i.problem_id = p.id
+      JOIN algorithm_collections c
+        ON c.workspace_id = i.workspace_id AND c.id = i.collection_id
+      WHERE c.collection_kind = 'course';
+    `,
+  },
 ];
 
 function migrateLegacyDayTasks(database: Database.Database): void {

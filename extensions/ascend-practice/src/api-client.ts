@@ -109,6 +109,7 @@ export class AscendApi {
   updateProblem(problemId: number, input: unknown) {
     return this.patch(`/api/algorithm/vscode/problems/${problemId}`, input);
   }
+  importCpp(input: unknown) { return this.post("/api/algorithm/vscode/import/cpp", input); }
 
   private post<T = Record<string, unknown>>(route: string, input: unknown): Promise<T> {
     return this.request<T>(route, { method: "POST", body: JSON.stringify(input) });

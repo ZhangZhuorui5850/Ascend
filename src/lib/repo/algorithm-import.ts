@@ -3,6 +3,7 @@ import type Database from "better-sqlite3";
 import type { WorkspaceScope } from "../access-context";
 import type { AlgorithmImportScan } from "../algorithm-import";
 import type { ParsedAlgorithmExercise } from "../algorithm-import-parser";
+import { normalizeAlgorithmAlias } from "../algorithm-catalog";
 import { requirePluginEnabled } from "./plugins";
 
 export type AlgorithmCollection = {
@@ -35,6 +36,12 @@ export type AlgorithmImportResult = {
   unchanged: number;
   warningCount: number;
   collectionCount: number;
+};
+
+export type AlgorithmUploadImportResult = {
+  problemId: number;
+  duplicate: boolean;
+  matchStatus: ParsedAlgorithmExercise["matchStatus"];
 };
 
 export function listAlgorithmCollections(db: Database.Database, scope: WorkspaceScope): AlgorithmCollection[] {
@@ -188,7 +195,7 @@ export function importAlgorithmScan(
   };
 }
 
-function upsertImportedProblem(
+export function upsertImportedProblem(
   db: Database.Database,
   scope: WorkspaceScope,
   sourceId: string,
@@ -280,6 +287,67 @@ function upsertImportedProblem(
     ).run(scope.workspaceId, row.id, topic);
   }
   return row.id;
+}
+
+export function importAlgorithmUpload(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: {
+    exercise: ParsedAlgorithmExercise;
+    courseName?: string;
+    stageKey?: string;
+    folderPath?: string;
+  },
+): AlgorithmUploadImportResult {
+  requirePluginEnabled(db, scope, "algorithms");
+  const exercise = input.exercise;
+  const sourceId = stableId("algorithm-source", `${scope.workspaceId}:browser-upload`);
+  const duplicate = Boolean(db.prepare(`
+    SELECT 1 FROM algorithm_problems
+    WHERE workspace_id = ? AND provider_id = ? AND external_problem_id = ?
+  `).get(scope.workspaceId, exercise.providerId, exercise.externalProblemId));
+  const problemId = db.transaction(() => {
+    db.prepare(`
+      INSERT INTO algorithm_import_sources
+        (workspace_id, id, name, source_kind, root_locator, item_count, status,
+         errors_json, last_scanned_at, last_imported_at)
+      VALUES (?, ?, '浏览器上传', 'browser_upload', 'ascend://uploads/algorithms', 1, 'ready', '[]',
+              CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT(workspace_id, id) DO UPDATE SET
+        item_count = algorithm_import_sources.item_count + 1,
+        status = 'ready', last_scanned_at = CURRENT_TIMESTAMP,
+        last_imported_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+    `).run(scope.workspaceId, sourceId);
+    const id = upsertImportedProblem(db, scope, sourceId, exercise, defaultCppTemplate());
+    upsertImportItem(db, scope, sourceId, id, exercise);
+    if (input.courseName?.trim()) {
+      const courseName = input.courseName.trim().slice(0, 80);
+      const courseKey = stableId("course", courseName.normalize("NFKC").toLowerCase());
+      db.prepare(`
+        INSERT INTO algorithm_course_memberships
+          (workspace_id, problem_id, course_key, course_name, stage_key, sort_order)
+        VALUES (?, ?, ?, ?, ?, 0)
+        ON CONFLICT(workspace_id, problem_id, course_key) DO UPDATE SET
+          course_name = excluded.course_name, stage_key = excluded.stage_key,
+          updated_at = CURRENT_TIMESTAMP
+      `).run(scope.workspaceId, id, courseKey, courseName, (input.stageKey || exercise.phase || "未分阶段").slice(0, 40));
+    }
+    const aliasValue = exercise.sourcePath.split(/[\\/]/).pop() || exercise.title;
+    const aliasKey = normalizeAlgorithmAlias(aliasValue);
+    if (aliasKey) {
+      db.prepare(`
+        INSERT INTO algorithm_problem_aliases
+          (workspace_id, alias_key, alias_value, provider_id, external_problem_id, problem_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(workspace_id, alias_key) DO UPDATE SET
+          alias_value = excluded.alias_value, provider_id = excluded.provider_id,
+          external_problem_id = excluded.external_problem_id, problem_id = excluded.problem_id,
+          updated_at = CURRENT_TIMESTAMP
+      `).run(scope.workspaceId, aliasKey, aliasValue, exercise.providerId, exercise.externalProblemId, id);
+    }
+    return id;
+  })();
+  return { problemId, duplicate, matchStatus: exercise.matchStatus };
 }
 
 function upsertImportItem(
@@ -388,6 +456,10 @@ function pathCollections(sourcePath: string): Array<{ key: string; name: string;
     return [{ key: "source:personal-practice", name: "个人练习", kind: "source" }];
   }
   return [];
+}
+
+function defaultCppTemplate(): string {
+  return "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n  ios::sync_with_stdio(false);\n  cin.tie(nullptr);\n\n  return 0;\n}\n";
 }
 
 // Kept for future upload imports where a random source identifier is preferable.

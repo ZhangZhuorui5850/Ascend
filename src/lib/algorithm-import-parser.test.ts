@@ -76,4 +76,35 @@ int main() {}
     expect(parsed.materialStatus).toBe("review");
     expect(parsed.warnings).toEqual(expect.arrayContaining(["缺少输入说明", "缺少输出说明", "缺少可解析样例"]));
   });
+
+  it("identifies a catalog problem from a numbered filename without a header comment", () => {
+    const parsed = parseAlgorithmCpp(
+      "郭炜/W3/2754-八皇后.cpp",
+      "#include <bits/stdc++.h>\nint main() { return 0; }\n",
+    );
+    expect(parsed).toMatchObject({
+      title: "八皇后",
+      providerId: "bailian",
+      externalProblemId: "2754",
+      phase: "W3",
+      topics: ["回溯", "枚举"],
+      matchStatus: "identified",
+    });
+    expect(parsed.sourceCode).toContain("#include <bits/stdc++.h>");
+    expect(parsed.warnings).toContain("未找到文件头块注释，已从文件名识别");
+  });
+
+  it("keeps a low-information temp.cpp importable for preview correction", () => {
+    const parsed = parseAlgorithmCpp("临时/temp.cpp", "int main() {}\n");
+    expect(parsed).toMatchObject({
+      title: "temp",
+      providerId: "local-import",
+      externalProblemId: "临时/temp",
+      matchStatus: "incomplete",
+    });
+    expect(parsed.warnings).toEqual(expect.arrayContaining([
+      "未找到文件头块注释，已从文件名识别",
+      "缺少可确认的平台链接或题号",
+    ]));
+  });
 });
