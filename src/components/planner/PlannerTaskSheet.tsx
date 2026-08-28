@@ -10,7 +10,7 @@ import type {
   PlannerTask,
   TaskList,
 } from "@/lib/planner/types";
-import type { PlannerTaskView } from "@/lib/repo/planner-tasks";
+import type { PlannerTaskView } from "@/lib/planner/task-views";
 import type { FormEvent } from "react";
 import styles from "@/styles/planner/tasks.module.css";
 

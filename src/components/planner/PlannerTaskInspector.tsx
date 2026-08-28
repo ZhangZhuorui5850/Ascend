@@ -76,7 +76,7 @@ export function PlannerTaskInspector({
       <header className={styles.inspectorHeader}>
         <div className={styles.inspectorTitle}>
           <h2>任务详情</h2>
-          <small>v{task.version}</small>
+          <p>编辑任务内容与执行安排</p>
         </div>
         <PlannerStatusIndicator status={mutationStatus} />
       </header>
@@ -89,45 +89,53 @@ export function PlannerTaskInspector({
               {activeLabels.map((label) => <span className={styles.label} key={label.id}>#{label.name}</span>)}
             </div>
           ) : null}
-          <PlannerCollapsible label="备注" summary={task.notes.trim() ? "已有内容" : "空白"}>
-            <PlannerField label="备注"><textarea defaultValue={task.notes} name="notes" rows={5} /></PlannerField>
-          </PlannerCollapsible>
-          {dirty ? <button className="primaryButton" type="submit">保存任务</button> : null}
-        </form>
-        {labels.length ? (
-          <PlannerCollapsible label="标签" summary={activeLabels.length ? `${activeLabels.length} 个标签` : "未添加"}>
-            <PlannerTaskLabels activeLabelIds={activeLabelIds} labels={labels} onSubmit={onSaveLabels} />
-          </PlannerCollapsible>
-        ) : null}
-        <PlannerCollapsible label="提醒" summary={taskReminders.length ? `${taskReminders.length} 条提醒` : "未设置"}>
-          <PlannerTaskReminders
-            onAdd={onAddReminder}
-            onCancel={onCancelReminder}
-            onEnablePush={onEnablePush}
-            reminders={taskReminders}
-          />
-        </PlannerCollapsible>
-        <PlannerCollapsible label="重复" summary={task.series_id ? "系列任务" : "单次任务"}>
-          <PlannerTaskRecurrence
-            firstDate={scheduled.date || task.due_date || localDateKey()}
-            firstTime={scheduled.time || "09:00"}
-            onSubmit={onCreateSeries}
-          />
-        </PlannerCollapsible>
-        {task.depth < 3 && view !== "trash" ? (
-          <PlannerCollapsible label="子任务" summary={`当前层级 ${task.depth}/3`}>
-            <PlannerTaskSubtasks onSubmit={onAddSubtask} />
-          </PlannerCollapsible>
-        ) : null}
-        <PlannerCollapsible label="系统信息" summary={`版本 ${task.version}`}>
-          <div className={styles.factRow}>
-            <span><CalendarClock size={14} />{task.scheduled_start_at ? "已排期" : "待排期"}</span>
-            <span><ArchiveRestore size={14} />{task.deleted_at ? "回收站" : "活动任务"}</span>
+          <div className={styles.formSecondary}>
+            <PlannerCollapsible label="备注" summary={task.notes.trim() ? "已有内容" : "空白"}>
+              <PlannerField label="备注"><textarea defaultValue={task.notes} name="notes" rows={5} /></PlannerField>
+            </PlannerCollapsible>
           </div>
-        </PlannerCollapsible>
+          {dirty ? <button className={`primaryButton ${styles.saveButton}`} type="submit">保存任务</button> : null}
+        </form>
+        <div className={styles.secondaryHeading}>
+          <h3>更多设置</h3>
+          <span>按需展开</span>
+        </div>
+        <div className={styles.inspectorSecondary}>
+          {labels.length ? (
+            <PlannerCollapsible label="标签" summary={activeLabels.length ? `${activeLabels.length} 个标签` : "未添加"}>
+              <PlannerTaskLabels activeLabelIds={activeLabelIds} labels={labels} onSubmit={onSaveLabels} />
+            </PlannerCollapsible>
+          ) : null}
+          <PlannerCollapsible label="提醒" summary={taskReminders.length ? `${taskReminders.length} 条提醒` : "未设置"}>
+            <PlannerTaskReminders
+              onAdd={onAddReminder}
+              onCancel={onCancelReminder}
+              onEnablePush={onEnablePush}
+              reminders={taskReminders}
+            />
+          </PlannerCollapsible>
+          <PlannerCollapsible label="重复" summary={task.series_id ? "系列任务" : "单次任务"}>
+            <PlannerTaskRecurrence
+              firstDate={scheduled.date || task.due_date || localDateKey()}
+              firstTime={scheduled.time || "09:00"}
+              onSubmit={onCreateSeries}
+            />
+          </PlannerCollapsible>
+          {task.depth < 3 && view !== "trash" ? (
+            <PlannerCollapsible label="子任务" summary={`当前层级 ${task.depth}/3`}>
+              <PlannerTaskSubtasks onSubmit={onAddSubtask} />
+            </PlannerCollapsible>
+          ) : null}
+          <PlannerCollapsible label="系统信息" summary={`版本 ${task.version}`}>
+            <div className={styles.factRow}>
+              <span><CalendarClock size={14} />{task.scheduled_start_at ? "已排期" : "待排期"}</span>
+              <span><ArchiveRestore size={14} />{task.deleted_at ? "回收站" : "活动任务"}</span>
+            </div>
+          </PlannerCollapsible>
+        </div>
       </div>
       <footer className={styles.inspectorFooter}>
-        <PlannerStatusIndicator status={mutationStatus} />
+        <small>版本 {task.version}</small>
         <small>所有时间使用当前学习空间时区</small>
       </footer>
     </div>

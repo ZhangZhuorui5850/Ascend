@@ -45,7 +45,7 @@ export default async function ReviewPage({
           <h1>复习</h1>
           <span>{total ? `今天有 ${total} 项到期内容` : "今天没有到期内容"}</span>
         </div>
-        <Link href="/">
+        <Link href="/" transitionTypes={["nav-back"]}>
           <ArrowLeft aria-hidden size={16} />
           回到今天
         </Link>

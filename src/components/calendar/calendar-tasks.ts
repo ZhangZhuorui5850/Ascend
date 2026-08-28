@@ -1,6 +1,9 @@
 import type { CalendarTask } from "@/lib/repo/planner-calendar-tasks";
 
-export type OptimisticCalendarTask = CalendarTask & { pending?: boolean };
+export type OptimisticCalendarTask = CalendarTask & {
+  clientKey?: string;
+  pending?: boolean;
+};
 
 export type CalendarTaskMutation =
   | { type: "add"; task: OptimisticCalendarTask }
@@ -13,7 +16,13 @@ export function calendarTaskReducer(
   state: OptimisticCalendarTask[],
   mutation: CalendarTaskMutation,
 ): OptimisticCalendarTask[] {
-  if (mutation.type === "add") return [...state, mutation.task];
+  if (mutation.type === "add") {
+    const exists = state.some(
+      (task) =>
+        task.id === mutation.task.id || Boolean(mutation.task.clientKey && task.clientKey === mutation.task.clientKey),
+    );
+    return exists ? state : [...state, mutation.task];
+  }
   if (mutation.type === "remove") return state.filter((task) => task.id !== mutation.id);
   if (mutation.type === "replace") {
     return state.map((task) => (task.id === mutation.temporaryId ? mutation.task : task));

@@ -1,67 +1,52 @@
 import { PlannerTasks } from "@/components/PlannerTasks";
 import { PlannerShell } from "@/components/planner/PlannerShell";
+import { shiftDateKey } from "@/lib/dates";
+import { isPlannerTaskView } from "@/lib/planner/task-views";
 import { dateKeyInTimeZone } from "@/lib/planner/time";
-import type { PlannerTaskView } from "@/lib/repo/planner-tasks";
 import { getDb } from "@/lib/db";
 import { requirePageWorkspace } from "@/lib/page-auth";
 import { listPlannerLabels, listPlannerTaskLabelIds } from "@/lib/repo/planner-labels";
 import { listTaskLists } from "@/lib/repo/planner-lists";
-import { listTaskView } from "@/lib/repo/planner-tasks";
+import { listTaskViewSource } from "@/lib/repo/planner-tasks";
 import { listWorkspaceReminders } from "@/lib/repo/planner-reminders";
 
 export const dynamic = "force-dynamic";
 
-const VIEWS = new Set<PlannerTaskView>([
-  "inbox",
-  "today",
-  "upcoming",
-  "anytime",
-  "overdue",
-  "waiting",
-  "completed",
-  "trash",
-  "all",
-]);
-
-export default async function TasksPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ view?: string; list?: string }>;
-}) {
+export default async function TasksPage({ searchParams }: { searchParams: Promise<{ view?: string; list?: string }> }) {
   const access = await requirePageWorkspace("/tasks");
   const db = getDb();
   const query = await searchParams;
-  const view = VIEWS.has(query.view as PlannerTaskView)
-    ? query.view as PlannerTaskView
-    : "inbox";
-  const workspace = db.prepare("SELECT timezone FROM workspaces WHERE id = ?")
-    .get(access.workspaceId) as { timezone: string };
-  const today = dateKeyInTimeZone(new Date(), workspace.timezone);
+  const requestedView = isPlannerTaskView(query.view) ? query.view : "inbox";
+  const workspace = db.prepare("SELECT timezone FROM workspaces WHERE id = ?").get(access.workspaceId) as {
+    timezone: string;
+  };
+  const now = new Date();
+  const today = dateKeyInTimeZone(now, workspace.timezone);
   const lists = listTaskLists(db, access);
   const listId = query.list && lists.some((list) => list.id === query.list) ? query.list : undefined;
-  const tasks = listTaskView(db, access, {
-    view,
+  const view = listId ? "all" : requestedView;
+  const taskSource = listTaskViewSource(db, access);
+  const taskViewContext = {
     today,
-    listId,
-    limit: 500,
-  });
+    upcomingEnd: shiftDateKey(today, 30),
+    now: now.toISOString(),
+    inboxId: taskSource.inboxId,
+  };
 
   return (
-    <PlannerShell
-      active="tasks"
-      description="从 Inbox 收集任务，分离到期与排期，并保留完成轨迹。"
-      title="任务"
-    >
+    <PlannerShell active="tasks" description="从 Inbox 收集任务，分离到期与排期，并保留完成轨迹。" title="任务">
       <div className="plannerTasksPage">
-      <PlannerTasks
-        initialReminders={listWorkspaceReminders(db, access)}
-        initialTaskLabelIds={listPlannerTaskLabelIds(db, access)}
-        initialTasks={tasks}
-        labels={listPlannerLabels(db, access)}
-        lists={lists}
-        timeZone={workspace.timezone}
-        view={view}
-      />
+        <PlannerTasks
+          initialReminders={listWorkspaceReminders(db, access)}
+          initialListId={listId}
+          initialTaskLabelIds={listPlannerTaskLabelIds(db, access)}
+          initialTasks={taskSource.tasks}
+          initialView={view}
+          labels={listPlannerLabels(db, access)}
+          lists={lists}
+          taskViewContext={taskViewContext}
+          timeZone={workspace.timezone}
+        />
       </div>
     </PlannerShell>
   );

@@ -16,8 +16,8 @@ describe("shared Planner shell", () => {
   });
 
   it("wraps both stable routes without duplicating h1", () => {
-    expect(tasks).toContain('<PlannerShell\n      active="tasks"');
-    expect(calendar).toContain('<PlannerShell\n      active="calendar"');
+    expect(tasks).toMatch(/<PlannerShell(?:\s|[^>])*active="tasks"/);
+    expect(calendar).toMatch(/<PlannerShell(?:\s|[^>])*active="calendar"/);
     expect(tasks).not.toContain("<h1>");
     expect(calendar).not.toContain("<h1>");
   });
