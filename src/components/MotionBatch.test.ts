@@ -16,6 +16,10 @@ const globals = source("../app/globals.css");
 const summit = source("../styles/summit.css");
 const appShell = source("./AppShell.tsx");
 const captureStyles = source("./CapturePanel.module.css");
+const commandPalette = source("./CommandPalette.tsx");
+const sidebar = source("./Sidebar.tsx");
+const plannerPrimitives = source("../styles/planner/primitives.module.css");
+const todayStyles = source("../app/Today.module.css");
 
 describe("motion batch list presence", () => {
   it("keeps capture file state explicit and countdown insertion/removal animated", () => {
@@ -70,14 +74,28 @@ describe("motion batch CSS contracts", () => {
     expect(summit).toContain("@supports (interpolate-size: allow-keywords)");
     expect(summit).toContain(".dayModule::details-content");
     expect(summit).toContain("transition-behavior: allow-discrete");
-    expect(summit).toMatch(/\.commandPalette,[\s\S]*captureMenuIn var\(--motion-fast\)/);
+    expect(commandPalette).toContain("<Dialog.Root");
+    expect(summit).toContain(".commandPalette[data-ending-style]");
+    expect(plannerPrimitives).toContain('.drawerPopup[data-planner-surface="drawer"][data-ending-style]');
   });
 
-  it("connects page tokens and removes dead transition props", () => {
+  it("assigns spatial meaning to page navigation without double-enter motion", () => {
     expect(summit).toContain("summit-page-in var(--motion-page) var(--motion-ease-enter)");
     expect(summit).toContain("summit-page-out var(--motion-fast) var(--motion-ease-exit)");
+    expect(summit).toContain(":active-view-transition-type(nav-switch)");
+    expect(summit).toContain(":active-view-transition-type(nav-forward)");
+    expect(summit).toContain(":active-view-transition-type(nav-back)");
+    expect(summit).toMatch(/\.mainPane > \.pageStack > \*\s*{\s*animation: none;/);
+    expect(sidebar).toContain('transitionTypes={["nav-switch"]}');
+    expect(sidebar).not.toContain('transitionTypes={["nav-forward"]}');
     expect(appShell).not.toContain('enter="summit-page-enter"');
     expect(appShell).not.toContain('exit="summit-page-exit"');
+  });
+
+  it("keeps high-frequency completion feedback brief and reducible", () => {
+    expect(todayStyles).toContain("today-check-confirm var(--motion-quick)");
+    expect(todayStyles).toContain(':global(html[data-motion="reduce"])');
+    expect(captureStyles).toContain("var(--motion-loop)");
   });
 
   it("opens the same accessible capture primitive from every route", () => {

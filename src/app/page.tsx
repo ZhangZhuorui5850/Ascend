@@ -52,7 +52,7 @@ export default async function TodayPage() {
                 {action.reasons.map((reason) => <li key={reason}>{reason}</li>)}
               </ul>
             </div>
-            <Link className={styles.primaryAction} href={action.href}>
+            <Link className={styles.primaryAction} href={action.href} transitionTypes={["nav-forward"]}>
               开始
               <ArrowRight aria-hidden size={18} />
             </Link>
@@ -78,7 +78,7 @@ export default async function TodayPage() {
             <p className={styles.sectionLabel}>TODAY</p>
             <h2 id="today-timeline">今天的执行列表</h2>
           </div>
-          <Link className={styles.secondaryLink} href="/calendar">
+          <Link className={styles.secondaryLink} href="/calendar" transitionTypes={["nav-switch"]}>
             <CalendarDays aria-hidden size={16} />
             看日历
           </Link>
@@ -89,7 +89,7 @@ export default async function TodayPage() {
           unscheduledTasks={visibleUnscheduled}
         />
         {hiddenTimelineCount ? (
-          <Link className={styles.moreLink} href="/tasks">还有 {hiddenTimelineCount} 项，在计划中查看</Link>
+          <Link className={styles.moreLink} href="/tasks" transitionTypes={["nav-switch"]}>还有 {hiddenTimelineCount} 项，在计划中查看</Link>
         ) : null}
       </section>
 
@@ -99,7 +99,7 @@ export default async function TodayPage() {
             <p className={styles.sectionLabel}>REVIEW</p>
             <h2 id="today-review">今日复习</h2>
           </div>
-          <Link className={styles.secondaryLink} href="/review">
+          <Link className={styles.secondaryLink} href="/review" transitionTypes={["nav-switch"]}>
             {model.review.dueKnowledgePoints + model.review.dueMistakes ? "进入复习" : "查看复习"}
             <ArrowRight aria-hidden size={16} />
           </Link>
@@ -123,7 +123,7 @@ export default async function TodayPage() {
         </CaptureTrigger>
       </section>
 
-      <Link className={styles.archiveLink} href={`/day/${day}`}>
+      <Link className={styles.archiveLink} href={`/day/${day}`} transitionTypes={["nav-forward"]}>
         <RotateCcw aria-hidden size={15} />
         补录与日终复盘
       </Link>

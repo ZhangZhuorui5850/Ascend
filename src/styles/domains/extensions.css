@@ -2401,7 +2401,7 @@
 }
 
 .spin {
-  animation: algorithm-spin 1s linear infinite;
+  animation: algorithm-spin var(--motion-loop) linear infinite;
 }
 
 @keyframes algorithm-spin {

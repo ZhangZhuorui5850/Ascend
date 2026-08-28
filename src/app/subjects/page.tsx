@@ -33,7 +33,7 @@ export default async function SubjectsPage() {
             {group.items.map((subject) => {
               const progress = subject.pointCount ? Math.round((subject.masteredCount / subject.pointCount) * 100) : 0;
               return (
-                <Link href={`/subjects/${subject.code}`} className="subjectCard" key={subject.code}>
+                <Link href={`/subjects/${subject.code}`} className="subjectCard" key={subject.code} transitionTypes={["nav-forward"]}>
                   <div className="subjectCardHead">
                     <b>{subject.code}</b>
                     <strong>{subject.name}</strong>

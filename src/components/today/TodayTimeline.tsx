@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { startTransition, useState } from "react";
 import { CalendarDays, Check, Clock3 } from "lucide-react";
 import { toggleDayTaskAction } from "@/app/actions/day-tasks";
@@ -81,7 +82,7 @@ export function TodayTimeline({
     return (
       <div className={styles.timelineEmpty}>
         <span>今天还没有安排。</span>
-        <a href="/tasks">去计划中看看</a>
+        <Link href="/tasks" transitionTypes={["nav-switch"]}>去计划中看看</Link>
       </div>
     );
   }

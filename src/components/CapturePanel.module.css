@@ -23,6 +23,20 @@
   justify-content: center;
   min-height: 52px;
   padding: 5px 2px;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard),
+    color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-base) var(--motion-ease-standard);
+}
+
+.intentTabs button:hover {
+  color: var(--ink);
+  transform: translateY(calc(-1 * var(--motion-distance-1)));
+}
+
+.intentTabs button:active {
+  transform: scale(0.96);
 }
 
 .intentTabs button[aria-selected="true"] {
@@ -54,6 +68,10 @@
   color: var(--ink);
   font: inherit;
   width: 100%;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-fast) var(--motion-ease-standard);
 }
 
 .mainField textarea {
@@ -84,6 +102,7 @@
   color: var(--info);
   font-size: .72rem;
   padding: 4px 8px;
+  animation: capture-chip-in var(--motion-quick) var(--motion-ease-enter) both;
 }
 
 .warning,
@@ -167,6 +186,20 @@
   min-height: 44px;
   min-width: 116px;
   padding: 0 14px;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-base) var(--motion-ease-standard);
+}
+
+.footer button:hover:not(:disabled) {
+  background: var(--accent-hover);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 18%, transparent);
+  transform: translateY(calc(-1 * var(--motion-distance-1)));
+}
+
+.footer button:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .footer button:disabled {
@@ -211,6 +244,10 @@
   grid-template-columns: 32px minmax(0, 1fr) auto 36px;
   min-height: 52px;
   padding: 7px;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard),
+    opacity var(--motion-fast) var(--motion-ease-standard);
 }
 
 .fileIcon {
@@ -267,10 +304,19 @@
   pointer-events: none;
   position: fixed;
   z-index: calc(var(--planner-z-dialog) + 2);
+  animation: capture-drop-overlay-in var(--motion-panel) var(--motion-ease-enter) both;
 }
 
 .spin {
-  animation: captureSpin 1s linear infinite;
+  animation: captureSpin var(--motion-loop) linear infinite;
+}
+
+@keyframes capture-chip-in {
+  from { opacity: 0; transform: translateY(var(--motion-distance-1)); }
+}
+
+@keyframes capture-drop-overlay-in {
+  from { opacity: 0; }
 }
 
 @keyframes captureSpin {
@@ -306,7 +352,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .spin {
+  .spin,
+  .preview span,
+  .dropOverlay {
     animation: none;
   }
+}
+
+:global(html[data-motion="reduce"]) .spin,
+:global(html[data-motion="reduce"]) .preview span,
+:global(html[data-motion="reduce"]) .dropOverlay {
+  animation: none;
 }

@@ -31,7 +31,7 @@ export default async function SubjectPage({ params, searchParams }: {
     <div className="pageStack">
       <div className="pageHeader subjectDetailHeader">
         <div>
-          <span className="eyebrow"><Link href="/subjects">科目</Link> / {detail.subject.code}</span>
+          <span className="eyebrow"><Link href="/subjects" transitionTypes={["nav-back"]}>科目</Link> / {detail.subject.code}</span>
           <h1>{detail.subject.name}</h1>
           {detail.subject.description ? <p>{detail.subject.description}</p> : null}
         </div>

@@ -21,11 +21,11 @@ export function PlannerShell({
           <h1>计划</h1>
         </div>
         <nav aria-label="计划视图" className={styles.views}>
-          <Link aria-current={active === "tasks" ? "page" : undefined} href="/tasks">
+          <Link aria-current={active === "tasks" ? "page" : undefined} href="/tasks" transitionTypes={["nav-switch"]}>
             <ListChecks aria-hidden size={17} />
             任务
           </Link>
-          <Link aria-current={active === "calendar" ? "page" : undefined} href="/calendar">
+          <Link aria-current={active === "calendar" ? "page" : undefined} href="/calendar" transitionTypes={["nav-switch"]}>
             <CalendarDays aria-hidden size={17} />
             日历
           </Link>

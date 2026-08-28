@@ -1,5 +1,6 @@
 "use client";
 
+import { Dialog } from "@base-ui/react/dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -132,14 +133,6 @@ export function CommandPalette({
   const groupedEntries = groupEntries(entries);
 
   useEffect(() => {
-    function handle(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-    window.addEventListener("keydown", handle);
-    return () => window.removeEventListener("keydown", handle);
-  }, [setOpen]);
-
-  useEffect(() => {
     if (!open) return;
     window.setTimeout(() => {
       setActiveIndex(0);
@@ -182,12 +175,11 @@ export function CommandPalette({
     };
   }, [open, query, role]);
 
-  if (!open) return null;
   const safeActiveIndex = Math.max(0, Math.min(activeIndex, Math.max(0, entries.length - 1)));
 
   function go(href: string) {
     setOpen(false);
-    router.push(href);
+    router.push(href, { transitionTypes: ["nav-switch"] });
   }
 
   function execute(index: number) {
@@ -238,8 +230,12 @@ export function CommandPalette({
   }
 
   return (
-    <div className="commandBackdrop" onMouseDown={() => setOpen(false)} role="presentation">
-      <section aria-label="命令菜单" aria-modal="true" className="commandPalette" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+    <Dialog.Root onOpenChange={setOpen} open={open}>
+      <Dialog.Portal>
+        <Dialog.Backdrop className="commandBackdrop" />
+        <Dialog.Viewport className="commandViewport">
+          <Dialog.Popup aria-label="命令菜单" className="commandPalette" finalFocus initialFocus={inputRef}>
+            <Dialog.Title className="srOnly">命令菜单</Dialog.Title>
         <div className="commandSearch">
           <Search size={18} />
           <input
@@ -312,8 +308,10 @@ export function CommandPalette({
           </span>
         </div>
         <footer><span>↑↓ 浏览</span><span>Enter 打开</span><span>Esc 关闭</span></footer>
-      </section>
-    </div>
+          </Dialog.Popup>
+        </Dialog.Viewport>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

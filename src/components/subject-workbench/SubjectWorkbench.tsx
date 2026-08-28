@@ -1,13 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ListTree, Network, Plus, Settings2, Trash2 } from "lucide-react";
-import {
-  createChapterAction,
-  deleteSubjectAction,
-  renameSubjectAction,
-} from "@/app/actions/knowledge";
+import { createChapterAction, deleteSubjectAction, renameSubjectAction } from "@/app/actions/knowledge";
 import {
   flattenChapterPoints,
   flattenPointTree,
@@ -37,10 +33,19 @@ type SubjectWorkbenchProps = {
 };
 
 /** 科目工作台壳：头部工具栏（视图/排序/科目设置）、聚焦面包屑，按视图分发到列表或导图 */
-export function SubjectWorkbench({ subject, chapters, loosePoints, today, focusId = null, view = "list" }: SubjectWorkbenchProps) {
+export function SubjectWorkbench({
+  subject,
+  chapters,
+  loosePoints,
+  today,
+  focusId = null,
+  view = "list",
+}: SubjectWorkbenchProps) {
   const router = useRouter();
   const { confirm, notify } = useFeedback();
   const [chapterTitle, setChapterTitle] = useState("");
+  const [activeFocusId, setActiveFocusId] = useState<string | null>(focusId);
+  const [activeView, setActiveView] = useState<"list" | "map">(view);
   const { sortMode, changeSortMode } = useSortModePref(subject.code);
 
   function report(result: { ok: boolean; error?: string }) {
@@ -48,33 +53,46 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today, focusI
     else notify(result.error || "操作失败", "error");
   }
 
-  /** 聚焦/切换视图都走 URL，保持另一个参数不丢 */
+  useEffect(() => {
+    const restoreWorkbenchState = () => {
+      const params = new URLSearchParams(window.location.search);
+      setActiveFocusId(params.get("focus"));
+      setActiveView(params.get("view") === "map" ? "map" : "list");
+    };
+    window.addEventListener("popstate", restoreWorkbenchState);
+    return () => window.removeEventListener("popstate", restoreWorkbenchState);
+  }, []);
+
+  /** 数据已经在工作台内；只更新本地层级状态与 URL，不重新请求整页。 */
   function navigate(nextFocus: string | null, nextView: "list" | "map") {
+    if (nextFocus === activeFocusId && nextView === activeView) return;
     const params = new URLSearchParams();
     if (nextFocus) params.set("focus", nextFocus);
     if (nextView === "map") params.set("view", "map");
     const query = params.toString();
-    router.push(`/subjects/${subject.code}${query ? `?${query}` : ""}`);
+    setActiveFocusId(nextFocus);
+    setActiveView(nextView);
+    window.history.pushState(null, "", `/subjects/${encodeURIComponent(subject.code)}${query ? `?${query}` : ""}`);
   }
 
   function focusChapter(id: string | null) {
-    navigate(id, view);
+    navigate(id, activeView);
   }
 
-  const focusChapterPath = focusId ? findChapterPath(chapters, focusId) : null;
-  const focusPointLocation = focusId && !focusChapterPath
-    ? findPointLocation(chapters, loosePoints, focusId)
-    : null;
+  const focusChapterPath = activeFocusId ? findChapterPath(chapters, activeFocusId) : null;
+  const focusPointLocation =
+    activeFocusId && !focusChapterPath ? findPointLocation(chapters, loosePoints, activeFocusId) : null;
   const focusPointTarget = focusPointLocation?.pointPath.at(-1) ?? null;
   const focusPath = focusChapterPath ?? focusPointLocation?.chapterPath ?? null;
   const focusTarget = focusPath?.at(-1) ?? null;
   const focusValid = Boolean(focusTarget || focusPointTarget);
   const visibleChapters = focusTarget ? [focusTarget] : focusPointTarget ? [] : chapters;
-  const visibleLoosePoints = focusPointTarget && focusPointLocation?.chapterPath.length === 0
-    ? [focusPointTarget]
-    : focusTarget
-      ? []
-      : loosePoints;
+  const visibleLoosePoints =
+    focusPointTarget && focusPointLocation?.chapterPath.length === 0
+      ? [focusPointTarget]
+      : focusTarget
+        ? []
+        : loosePoints;
   const tree: TreeControls = useTreeControls({
     subjectCode: subject.code,
     report,
@@ -119,114 +137,124 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today, focusI
           <p>整理章节关系，选中知识点后完善回忆卡与学习证据。</p>
         </div>
         <div className="workbenchToolbar">
-        <div aria-label="视图" className="sortModeSwitch viewSwitch" role="group">
-          <button
-            aria-pressed={view === "list"}
-            className={view === "list" ? "active" : undefined}
-            onClick={() => navigate(focusId, "list")}
-            type="button"
-          >
-            <ListTree size={14} />
-            目录
-          </button>
-          <button
-            aria-pressed={view === "map"}
-            className={view === "map" ? "active" : undefined}
-            onClick={() => navigate(focusId, "map")}
-            type="button"
-          >
-            <Network size={14} />
-            图谱
-          </button>
-        </div>
-        <div aria-label="知识点排序方式" className="sortModeSwitch sortSwitch" role="group">
-          {POINT_SORT_MODES.map((option) => (
+          <div aria-label="视图" className="sortModeSwitch viewSwitch" role="group">
             <button
-              aria-pressed={sortMode === option.value}
-              className={sortMode === option.value ? "active" : undefined}
-              key={option.value}
-              onClick={() => changeSortMode(option.value)}
+              aria-pressed={activeView === "list"}
+              className={activeView === "list" ? "active" : undefined}
+              onClick={() => navigate(activeFocusId, "list")}
               type="button"
             >
-              {option.label}
+              <ListTree size={14} />
+              目录
             </button>
-          ))}
-        </div>
-        <details className="subjectSettings">
-          <summary aria-label="打开科目设置">
-            <Settings2 size={15} />
-            科目设置
-          </summary>
-          <div className="subjectSettingsPopover">
-            <label>
-              <span>科目名称</span>
-              <input
-                aria-label="科目名称"
-                defaultValue={subject.name}
-                key={`name-${subject.name}`}
-                onBlur={(event) => {
-                  const name = event.target.value.trim();
-                  if (name && name !== subject.name) {
-                    void renameSubjectAction({ code: subject.code, name }).then(report);
-                  }
-                }}
-              />
-            </label>
-            <label>
-              <span>考试形式</span>
-              <select
-                aria-label="科目类型"
-                onChange={(event) =>
-                  void renameSubjectAction({
-                    code: subject.code,
-                    name: subject.name,
-                    track: event.target.value as SubjectTrack,
-                  }).then(report)
-                }
-                value={subject.track}
-              >
-                <option value="written">笔试</option>
-                <option value="machine">机试</option>
-              </select>
-            </label>
-            <button className="subjectDeleteButton" onClick={() => void removeSubject()} type="button">
-              <Trash2 size={14} />
-              删除科目
+            <button
+              aria-pressed={activeView === "map"}
+              className={activeView === "map" ? "active" : undefined}
+              onClick={() => navigate(activeFocusId, "map")}
+              type="button"
+            >
+              <Network size={14} />
+              图谱
             </button>
           </div>
-        </details>
+          <div aria-label="知识点排序方式" className="sortModeSwitch sortSwitch" role="group">
+            {POINT_SORT_MODES.map((option) => (
+              <button
+                aria-pressed={sortMode === option.value}
+                className={sortMode === option.value ? "active" : undefined}
+                key={option.value}
+                onClick={() => changeSortMode(option.value)}
+                type="button"
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <details className="subjectSettings">
+            <summary aria-label="打开科目设置">
+              <Settings2 size={15} />
+              科目设置
+            </summary>
+            <div className="subjectSettingsPopover">
+              <label>
+                <span>科目名称</span>
+                <input
+                  aria-label="科目名称"
+                  defaultValue={subject.name}
+                  key={`name-${subject.name}`}
+                  onBlur={(event) => {
+                    const name = event.target.value.trim();
+                    if (name && name !== subject.name) {
+                      void renameSubjectAction({ code: subject.code, name }).then(report);
+                    }
+                  }}
+                />
+              </label>
+              <label>
+                <span>考试形式</span>
+                <select
+                  aria-label="科目类型"
+                  onChange={(event) =>
+                    void renameSubjectAction({
+                      code: subject.code,
+                      name: subject.name,
+                      track: event.target.value as SubjectTrack,
+                    }).then(report)
+                  }
+                  value={subject.track}
+                >
+                  <option value="written">笔试</option>
+                  <option value="machine">机试</option>
+                </select>
+              </label>
+              <button className="subjectDeleteButton" onClick={() => void removeSubject()} type="button">
+                <Trash2 size={14} />
+                删除科目
+              </button>
+            </div>
+          </details>
         </div>
       </div>
 
       {focusValid && focusPath ? (
         <nav aria-label="聚焦路径" className="focusBreadcrumb">
-          <button onClick={() => focusChapter(null)} type="button">{subject.name}</button>
+          <button onClick={() => focusChapter(null)} type="button">
+            {subject.name}
+          </button>
           {focusPath.map((node, index) => (
             <span key={node.id}>
               <span aria-hidden> / </span>
               {!focusPointTarget && index === focusPath.length - 1 ? (
-                <strong><RichText text={node.title} /></strong>
+                <strong>
+                  <RichText text={node.title} />
+                </strong>
               ) : (
-                <button onClick={() => focusChapter(node.id)} type="button"><RichText text={node.title} /></button>
+                <button onClick={() => focusChapter(node.id)} type="button">
+                  <RichText text={node.title} />
+                </button>
               )}
             </span>
           ))}
           {focusPointTarget ? (
             <span>
               <span aria-hidden> / </span>
-              <strong><RichText text={focusPointTarget.title} /></strong>
+              <strong>
+                <RichText text={focusPointTarget.title} />
+              </strong>
             </span>
           ) : null}
         </nav>
       ) : null}
-      {focusId && !focusValid ? <p className="empty">定位的章节或知识点不存在（可能已被删除），已显示完整目录。</p> : null}
+      {activeFocusId && !focusValid ? (
+        <p className="empty">定位的章节或知识点不存在（可能已被删除），已显示完整目录。</p>
+      ) : null}
 
-      {view === "map" ? (
+      {activeView === "map" ? (
         <MindMapView
           allowRootAdd={!focusValid}
           baseDepth={focusPath ? focusPath.length : 1}
           chapters={visibleChapters}
-          key={focusId ?? "all"}
+          key={activeFocusId ?? "all"}
           loosePoints={visibleLoosePoints}
           report={report}
           sortMode={sortMode}
@@ -296,20 +324,22 @@ export function SubjectWorkbench({ subject, chapters, loosePoints, today, focusI
             ) : null}
           </div>
 
-          {!focusPointTarget ? <div className="chapterCreate">
-            <input
-              value={chapterTitle}
-              onChange={(event) => setChapterTitle(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") void addChapter();
-              }}
-              placeholder="新增章节，例如：特征值与二次型"
-            />
-            <button disabled={!chapterTitle.trim()} onClick={() => void addChapter()} type="button">
-              <Plus size={15} />
-              添加章节
-            </button>
-          </div> : null}
+          {!focusPointTarget ? (
+            <div className="chapterCreate">
+              <input
+                value={chapterTitle}
+                onChange={(event) => setChapterTitle(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void addChapter();
+                }}
+                placeholder="新增章节，例如：特征值与二次型"
+              />
+              <button disabled={!chapterTitle.trim()} onClick={() => void addChapter()} type="button">
+                <Plus size={15} />
+                添加章节
+              </button>
+            </div>
+          ) : null}
         </>
       )}
     </section>
