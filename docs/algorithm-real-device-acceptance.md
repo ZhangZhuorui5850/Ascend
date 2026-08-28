@@ -1,8 +1,6 @@
 # Algorithm training real-device acceptance
 
-Use an isolated Ascend staging instance connected to the isolated Judge Gateway.
-The tested application must be an exact Git commit and must be reachable over
-HTTPS from the physical devices.
+Use an isolated Ascend staging instance connected to the isolated Judge Gateway. Record the exact Git commit and expose the staging application through HTTPS to the physical devices.
 
 ## Required devices
 
@@ -13,35 +11,25 @@ HTTPS from the physical devices.
 ## One complete flow on every device
 
 1. Sign in to a dedicated test workspace.
-2. Open Extensions and confirm the pilot status is visible.
-3. Open Algorithm Training and confirm exactly 30 managed problems.
-4. Open a managed problem and verify no horizontal page overflow.
-5. Edit code, reload/relaunch, and verify the encrypted draft restores.
-6. Run a public sample and submit a formal solution.
-7. Interrupt/reload during polling and verify the same remote submission resumes.
-8. Save reflection evidence and verify it survives reload.
+2. Open Algorithm Training and confirm the Today and Library surfaces load with workspace-owned data.
+3. Upload a CPP file, review the import preview, and confirm the problem appears in the library.
+4. Add the problem to a training date and open its editor without horizontal page overflow.
+5. Edit code, reload or relaunch, and confirm the encrypted draft restores.
+6. Run a public sample and submit a formal solution through the isolated Gateway.
+7. Interrupt polling, reload, and confirm the same remote submission resumes.
+8. Save reflection evidence and confirm it survives reload.
 
-Phone additionally requires standalone mode, safe-area handling, no keyboard
-occlusion, and full app relaunch recovery. Tablet requires portrait and
-landscape. Desktop requires keyboard navigation through tabs, editor, actions and
-reflection.
+Phone evidence also covers standalone mode, safe-area handling, keyboard visibility and full relaunch recovery. Tablet evidence covers portrait and landscape. Desktop evidence covers keyboard navigation through tabs, library controls, editor, actions and reflection.
 
-Take at least two screenshots per device. Do not include passwords, tokens,
-email addresses, source code that should remain private, hidden tests or personal
-notifications.
+Take at least two screenshots per device. Evidence contains staging UI and synthetic workspace data. Remove passwords, tokens, email addresses, private source code, hidden tests and personal notifications.
 
 ## Evidence validation
 
-Copy `docs/templates/algorithm-real-device-evidence.example.json` beside the
-screenshots, replace the metadata and false values with observed results, and
-calculate each screenshot SHA-256.
+Copy `docs/templates/algorithm-real-device-evidence.example.json` beside the screenshots, replace the metadata and false values with observed results, and calculate each screenshot SHA-256.
 
 ```bash
 ASCEND_DEVICE_EVIDENCE_CONFIRM=real-devices-observed \
   npm run audit:algorithm-devices -- /absolute/path/to/evidence.json
 ```
 
-The validator rejects loopback/non-HTTPS URLs, stale timestamps, incomplete
-devices or checks, missing/tampered screenshots and sensitive-data field names.
-Its success proves that the required observations were recorded; it does not
-independently prove that the tester's observations were truthful.
+Schema version 2 records the current training board and CPP import flow. The validator checks HTTPS, commit identity, timestamp freshness, device coverage, required checks and screenshot hashes.

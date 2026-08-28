@@ -77,7 +77,7 @@ describe("optimistic toggle wiring", () => {
   });
 
   it("persists writes via revalidatePath, never refresh()", () => {
-    // Next 16.2 软导航页面会丢弃 refresh() 的 RSC 回流（见 docs/agent-development-guide.md）
+    // Next 16.2 软导航页面会丢弃 refresh() 的 RSC 回流（见 docs/archive/investigations/2026-07-17-next-rsc-refresh.md）
     expect(dayTaskActions).toContain('import { revalidatePath } from "next/cache"');
     expect(dayTaskActions).not.toContain("import { refresh");
     expect(dayTaskActions).toContain("function revalidateTaskViews");

@@ -6,7 +6,7 @@
 
 状态：Gate 2 设计冻结候选
 
-依据：`ASCEND_CURRENT_STATE_AUDIT.md` 与 `docs/agent-development-guide.md`
+依据：`docs/archive/reports/2026-08-10-repository-reality-audit.md` 与 `docs/development.md`
 
 ## 1. Product North Star
 

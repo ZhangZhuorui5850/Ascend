@@ -6,4 +6,4 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Project agent guide
 
-Before changing code, read `docs/agent-development-guide.md`. It defines this project's architecture boundaries, data layer rules, write path, testing expectations, and documentation conventions.
+Before changing code, read `docs/development.md`. It defines this project's architecture boundaries, data layer rules, write path, testing expectations, and documentation conventions.

@@ -20,7 +20,7 @@ if (/(password|token|secret|sourceCode|source_code|email|phoneNumber|ipAddress)/
 const report = JSON.parse(raw);
 const failures = [];
 
-check(report.schemaVersion === 1, "schemaVersion must be 1");
+check(report.schemaVersion === 2, "schemaVersion must be 2");
 check(/^[0-9a-f]{40}$/.test(report.appCommit || ""), "appCommit must be a full 40-character Git SHA");
 check(isRecentTimestamp(report.testedAt), "testedAt must be a valid timestamp within the last 30 days");
 validateUrl(report.appUrl);
@@ -41,8 +41,8 @@ const expectedDevices = new Map([
 ]);
 const commonChecks = [
   "login",
-  "pilotStatusVisible",
-  "catalog30",
+  "trainingBoard",
+  "cppImport",
   "managedEditor",
   "noHorizontalOverflow",
   "draftRestore",

@@ -119,7 +119,7 @@ npm run audit:judge-isolation
 
 参考 Gateway 是控制面样板，不是对生产沙箱安全的证明。
 
-真实设备记录必须按 `docs/algorithm-real-device-acceptance.md` 执行，并通过：
+真实设备记录必须按 [`docs/algorithm-real-device-acceptance.md`](../algorithm-real-device-acceptance.md) 执行，并通过：
 
 ```bash
 ASCEND_DEVICE_EVIDENCE_CONFIRM=real-devices-observed \

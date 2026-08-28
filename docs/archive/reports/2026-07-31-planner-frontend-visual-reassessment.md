@@ -14,7 +14,7 @@
 
 [COMPUTED] `scripts/responsive-audit.mjs` 已通过 1440×1000、900×1000 和 390×844 三视口，覆盖默认/选择任务行、Quick Capture、Drawer/Sheet 回焦、Planner 字段 computed style、中文文案、单列表单、水平溢出和 fixed/sticky 矩形相交。外观矩阵按代码实际支持的 `default`、`aurora`、`brutal`、`cloud`、`terminal` 五套 skin，在 light/dark 下抽测 Tasks 与 Calendar，并验证 reduce motion。原计划中的 Summit/Forest 名称不属于当前可选 skin，不作为虚构验收项。
 
-[COMPUTED] 六张最终证据位于 [`docs/screenshots/planner/after-upgrade/`](../screenshots/planner/after-upgrade/)；每张均为 `fullPage: false` 的 viewport 截图，并有同名 JSON 记录 route、state、viewport、browser、theme、skin、scroll 和 build identifier。逐张 100% 缩放人工复核确认：双前导控件、原生白底、边框过量、英文状态、sticky footer、ICP/FAB 遮挡均未复现。V-014 与 V-015 的自动矩形相交结果为零。
+[COMPUTED] 六张最终证据位于 [`docs/screenshots/planner/after-upgrade/`](../../screenshots/planner/after-upgrade/)；每张均为 `fullPage: false` 的 viewport 截图，并有同名 JSON 记录 route、state、viewport、browser、theme、skin、scroll 和 build identifier。逐张 100% 缩放人工复核确认：双前导控件、原生白底、边框过量、英文状态、sticky footer、ICP/FAB 遮挡均未复现。V-014 与 V-015 的自动矩形相交结果为零。
 
 [KNOWN] 当前需先补齐上述完成证据，再进入本文件第 6.4 节的用户最终视觉确认；两者完成前不把整改写成正式发布通过。
 
@@ -37,10 +37,10 @@
 
 | 样本 | 文件 | 能直接证明 | 不能单独证明 |
 |---|---|---|---|
-| Tasks 桌面详情 | [`tasks-phase5-inbox-recovered.png`](../screenshots/planner/after/tasks-phase5-inbox-recovered.png) | 双前导控件、白底/粗边框字段、常驻删除、语言与日期格式、右栏浮层遮挡 | 键盘行为、computed style 的最终值 |
-| Tasks 移动 Sheet | [`tasks-phase5-mobile-sheet.png`](../screenshots/planner/after/tasks-phase5-mobile-sheet.png) | 双前导控件、长表单、原生字段、sticky footer 与日期字段重叠 | 真实 844px 视口内随滚动变化的遮挡范围 |
-| Calendar 桌面详情 | [`calendar-phase5-event-detail.png`](../screenshots/planner/after/calendar-phase5-event-detail.png) | 四张概览卡、外框层级、原生字段、浮动“收纳”覆盖右栏 | 拖拽与弹层交互状态 |
-| Calendar 移动 Sheet | [`calendar-phase5-mobile-keyboard-sheet.png`](../screenshots/planner/after/calendar-phase5-mobile-keyboard-sheet.png) | 控件密度、日期/时间的 locale 外观、表单层级 | 软键盘打开后的实际可视区域 |
+| Tasks 桌面详情 | [`tasks-phase5-inbox-recovered.png`](../../screenshots/planner/after/tasks-phase5-inbox-recovered.png) | 双前导控件、白底/粗边框字段、常驻删除、语言与日期格式、右栏浮层遮挡 | 键盘行为、computed style 的最终值 |
+| Tasks 移动 Sheet | [`tasks-phase5-mobile-sheet.png`](../../screenshots/planner/after/tasks-phase5-mobile-sheet.png) | 双前导控件、长表单、原生字段、sticky footer 与日期字段重叠 | 真实 844px 视口内随滚动变化的遮挡范围 |
+| Calendar 桌面详情 | [`calendar-phase5-event-detail.png`](../../screenshots/planner/after/calendar-phase5-event-detail.png) | 四张概览卡、外框层级、原生字段、浮动“收纳”覆盖右栏 | 拖拽与弹层交互状态 |
+| Calendar 移动 Sheet | [`calendar-phase5-mobile-keyboard-sheet.png`](../../screenshots/planner/after/calendar-phase5-mobile-keyboard-sheet.png) | 控件密度、日期/时间的 locale 外观、表单层级 | 软键盘打开后的实际可视区域 |
 
 [COMPUTED] Phase 5 移动截图是 390px 宽的 full-page 产物（Tasks 高 2006px，Calendar 高 1317px），不是 390×844 的 viewport 截图。因此它们足以否决当前视觉方案，但不能替代对固定/粘性元素、软键盘和首屏遮挡的实时验证。R0 必须补录 390×844 viewport 截图、浏览器与 skin、页面状态、滚动位置和构建版本。
 

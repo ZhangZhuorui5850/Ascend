@@ -29,12 +29,12 @@ Ascend（原 ZGCA Workbench）现已从单用户 Mac mini 面板升级为多用�
 
 | View | Screenshot |
 | --- | --- |
-| Login | [Desktop login](screenshots/final-login-desktop.png) |
-| Main workspace | [Desktop home](screenshots/final-home-desktop.png) |
-| Theme | [Dark home](screenshots/final-home-dark.png) |
-| Mobile | [Mobile day workspace](screenshots/final-day-mobile.png) |
-| Admin | [Admin overview](screenshots/final-admin-desktop.png) |
-| Admin target context | [User workspace review](screenshots/final-admin-workspace.png) |
+| Login | [Desktop login](../../screenshots/final-login-desktop.png) |
+| Main workspace | [Desktop home](../../screenshots/final-home-desktop.png) |
+| Theme | [Dark home](../../screenshots/final-home-dark.png) |
+| Mobile | [Mobile day workspace](../../screenshots/final-day-mobile.png) |
+| Admin | [Admin overview](../../screenshots/final-admin-desktop.png) |
+| Admin target context | [User workspace review](../../screenshots/final-admin-workspace.png) |
 
 ## Architecture
 
@@ -75,7 +75,7 @@ Recommended public hostname: `app.zhuorui.me`.
 2. The existing `zgca.zhuorui.me` Cloudflare Tunnel record belongs to the former Mac mini deployment and is not part of the new architecture. Remove it only after the new hostname is fully verified.
 3. After ICP approval, add `A app -> 82.157.141.186`. Start DNS-only to verify direct origin HTTPS, then optionally compare Cloudflare Proxied mode with Full (strict) TLS. Cloudflare documents that DNS-only exposes the origin IP while Proxied routes web traffic through Cloudflare: [Cloudflare proxy status](https://developers.cloudflare.com/dns/proxy-status/).
 4. Tencent documents that a website hosted on a mainland Tencent Cloud server must complete the applicable filing before service is opened. The current filing workflow is documented here: [Tencent Cloud first ICP filing](https://cloud.tencent.com/document/product/243/97668).
-5. Follow [`deploy/README.md`](../deploy/README.md) for firewall, SSH keys, environment setup, first launch, health checks, backup, upgrade and rollback.
+5. Follow [`deploy/README.md`](../../../deploy/README.md) for firewall, SSH keys, environment setup, first launch, health checks, backup, upgrade and rollback.
 
 ## Operational boundaries
 

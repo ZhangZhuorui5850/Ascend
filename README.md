@@ -6,7 +6,7 @@
 
 > 想直接运行命令：先看 [操作速查表](./QUICKSTART.md)。完整生产运维说明见 [deploy/README.md](./deploy/README.md)。
 
-Agent、MCP 与命令行接入见 [Ascend Agent Interface 手册](./docs/agent-interface.md)。
+Agent、MCP 与命令行接入见 [Ascend Agent Interface 手册](./docs/features/agent-interface.md)。
 
 ## 主要功能
 
@@ -29,7 +29,7 @@ Agent、MCP 与命令行接入见 [Ascend Agent Interface 手册](./docs/agent-i
 
 ## 技术栈
 
-- Next.js 16.2.10（App Router、Server Actions、standalone 生产输出）
+- Next.js 16.2.12（App Router、Server Actions、standalone 生产输出）
 - React 19、TypeScript
 - SQLite、better-sqlite3
 - Vitest、Playwright
@@ -110,7 +110,7 @@ npm run responsive:audit
 - 编排：`compose.production.yml`
 - 服务：单个 Next.js 应用容器，由 Caddy 提供 HTTPS 和反向代理
 
-高频更新、日志、重启和检查命令见 [QUICKSTART.md](./QUICKSTART.md)，首次部署、防火墙、证书、备份和完整回滚流程见 [deploy/README.md](./deploy/README.md)。
+高频更新、日志、重启和检查命令见 [QUICKSTART.md](./QUICKSTART.md)，日常发布见 [部署流程](./docs/operations/deployment.md)，备份恢复见 [备份恢复手册](./docs/operations/backup-restore.md)。
 
 生产端口 `3000` 只在 Compose 网络中暴露，不应直接开放到公网。
 
@@ -147,6 +147,6 @@ npm run responsive:audit
 ## 进一步阅读
 
 - [操作速查表](./QUICKSTART.md)
-- [Ubuntu 生产运维手册](./deploy/README.md)
-- [Ascend Agent Interface 手册](./docs/agent-interface.md)
-- [升级说明](./docs/UPGRADE_BRIEFING.md)
+- [文档索引](./docs/README.md)
+- [Ubuntu 首次部署手册](./deploy/README.md)
+- [Ascend Agent Interface 手册](./docs/features/agent-interface.md)

@@ -1,6 +1,6 @@
 # Ascend（登峰）常用命令
 
-这里只保留日常最常用的命令。首次部署、备份恢复和故障排查见 [生产运维手册](./deploy/README.md)。
+这里只保留日常最常用的命令。日常发布、备份恢复和故障排查见 [文档索引](./docs/README.md)。
 
 ## 本地开发
 
@@ -44,7 +44,7 @@ npm run ascend -- task.list --from 2026-07-19 --to 2026-07-26 --pretty
 npm run ascend -- tools
 ```
 
-远程接入：登录 Ascend，打开「设置 → Agent」，创建令牌，然后直接复制页面给出的 `codex mcp add` 命令。Agent 会通过 MCP 自动读取工具说明。完整权限和操作表见 [Agent Interface 手册](./docs/agent-interface.md)。
+远程接入：登录 Ascend，打开「设置 → Agent」，创建令牌，然后直接复制页面给出的 `codex mcp add` 命令。Agent 会通过 MCP 自动读取工具说明。完整权限和操作表见 [Agent Interface 手册](./docs/features/agent-interface.md)。
 
 只想用生产模式在本机运行：
 
@@ -87,4 +87,4 @@ docker compose -f compose.production.yml logs -f app
 /opt/apps/ascend/backups/  备份
 ```
 
-不要手动删除 `data/`。回滚、恢复备份、修改生产环境变量或网站打不开时，查看 [deploy/README.md](./deploy/README.md)。
+生产数据恢复与回滚按照 [备份恢复手册](./docs/operations/backup-restore.md) 执行；服务异常按照 [故障排查](./docs/operations/troubleshooting.md) 定位。

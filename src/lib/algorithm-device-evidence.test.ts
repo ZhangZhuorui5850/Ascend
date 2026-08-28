@@ -37,8 +37,8 @@ describe("real-device evidence validator", () => {
         });
       const common = {
         login: true,
-        pilotStatusVisible: true,
-        catalog30: true,
+        trainingBoard: true,
+        cppImport: true,
         managedEditor: true,
         noHorizontalOverflow: true,
         draftRestore: true,
@@ -48,7 +48,7 @@ describe("real-device evidence validator", () => {
         reflectionRestore: true,
       };
       const report = {
-        schemaVersion: 1,
+        schemaVersion: 2,
         appCommit: "a".repeat(40),
         appUrl: "https://judge-staging.example",
         testedAt: new Date().toISOString(),

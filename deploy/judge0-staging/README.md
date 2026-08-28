@@ -102,7 +102,7 @@ ASCEND_JUDGE_ATTACK_GATEWAY_TOKEN='<gateway-token>' \
 
 Then tunnel the staging Gateway to an isolated Ascend application instance and
 run `npm run audit:judge-chain`, followed by the responsive and real-device
-checks described in `docs/judge-gateway-deployment.md`.
+checks described in `docs/security/judge-gateway.md`.
 
 ## 7. Tear down
 

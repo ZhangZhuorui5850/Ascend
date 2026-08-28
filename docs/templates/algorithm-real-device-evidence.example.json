@@ -1,18 +1,18 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "appCommit": "0000000000000000000000000000000000000000",
   "appUrl": "https://judge-staging.example",
-  "testedAt": "2026-07-26T05:00:00.000Z",
+  "testedAt": "2026-08-28T05:00:00.000Z",
   "devices": [
     {
       "id": "phone-ios-pwa",
-      "os": "iOS 18.x",
+      "os": "iOS version",
       "browser": "Safari / standalone PWA",
       "viewport": { "width": 390, "height": 844, "dpr": 3 },
       "checks": {
         "login": false,
-        "pilotStatusVisible": false,
-        "catalog30": false,
+        "trainingBoard": false,
+        "cppImport": false,
         "managedEditor": false,
         "noHorizontalOverflow": false,
         "draftRestore": false,
@@ -26,7 +26,7 @@
         "relaunchRestore": false
       },
       "artifacts": [
-        { "path": "phone-catalog.png", "sha256": "replace" },
+        { "path": "phone-training.png", "sha256": "replace" },
         { "path": "phone-pwa-relaunch.png", "sha256": "replace" }
       ]
     },
@@ -37,8 +37,8 @@
       "viewport": { "width": 768, "height": 1024, "dpr": 2 },
       "checks": {
         "login": false,
-        "pilotStatusVisible": false,
-        "catalog30": false,
+        "trainingBoard": false,
+        "cppImport": false,
         "managedEditor": false,
         "noHorizontalOverflow": false,
         "draftRestore": false,
@@ -61,8 +61,8 @@
       "viewport": { "width": 1440, "height": 900, "dpr": 2 },
       "checks": {
         "login": false,
-        "pilotStatusVisible": false,
-        "catalog30": false,
+        "trainingBoard": false,
+        "cppImport": false,
         "managedEditor": false,
         "noHorizontalOverflow": false,
         "draftRestore": false,
@@ -73,7 +73,7 @@
         "keyboardNavigation": false
       },
       "artifacts": [
-        { "path": "desktop-editor.png", "sha256": "replace" },
+        { "path": "desktop-library.png", "sha256": "replace" },
         { "path": "desktop-result.png", "sha256": "replace" }
       ]
     }

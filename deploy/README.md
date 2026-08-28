@@ -2,7 +2,7 @@
 
 Target: Tencent Lighthouse in Beijing, Docker Compose, Caddy automatic HTTPS, SQLite + uploads on a persistent host volume.
 
-Online algorithm judging is a separate security boundary and must not be added to the main application Compose. See `docs/judge-gateway-deployment.md` for the reference topology and release gates.
+Online algorithm judging uses a separate security boundary. See `docs/security/judge-gateway.md` for the reference topology and release gates. Daily releases use `docs/operations/deployment.md`; backup and restore use `docs/operations/backup-restore.md`.
 
 ## Before public launch
 

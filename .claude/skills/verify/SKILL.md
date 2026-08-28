@@ -1,40 +1,40 @@
 ---
 name: verify
-description: 在隔离实例上端到端验证 Ascend 的改动（构建、启动、登录、驱动 UI、隔离数据）
+description: 当用户明确要求 Ascend 的端到端、浏览器、视觉或交互验收时，在隔离实例上驱动真实 UI 并保存可复核证据。
 ---
 
-# Ascend 端到端验证配方
+# Ascend 浏览器验收
 
-## 隔离实例启动（不碰生产数据）
+`.agents/skills/verify/SKILL.md` 是本技能的维护源；`npm run skills:sync` 生成 `.claude` 副本。
 
-生产数据在 `./data`（`ZGCA_DATA_ROOT` 可重定向）；用户生产实例是本机 `next start`。验证一律用独立数据目录 + 独立端口：
+## 适用范围
+
+用户明确提出端到端、浏览器、视觉、响应式或交互验收时使用本技能。代码级验证按 `docs/development.md` 分级执行，日常发布按 `docs/operations/deployment.md` 执行。
+
+## 隔离边界
+
+- 默认目标为隔离的本地或 staging 实例。生产验收需要用户明确指定生产环境和允许的操作范围。
+- 使用 `mktemp -d` 创建专用 `ZGCA_DATA_ROOT`，设置专用端口和测试账号。
+- 浏览器步骤只写入测试 workspace。涉及 Judge 时连接隔离 Gateway。
+- 记录自己启动的进程 PID，收尾时按 PID 终止。
+
+本地功能验收可从以下形状开始：
 
 ```bash
-npm run build   # 注意：会重写 .next，若用户 dev/start 实例正在跑会受影响，验证后提醒重启
-ZGCA_DATA_ROOT=<scratch>/verify-data APP_LOGIN_EMAIL=qa@test.local APP_LOGIN_PASSWORD=test1234 \
-  npx next start -p 3123 &
+verify_root="$(mktemp -d)"
+ZGCA_DATA_ROOT="$verify_root/data" \
+APP_LOGIN_EMAIL=qa@test.local \
+APP_LOGIN_PASSWORD=test1234 \
+npm run dev -- --port 3123
 ```
 
-- `APP_LOGIN_EMAIL/PASSWORD` 会在首次登录时引导创建用户 + workspace（`ensureBootstrapUsers`）。
-- 有 "output: standalone" 警告但 `next start` 实际可用（页面与静态资源均 200）。
-- 数据库文件：`$ZGCA_DATA_ROOT/workbench.sqlite`。
+## 验收闭环
 
-## Playwright 驱动
+1. 读取当前功能手册和变更 diff，提取本次可观察的验收项。
+2. 启动隔离实例，确认 `/login` 与目标页面可达。
+3. 使用 Playwright 驱动 Chromium；首次缺少浏览器时安装 `chromium` 与 `chromium-headless-shell`。
+4. 覆盖与任务相关的主流程、失败恢复、目标视口、键盘和主题状态。
+5. 保存关键截图、控制台错误、失败请求和复现步骤。真实设备验收使用对应 evidence 模板。
+6. 核对测试数据目录与生产数据目录相互独立，停止已记录 PID，并删除临时数据。
 
-- 浏览器：`npx playwright install chromium chromium-headless-shell`（headless 需要 headless-shell）。无系统 Chrome。
-- 脚本放 scratchpad 时用 `createRequire("/home/zzr/Ascend/package.json")` 解析 better-sqlite3/playwright。
-- 登录表单：`/login`，`input[name="email"]`、`input[name="password"]`、`button[type="submit"]`。
-- 造数据最快路径：登录一次让 bootstrap 建好 workspace，然后直接用 better-sqlite3 往 `subjects` / `subject_chapters` / `knowledge_points` 插行（参考 `src/lib/repo/testing.ts` 的 seedSubjectWithChapter 字段）。
-- 原生 HTML5 拖拽用 mouse.down → 多步 mouse.move → mouse.up 可靠触发（Chromium 拖拽拦截自动生效）；中途 `page.screenshot` 可捕获指示线。
-- 坑：目标元素必须在视口内，`boundingBox()` 对视口外元素返回坐标但 mouse.move 过去不会触发 dragover——直接用超高视口（如 1440x2600）最省事。
-- 坑：headless-shell 无 CJK 字体，截图里中文是方框（可 `curl` 下载 Noto Sans CJK 到 `~/.local/share/fonts` + `fc-cache` 解决）。
-- 坑：造数据的日期必须与 `todayKey()` 同口径（Asia/Shanghai）——`new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Shanghai"}).format(d)`；用 `toISOString()` 在凌晨会差一天，表现为"今日任务/回显莫名缺失"。
-- 坑：PWA service worker 会在重复测试中用旧 build 缓存重载页面、甚至把会话踢回 /login——Playwright context 一律加 `serviceWorkers: "block"`。
-- 首页入场编排每日只播一次：重播需先 `localStorage.removeItem("zgca-intro")` 再整文档加载（`page.reload` 或 `goto`，SPA 导航不触发）。
-- 提交拖拽后等 `router.refresh()`：`waitForTimeout(900)` + `waitForLoadState("networkidle")` 足够。
-- 坑：模拟慢网络**不要用 `page.route` 拦截 + sleep 后 continue**——对 server action 的 RSC 流式响应不可靠，会随机吞响应，表现为"transition 永不结束、乐观行卡草稿态"的假阳性。用 CDP 原生模拟：`context.newCDPSession(page)` → `Network.enable` → `Network.emulateNetworkConditions({latency: 300, downloadThroughput: -1, uploadThroughput: -1, offline: false})`。
-- 坑：`nohup npx next start &` 记下的是 npx 包装进程的 PID，kill 它杀不掉真正监听端口的 `next-server` 子进程（下次起服务 EADDRINUSE）。收尾用 `ss -ltnp | grep <端口>` 找到真实 PID 再 kill。
-
-## 收尾
-
-按 PID kill 自己起的 `next start`（**不要** `pkill -f next`，会误伤用户实例/自身命令）。提醒用户生产实例需 build + 重启才吃到新代码。
+登录页稳定选择器为 `input[name="email"]`、`input[name="password"]` 与 `button[type="submit"]`。详细 Playwright 排障见 `docs/operations/troubleshooting.md`。

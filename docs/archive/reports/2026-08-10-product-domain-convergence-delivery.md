@@ -28,8 +28,8 @@
 
 本轮以“单一任务事实源、不可变学习证据、application command 统一写入、Today 单一行动入口”为约束进行重构。现状审计和冻结后的目标设计分别见：
 
-- `ASCEND_CURRENT_STATE_AUDIT.md`
-- `ASCEND_PRODUCT_CONVERGENCE_DESIGN.md`
+- `docs/archive/reports/2026-08-10-repository-reality-audit.md`
+- `docs/archive/specs/2026-08-10-product-convergence-design.md`
 
 ## 数据与领域架构
 
