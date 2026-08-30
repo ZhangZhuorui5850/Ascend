@@ -35,6 +35,7 @@
 .eyebrow { display: block; margin-bottom: 8px; color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .15em; }
 .heroRow h2 { margin: 0; font-size: clamp(21px, 2vw, 25px); line-height: 1.25; }
 .heroRow p, .detailMeta, .modalLead { margin: 8px 0 0; color: var(--muted); }
+.modalFootnote { margin: 12px 0 0; color: var(--quiet); font-size: 12px; line-height: 1.6; }
 .dateField { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 600; }
 .dateField input, .bulkBar input, .bulkBar select, .detailActions input, .importBulk input, .importBulk select { min-height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--ink); }
 .todayToolbar { justify-content: space-between; margin-bottom: 14px; }
@@ -144,6 +145,7 @@
 .tableRow { min-height: 56px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 12.5px; cursor: pointer; }
 .tableRow:last-child { border-bottom: 0; }
 .tableRow:hover { background: var(--surface-soft); }
+.tableRow:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .tableRow[data-active="true"] { background: var(--accent-soft); }
 .tableRow strong { overflow: hidden; font-size: 13.5px; text-overflow: ellipsis; white-space: nowrap; }
 .tableRow > span { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
@@ -238,15 +240,24 @@ body[data-alg-resizing] .drawerHandle::after { background: var(--accent); }
 .settingsSection p { color: var(--muted); }
 .deviceRow { display: flex; align-items: center; gap: 10px; margin: 10px 0; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-soft); }
 .deviceRow span { display: grid; gap: 3px; }
+.deviceRevoke { min-height: 28px; margin-left: auto; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: transparent; color: var(--muted); font-size: 12px; }
+.deviceRevoke:hover { border-color: var(--danger); color: var(--danger); }
+.deviceRevoke:disabled { opacity: .5; cursor: not-allowed; }
 .deviceRow small { color: var(--muted); }
 .spin { animation: algSpin var(--motion-page) linear infinite; }
 @keyframes algSpin { to { transform: rotate(360deg); } }
+
+.detailPlaceholder { display: grid; place-content: center; justify-items: center; gap: 6px; padding: 22px; border-left: 1px solid var(--line); background: var(--surface-soft); color: var(--quiet); text-align: center; }
+.detailPlaceholder strong { color: var(--muted); font-size: 13.5px; }
+.detailPlaceholder span { font-size: 12px; }
 
 /* ---------- 响应式 ---------- */
 
 @media (max-width: 1180px) {
   .libraryLayout { grid-template-columns: 190px minmax(500px, 1fr); }
-  .detailDrawer { position: fixed; z-index: 100; top: 82px; right: 20px; bottom: 20px; width: var(--alg-detail-w, min(390px, calc(100vw - 40px))); max-height: none; border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); }
+  .detailPlaceholder { display: none; }
+  .libraryLayout[data-detail-open="true"]::before { content: ""; position: fixed; inset: 0; z-index: calc(var(--z-drawer) - 1); background: var(--scrim); backdrop-filter: blur(2px); }
+  .detailDrawer { position: fixed; z-index: var(--z-drawer); top: 82px; right: 20px; bottom: 20px; width: var(--alg-detail-w, min(390px, calc(100vw - 40px))); max-height: none; border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); }
   .tableHead, .tableRow { grid-template-columns: 24px minmax(112px, 1.25fr) 72px 100px 80px 60px; }
 }
 

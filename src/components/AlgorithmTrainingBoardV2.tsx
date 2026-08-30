@@ -17,6 +17,7 @@ import {
   UploadCloud,
   X,
 } from "lucide-react";
+import { Dialog } from "@base-ui/react/dialog";
 import { useRouter } from "next/navigation";
 import {
   startTransition,
@@ -33,11 +34,13 @@ import {
   removeAlgorithmPlanAction,
   reorderAlgorithmPlansAction,
   scheduleAlgorithmProblemsAction,
+  revokeAlgorithmDeviceAction,
   setAlgorithmCurriculumChapterAction,
   setAlgorithmCourseAction,
 } from "@/app/actions/algorithms";
 import { useFeedback } from "@/components/FeedbackProvider";
 import { RichText } from "@/components/RichText";
+import plannerStyles from "@/styles/planner/primitives.module.css";
 import type { AlgorithmCurriculumChapter } from "@/lib/algorithm-curriculum";
 import type { JudgeRuntimeAvailability } from "@/lib/judge-runtime";
 import type { AlgorithmDevice } from "@/lib/repo/algorithm-devices";
@@ -97,7 +100,7 @@ export function AlgorithmTrainingBoardV2({
   today: string;
 }) {
   const router = useRouter();
-  const { notify } = useFeedback();
+  const { notify, confirm } = useFeedback();
   const [section, setSection] = useState<Section>(initialProblemId ? "library" : "today");
   const [selectedDate, setSelectedDate] = useState(today);
   const [showReviews, setShowReviews] = useState(true);
@@ -108,6 +111,11 @@ export function AlgorithmTrainingBoardV2({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [completion, setCompletion] = useState<CompletionTarget | null>(null);
   const [pending, setPending] = useState(false);
+  const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRevokingDeviceId((current) => (current && devices.some((device) => device.id === current) ? current : null));
+  }, [devices]);
 
   useEffect(() => {
     const saved = window.localStorage.getItem("ascend.algorithm.showReviews");
@@ -115,16 +123,23 @@ export function AlgorithmTrainingBoardV2({
   }, []);
 
   function mutate(action: () => Promise<{ ok: boolean; error?: string }>, success: string) {
+    if (pending) return;
     setPending(true);
     startTransition(async () => {
-      const result = await action();
-      setPending(false);
-      if (!result.ok) {
-        notify(result.error || "操作失败", "error");
-        return;
+      try {
+        const result = await action();
+        if (!result.ok) {
+          notify(result.error || "操作失败", "error");
+          return;
+        }
+        notify(success);
+        router.refresh();
+      } catch (reason) {
+        console.error("算法训练操作失败", reason);
+        notify("网络异常，操作未生效，可以重试", "error");
+      } finally {
+        setPending(false);
       }
-      notify(success);
-      router.refresh();
     });
   }
 
@@ -157,10 +172,22 @@ export function AlgorithmTrainingBoardV2({
           onComplete={setCompletion}
           onOpenProblem={(id) => { setSelectedProblemId(id); setSection("library"); }}
           onOpenPicker={() => setPickerOpen(true)}
-          onRemove={(plan) => mutate(
-            () => removeAlgorithmPlanAction({ taskId: plan.taskId, expectedVersion: plan.version, day: plan.day }),
-            "已移出训练计划",
-          )}
+          onRemove={(plan) => {
+            const problem = dashboard.problems.find((item) => item.id === plan.problemId);
+            void confirm({
+              title: "移出训练计划？",
+              description: `「${problem?.title ?? "该题"}」将从 ${plan.day} 的计划中移除。`,
+              confirmLabel: "移出",
+              danger: true,
+            }).then((ok) => {
+              if (ok) {
+                mutate(
+                  () => removeAlgorithmPlanAction({ taskId: plan.taskId, expectedVersion: plan.version, day: plan.day }),
+                  "已移出训练计划",
+                );
+              }
+            });
+          }}
           onReorder={(taskIds) => mutate(
             () => reorderAlgorithmPlansAction({ day: selectedDate, taskIds }),
             "训练顺序已保存",
@@ -245,9 +272,25 @@ export function AlgorithmTrainingBoardV2({
         />
       ) : null}
       {settingsOpen ? (
-        <SettingsDialog devices={devices} judge={judgeAvailability} onClose={() => setSettingsOpen(false)} />
+        <SettingsDialog
+          devices={devices}
+          judge={judgeAvailability}
+          onClose={() => setSettingsOpen(false)}
+          onRevokeDevice={(deviceId, deviceName) => {
+            void confirm({
+              title: "撤销这台设备？",
+              description: `「${deviceName}」的访问令牌会立即失效，需要重新配对才能同步。`,
+              confirmLabel: "撤销设备",
+              danger: true,
+            }).then((ok) => {
+              if (!ok) return;
+              setRevokingDeviceId(deviceId);
+              mutate(async () => revokeAlgorithmDeviceAction(deviceId), "设备已撤销");
+            });
+          }}
+          pendingDeviceId={revokingDeviceId}
+        />
       ) : null}
-      {selectedProblem ? null : null}
     </main>
   );
 }
@@ -582,7 +625,17 @@ function LibraryView({
     grabber.addEventListener("pointercancel", onEnd, { once: true });
   }
 
-  const selectedProblem = dashboard.problems.find((problem) => problem.id === selectedProblemId) ?? filtered[0] ?? null;
+  const selectedProblem = dashboard.problems.find((problem) => problem.id === selectedProblemId) ?? null;
+  useEffect(() => {
+    if (!selectedProblemId) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !document.querySelector('[class*="modalBackdrop"]')) {
+        setSelectedProblemId(null);
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [selectedProblemId, setSelectedProblemId]);
   const targetIds = selectedIds.length ? selectedIds : selectedProblem ? [selectedProblem.id] : [];
   const selectedChapterStats = filter.startsWith("chapter:")
     ? curriculumStats.find((item) => item.chapter.key === filter.slice(8)) ?? null
@@ -592,6 +645,7 @@ function LibraryView({
   return (
     <section
       className={styles.libraryLayout}
+      data-detail-open={selectedProblem ? "true" : undefined}
       style={detailWidth ? ({ "--alg-detail-w": `${detailWidth}px` } as React.CSSProperties) : undefined}
     >
       <aside className={styles.libraryNav}>
@@ -704,7 +758,7 @@ function LibraryView({
         </div>
         <div className={styles.problemTable} role="table" aria-label="算法题库">
           <div className={styles.tableHead} role="row">
-            <input aria-label="全选当前结果" checked={filtered.length > 0 && filtered.every((item) => selectedIds.includes(item.id))} type="checkbox" onChange={(event) => setSelectedIds(event.target.checked ? filtered.map((item) => item.id) : [])} />
+            <input aria-label={`全选筛选结果（共 ${filtered.length} 题，含未显示页）`} checked={filtered.length > 0 && filtered.every((item) => selectedIds.includes(item.id))} type="checkbox" onChange={(event) => setSelectedIds(event.target.checked ? filtered.map((item) => item.id) : [])} />
             {sortCell("title", "题目")}
             {sortCell("ext", "平台题号")}
             {sortCell("course", "课程章节")}
@@ -713,8 +767,23 @@ function LibraryView({
           </div>
           {visibleProblems.map((problem) => {
             const chapter = curriculumByProblem.get(problem.id);
+            const openDetail = () => setSelectedProblemId(problem.id);
             return (
-              <div className={styles.tableRow} data-active={selectedProblem?.id === problem.id} key={problem.id} role="row" onClick={() => setSelectedProblemId(problem.id)}>
+              <div
+                className={styles.tableRow}
+                data-active={selectedProblem?.id === problem.id}
+                key={problem.id}
+                role="row"
+                tabIndex={0}
+                aria-selected={selectedProblem?.id === problem.id}
+                onClick={openDetail}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openDetail();
+                  }
+                }}
+              >
                 <input aria-label={`选择 ${problem.title}`} checked={selectedIds.includes(problem.id)} type="checkbox" onClick={(event) => event.stopPropagation()} onChange={(event) => setSelectedIds(event.target.checked ? [...selectedIds, problem.id] : selectedIds.filter((id) => id !== problem.id))} />
                 <strong>{problem.title}</strong>
                 <span>{providerText(problem)}</span>
@@ -797,7 +866,13 @@ function LibraryView({
           </details>
           <p className={styles.storageLine}><FolderOpen size={15} /> Ascend 网盘 / 算法 / {folderName(relations, folderByProblem.get(selectedProblem.id))}</p>
         </aside>
-      ) : null}
+      ) : (
+        <aside className={styles.detailPlaceholder}>
+          <LibraryBig size={26} />
+          <strong>从左侧选择题目查看详情</strong>
+          <span>题面、参考代码与训练记录会显示在这里。</span>
+        </aside>
+      )}
     </section>
   );
 }
@@ -826,6 +901,7 @@ function CompletionDialog({ target, onClose, onChoose }: { target: CompletionTar
         <button onClick={() => onChoose("tomorrow")}><strong>明天继续</strong><span>保留训练状态，安排到次日</span></button>
         <button onClick={() => onChoose("stop-review")}><strong>完成并退出复习计划</strong><span>保留完成记录，停止自动安排</span></button>
       </div>
+      <p className={styles.modalFootnote}>「完成」会记录一次 AC（独立通过）结果；未通过的作答请先不要点完成，等修正后再记录。</p>
     </Modal>
   );
 }
@@ -962,13 +1038,26 @@ function CppImportDialog({ folders, onClose, onImported }: { folders: AlgorithmT
   );
 }
 
-function SettingsDialog({ devices, judge, onClose }: { devices: AlgorithmDevice[]; judge: JudgeRuntimeAvailability; onClose: () => void }) {
+function SettingsDialog({ devices, judge, onClose, onRevokeDevice, pendingDeviceId }: { devices: AlgorithmDevice[]; judge: JudgeRuntimeAvailability; onClose: () => void; onRevokeDevice: (deviceId: string, deviceName: string) => void; pendingDeviceId: string | null }) {
   return (
     <Modal title="连接与设置" onClose={onClose}>
       <section className={styles.settingsSection}>
         <h3>VS Code 连接</h3>
         <p>{devices.length ? `${devices.length} 台设备已连接` : "等待 VS Code 插件配对"}</p>
-        {devices.map((device) => <div className={styles.deviceRow} key={device.id}><Code2 size={17} /><span><strong>{device.name}</strong><small>{device.lastSeenAt ? `最近同步 ${device.lastSeenAt.slice(0, 16).replace("T", " ")}` : "等待首次同步"}</small></span></div>)}
+        {devices.map((device) => (
+          <div className={styles.deviceRow} key={device.id}>
+            <Code2 size={17} />
+            <span><strong>{device.name}</strong><small>{device.lastSeenAt ? `最近同步 ${device.lastSeenAt.slice(0, 16).replace("T", " ")}` : "等待首次同步"}</small></span>
+            <button
+              className={styles.deviceRevoke}
+              disabled={pendingDeviceId === device.id}
+              onClick={() => onRevokeDevice(device.id, device.name)}
+              type="button"
+            >
+              撤销
+            </button>
+          </div>
+        ))}
         <a className={styles.primaryButton} href="/practice/algorithms/connect">连接新设备</a>
       </section>
       <section className={styles.settingsSection}>
@@ -980,13 +1069,37 @@ function SettingsDialog({ devices, judge, onClose }: { devices: AlgorithmDevice[
 }
 
 function Modal({ children, onClose, title, wide = false }: { children: React.ReactNode; onClose: () => void; title: string; wide?: boolean }) {
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    returnFocusRef.current = document.activeElement as HTMLElement | null;
+    return () => returnFocusRef.current?.focus?.();
+  }, []);
   return (
-    <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section aria-label={title} aria-modal="true" className={styles.modal} data-wide={wide} role="dialog">
-        <header><h2>{title}</h2><button aria-label="关闭" onClick={onClose}><X size={19} /></button></header>
-        {children}
-      </section>
-    </div>
+    <Dialog.Root
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      open
+    >
+      <Dialog.Portal>
+        <Dialog.Backdrop className={styles.modalBackdrop} />
+        <Dialog.Viewport className={plannerStyles.dialogViewport}>
+          <Dialog.Popup
+            aria-label={title}
+            className={styles.modal}
+            data-wide={wide}
+            initialFocus
+            finalFocus={returnFocusRef}
+          >
+            <header>
+              <Dialog.Title render={<h2 />}>{title}</Dialog.Title>
+              <button aria-label="关闭" onClick={onClose}><X size={19} /></button>
+            </header>
+            {children}
+          </Dialog.Popup>
+        </Dialog.Viewport>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

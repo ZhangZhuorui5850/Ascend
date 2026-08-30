@@ -312,6 +312,11 @@ body:has([data-planner-workspace="calendar"]) .icpFooter {
   }
 }
 
+/* 算法详情栏展开时让位：FAB 悬浮球会压住详情正文 */
+body:has([data-detail-open="true"]) .captureFab {
+  display: none;
+}
+
 /* 收纳面板：宽屏为常驻右栏，窄屏为抽屉 */
 .capturePanel {
   position: sticky;
