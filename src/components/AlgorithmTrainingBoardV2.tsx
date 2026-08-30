@@ -164,7 +164,14 @@ export function AlgorithmTrainingBoardV2({
     : "today";
   const selectedProblemId = urlProblem;
   const setSection = (next: Section) => updateUrl({ tab: next === "library" ? "library" : null, problem: null }, "push");
-  const openProblem = (id: number | null) => updateUrl({ problem: id === null ? null : String(id), tab: id === null ? null : "library" }, "push");
+  const openProblem = (id: number | null) => {
+    if (id === null) {
+      // 关闭详情不离开题库：仅当前不在题库时才移除 tab
+      updateUrl({ problem: null, tab: section === "library" ? "library" : null }, "push");
+      return;
+    }
+    updateUrl({ problem: String(id), tab: "library" }, "push");
+  };
 
   function mutate(action: () => Promise<{ ok: boolean; error?: string }>, success: string) {
     if (pending) return;
