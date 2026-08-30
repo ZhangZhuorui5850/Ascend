@@ -11,10 +11,10 @@ import { todayKey } from "@/lib/dates";
 const routeTitles: Array<[RegExp, string, string]> = [
   [/^\/$/, "今天", "Today"],
   [/^\/day\//, "日记录", "历史、补录与复盘"],
-  [/^\/tasks/, "计划", "Planner · 任务"],
-  [/^\/calendar/, "计划", "Planner · 日历"],
+  [/^\/tasks/, "任务", "计划与排期"],
+  [/^\/calendar/, "任务", "日历视图"],
   [/^\/subjects\//, "学习", "知识详情"],
-  [/^\/subjects/, "学习", "知识体系"],
+  [/^\/subjects/, "学习", "科目与知识体系"],
   [/^\/review/, "复习", "今日到期内容"],
   [/^\/assets/, "资料", "文件与关联"],
   [/^\/mistakes/, "复习", "错题本"],
@@ -23,10 +23,10 @@ const routeTitles: Array<[RegExp, string, string]> = [
   [/^\/extensions/, "扩展中心", "能力、权限与连接"],
   [/^\/analytics/, "分析", "趋势与弱点"],
   [/^\/settings/, "设置", "偏好与目标"],
-  [/^\/admin\/users\//, "用户详情", "Admin"],
-  [/^\/admin\/users/, "用户管理", "Admin"],
-  [/^\/admin\/audit/, "操作日志", "Admin"],
-  [/^\/admin/, "管理概览", "Admin"],
+  [/^\/admin\/users\//, "用户详情", "管理后台"],
+  [/^\/admin\/users/, "用户管理", "管理后台"],
+  [/^\/admin\/audit/, "操作日志", "管理后台"],
+  [/^\/admin/, "管理概览", "管理后台"],
 ];
 
 export function TopBar({
@@ -56,7 +56,7 @@ export function TopBar({
       </div>
       <div className="topbarActions">
         {role === "user" ? <Link className="topbarDate" href="/"><CalendarRange size={15} /><span>{dayLabel}</span></Link> : null}
-        <button className="commandTrigger" onClick={onCommand} type="button"><Search size={15} /><span>搜索或快速操作</span></button>
+        <button className="commandTrigger" onClick={onCommand} title="搜索或快速操作（Ctrl/⌘+K）" type="button"><Search size={15} /><span>搜索或快速操作<small className="commandHint">Ctrl/⌘K</small></span></button>
         <ThemeSwitcher />
         <Link aria-label={role === "admin" ? "用户管理" : "设置"} className="topbarIconButton" href={role === "admin" ? "/admin/users" : "/settings"} title={role === "admin" ? "用户管理" : "设置"}>
           {role === "admin" ? <Users size={17} /> : <Settings size={17} />}

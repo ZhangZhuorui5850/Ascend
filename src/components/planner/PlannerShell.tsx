@@ -16,9 +16,9 @@ export function PlannerShell({
   return (
     <div className={styles.shell} data-planner-shell>
       <header className={styles.header}>
-        <div>
-          <p>PLANNER</p>
-          <h1>计划</h1>
+        <div className={styles.context}>
+          <h1>{title}</h1>
+          <p>{description}</p>
         </div>
         <nav aria-label="计划视图" className={styles.views}>
           <Link aria-current={active === "tasks" ? "page" : undefined} href="/tasks">
@@ -31,10 +31,6 @@ export function PlannerShell({
           </Link>
         </nav>
       </header>
-      <div className={styles.context}>
-        <h2>{title}</h2>
-        <p>{description}</p>
-      </div>
       <div className={styles.content}>{children}</div>
     </div>
   );

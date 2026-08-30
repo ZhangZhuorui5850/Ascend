@@ -20,7 +20,7 @@ export default async function MistakesPage() {
     <div className="pageStack">
       <div className="pageHeader">
         <span className="eyebrow">ERROR LOOP · 错因闭环</span>
-        <h1>错题回炉</h1>
+        <h1>错题本</h1>
         <p>按间隔复习节奏重新作答，两次跨日答对后完成毕业。</p>
       </div>
 
@@ -91,7 +91,7 @@ export default async function MistakesPage() {
       </section>
 
       <p className="hint">
-        新错题可从<Link href="/">Today</Link>的“记录”入口添加，并关联科目和知识点。
+        新错题可从<Link href="/">「今天」</Link>的“记录”入口添加，并关联科目和知识点。
       </p>
     </div>
   );

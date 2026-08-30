@@ -60,10 +60,19 @@ export function AppShell({ user, hierarchy, enabledPluginIds, modulePrefs, child
   useEffect(() => {
     function onShortcut(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        // Cmd/Ctrl+K 保留给全局搜索/命令面板（行业惯例），录入走 N 键或记录按钮。
         event.preventDefault();
-        setCaptureIntent(undefined);
-        setCaptureOpen(true);
+        setCaptureOpen(false);
+        setCommandOpen(true);
+        return;
       }
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key.toLowerCase() !== "n") return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+      event.preventDefault();
+      setCaptureIntent(undefined);
+      setCaptureOpen(true);
     }
     window.addEventListener("keydown", onShortcut);
     return () => window.removeEventListener("keydown", onShortcut);

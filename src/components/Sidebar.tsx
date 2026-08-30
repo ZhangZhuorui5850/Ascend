@@ -50,7 +50,6 @@ export type NavItem = {
   pluginId?: PluginId;
   mobileOverflow?: boolean;
   activeAliases?: string[];
-  parentActiveOnly?: boolean;
 };
 
 export function getNavigation(role: "admin" | "user", enabledPluginIds: PluginId[] = []): NavItem[] {
@@ -63,12 +62,12 @@ export function getNavigation(role: "admin" | "user", enabledPluginIds: PluginId
   }
   const links: NavItem[] = [
     { href: "/", match: "/", exact: true, label: "今天", group: "主要", icon: Home, activeAliases: ["/day"] },
-    { href: "/tasks", match: "/tasks", exact: false, label: "计划", group: "主要", icon: ListChecks, activeAliases: ["/calendar"] },
+    { href: "/tasks", match: "/tasks", exact: false, label: "任务", group: "主要", icon: ListChecks },
     { href: "/subjects", match: "/subjects", exact: false, label: "学习", group: "主要", icon: BookOpen },
-    { href: "/review", match: "/review", exact: false, label: "复习", group: "主要", icon: RotateCcw, activeAliases: ["/mistakes"] },
+    { href: "/review", match: "/review", exact: false, label: "复习", group: "主要", icon: RotateCcw },
     { href: "/assets", match: "/assets", exact: false, label: "资料", group: "主要", icon: HardDrive, mobileOverflow: true },
-    { href: "/calendar", match: "/calendar", exact: false, label: "日历", group: "更多", icon: CalendarDays, parentActiveOnly: true, mobileOverflow: true },
-    { href: "/mistakes", match: "/mistakes", exact: false, label: "错题本", group: "更多", icon: Tag, moduleKey: "mistakes" as const, parentActiveOnly: true, mobileOverflow: true },
+    { href: "/calendar", match: "/calendar", exact: false, label: "日历", group: "更多", icon: CalendarDays, mobileOverflow: true },
+    { href: "/mistakes", match: "/mistakes", exact: false, label: "错题本", group: "更多", icon: Tag, moduleKey: "mistakes" as const, mobileOverflow: true },
     { href: "/mock-exams", match: "/mock-exams", exact: false, label: "模考", group: "更多", icon: GraduationCap, moduleKey: "mock-exams" as const, mobileOverflow: true },
     { href: "/analytics", match: "/analytics", exact: false, label: "分析", group: "更多", icon: BarChart3, moduleKey: "analytics" as const, mobileOverflow: true },
   ];
@@ -104,7 +103,6 @@ export function applyModulePrefs(links: NavItem[], modulePrefs?: ModulePref[]): 
 }
 
 function isLinkActive(pathname: string, item: NavItem): boolean {
-  if (item.parentActiveOnly) return false;
   if (item.activeAliases?.some((match) => pathname === match || pathname.startsWith(`${match}/`))) return true;
   if (item.exact) return pathname === item.match;
   return pathname === item.href || pathname === item.match || pathname.startsWith(`${item.match}/`);

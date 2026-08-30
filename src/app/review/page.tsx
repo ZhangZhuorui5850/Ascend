@@ -67,7 +67,7 @@ export default async function ReviewPage({
           <CheckCircle2 aria-hidden size={28} />
           <div>
             <h2>今日复习已清零</h2>
-            <p>可以回到 Today 继续当前任务。</p>
+            <p>可以回到「今天」继续当前任务。</p>
           </div>
         </section>
       )}

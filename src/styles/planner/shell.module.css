@@ -7,25 +7,9 @@
 .header {
   align-items: end;
   display: flex;
-  gap: 20px;
+  flex-wrap: wrap;
+  gap: 12px 20px;
   justify-content: space-between;
-}
-
-.header p {
-  color: var(--accent);
-  font-family: var(--font-mono);
-  font-size: var(--type-caption);
-  font-weight: 750;
-  letter-spacing: .12em;
-  margin: 0 0 3px;
-}
-
-.header h1 {
-  color: var(--ink);
-  font-family: var(--font-sans);
-  font-size: var(--type-page-title);
-  letter-spacing: -.04em;
-  margin: 0;
 }
 
 .views {
@@ -59,25 +43,22 @@
 }
 
 .context {
-  border-top: 1px solid var(--line);
-  display: flex;
-  gap: 16px;
-  justify-content: space-between;
-  padding-top: 14px;
+  min-width: 0;
 }
 
-.context h2 {
+.context h1 {
   color: var(--ink);
-  font-size: var(--type-section-title);
+  font-family: var(--font-sans);
+  font-size: var(--type-page-title);
+  letter-spacing: -.04em;
   margin: 0;
 }
 
 .context p {
   color: var(--muted);
   font-size: var(--type-support);
-  margin: 3px 0 0;
+  margin: 4px 0 0;
   max-width: 620px;
-  text-align: right;
 }
 
 .content {

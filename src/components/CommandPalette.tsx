@@ -1,5 +1,6 @@
 "use client";
 
+import { Dialog } from "@base-ui/react/dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -62,6 +63,7 @@ export function CommandPalette({
   const router = useRouter();
   const { notify } = useFeedback();
   const inputRef = useRef<HTMLInputElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [searchState, setSearchState] = useState<{ query: string; results: WorkspaceSearchResult[] }>({
@@ -87,16 +89,6 @@ export function CommandPalette({
         icon: item.icon,
         description: item.href,
       }));
-    if (role === "user") {
-      navigation.unshift({
-        key: "navigation:today",
-        group: "页面与操作",
-        label: "打开今天",
-        href: "/",
-        icon: ArrowRight,
-        description: `今天 · ${todayKey()}`,
-      });
-    }
     return navigation;
   }, [enabledPluginIds, modulePrefs, role]);
   const commands = useMemo<PaletteEntry[]>(() => role === "user"
@@ -132,19 +124,16 @@ export function CommandPalette({
   const groupedEntries = groupEntries(entries);
 
   useEffect(() => {
-    function handle(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-    window.addEventListener("keydown", handle);
-    return () => window.removeEventListener("keydown", handle);
-  }, [setOpen]);
-
-  useEffect(() => {
     if (!open) return;
-    window.setTimeout(() => {
+    returnFocusRef.current = document.activeElement as HTMLElement | null;
+    const timer = window.setTimeout(() => {
       setActiveIndex(0);
       inputRef.current?.focus();
     }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      returnFocusRef.current?.focus?.();
+    };
   }, [open]);
 
   useEffect(() => {
@@ -182,7 +171,6 @@ export function CommandPalette({
     };
   }, [open, query, role]);
 
-  if (!open) return null;
   const safeActiveIndex = Math.max(0, Math.min(activeIndex, Math.max(0, entries.length - 1)));
 
   function go(href: string) {
@@ -238,8 +226,21 @@ export function CommandPalette({
   }
 
   return (
-    <div className="commandBackdrop" onMouseDown={() => setOpen(false)} role="presentation">
-      <section aria-label="命令菜单" aria-modal="true" className="commandPalette" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+    <Dialog.Root
+      onOpenChange={(next) => {
+        if (!next) setOpen(false);
+      }}
+      open={open}
+    >
+      <Dialog.Portal>
+        <Dialog.Backdrop className="commandBackdrop" />
+        <Dialog.Viewport className="commandViewport">
+          <Dialog.Popup
+            aria-label="命令菜单"
+            className="commandPalette"
+            finalFocus={returnFocusRef}
+            initialFocus={inputRef}
+          >
         <div className="commandSearch">
           <Search size={18} />
           <input
@@ -311,9 +312,11 @@ export function CommandPalette({
             {searching ? "正在搜索" : normalizedQuery ? `找到 ${entityEntries.length} 条学习记录` : ""}
           </span>
         </div>
-        <footer><span>↑↓ 浏览</span><span>Enter 打开</span><span>Esc 关闭</span></footer>
-      </section>
-    </div>
+            <footer><span>↑↓ 浏览</span><span>Enter 打开</span><span>Esc 关闭</span></footer>
+          </Dialog.Popup>
+        </Dialog.Viewport>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

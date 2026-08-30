@@ -112,10 +112,10 @@ export function AlgorithmTrainingBoardV2({
   const [completion, setCompletion] = useState<CompletionTarget | null>(null);
   const [pending, setPending] = useState(false);
   const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
-
-  useEffect(() => {
-    setRevokingDeviceId((current) => (current && devices.some((device) => device.id === current) ? current : null));
-  }, [devices]);
+  // 撤销请求发出后、设备列表刷新前，按钮保持忙碌；设备消失即视为完成。
+  const pendingDeviceId = revokingDeviceId && devices.some((device) => device.id === revokingDeviceId)
+    ? revokingDeviceId
+    : null;
 
   useEffect(() => {
     const saved = window.localStorage.getItem("ascend.algorithm.showReviews");
@@ -142,8 +142,6 @@ export function AlgorithmTrainingBoardV2({
       }
     });
   }
-
-  const selectedProblem = dashboard.problems.find((problem) => problem.id === selectedProblemId) ?? null;
 
   return (
     <main className={styles.shell} aria-busy={pending}>
@@ -288,7 +286,7 @@ export function AlgorithmTrainingBoardV2({
               mutate(async () => revokeAlgorithmDeviceAction(deviceId), "设备已撤销");
             });
           }}
-          pendingDeviceId={revokingDeviceId}
+          pendingDeviceId={pendingDeviceId}
         />
       ) : null}
     </main>

@@ -1,5 +1,6 @@
-import { notFound } from "next/navigation";
+import Link from "next/link";
 import { AlgorithmTrainingBoardV2 } from "@/components/AlgorithmTrainingBoardV2";
+import { EmptyState } from "@/components/EmptyState";
 import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { getJudgeRuntimeAvailability } from "@/lib/judge-runtime";
@@ -21,7 +22,25 @@ export default async function AlgorithmTrainingPage({
   try {
     requirePluginEnabled(db, access, "algorithms");
   } catch {
-    notFound();
+    // 插件未启用时给出可操作的引导，而不是脱离应用壳的 404。
+    return (
+      <div className="pageStack algorithmPage">
+        <header className="pageHeader algorithmPageHeader">
+          <div>
+            <span className="eyebrow">ALGORITHM PRACTICE · 算法训练</span>
+            <h1>算法训练</h1>
+          </div>
+        </header>
+        <EmptyState
+          action={{ href: "/extensions", label: "前往扩展中心启用" }}
+          seal="算法"
+          text="算法训练插件还没有启用。启用后即可使用课程章节、题库、训练计划与 VS Code 同步。"
+        />
+        <p style={{ textAlign: "center", color: "var(--quiet)", fontSize: "13px" }}>
+          不确定是否需要？可以<Link href="/extensions">先看看插件说明</Link>。
+        </p>
+      </div>
+    );
   }
   const today = todayKey();
   const dashboard = getAlgorithmDashboard(db, access, today);

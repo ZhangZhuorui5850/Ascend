@@ -7,8 +7,9 @@ const calendar = readFileSync(new URL("../../app/calendar/page.tsx", import.meta
 const styles = readFileSync(new URL("../../styles/planner/shell.module.css", import.meta.url), "utf8");
 
 describe("shared Planner shell", () => {
-  it("owns the single Plan heading and stable task/calendar views", () => {
-    expect(shell).toContain("<h1>计划</h1>");
+  it("owns the single page heading and stable task/calendar views", () => {
+    // PlannerShell 提供两视图共用的唯一 h1（来自 title prop），页面内不再重复 h1。
+    expect(shell).toContain("<h1>{title}</h1>");
     expect(shell).toContain('href="/tasks"');
     expect(shell).toContain('href="/calendar"');
     expect(shell).toContain('aria-current={active === "tasks"');

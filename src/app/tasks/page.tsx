@@ -49,7 +49,7 @@ export default async function TasksPage({
   return (
     <PlannerShell
       active="tasks"
-      description="从 Inbox 收集任务，分离到期与排期，并保留完成轨迹。"
+      description="从收集箱收集任务，分离到期与排期，并保留完成轨迹。"
       title="任务"
     >
       <div className="plannerTasksPage">

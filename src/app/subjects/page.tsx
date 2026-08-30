@@ -18,8 +18,8 @@ export default async function SubjectsPage() {
   return (
     <div className="pageStack">
       <div className="pageHeader">
-        <span className="eyebrow">KNOWLEDGE SYSTEM · 知识体系</span>
-        <h1>知识体系</h1>
+        <span className="eyebrow">KNOWLEDGE SYSTEM · 科目与知识体系</span>
+        <h1>学习</h1>
         <p>沿着科目、章节、知识点逐层推进，资料、错题和复习记录会在同一上下文汇合。</p>
       </div>
 

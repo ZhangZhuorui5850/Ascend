@@ -47,7 +47,7 @@ export default async function TodayPage() {
             </div>
             <p className={styles.nowMeta}>{actionMeta(action, model.timeZone, day)}</p>
             <div aria-label="推荐原因" className={styles.reasons}>
-              <span>因为</span>
+              <span>因为：</span>
               <ul>
                 {action.reasons.map((reason) => <li key={reason}>{reason}</li>)}
               </ul>
@@ -89,7 +89,7 @@ export default async function TodayPage() {
           unscheduledTasks={visibleUnscheduled}
         />
         {hiddenTimelineCount ? (
-          <Link className={styles.moreLink} href="/tasks">还有 {hiddenTimelineCount} 项，在计划中查看</Link>
+          <Link className={styles.moreLink} href="/tasks?view=today">还有 {hiddenTimelineCount} 项，在今天查看</Link>
         ) : null}
       </section>
 
