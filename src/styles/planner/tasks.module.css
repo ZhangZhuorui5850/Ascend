@@ -383,7 +383,7 @@
 .taskRow[data-completed="true"] .completeButton {
   border-color: var(--accent);
   background: var(--accent);
-  color: white;
+  color: var(--accent-ink);
 }
 
 .openButton {
@@ -690,7 +690,7 @@
   min-width: 0;
 }
 
-@media (max-width: 1179px) {
+@media (max-width: 1180px) {
   .workspace {
     grid-template-columns: 212px minmax(0, 1fr);
   }
@@ -775,7 +775,7 @@
 
   .mobileNav a[data-active="true"] {
     background: var(--accent);
-    color: white;
+    color: var(--accent-ink);
   }
 
   .main {

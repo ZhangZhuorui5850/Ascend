@@ -60,7 +60,8 @@
 .reviewBadge, .statusBadge { display: inline-flex; align-items: center; justify-content: center; padding: 2px 9px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); font-size: 11.5px; font-style: normal; font-weight: 600; white-space: nowrap; }
 .statusBadge[data-status="todo"] { background: var(--surface-soft); color: var(--muted); }
 .statusBadge[data-status="done"] { background: var(--ok-soft); color: var(--ok); }
-.rowActions button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); }
+.rowActions button { position: relative; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); }
+.rowActions button::after { content: ""; position: absolute; inset: -5px; }
 .rowActions button:hover { background: var(--accent-soft); color: var(--accent); }
 .rowActions button:disabled { opacity: .25; }
 .emptyState { display: grid; justify-items: center; padding: 64px 20px; color: var(--muted); text-align: center; }

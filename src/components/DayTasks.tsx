@@ -235,7 +235,33 @@ export function DayTasks({ day, today, tasks, subjects, carryFrom, carryCount = 
           if (!result.ok || entry.animationDone) return [];
           return [{ ...entry, actionDone: true }];
         }));
-        report(result);
+        if (result.ok) {
+          // 今日任务是硬删除，撤销 = 以原字段重建一条（完成状态与证据关联不恢复）。
+          notify(`已删除「${task.title}」`, "success", {
+            actionLabel: "撤销",
+            undo: () => {
+              startTransition(async () => {
+                try {
+                  const restored = await createDayTaskAction({
+                    clientMutationId: crypto.randomUUID(),
+                    day,
+                    title: task.title,
+                    subjectCode: task.subject_code,
+                    priority: task.priority,
+                    estimatedMinutes: task.estimated_minutes,
+                    scheduledStart: task.scheduled_start,
+                  });
+                  report(restored);
+                } catch (error) {
+                  console.error("撤销删除任务失败", error);
+                  report({ ok: false, error: "网络异常，撤销未生效" });
+                }
+              });
+            },
+          });
+        } else {
+          report(result);
+        }
       } catch (error) {
         console.error("删除任务失败", error);
         setExitingTasks((current) => current.filter((entry) => entry.task.id !== task.id));
