@@ -69,7 +69,7 @@ describe("Planner Tasks Phase 2 surface", () => {
     expect(taskSheet).toContain('surface={viewport === "mobile" ? "sheet" : "drawer"}');
     expect(taskSheet).toContain("triggerRef");
     expect(taskSheet).toContain("initialFocus={titleInputRef}");
-    expect(taskStyles).toContain("@media (max-width: 1179px)");
+    expect(taskStyles).toContain("@media (max-width: 1180px)");
     expect(taskStyles).toContain("@media (max-width: 760px)");
     expect(taskStyles).toContain("grid-template-columns: 232px minmax(0, 1fr) 380px");
     expect(workspace).toContain("handleDetailOpenChange");

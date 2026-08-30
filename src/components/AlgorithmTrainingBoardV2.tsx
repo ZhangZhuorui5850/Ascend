@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { Dialog } from "@base-ui/react/dialog";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   startTransition,
   useEffect,
@@ -39,7 +39,7 @@ import {
   setAlgorithmCourseAction,
 } from "@/app/actions/algorithms";
 import { useFeedback } from "@/components/FeedbackProvider";
-import { RichText } from "@/components/RichText";
+import { MarkdownContent } from "@/components/MarkdownContent";
 import plannerStyles from "@/styles/planner/primitives.module.css";
 import type { AlgorithmCurriculumChapter } from "@/lib/algorithm-curriculum";
 import type { JudgeRuntimeAvailability } from "@/lib/judge-runtime";
@@ -77,6 +77,32 @@ const DETAIL_MIN_WIDTH = 300;
 const DETAIL_MAX_WIDTH = 760;
 const DETAIL_DEFAULT_WIDTH = 360;
 
+function parseUrlId(value: string | null): number | null {
+  if (!value || !/^\d{1,12}$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeLibraryFilter(value: string | null, initialChapter: { key: string } | null | undefined): LibraryFilter {
+  if (!value) return initialChapter ? `chapter:${initialChapter.key}` : "all";
+  if (
+    value === "all" || value === "curriculum" || value === "todo" || value === "done" || value === "review"
+    || value.startsWith("chapter:") || value.startsWith("course:") || value.startsWith("stage:") || value.startsWith("folder:")
+  ) {
+    return value as LibraryFilter;
+  }
+  return "all";
+}
+
+function parseTableSortParam(value: string | null): TableSort | null {
+  if (!value) return null;
+  const [key, dir] = value.split(":");
+  if ((key === "title" || key === "ext" || key === "course" || key === "status") && (dir === "asc" || dir === "desc")) {
+    return { key, dir: dir === "asc" ? 1 : -1 };
+  }
+  return null;
+}
+
 function clampDetailWidth(value: number): number {
   const max = typeof window === "undefined"
     ? DETAIL_MAX_WIDTH
@@ -87,25 +113,22 @@ function clampDetailWidth(value: number): number {
 export function AlgorithmTrainingBoardV2({
   dashboard,
   devices,
-  initialProblemId,
   judgeAvailability,
   relations,
   today,
 }: {
   dashboard: AlgorithmDashboard;
   devices: AlgorithmDevice[];
-  initialProblemId: number | null;
   judgeAvailability: JudgeRuntimeAvailability;
   relations: AlgorithmTrainingRelations;
   today: string;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { notify, confirm } = useFeedback();
-  const [section, setSection] = useState<Section>(initialProblemId ? "library" : "today");
   const [selectedDate, setSelectedDate] = useState(today);
   const [showReviews, setShowReviews] = useState(true);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [selectedProblemId, setSelectedProblemId] = useState<number | null>(initialProblemId);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -121,6 +144,27 @@ export function AlgorithmTrainingBoardV2({
     const saved = window.localStorage.getItem("ascend.algorithm.showReviews");
     if (saved) queueMicrotask(() => setShowReviews(saved === "1"));
   }, []);
+
+  // URL 状态契约：tab/主筛选/problem 可回退（push），q/sort/page 连续操作不刷历史（replace）。
+  function updateUrl(entries: Record<string, string | null>, mode: "push" | "replace") {
+    const params = new URLSearchParams(window.location.search);
+    for (const [key, value] of Object.entries(entries)) {
+      if (value === null || value === "") params.delete(key);
+      else params.set(key, value);
+    }
+    const query = params.toString();
+    const url = `${window.location.pathname}${query ? `?${query}` : ""}`;
+    if (mode === "push") window.history.pushState(null, "", url);
+    else window.history.replaceState(null, "", url);
+  }
+
+  const urlProblem = parseUrlId(searchParams.get("problem"));
+  const section: Section = searchParams.get("tab") === "library" || (!searchParams.has("tab") && urlProblem !== null)
+    ? "library"
+    : "today";
+  const selectedProblemId = urlProblem;
+  const setSection = (next: Section) => updateUrl({ tab: next === "library" ? "library" : null, problem: null }, "push");
+  const openProblem = (id: number | null) => updateUrl({ problem: id === null ? null : String(id), tab: id === null ? null : "library" }, "push");
 
   function mutate(action: () => Promise<{ ok: boolean; error?: string }>, success: string) {
     if (pending) return;
@@ -164,11 +208,11 @@ export function AlgorithmTrainingBoardV2({
         </div>
       </header>
 
-      {section === "today" ? (
+      <div hidden={section !== "today"}>
         <TodayView
           dashboard={dashboard}
           onComplete={setCompletion}
-          onOpenProblem={(id) => { setSelectedProblemId(id); setSection("library"); }}
+          onOpenProblem={(id) => openProblem(id)}
           onOpenPicker={() => setPickerOpen(true)}
           onRemove={(plan) => {
             const problem = dashboard.problems.find((item) => item.id === plan.problemId);
@@ -186,10 +230,8 @@ export function AlgorithmTrainingBoardV2({
               }
             });
           }}
-          onReorder={(taskIds) => mutate(
-            () => reorderAlgorithmPlansAction({ day: selectedDate, taskIds }),
-            "训练顺序已保存",
-          )}
+          onReorder={(taskIds) => reorderAlgorithmPlansAction({ day: selectedDate, taskIds })}
+          onReorderSettled={() => {}}
           plans={relations.plans}
           curriculum={relations.curriculum}
           selectedDate={selectedDate}
@@ -201,7 +243,8 @@ export function AlgorithmTrainingBoardV2({
           showReviews={showReviews}
           today={today}
         />
-      ) : (
+      </div>
+      <div hidden={section !== "library"}>
         <LibraryView
           dashboard={dashboard}
           onAddPlan={(problemIds, day) => mutate(
@@ -224,14 +267,22 @@ export function AlgorithmTrainingBoardV2({
           selectedIds={selectedIds}
           selectedProblemId={selectedProblemId}
           setSelectedIds={setSelectedIds}
-          setSelectedProblemId={setSelectedProblemId}
+          setOpenProblem={openProblem}
           today={today}
+          filterParam={searchParams.get("filter")}
+          queryParam={searchParams.get("q") ?? ""}
+          sortParam={searchParams.get("sort")}
+          pageParam={searchParams.get("page")}
+          updateUrl={updateUrl}
         />
-      )}
+      </div>
 
       {pickerOpen ? (
         <ProblemPicker
           problems={dashboard.problems}
+          plannedProblemIds={relations.plans
+            .filter((plan) => plan.day === selectedDate && plan.status !== "canceled")
+            .map((plan) => plan.problemId)}
           selectedDate={selectedDate}
           onClose={() => setPickerOpen(false)}
           onSubmit={(ids) => {
@@ -300,6 +351,7 @@ function TodayView({
   onOpenProblem,
   onRemove,
   onReorder,
+  onReorderSettled,
   plans,
   curriculum,
   selectedDate,
@@ -313,7 +365,8 @@ function TodayView({
   onOpenPicker: () => void;
   onOpenProblem: (id: number) => void;
   onRemove: (plan: PlannedAlgorithmProblem) => void;
-  onReorder: (taskIds: string[]) => void;
+  onReorder: (taskIds: string[]) => Promise<{ ok: boolean; error?: string }>;
+  onReorderSettled: () => void;
   plans: PlannedAlgorithmProblem[];
   curriculum: AlgorithmTrainingRelations["curriculum"];
   selectedDate: string;
@@ -322,29 +375,76 @@ function TodayView({
   setShowReviews: (value: boolean) => void;
   today: string;
 }) {
+  const router = useRouter();
+  const { notify } = useFeedback();
   const primaryChapterByProblem = curriculumPrimaryChapters(curriculum);
   const manualPlans = plans.filter((item) => item.day === selectedDate && item.status !== "canceled");
+  // 排序乐观化：本地顺序立即生效，服务端确认前单飞串行提交，失败恢复服务端真值。
+  const [orderOverride, setOrderOverride] = useState<string[] | null>(null);
+  const [completedCollapsed, setCompletedCollapsed] = useState(false);
+  const reorderQueue = useRef<Promise<void>>(Promise.resolve());
   const due = selectedDate === today
     ? dashboard.problems.filter((problem) => problem.reviewEnabled && problem.nextReview && problem.nextReview <= today)
     : dashboard.problems.filter((problem) => problem.reviewEnabled && problem.nextReview === selectedDate);
-  const rows: Array<{ problem: AlgorithmProblem; plan: PlannedAlgorithmProblem | null; review: boolean }> = manualPlans.map((plan) => ({
-    problem: dashboard.problems.find((problem) => problem.id === plan.problemId)!,
-    plan,
-    review: due.some((problem) => problem.id === plan.problemId),
-  })).filter((row) => row.problem);
+  const orderedPlans = useMemo(() => {
+    if (orderOverride) {
+      const byTaskId = new Map(manualPlans.map((plan) => [plan.taskId, plan]));
+      const overridden = orderOverride
+        .map((taskId) => byTaskId.get(taskId))
+        .filter((plan): plan is PlannedAlgorithmProblem => Boolean(plan));
+      const rest = manualPlans.filter((plan) => !orderOverride.includes(plan.taskId));
+      return [...overridden, ...rest];
+    }
+    // 默认顺序：未完成在前，已完成沉底
+    return [
+      ...manualPlans.filter((plan) => plan.status !== "completed"),
+      ...manualPlans.filter((plan) => plan.status === "completed"),
+    ];
+  }, [manualPlans, orderOverride]);
+  const rows: Array<{ problem: AlgorithmProblem; plan: PlannedAlgorithmProblem | null; review: boolean; planIndex: number }> = orderedPlans
+    .map((plan, planIndex) => ({ plan, planIndex }))
+    .filter((entry) => !(completedCollapsed && entry.plan.status === "completed"))
+    .flatMap((entry) => {
+      const problem = dashboard.problems.find((item) => item.id === entry.plan.problemId);
+      return problem ? [{ problem, plan: entry.plan, review: due.some((item) => item.id === problem.id), planIndex: entry.planIndex }] : [];
+    });
   if (showReviews) {
     for (const problem of due) {
-      if (!rows.some((row) => row.problem.id === problem.id)) rows.push({ problem, plan: null, review: true });
+      if (!rows.some((row) => row.problem.id === problem.id)) rows.push({ problem, plan: null, review: true, planIndex: -1 });
     }
   }
-  const completedCount = rows.filter((row) => row.plan?.status === "completed").length;
+  const completedCount = manualPlans.filter((plan) => plan.status === "completed").length;
+
+  // 服务端真值到达后清掉本地覆盖，避免与刷新后的数据漂移（渲染期对账）
+  const plansFingerprint = manualPlans.map((plan) => `${plan.taskId}:${plan.status}`).join("|");
+  const [settledFingerprint, setSettledFingerprint] = useState(plansFingerprint);
+  if (settledFingerprint !== plansFingerprint) {
+    setSettledFingerprint(plansFingerprint);
+    setOrderOverride(null);
+  }
 
   function move(index: number, direction: -1 | 1) {
     const target = index + direction;
-    if (target < 0 || target >= manualPlans.length) return;
-    const next = [...manualPlans];
+    if (target < 0 || target >= orderedPlans.length) return;
+    const next = [...orderedPlans];
     [next[index], next[target]] = [next[target], next[index]];
-    onReorder(next.map((item) => item.taskId));
+    const taskIds = next.map((item) => item.taskId);
+    setOrderOverride(taskIds);
+    reorderQueue.current = reorderQueue.current.then(async () => {
+      try {
+        const result = await onReorder(taskIds);
+        if (!result.ok) {
+          notify(result.error || "排序保存失败", "error");
+          setOrderOverride(null);
+        }
+      } catch {
+        notify("网络异常，顺序未保存，已恢复原顺序", "error");
+        setOrderOverride(null);
+      } finally {
+        onReorderSettled();
+        void router.refresh();
+      }
+    });
   }
 
   return (
@@ -353,12 +453,30 @@ function TodayView({
         <div>
           <span className={styles.eyebrow}>DAILY TRAINING</span>
           <h2>{selectedDate === today ? "今天练什么" : `${selectedDate} 的训练`}</h2>
-          <p>{rows.length ? `${completedCount}/${rows.length} 已完成，按你的顺序逐题处理。` : "先从题库加入几道题。"}</p>
+          <p>
+            {rows.length ? `${completedCount}/${orderedPlans.length} 已完成，按你的顺序逐题处理。` : "先从题库加入几道题。"}
+            {completedCount > 0 ? (
+              <button className={styles.collapseToggle} onClick={() => setCompletedCollapsed((value) => !value)} type="button">
+                {completedCollapsed ? `显示已完成（${completedCount}）` : "收起已完成"}
+              </button>
+            ) : null}
+          </p>
         </div>
-        <label className={styles.dateField}>
-          <span>训练日期</span>
-          <input min={today} type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
-        </label>
+        <div className={styles.heroSide}>
+          {selectedDate !== today ? (
+            <button className={styles.backToday} onClick={() => setSelectedDate(today)} type="button">回到今天</button>
+          ) : null}
+          <label className={styles.dateField}>
+            <span>训练日期</span>
+            <input min={today} type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
+          </label>
+        </div>
+      </div>
+      <div aria-label="题库证据概览" className={styles.metricBand}>
+        <span><b>{dashboard.metrics.problemCount}</b> 题库</span>
+        <span><b>{dashboard.metrics.attemptedCount}</b> 已做</span>
+        <span><b>{dashboard.metrics.independentCount}</b> 独立完成</span>
+        <span><b>{dashboard.metrics.dueCount}</b> 待复习</span>
       </div>
       <div className={styles.todayToolbar}>
         <button className={styles.primaryButton} onClick={onOpenPicker}><Plus size={17} /> 添加题目</button>
@@ -368,7 +486,7 @@ function TodayView({
         </label>
       </div>
       <div className={styles.planList}>
-        {rows.map((row, index) => (
+        {rows.map((row) => (
           <article className={styles.planRow} key={`${row.problem.id}:${row.plan?.taskId ?? "review"}`}>
             <span className={styles.grip} data-static={row.plan ? undefined : "true"}><GripVertical size={17} /></span>
             <button className={styles.completeCircle} aria-label={`完成 ${row.problem.title}`} data-completed={row.plan?.status === "completed" || undefined} onClick={() => onComplete(row)}>
@@ -381,8 +499,8 @@ function TodayView({
             {row.review ? <span className={styles.reviewBadge}>复习</span> : null}
             {row.plan ? (
               <span className={styles.rowActions}>
-                <button aria-label="上移" disabled={index === 0} onClick={() => move(index, -1)}>↑</button>
-                <button aria-label="下移" disabled={index === manualPlans.length - 1} onClick={() => move(index, 1)}>↓</button>
+                <button aria-label="上移" disabled={row.planIndex === 0} onClick={() => move(row.planIndex, -1)}>↑</button>
+                <button aria-label="下移" disabled={row.planIndex >= orderedPlans.length - 1} onClick={() => move(row.planIndex, 1)}>↓</button>
                 <button aria-label="移出计划" onClick={() => onRemove(row.plan!)}><X size={16} /></button>
               </span>
             ) : <span className={styles.dueText}>到期 {row.problem.nextReview}</span>}
@@ -411,8 +529,13 @@ function LibraryView({
   selectedIds,
   selectedProblemId,
   setSelectedIds,
-  setSelectedProblemId,
+  setOpenProblem,
   today,
+  filterParam,
+  queryParam,
+  sortParam,
+  pageParam,
+  updateUrl,
 }: {
   dashboard: AlgorithmDashboard;
   onAddPlan: (ids: number[], day: string) => void;
@@ -423,8 +546,13 @@ function LibraryView({
   selectedIds: number[];
   selectedProblemId: number | null;
   setSelectedIds: (ids: number[]) => void;
-  setSelectedProblemId: (id: number | null) => void;
+  setOpenProblem: (id: number | null) => void;
   today: string;
+  filterParam: string | null;
+  queryParam: string;
+  sortParam: string | null;
+  pageParam: string | null;
+  updateUrl: (entries: Record<string, string | null>, mode: "push" | "replace") => void;
 }) {
   const curriculumChapters = useMemo(() => relations.curriculum.chapters.map((chapter) => ({
     key: chapter.key,
@@ -455,18 +583,19 @@ function LibraryView({
   const initialChapter = selectedProblemId
     ? curriculumByProblem.get(selectedProblemId) ?? currentChapter?.chapter
     : currentChapter?.chapter;
-  const [filter, setFilter] = useState<LibraryFilter>(() => initialChapter ? `chapter:${initialChapter.key}` : "all");
-  const [query, setQuery] = useState("");
+  // 筛选/搜索/排序/页码由 URL 驱动（见主组件契约），刷新与回退都能保住现场。
+  const filter = normalizeLibraryFilter(filterParam, initialChapter);
+  const query = queryParam;
+  const tableSort = parseTableSortParam(sortParam);
+  const pageIndex = Math.max(0, Number.parseInt(pageParam ?? "0", 10) || 0);
   const [planDate, setPlanDate] = useState(today);
   const [courseName, setCourseName] = useState(relations.courses[0]?.name || "郭炜算法基础");
   const [stageKey, setStageKey] = useState("W1");
   const [curriculumChapterKey, setCurriculumChapterKey] = useState(initialChapter?.key ?? curriculumChapters[0]?.key ?? "");
-  const [pageIndex, setPageIndex] = useState(0);
   const [detailWidth, setDetailWidth] = useState<number | null>(null);
   const [providersSelected, setProvidersSelected] = useState<string[]>([]);
   const [tagsSelected, setTagsSelected] = useState<string[]>([]);
   const [expandedCourses, setExpandedCourses] = useState<string[]>([]);
-  const [tableSort, setTableSort] = useState<TableSort | null>(null);
   const membershipsByProblem = useMemo(() => groupMemberships(relations), [relations]);
   const folderByProblem = useMemo(
     () => new Map(relations.library.items.map((item) => [item.problemId, item.folderId])),
@@ -542,13 +671,24 @@ function LibraryView({
   }, []);
 
   function applyFilter(next: LibraryFilter) {
-    setFilter(next);
-    setPageIndex(0);
+    updateUrl({ filter: next === "all" ? null : next, page: null }, "push");
   }
 
   function toggleTableSort(key: TableSortKey) {
-    setPageIndex(0);
-    setTableSort((current) => (!current || current.key !== key ? { key, dir: 1 } : current.dir === 1 ? { key, dir: -1 } : null));
+    const next = !tableSort || tableSort.key !== key
+      ? `${key}:asc`
+      : tableSort.dir === 1
+        ? `${key}:desc`
+        : null;
+    updateUrl({ sort: next, page: null }, "replace");
+  }
+
+  function changeQuery(value: string) {
+    updateUrl({ q: value || null, page: null }, "replace");
+  }
+
+  function changePage(next: number) {
+    updateUrl({ page: next > 0 ? String(next) : null }, "replace");
   }
 
   function toggleSelection(list: string[], value: string): string[] {
@@ -557,12 +697,12 @@ function LibraryView({
 
   function toggleProvider(value: string) {
     setProvidersSelected((current) => toggleSelection(current, value));
-    setPageIndex(0);
+    changePage(0);
   }
 
   function toggleTag(value: string) {
     setTagsSelected((current) => toggleSelection(current, value));
-    setPageIndex(0);
+    changePage(0);
   }
 
   function toggleCourseExpanded(courseKey: string) {
@@ -572,11 +712,9 @@ function LibraryView({
   const hasActiveRefiners = providersSelected.length > 0 || tagsSelected.length > 0;
 
   function resetAllFilters() {
-    setFilter("all");
-    setQuery("");
+    updateUrl({ filter: null, q: null, page: null }, "push");
     setProvidersSelected([]);
     setTagsSelected([]);
-    setPageIndex(0);
   }
 
   const sortCell = (key: TableSortKey, label: string) => (
@@ -628,17 +766,18 @@ function LibraryView({
     if (!selectedProblemId) return;
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape" && !document.querySelector('[class*="modalBackdrop"]')) {
-        setSelectedProblemId(null);
+        setOpenProblem(null);
       }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [selectedProblemId, setSelectedProblemId]);
+  }, [selectedProblemId, setOpenProblem]);
   const targetIds = selectedIds.length ? selectedIds : selectedProblem ? [selectedProblem.id] : [];
   const selectedChapterStats = filter.startsWith("chapter:")
     ? curriculumStats.find((item) => item.chapter.key === filter.slice(8)) ?? null
     : null;
   const curriculumCompleted = dashboard.problems.filter(isAlgorithmCompleted).length;
+  const hiddenSelectedCount = selectedIds.filter((id) => !filtered.some((problem) => problem.id === id)).length;
 
   return (
     <section
@@ -719,7 +858,7 @@ function LibraryView({
           </section>
         ) : null}
         <div className={styles.libraryHeader}>
-          <label className={styles.searchField}><Search size={17} /><input placeholder="搜索名称、题号或分类" value={query} onChange={(event) => { setQuery(event.target.value); setPageIndex(0); }} /></label>
+          <label className={styles.searchField}><Search size={17} /><input placeholder="搜索名称、题号或分类" value={query} onChange={(event) => changeQuery(event.target.value)} /></label>
           <span>{filtered.length} 道题</span>
         </div>
         <div className={styles.filterBar}>
@@ -739,20 +878,38 @@ function LibraryView({
         </div>
         <div className={styles.bulkBar} data-visible={selectedIds.length > 0}>
           <strong>已选 {selectedIds.length}</strong>
+          {hiddenSelectedCount > 0 ? (
+            <span className={styles.bulkHint}>其中 {hiddenSelectedCount} 道不在当前筛选内</span>
+          ) : null}
+          <button className={styles.bulkClear} onClick={() => setSelectedIds([])} type="button">清除</button>
+          <span className={styles.bulkDivider} aria-hidden />
           <input min={today} type="date" value={planDate} onChange={(event) => setPlanDate(event.target.value)} />
-          <button onClick={() => onAddPlan(selectedIds, planDate)}>加入计划</button>
-          <select aria-label="移动到文件夹" defaultValue="" onChange={(event) => { onMove(selectedIds, event.target.value || null); event.currentTarget.value = ""; }}>
+          <button onClick={() => { onAddPlan(selectedIds, planDate); setSelectedIds([]); }}>加入计划</button>
+          <select aria-label="移动到文件夹" defaultValue="" onChange={(event) => { onMove(selectedIds, event.target.value || null); event.currentTarget.value = ""; setSelectedIds([]); }}>
             <option value="">移动文件夹…</option>
             <option value="">未整理</option>
             {relations.library.folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
           </select>
-          <button onClick={() => onSetCourse(selectedIds, courseName, stageKey)}>设置来源题单</button>
-          <input aria-label="来源课程或题单名称" value={courseName} onChange={(event) => setCourseName(event.target.value)} />
-          <input aria-label="题单分组" className={styles.shortInput} value={stageKey} onChange={(event) => setStageKey(event.target.value)} />
+          <select aria-label="来源题单" value={courseName} onChange={(event) => {
+            setCourseName(event.target.value);
+            const course = relations.courses.find((item) => item.name === event.target.value);
+            setStageKey(course?.stages[0]?.key ?? stageKey);
+          }}>
+            {relations.courses.length
+              ? relations.courses.map((course) => <option key={course.key} value={course.name}>{course.name}</option>)
+              : <option value={courseName}>{courseName}</option>}
+          </select>
+          <input aria-label="题单分组" className={styles.shortInput} list="alg-stage-options" value={stageKey} onChange={(event) => setStageKey(event.target.value)} />
+          <datalist id="alg-stage-options">
+            {(relations.courses.find((course) => course.name === courseName)?.stages ?? []).map((stage) => (
+              <option key={stage.key} value={stage.key} />
+            ))}
+          </datalist>
+          <button onClick={() => { onSetCourse(selectedIds, courseName, stageKey); setSelectedIds([]); }}>设置来源题单</button>
           <select aria-label="课程章节" value={curriculumChapterKey} onChange={(event) => setCurriculumChapterKey(event.target.value)}>
             {curriculumChapters.map((chapter) => <option key={chapter.key} value={chapter.key}>{chapter.order}. {chapter.title}</option>)}
           </select>
-          <button onClick={() => onSetCurriculum(selectedIds, curriculumChapterKey)}>设置课程章节</button>
+          <button onClick={() => { onSetCurriculum(selectedIds, curriculumChapterKey); setSelectedIds([]); }}>设置课程章节</button>
         </div>
         <div className={styles.problemTable} role="table" aria-label="算法题库">
           <div className={styles.tableHead} role="row">
@@ -765,7 +922,7 @@ function LibraryView({
           </div>
           {visibleProblems.map((problem) => {
             const chapter = curriculumByProblem.get(problem.id);
-            const openDetail = () => setSelectedProblemId(problem.id);
+            const openDetail = () => setOpenProblem(problem.id);
             return (
               <div
                 className={styles.tableRow}
@@ -801,11 +958,11 @@ function LibraryView({
         </div>
         {filtered.length > LIBRARY_PAGE_SIZE ? (
           <nav className={styles.pager} aria-label="题库分页">
-            <button disabled={safePageIndex === 0} onClick={() => setPageIndex(safePageIndex - 1)}>上一页</button>
+            <button disabled={safePageIndex === 0} onClick={() => changePage(safePageIndex - 1)}>上一页</button>
             <span data-pager-info>
               第 {safePageIndex + 1} / {pageCount} 页 · 共 {filtered.length} 题 · 本页 {visibleProblems.length} 题
             </span>
-            <button disabled={safePageIndex >= pageCount - 1} onClick={() => setPageIndex(safePageIndex + 1)}>下一页</button>
+            <button disabled={safePageIndex >= pageCount - 1} onClick={() => changePage(safePageIndex + 1)}>下一页</button>
           </nav>
         ) : null}
       </div>
@@ -835,7 +992,7 @@ function LibraryView({
           />
           <div className={styles.detailTop}>
             <span className={styles.statusDot} data-status={learningStatus(selectedProblem, today)} />
-            <button aria-label="关闭详情" onClick={() => setSelectedProblemId(null)}><X size={18} /></button>
+            <button aria-label="关闭详情" onClick={() => setOpenProblem(null)}><X size={18} /></button>
           </div>
           <span className={styles.eyebrow}>{providerText(selectedProblem)}</span>
           <h2>{selectedProblem.title}</h2>
@@ -847,7 +1004,7 @@ function LibraryView({
             <input min={today} type="date" value={planDate} onChange={(event) => setPlanDate(event.target.value)} />
             <button className={styles.primaryButton} onClick={() => onAddPlan(targetIds, planDate)}><Plus size={16} /> 加入计划</button>
           </div>
-          <section className={styles.statement}><RichText block text={selectedProblem.statementMarkdown || `${selectedProblem.title}\n\n题面保存在参考 CPP 的文件头注释中。`} /></section>
+          <section className={styles.statement}><MarkdownContent source={selectedProblem.statementMarkdown || `${selectedProblem.title}\n\n题面保存在参考 CPP 的文件头注释中。`} /></section>
           <details className={styles.detailSection}>
             <summary>参考 CPP</summary>
             <pre>{selectedProblem.referenceCode.cpp17 || "参考代码保存在 Ascend 网盘中。"}</pre>
@@ -875,20 +1032,62 @@ function LibraryView({
   );
 }
 
-function ProblemPicker({ problems, selectedDate, onClose, onSubmit }: { problems: AlgorithmProblem[]; selectedDate: string; onClose: () => void; onSubmit: (ids: number[]) => void }) {
+function ProblemPicker({ plannedProblemIds, problems, selectedDate, onClose, onSubmit }: {
+  plannedProblemIds: number[];
+  problems: AlgorithmProblem[];
+  selectedDate: string;
+  onClose: () => void;
+  onSubmit: (ids: number[]) => void;
+}) {
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "todo" | "done" | "review">("all");
   const [ids, setIds] = useState<number[]>([]);
-  const visible = problems.filter((problem) => `${problem.title} ${problem.externalProblemId}`.toLowerCase().includes(query.toLowerCase())).slice(0, 100);
+  const planned = new Set(plannedProblemIds);
+  const matched = problems
+    .filter((problem) => `${problem.title} ${problem.externalProblemId}`.toLowerCase().includes(query.toLowerCase()))
+    .filter((problem) => statusFilter === "all" || learningStatus(problem, selectedDate) === statusFilter);
+  const visible = matched.slice(0, 100);
   return (
     <Modal title={`添加到 ${selectedDate}`} onClose={onClose}>
       <label className={styles.searchField}><Search size={17} /><input autoFocus placeholder="搜索题目" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
-      <div className={styles.pickerList}>
-        {visible.map((problem) => <label key={problem.id}><input checked={ids.includes(problem.id)} type="checkbox" onChange={(event) => setIds(event.target.checked ? [...ids, problem.id] : ids.filter((id) => id !== problem.id))} /><span><strong>{problem.title}</strong><small>{providerText(problem)}</small></span></label>)}
+      <div className={styles.pickerFilters} role="group" aria-label="按状态筛选">
+        {([
+          ["all", "全部"],
+          ["todo", "未做"],
+          ["done", "已做"],
+          ["review", "待复习"],
+        ] as const).map(([value, label]) => (
+          <button
+            aria-pressed={statusFilter === value}
+            key={value}
+            onClick={() => setStatusFilter(value)}
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
       </div>
+      <div className={styles.pickerList}>
+        {visible.map((problem) => (
+          <label key={problem.id}>
+            <input checked={ids.includes(problem.id)} type="checkbox" onChange={(event) => setIds(event.target.checked ? [...ids, problem.id] : ids.filter((id) => id !== problem.id))} />
+            <span>
+              <strong>{problem.title}{planned.has(problem.id) ? <i className={styles.plannedMark}>已加入</i> : null}</strong>
+              <small>{providerText(problem)}</small>
+            </span>
+          </label>
+        ))}
+      </div>
+      {matched.length > visible.length ? (
+        <p className={styles.pickerTruncated}>共 {matched.length} 道匹配，仅显示前 100 道；用搜索缩小范围。</p>
+      ) : (
+        <p className={styles.pickerTruncated}>共 {matched.length} 道匹配</p>
+      )}
       <footer className={styles.modalFooter}><button onClick={onClose}>取消</button><button className={styles.primaryButton} disabled={!ids.length} onClick={() => onSubmit(ids)}>加入 {ids.length} 道题</button></footer>
     </Modal>
   );
 }
+
 
 function CompletionDialog({ target, onClose, onChoose }: { target: CompletionTarget; onClose: () => void; onChoose: (choice: "review" | "tomorrow" | "stop-review") => void }) {
   return (

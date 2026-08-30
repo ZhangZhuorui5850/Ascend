@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { AlgorithmTrainingBoardV2 } from "@/components/AlgorithmTrainingBoardV2";
 import { EmptyState } from "@/components/EmptyState";
 import { todayKey } from "@/lib/dates";
@@ -12,11 +13,7 @@ import { requirePluginEnabled } from "@/lib/repo/plugins";
 
 export const dynamic = "force-dynamic";
 
-export default async function AlgorithmTrainingPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ problem?: string | string[] }>;
-}) {
+export default async function AlgorithmTrainingPage() {
   const access = await requirePageWorkspace("/practice/algorithms");
   const db = getDb();
   try {
@@ -47,8 +44,6 @@ export default async function AlgorithmTrainingPage({
   const relations = getAlgorithmTrainingRelations(db, access);
   const devices = listAlgorithmDevices(db, access);
   const judgeAvailability = getJudgeRuntimeAvailability(db, access);
-  const query = await searchParams;
-  const initialProblemId = parsePositiveId(query.problem);
 
   return (
     <div className="pageStack algorithmPage">
@@ -59,20 +54,16 @@ export default async function AlgorithmTrainingPage({
           <p>课程章节、题目、CPP 和训练进度集中在一个工作区。</p>
         </div>
       </header>
-      <AlgorithmTrainingBoardV2
-        dashboard={dashboard}
-        devices={devices}
-        initialProblemId={initialProblemId}
-        judgeAvailability={judgeAvailability}
-        relations={relations}
-        today={today}
-      />
+      <Suspense fallback={<div aria-label="正在加载" className="pageStack pageSkeleton" role="status"><div className="skeletonLine wide" /><div className="skeletonHero" /><div className="skeletonGrid"><div /><div /><div /></div></div>}>
+        <AlgorithmTrainingBoardV2
+          dashboard={dashboard}
+          devices={devices}
+          judgeAvailability={judgeAvailability}
+          relations={relations}
+          today={today}
+        />
+      </Suspense>
     </div>
   );
 }
 
-function parsePositiveId(value: string | string[] | undefined): number | null {
-  if (typeof value !== "string" || !/^\d{1,12}$/.test(value)) return null;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
-}
