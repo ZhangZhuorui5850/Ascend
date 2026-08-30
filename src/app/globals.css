@@ -332,7 +332,7 @@ body:has([data-planner-workspace="calendar"]) .icpFooter {
   inset: 0;
   z-index: 40;
   border: 0;
-  background: rgba(32, 24, 12, 0.4);
+  background: var(--scrim);
 }
 
 .captureClose {
@@ -348,7 +348,7 @@ body:has([data-planner-workspace="calendar"]) .icpFooter {
   position: fixed;
   right: 22px;
   bottom: 24px;
-  z-index: 30;
+  z-index: var(--z-fab);
   align-items: center;
   gap: 8px;
   padding: 12px 18px;
@@ -366,7 +366,7 @@ body:has([data-planner-workspace="calendar"]) .icpFooter {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 30;
+  z-index: var(--z-mobile-nav);
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
   border-top: 1px solid var(--line);
@@ -2763,7 +2763,7 @@ body[data-dragging] .mapCard::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(32, 24, 12, 0.32);
+  background: var(--scrim-soft);
   backdrop-filter: blur(2px);
   pointer-events: none;
 }
@@ -3193,7 +3193,7 @@ body[data-dragging] .mapCard::after {
     top: 0;
     right: 0;
     bottom: 0;
-    z-index: 50;
+    z-index: var(--z-sheet);
     width: min(var(--capture-width), 92vw);
     border-left: 1px solid var(--line);
     box-shadow: var(--shadow);
@@ -3258,7 +3258,7 @@ body[data-dragging] .mapCard::after {
     display: flex;
     position: fixed;
     inset: 0 auto 0 0;
-    z-index: 80;
+    z-index: var(--z-drawer);
     width: min(300px, 84vw);
     box-shadow: var(--shadow-lg);
   }
@@ -3267,9 +3267,9 @@ body[data-dragging] .mapCard::after {
     display: block;
     position: fixed;
     inset: 0;
-    z-index: 75;
+    z-index: var(--z-popover);
     border: 0;
-    background: rgba(32, 24, 12, 0.42);
+    background: var(--scrim);
   }
 
   /* 顶栏汉堡弹出的导航抽屉：手机宽度下侧栏以完整形态从左侧滑出 */
@@ -3277,7 +3277,7 @@ body[data-dragging] .mapCard::after {
     display: flex;
     position: fixed;
     inset: 0 auto 0 0;
-    z-index: 80;
+    z-index: var(--z-drawer);
     width: min(300px, 84vw);
     border-right: 1px solid var(--line);
     box-shadow: var(--shadow);
@@ -3308,9 +3308,9 @@ body[data-dragging] .mapCard::after {
     display: block;
     position: fixed;
     inset: 0;
-    z-index: 75;
+    z-index: var(--z-popover);
     border: 0;
-    background: rgba(32, 24, 12, 0.42);
+    background: var(--scrim);
     backdrop-filter: blur(3px);
   }
 
@@ -3632,7 +3632,7 @@ body[data-dragging] .mapCard::after {
 .topbar {
   position: sticky;
   top: 0;
-  z-index: 25;
+  z-index: var(--z-sticky);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3770,7 +3770,7 @@ kbd {
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
-  z-index: 60;
+  z-index: var(--z-popover);
   width: min(300px, calc(100vw - 28px));
   display: flex;
   flex-direction: column;
@@ -4358,7 +4358,7 @@ kbd {
   position: fixed;
   top: 0;
   right: 0;
-  z-index: 50;
+  z-index: var(--z-sheet);
   width: var(--capture-width);
   border-left: 1px solid var(--line);
   background: var(--surface-raised);
@@ -4376,7 +4376,7 @@ kbd {
 }
 
 .captureBackdrop {
-  background: rgba(32, 24, 12, 0.42);
+  background: var(--scrim);
   backdrop-filter: blur(3px);
 }
 
@@ -4409,8 +4409,8 @@ kbd {
 .mobileMoreBackdrop {
   position: fixed !important;
   inset: 0 !important;
-  z-index: 60 !important;
-  background: rgba(32, 24, 12, 0.42) !important;
+  z-index: var(--z-sheet) !important;
+  background: var(--scrim) !important;
 }
 
 .mobileMoreSheet {
@@ -4418,7 +4418,7 @@ kbd {
   right: 8px;
   bottom: calc(76px + env(safe-area-inset-bottom));
   left: 8px;
-  z-index: 70;
+  z-index: var(--z-popover);
   padding: 12px 16px 18px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-xl);
@@ -4457,11 +4457,11 @@ kbd {
 .commandBackdrop {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: var(--z-dialog);
   display: grid;
   place-items: start center;
   padding: min(18vh, 150px) 16px 16px;
-  background: rgba(32, 24, 12, 0.45);
+  background: var(--scrim);
   backdrop-filter: blur(4px);
 }
 
@@ -5275,56 +5275,14 @@ kbd {
   background: var(--surface);
 }
 
-.toastViewport {
-  position: fixed;
-  top: 82px;
-  right: 20px;
-  z-index: 130;
-  display: grid;
-  gap: 8px;
-  width: min(380px, calc(100vw - 28px));
-  pointer-events: none;
-}
-
-.toast {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) 28px;
-  align-items: center;
-  gap: 9px;
-  min-height: 52px;
-  padding: 10px 10px 10px 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
-  background: var(--surface-raised);
-  box-shadow: var(--shadow);
-  pointer-events: auto;
-  animation: toast-in 180ms ease both;
-}
-
-.toast-success > svg { color: var(--ok); }
-.toast-error > svg { color: var(--danger); }
-.toast-info > svg { color: var(--info); }
-
-.toast button {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--muted);
-}
-
 .dialogBackdrop {
   position: fixed;
   inset: 0;
-  z-index: 120;
+  z-index: var(--z-dialog);
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgba(32, 24, 12, 0.45);
+  background: var(--scrim);
   backdrop-filter: blur(4px);
 }
 
@@ -5415,20 +5373,11 @@ kbd {
 .errorState h1 { margin: 8px 0 0; font-size: 24px; }
 .errorState p { margin: 0 0 12px; color: var(--muted); line-height: 1.7; }
 
-@keyframes toast-in {
-  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
-}
-
 @keyframes skeleton-shimmer {
   to { background-position: -220% 0; }
 }
 
 @media (max-width: 760px) {
-  .toastViewport {
-    top: 66px;
-    right: 14px;
-  }
-
   .skeletonGrid {
     grid-template-columns: 1fr;
   }
@@ -6108,11 +6057,11 @@ h3,
 .viewerBackdrop {
   position: fixed;
   inset: 0;
-  z-index: 140;
+  z-index: var(--z-viewer);
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(32, 24, 12, 0.55);
+  background: var(--scrim-strong);
   backdrop-filter: blur(4px);
 }
 
@@ -7455,7 +7404,7 @@ a,
   position: fixed;
   right: max(16px, env(safe-area-inset-right));
   bottom: max(16px, env(safe-area-inset-bottom));
-  z-index: 160;
+  z-index: var(--z-system);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -9457,7 +9406,7 @@ body[data-dragging] .mapTools {
   .pointPanel:not(.pointPanelWelcome) {
     position: fixed;
     inset: 12px 12px max(12px, env(safe-area-inset-bottom));
-    z-index: 120;
+    z-index: var(--z-dialog);
     width: auto;
     height: auto;
     border: 1px solid var(--line);
@@ -11442,119 +11391,6 @@ body[data-dragging] .mapTools {
   }
 }
 
-/* 窄屏（.driveDetails 被隐藏的宽度）下，选中文件改用底部 sheet 呈现详情 */
-.driveSheetBackdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 96;
-  background: rgba(32, 24, 12, 0.42);
-}
-
-.driveDetailSheet {
-  position: fixed;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 97;
-  display: flex;
-  flex-direction: column;
-  max-height: min(78dvh, 640px);
-  border: 1px solid var(--line-strong);
-  border-bottom: 0;
-  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-lg);
-  animation: driveSheetIn var(--motion-quick) var(--motion-ease-enter) both;
-}
-
-.driveSheetGrip {
-  position: relative;
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  padding: 10px 0 6px;
-}
-
-.driveSheetGrip > span {
-  width: 36px;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--line-strong);
-}
-
-.driveSheetGrip > button {
-  position: absolute;
-  top: 4px;
-  right: 8px;
-  display: grid;
-  place-items: center;
-  padding: 8px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--quiet);
-}
-
-.driveSheetBody {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  overflow-y: auto;
-  padding: 4px 16px calc(18px + env(safe-area-inset-bottom));
-}
-
-.driveSheetBody h2 {
-  font-size: 14.5px;
-  font-weight: 600;
-  word-break: break-all;
-}
-
-.driveSheetBody > svg {
-  color: var(--quiet);
-}
-
-.driveSheetBody dl {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  margin: 0;
-}
-
-.driveSheetBody dl div {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 12.5px;
-}
-
-.driveSheetBody dt {
-  color: var(--quiet);
-  flex-shrink: 0;
-}
-
-.driveSheetBody dd {
-  margin: 0;
-  text-align: right;
-  word-break: break-all;
-}
-
-@keyframes driveSheetIn {
-  from {
-    opacity: 0;
-    transform: translateY(24px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .driveDetailSheet {
-    animation-duration: 0.001ms;
-  }
-}
-
-/* iOS 上 JS 检测强制显示的 PDF 降级块（其余触屏靠上方媒体查询控制显隐） */
-.viewerPdfFallback.iosForced {
-  display: grid;
-}
 
 .commandGroup { display: grid; gap: 4px; }
 .commandGroup + .commandGroup { margin-top: 8px; }

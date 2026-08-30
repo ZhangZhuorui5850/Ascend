@@ -9,8 +9,8 @@
 .driveSheetBackdrop {
   position: fixed;
   inset: 0;
-  z-index: 96;
-  background: rgba(32, 24, 12, 0.42);
+  z-index: var(--z-drawer);
+  background: var(--scrim);
 }
 
 .driveDetailSheet {
@@ -18,7 +18,7 @@
   right: 0;
   bottom: 0;
   left: 0;
-  z-index: 97;
+  z-index: var(--z-dialog);
   display: flex;
   flex-direction: column;
   max-height: min(78dvh, 640px);

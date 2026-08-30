@@ -270,7 +270,7 @@
 }
 
 .spin {
-  animation: captureSpin 1s linear infinite;
+  animation: captureSpin var(--motion-page) linear infinite;
 }
 
 @keyframes captureSpin {

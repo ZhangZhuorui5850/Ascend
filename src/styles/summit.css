@@ -1676,7 +1676,7 @@ a.homeFocusFigure:hover small {
 
 .calendarDayPopoverPositioner {
   position: fixed;
-  z-index: 90;
+  z-index: var(--z-popover);
   width: min(340px, calc(100vw - 24px));
 }
 

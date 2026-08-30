@@ -77,10 +77,25 @@
   --planner-row-selected: color-mix(in srgb, var(--accent) 6%, transparent);
   --planner-row-divider: var(--line);
   --planner-shadow-overlay: var(--shadow-lg);
-  --planner-z-popover: 70;
-  --planner-z-drawer: 80;
-  --planner-z-dialog: 90;
-  --planner-z-toast: 100;
+  /* 全局弹层层叠阶梯：域层只准引用 token，不得裸写数值。 */
+  --z-sticky: 25;
+  --z-fab: 30;
+  --z-mobile-nav: 30;
+  --z-sheet: 60;
+  --z-popover: 70;
+  --z-drawer: 80;
+  --z-dialog: 90;
+  --z-toast: 100;
+  --z-viewer: 110;
+  --z-system: 120;
+  /* 弹层遮罩：统一暖墨遮罩，替换散落的 rgba 字面量。 */
+  --scrim-soft: rgba(32, 24, 12, 0.32);
+  --scrim: rgba(32, 24, 12, 0.45);
+  --scrim-strong: rgba(32, 24, 12, 0.55);
+  --planner-z-popover: var(--z-popover);
+  --planner-z-drawer: var(--z-drawer);
+  --planner-z-dialog: var(--z-dialog);
+  --planner-z-toast: var(--z-toast);
   --mobile-nav-height: 72px;
 }
 
