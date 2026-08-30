@@ -12,6 +12,7 @@
 | 故障与浏览器排查 | [故障排查](./operations/troubleshooting.md) |
 | 算法训练 | [算法工作台](./features/algorithms.md) |
 | 算法训练体验评测 | [评测与优化方案](./algorithm-training-board-review.md) |
+| 前端体验优化记录 | [2026-08 优化](./frontend-ux-optimization-2026-08.md) |
 | Planner | [Planner 运维](./features/planner.md) |
 | Agent / MCP / CLI | [Agent Interface](./features/agent-interface.md) 与 [自动生成操作表](./generated/agent-operations.md) |
 | Judge 隔离 | [Judge Gateway 安全手册](./security/judge-gateway.md) |

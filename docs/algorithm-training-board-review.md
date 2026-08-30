@@ -1,6 +1,6 @@
 # 算法训练工作台评测与优化方案
 
-评测日期：2026-08-29 · 对象：`/practice/algorithms`（`AlgorithmTrainingBoardV2`）及其详情栏、弹层、导入流程 · 状态：v2 已按评审意见修订，待实施评审
+评测日期：2026-08-29 · 对象：`/practice/algorithms`（`AlgorithmTrainingBoardV2`）及其详情栏、弹层、导入流程 · 状态：v2 已按评审意见修订；2026-08-31 起部分 WP1/WP2a/WP3 项已随[前端体验优化](./frontend-ux-optimization-2026-08.md)落地（P0-1、P0-3、P1-1 前端部分、P1-2、P1-3、P1-4、P1-5、P1-6、P1-7、P2-1、P2-2、P2-3、P2-6、P2-7），P0-2 与 WP2b 仍待实施
 
 | 版本 | 说明 |
 | --- | --- |
