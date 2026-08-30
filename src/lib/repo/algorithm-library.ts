@@ -390,7 +390,7 @@ function promoteFolderContents(db: Database.Database, scope: WorkspaceScope, fol
   );
 }
 
-function ensureAlgorithmLibraryItems(db: Database.Database, scope: WorkspaceScope): void {
+export function ensureAlgorithmLibraryItems(db: Database.Database, scope: WorkspaceScope): void {
   const missing = db
     .prepare(
       `

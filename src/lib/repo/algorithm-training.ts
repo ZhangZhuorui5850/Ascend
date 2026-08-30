@@ -7,6 +7,7 @@ import { listAlgorithmLibrary, moveAlgorithmLibraryProblem, type AlgorithmLibrar
 import { getPlannerTask } from "./planner-tasks";
 import { requirePluginEnabled } from "./plugins";
 import { recordAlgorithmAttempt } from "./algorithms";
+import { listAlgorithmCurriculum, type PersistedAlgorithmCurriculum } from "./algorithm-curriculum";
 
 export type AlgorithmCourseMembership = {
   problemId: number;
@@ -37,6 +38,7 @@ export type AlgorithmTrainingRelations = {
   courses: AlgorithmCourse[];
   courseMemberships: AlgorithmCourseMembership[];
   library: AlgorithmLibrary;
+  curriculum: PersistedAlgorithmCurriculum;
 };
 
 const REVIEW_INTERVALS = [3, 7, 14, 30, 60] as const;
@@ -88,6 +90,7 @@ export function getAlgorithmTrainingRelations(
     courses: [...coursesByKey.values()],
     courseMemberships,
     library: listAlgorithmLibrary(db, scope),
+    curriculum: listAlgorithmCurriculum(db, scope),
   };
 }
 
@@ -365,6 +368,7 @@ export type AlgorithmTrainingTreeProblem = {
   title: string;
   label: string;
   hasAsset: boolean;
+  membershipKind: "primary" | "supplementary" | "source";
 };
 
 export type AlgorithmTrainingTree = {
@@ -373,10 +377,12 @@ export type AlgorithmTrainingTree = {
     key: string;
     name: string;
     total: number;
+    kind: "curriculum" | "source";
     stages: Array<{
       key: string;
       name: string;
       total: number;
+      acceptsProblems: boolean;
       problems: AlgorithmTrainingTreeProblem[];
     }>;
   }>;
@@ -400,32 +406,52 @@ export function getAlgorithmTrainingTree(
   scope: WorkspaceScope,
 ): AlgorithmTrainingTree {
   requirePluginEnabled(db, scope, "algorithms");
-  const rows = db
-    .prepare(
-      `
-      SELECT m.course_key AS courseKey, m.course_name AS courseName,
-             m.stage_key AS stageKey, m.sort_order AS sortOrder,
-             p.id, p.title, p.provider_id AS providerId,
-             EXISTS(
-               SELECT 1 FROM algorithm_problem_assets a
-               WHERE a.workspace_id = p.workspace_id AND a.problem_id = p.id
-             ) AS hasAsset
-      FROM algorithm_course_memberships m
-      JOIN algorithm_problems p ON p.workspace_id = m.workspace_id AND p.id = m.problem_id
-      WHERE m.workspace_id = ?
-      ORDER BY m.course_name, m.stage_key, m.sort_order, p.id
-    `,
-    )
-    .all(scope.workspaceId) as Array<{
+  type TreeRow = {
     courseKey: string;
     courseName: string;
     stageKey: string;
+    stageName: string;
     sortOrder: number;
     id: number;
     title: string;
     providerId: string;
     hasAsset: number;
-  }>;
+    membershipKind: "primary" | "supplementary" | "source";
+    courseKind: "curriculum" | "source";
+  };
+  const curriculum = listAlgorithmCurriculum(db, scope);
+  const curriculumRows = db.prepare(`
+    SELECT i.curriculum_key AS courseKey, c.curriculum_name AS courseName,
+           i.chapter_key AS stageKey, c.chapter_name AS stageName,
+           i.sort_order AS sortOrder, p.id, p.title, p.provider_id AS providerId,
+           EXISTS(
+             SELECT 1 FROM algorithm_problem_assets a
+             WHERE a.workspace_id = p.workspace_id AND a.problem_id = p.id
+           ) AS hasAsset,
+           i.membership_kind AS membershipKind, 'curriculum' AS courseKind
+    FROM algorithm_curriculum_items i
+    JOIN algorithm_curriculum_chapters c
+      ON c.workspace_id = i.workspace_id AND c.curriculum_key = i.curriculum_key
+     AND c.chapter_key = i.chapter_key
+    JOIN algorithm_problems p ON p.workspace_id = i.workspace_id AND p.id = i.problem_id
+    WHERE i.workspace_id = ? AND i.curriculum_key = ?
+    ORDER BY c.sort_order, i.sort_order, p.id
+  `).all(scope.workspaceId, curriculum.key) as TreeRow[];
+  const sourceRows = db.prepare(`
+    SELECT m.course_key AS courseKey, m.course_name AS courseName,
+           m.stage_key AS stageKey, m.stage_key AS stageName, m.sort_order AS sortOrder,
+           p.id, p.title, p.provider_id AS providerId,
+           EXISTS(
+             SELECT 1 FROM algorithm_problem_assets a
+             WHERE a.workspace_id = p.workspace_id AND a.problem_id = p.id
+           ) AS hasAsset,
+           'source' AS membershipKind, 'source' AS courseKind
+    FROM algorithm_course_memberships m
+    JOIN algorithm_problems p ON p.workspace_id = m.workspace_id AND p.id = m.problem_id
+    WHERE m.workspace_id = ?
+    ORDER BY m.course_name, m.stage_key, m.sort_order, p.id
+  `).all(scope.workspaceId) as TreeRow[];
+  const rows = [...curriculumRows, ...sourceRows];
 
   const collator = new Intl.Collator("zh-Hans-CN", { numeric: true });
   const courses = new Map<
@@ -433,42 +459,60 @@ export function getAlgorithmTrainingTree(
     {
       key: string;
       name: string;
-      total: number;
-      stages: Map<string, { key: string; name: string; total: number; problems: AlgorithmTrainingTreeProblem[] }>;
+      kind: "curriculum" | "source";
+      problemIds: Set<number>;
+      stages: Map<string, { key: string; name: string; problems: AlgorithmTrainingTreeProblem[] }>;
     }
   >();
+  courses.set(curriculum.key, {
+    key: curriculum.key,
+    name: curriculum.name,
+    kind: "curriculum",
+    problemIds: new Set(),
+    stages: new Map(curriculum.chapters.map((chapter) => [
+      chapter.key,
+      { key: chapter.key, name: `${chapter.sortOrder}. ${chapter.name}`, problems: [] },
+    ])),
+  });
   for (const row of rows) {
     let course = courses.get(row.courseKey);
     if (!course) {
-      course = { key: row.courseKey, name: row.courseName, total: 0, stages: new Map() };
+      course = { key: row.courseKey, name: row.courseName, kind: row.courseKind, problemIds: new Set(), stages: new Map() };
       courses.set(row.courseKey, course);
     }
     const stageKey = row.stageKey.trim() || "未分阶段";
     let stage = course.stages.get(stageKey);
     if (!stage) {
-      stage = { key: stageKey, name: stageKey, total: 0, problems: [] };
+      stage = { key: stageKey, name: row.stageName.trim() || stageKey, problems: [] };
       course.stages.set(stageKey, stage);
     }
-    course.total += 1;
-    stage.total += 1;
+    course.problemIds.add(row.id);
     stage.problems.push({
       id: row.id,
       title: row.title,
       label: treeProviderLabel(row.providerId),
       hasAsset: Boolean(row.hasAsset),
+      membershipKind: row.membershipKind,
     });
   }
+  const allProblemIds = new Set(rows.map((row) => row.id));
   return {
-    problemTotal: rows.length,
+    problemTotal: allProblemIds.size,
     courses: [...courses.values()]
-      .sort((left, right) => collator.compare(left.name, right.name))
+      .sort((left, right) => Number(right.kind === "curriculum") - Number(left.kind === "curriculum") || collator.compare(left.name, right.name))
       .map((course) => ({
         key: course.key,
         name: course.name,
-        total: course.total,
+        total: course.problemIds.size,
+        kind: course.kind,
         stages: [...course.stages.values()]
-          .sort((left, right) => collator.compare(left.key, right.key))
-          .map((stage) => ({ key: stage.key, name: stage.name, total: stage.total, problems: stage.problems })),
+          .map((stage) => ({
+            key: stage.key,
+            name: stage.name,
+            total: new Set(stage.problems.map((problem) => problem.id)).size,
+            acceptsProblems: course.kind === "curriculum",
+            problems: stage.problems,
+          })),
       })),
   };
 }

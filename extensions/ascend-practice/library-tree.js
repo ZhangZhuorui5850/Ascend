@@ -173,15 +173,28 @@ function phaseOrder(phaseKey) {
 function groupProblemsByStage(problems, courseKey) {
   const groups = new Map();
   for (const problem of problems || []) {
-    const membership = (problem?.courses || []).find((course) => course.courseKey === courseKey);
-    const key = String(membership?.stageKey || "").trim() || "未分阶段";
-    const list = groups.get(key) || [];
-    list.push(problem);
-    groups.set(key, list);
+    const memberships = (problem?.courses || []).filter((course) => course.courseKey === courseKey);
+    const stageKeys = memberships.length
+      ? [...new Set(memberships.map((membership) => String(membership.stageKey || "").trim() || "未分阶段"))]
+      : ["未分阶段"];
+    for (const key of stageKeys) {
+      const list = groups.get(key) || [];
+      list.push(problem);
+      groups.set(key, list);
+    }
   }
   return [...groups.entries()]
     .map(([phaseKey, items]) => ({ phaseKey, problems: items }))
     .sort((left, right) => phaseOrder(left.phaseKey) - phaseOrder(right.phaseKey) || left.phaseKey.localeCompare(right.phaseKey, "zh-CN"));
+}
+
+function problemsForCourseStage(problems, courseKey, stageKey) {
+  return (problems || []).filter((problem) =>
+    (problem?.courses || []).some(
+      (membership) => membership.courseKey === courseKey
+        && (String(membership.stageKey || "").trim() || "未分阶段") === stageKey,
+    ),
+  );
 }
 
 function compactMoveEntries(entries, index) {
@@ -287,6 +300,7 @@ module.exports = {
   problemStatus,
   createPracticeSections,
   groupProblemsByStage,
+  problemsForCourseStage,
   compactMoveEntries,
   insertionBeforeTarget,
   moveLibraryEntriesCompat,

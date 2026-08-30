@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import type { WorkspaceScope } from "../access-context";
+import { ensureAlgorithmCurriculumProblem } from "./algorithm-curriculum";
 import type { AlgorithmImportScan } from "../algorithm-import";
 import type { ParsedAlgorithmExercise } from "../algorithm-import-parser";
 import { normalizeAlgorithmAlias } from "../algorithm-catalog";
@@ -286,6 +287,7 @@ export function upsertImportedProblem(
     `,
     ).run(scope.workspaceId, row.id, topic);
   }
+  ensureAlgorithmCurriculumProblem(db, scope, row.id);
   return row.id;
 }
 

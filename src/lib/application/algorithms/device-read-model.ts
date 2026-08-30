@@ -1,13 +1,20 @@
 import type Database from "better-sqlite3";
 import { loadJudgeCodeKeys } from "../../algorithm-code-crypto";
+import { ALGORITHM_CURRICULUM_COURSE_KEY } from "../../algorithm-curriculum";
 import { todayKey } from "../../dates";
 import type { AlgorithmDeviceContext } from "../../repo/algorithm-devices";
 import { listAlgorithmCollections } from "../../repo/algorithm-import";
-import { listAlgorithmLibrary } from "../../repo/algorithm-library";
 import { getAlgorithmTrainingRelations } from "../../repo/algorithm-training";
 import { getAlgorithmDraft } from "../../repo/algorithm-submissions";
 import { getAlgorithmDashboard, getAlgorithmProblem, type AlgorithmProblem } from "../../repo/algorithms";
 import { getServerInstanceId } from "../../server-identity";
+
+type DeviceCourseMembership = {
+  problemId: number;
+  courseKey: string;
+  courseName: string;
+  stageKey: string;
+};
 
 export function getAlgorithmDeviceQueuePayload(
   db: Database.Database,
@@ -16,10 +23,21 @@ export function getAlgorithmDeviceQueuePayload(
   const today = todayKey();
   const dashboard = getAlgorithmDashboard(db, context, today);
   const collections = listAlgorithmCollections(db, context);
-  const library = listAlgorithmLibrary(db, context);
   const training = getAlgorithmTrainingRelations(db, context);
-  const coursesByProblem = new Map<number, typeof training.courseMemberships>();
-  for (const membership of training.courseMemberships) {
+  const library = training.library;
+  const curriculumChapterByKey = new Map(training.curriculum.chapters.map((chapter) => [chapter.key, chapter]));
+  const curriculumMemberships = training.curriculum.items.flatMap((item) => {
+    const chapter = curriculumChapterByKey.get(item.chapterKey);
+    return chapter ? [{
+      problemId: item.problemId,
+      courseKey: training.curriculum.key,
+      courseName: training.curriculum.name,
+      stageKey: `${chapter.sortOrder}. ${chapter.name}`,
+    }] : [];
+  });
+  const courseMemberships: DeviceCourseMembership[] = [...curriculumMemberships, ...training.courseMemberships];
+  const coursesByProblem = new Map<number, DeviceCourseMembership[]>();
+  for (const membership of courseMemberships) {
     const current = coursesByProblem.get(membership.problemId) ?? [];
     current.push(membership);
     coursesByProblem.set(membership.problemId, current);
@@ -35,7 +53,7 @@ export function getAlgorithmDeviceQueuePayload(
     ).map((item) => item.problemId),
   );
   const problemsById = new Map(dashboard.problems.map((problem) => [problem.id, problem]));
-  const courseTree = buildCourseTree(training, problemsById);
+  const courseTree = buildCourseTree(courseMemberships, problemsById, training.curriculum);
   const queue = training.plans
     .filter((plan) => plan.day === today && plan.status !== "canceled")
     .sort((left, right) => left.sortOrder - right.sortOrder)
@@ -61,11 +79,15 @@ export function getAlgorithmDeviceQueuePayload(
   };
 }
 
-/** 程序设计实习等课程阶段树：与网页「课程与阶段」同一份 memberships，插件侧栏优先渲染它。 */
+/** 网页课程主线与来源题单共用此树，插件侧栏按课程和章节展开。 */
 function buildCourseTree(
-  training: ReturnType<typeof getAlgorithmTrainingRelations>,
+  courseMemberships: DeviceCourseMembership[],
   problemsById: Map<number, AlgorithmProblem>,
+  curriculum: ReturnType<typeof getAlgorithmTrainingRelations>["curriculum"],
 ) {
+  const curriculumChapterKeyByStage = new Map(
+    curriculum.chapters.map((chapter) => [`${chapter.sortOrder}. ${chapter.name}`, chapter.key]),
+  );
   const openStatuses = new Set(["unseen", "attempted", "guided_completed"]);
   const openCount = (problemIds: Iterable<number>): number => {
     let count = 0;
@@ -79,13 +101,20 @@ function buildCourseTree(
     string,
     { id: string; name: string; kind: string; problemIds: Set<number>; stages: Map<string, Set<number>> }
   >();
-  for (const membership of training.courseMemberships) {
+  courses.set(curriculum.key, {
+    id: `course:${curriculum.key}`,
+    name: curriculum.name,
+    kind: "curriculum",
+    problemIds: new Set(),
+    stages: new Map(curriculum.chapters.map((chapter) => [`${chapter.sortOrder}. ${chapter.name}`, new Set<number>()])),
+  });
+  for (const membership of courseMemberships) {
     let course = courses.get(membership.courseKey);
     if (!course) {
       course = {
         id: `course:${membership.courseKey}`,
         name: membership.courseName,
-        kind: "course",
+        kind: membership.courseKey === ALGORITHM_CURRICULUM_COURSE_KEY ? "curriculum" : "course",
         problemIds: new Set(),
         stages: new Map(),
       };
@@ -107,9 +136,17 @@ function buildCourseTree(
       openCount: openCount(course.problemIds),
       stages: [...course.stages.entries()]
         .sort(([left], [right]) => collator.compare(left, right))
-        .map(([key, problemIds]) => ({ key, problemCount: problemIds.size, openCount: openCount(problemIds) })),
+        .map(([key, problemIds]) => ({
+          key,
+          chapterKey: course.kind === "curriculum" ? curriculumChapterKeyByStage.get(key) : undefined,
+          problemCount: problemIds.size,
+          openCount: openCount(problemIds),
+        })),
     }))
-    .sort((left, right) => collator.compare(left.name, right.name));
+    .sort((left, right) =>
+      Number(right.kind === "curriculum") - Number(left.kind === "curriculum")
+      || collator.compare(left.name, right.name),
+    );
 }
 
 export function getAlgorithmDeviceProblemPayload(

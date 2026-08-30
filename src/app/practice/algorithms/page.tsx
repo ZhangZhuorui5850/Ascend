@@ -37,7 +37,7 @@ export default async function AlgorithmTrainingPage({
         <div>
           <span className="eyebrow">ALGORITHM PRACTICE · 算法训练</span>
           <h1>按计划练题，按节奏复习</h1>
-          <p>题目、CPP、课程阶段和训练进度集中在一个工作区。</p>
+          <p>课程章节、题目、CPP 和训练进度集中在一个工作区。</p>
         </div>
       </header>
       <AlgorithmTrainingBoardV2

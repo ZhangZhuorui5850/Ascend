@@ -16,6 +16,7 @@ const {
   shouldUseLegacyLibraryMove,
   groupProblemsByPhase,
   groupProblemsByStage,
+  problemsForCourseStage,
   smartProblemMatches,
   createWorkspaceDocument,
 } = require("./library-tree");
@@ -172,6 +173,31 @@ test("stage grouping keeps numeric stage order across double digits", () => {
     "c",
   );
   assert.deepEqual(groups.map((group) => group.phaseKey), ["W2", "W10"]);
+});
+
+test("places one past paper in its topic chapter and comprehensive chapter", () => {
+  const problem = {
+    id: 1,
+    courses: [
+      { courseKey: "curriculum", stageKey: "8. 图论与最短路" },
+      { courseKey: "curriculum", stageKey: "9. 历年机试综合" },
+    ],
+  };
+  const groups = groupProblemsByStage([problem], "curriculum");
+  assert.deepEqual(groups.map((group) => group.phaseKey), ["8. 图论与最短路", "9. 历年机试综合"]);
+  assert.deepEqual(groups.map((group) => group.problems[0].id), [1, 1]);
+});
+
+test("returns the concrete problems under a persisted curriculum chapter", () => {
+  const problems = [
+    { id: 1, phaseKey: "W1", courses: [{ courseKey: "curriculum", stageKey: "1. 基础语法与 STL" }] },
+    { id: 2, phaseKey: "W1", courses: [{ courseKey: "curriculum", stageKey: "2. 模拟与枚举" }] },
+    { id: 3, phaseKey: "W5", courses: [{ courseKey: "source", stageKey: "1. 基础语法与 STL" }] },
+  ];
+  assert.deepEqual(
+    problemsForCourseStage(problems, "curriculum", "1. 基础语法与 STL").map((problem) => problem.id),
+    [1],
+  );
 });
 
 test("compacts multi-selection when a selected folder already carries descendants", () => {

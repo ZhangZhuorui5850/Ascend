@@ -2,6 +2,7 @@ import { getAlgorithmDeviceProblemPayload } from "@/lib/application/algorithms/d
 import { readBoundedJson, requireAlgorithmDeviceRequest, vscodeApiError, vscodeJson } from "@/lib/algorithm-vscode-api";
 import { getDb } from "@/lib/db";
 import { updateAlgorithmProblemDetails } from "@/lib/repo/algorithms";
+import { setAlgorithmCurriculumChapter } from "@/lib/repo/algorithm-curriculum";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       phaseKey: optionalString(body.phaseKey),
       nextReview: body.nextReview === null ? null : body.nextReview === undefined ? undefined : String(body.nextReview),
     });
+    if (body.curriculumChapterKey !== undefined) {
+      setAlgorithmCurriculumChapter(db, context, {
+        problemIds: [id],
+        chapterKey: String(body.curriculumChapterKey),
+      });
+    }
     return vscodeJson({ ok: true, problem });
   } catch (error) {
     return vscodeApiError(error);

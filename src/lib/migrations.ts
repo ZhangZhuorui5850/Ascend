@@ -6,6 +6,12 @@ import { LEGACY_WORKSPACE_ID } from "./repo/workspaces";
 import { addMinutesToInstant, localDateTimeToUtc } from "./planner/time";
 import { ensurePlannerDefaults, plannerDefaultId } from "./repo/planner-defaults";
 import { LEARNING_EVIDENCE_SCHEMA_V0030_SQL } from "./learning-evidence-schema";
+import {
+  ALGORITHM_CURRICULUM,
+  ALGORITHM_CURRICULUM_COURSE_KEY,
+  ALGORITHM_CURRICULUM_TITLE,
+  getAlgorithmCurriculumChapters,
+} from "./algorithm-curriculum";
 
 type Migration = {
   version: string;
@@ -2205,6 +2211,115 @@ const migrations: Migration[] = [
       WHERE c.collection_kind = 'course';
     `,
   },
+  {
+    version: "0041_algorithm_curriculum_storage",
+    sql: `
+      CREATE TABLE algorithm_curriculum_chapters (
+        workspace_id TEXT NOT NULL,
+        curriculum_key TEXT NOT NULL,
+        curriculum_name TEXT NOT NULL,
+        chapter_key TEXT NOT NULL,
+        chapter_name TEXT NOT NULL,
+        week_label TEXT NOT NULL DEFAULT '',
+        description TEXT NOT NULL DEFAULT '',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, curriculum_key, chapter_key),
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE algorithm_curriculum_items (
+        workspace_id TEXT NOT NULL,
+        curriculum_key TEXT NOT NULL,
+        chapter_key TEXT NOT NULL,
+        problem_id INTEGER NOT NULL,
+        membership_kind TEXT NOT NULL DEFAULT 'primary'
+          CHECK (membership_kind IN ('primary', 'supplementary')),
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (workspace_id, curriculum_key, chapter_key, problem_id),
+        FOREIGN KEY (workspace_id, curriculum_key, chapter_key)
+          REFERENCES algorithm_curriculum_chapters(workspace_id, curriculum_key, chapter_key) ON DELETE CASCADE,
+        FOREIGN KEY (workspace_id, problem_id)
+          REFERENCES algorithm_problems(workspace_id, id) ON DELETE CASCADE
+      );
+
+      CREATE UNIQUE INDEX idx_algorithm_curriculum_items_primary
+        ON algorithm_curriculum_items(workspace_id, curriculum_key, problem_id)
+        WHERE membership_kind = 'primary';
+      CREATE INDEX idx_algorithm_curriculum_items_chapter
+        ON algorithm_curriculum_items(workspace_id, curriculum_key, chapter_key, sort_order, problem_id);
+    `,
+  },
+  {
+    version: "0042_algorithm_curriculum_backfill",
+    run: (database) => {
+      const workspaces = database.prepare("SELECT id FROM workspaces ORDER BY id").all() as Array<{ id: string }>;
+      const insertChapter = database.prepare(`
+        INSERT OR IGNORE INTO algorithm_curriculum_chapters
+          (workspace_id, curriculum_key, curriculum_name, chapter_key, chapter_name,
+           week_label, description, sort_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const insertItem = database.prepare(`
+        INSERT OR IGNORE INTO algorithm_curriculum_items
+          (workspace_id, curriculum_key, chapter_key, problem_id, membership_kind, sort_order)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      for (const workspace of workspaces) {
+        for (const chapter of ALGORITHM_CURRICULUM) {
+          insertChapter.run(
+            workspace.id,
+            ALGORITHM_CURRICULUM_COURSE_KEY,
+            ALGORITHM_CURRICULUM_TITLE,
+            chapter.key,
+            chapter.title,
+            chapter.weekLabel,
+            chapter.description,
+            chapter.order,
+          );
+        }
+        const problems = database.prepare(`
+          SELECT id, external_problem_id AS externalProblemId, source_url AS sourceUrl,
+                 tags_json AS tagsJson, phase_key AS phaseKey
+          FROM algorithm_problems
+          WHERE workspace_id = ?
+          ORDER BY id
+        `).all(workspace.id) as Array<{
+          id: number;
+          externalProblemId: string;
+          sourceUrl: string;
+          tagsJson: string;
+          phaseKey: string;
+        }>;
+        const chapterPositions = new Map<string, number>();
+        for (const problem of problems) {
+          let tags: string[] = [];
+          try {
+            const parsed = JSON.parse(problem.tagsJson);
+            if (Array.isArray(parsed)) tags = parsed.filter((item): item is string => typeof item === "string");
+          } catch {
+            tags = [];
+          }
+          const chapters = getAlgorithmCurriculumChapters({ ...problem, tags });
+          chapters.forEach((chapter, index) => {
+            const position = (chapterPositions.get(chapter.key) ?? 0) + 1;
+            chapterPositions.set(chapter.key, position);
+            insertItem.run(
+              workspace.id,
+              ALGORITHM_CURRICULUM_COURSE_KEY,
+              chapter.key,
+              problem.id,
+              index === 0 ? "primary" : "supplementary",
+              position,
+            );
+          });
+        }
+      }
+    },
+  },
 ];
 
 function migrateLegacyDayTasks(database: Database.Database): void {
@@ -2283,6 +2398,7 @@ function migrateLegacyDayTasks(database: Database.Database): void {
  * 运行时使用这里的稳定值，避免生产 bundle 的函数序列化差异影响 checksum。
  */
 export const MIGRATION_RUN_HASHES: Readonly<Record<string, string>> = {
+  "0042_algorithm_curriculum_backfill": "93a33456986738f2a67606631562e1ab269afea572218f0475f379578bb46f37",
   "0039_remove_ascend_pilot_catalog": "e4ffc9d7c39b7fd70afbad7b31539810e764201fd800da5f4294281c29b57a52",
   "0004_knowledge_unification": "1313b9d63f9d6d06941b343e599a2ac6d49b777ebeb277c400fb0eb0a42ae985",
   "0005_day_planning": "5a28b7da3d8f49f36b8b7e6f4b6e4f44c504c9ebe86c991a4bc3ce7dbc7cfa8f",

@@ -5,6 +5,7 @@ import { getAlgorithmProviderDescriptor, identifyAlgorithmProvider } from "../al
 import { assertDateKey, shiftDateKey } from "../dates";
 import type { JudgeLanguage } from "../judge-gateway";
 import { requirePluginEnabled } from "./plugins";
+import { ensureAlgorithmCurriculumProblem } from "./algorithm-curriculum";
 
 export const ALGORITHM_VERDICTS = ["AC", "WA", "CE", "TLE", "MLE", "RE", "OTHER"] as const;
 export const ALGORITHM_REVIEW_KINDS = ["initial", "original_retest", "isomorphic_variant", "unseen_variant"] as const;
@@ -274,7 +275,9 @@ export function createAlgorithmProblem(
       JSON.stringify(tags),
       notes,
     );
-  return getAlgorithmProblem(db, scope, Number(result.lastInsertRowid));
+  const problemId = Number(result.lastInsertRowid);
+  ensureAlgorithmCurriculumProblem(db, scope, problemId);
+  return getAlgorithmProblem(db, scope, problemId);
 }
 
 export function updateAlgorithmProblemDetails(

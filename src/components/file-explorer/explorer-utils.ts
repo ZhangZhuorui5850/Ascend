@@ -2,7 +2,10 @@ import type { ExplorerFile, ExplorerTreeNode } from "@/lib/repo/library";
 
 export type SortKey = "name" | "size" | "day";
 
-export type DragPayload = { kind: "file"; id: number } | { kind: "folder"; path: string };
+export type DragPayload =
+  | { kind: "file"; id: number }
+  | { kind: "folder"; path: string }
+  | { kind: "algorithm-problem"; problemId: number };
 
 export type MoveTarget =
   | { kind: "file"; id: number; name: string }

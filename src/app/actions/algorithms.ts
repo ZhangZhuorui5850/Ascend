@@ -11,6 +11,7 @@ import { importAlgorithmScan } from "@/lib/repo/algorithm-import";
 import { approveAlgorithmDevicePairing } from "@/lib/repo/algorithm-device-pairings";
 import { createAlgorithmDevice, revokeAlgorithmDevice } from "@/lib/repo/algorithm-devices";
 import { createAlgorithmProblem, updateAlgorithmProblemDetails } from "@/lib/repo/algorithms";
+import { setAlgorithmCurriculumChapter } from "@/lib/repo/algorithm-curriculum";
 import {
   completeAlgorithmPlan,
   continueAlgorithmPlanTomorrow,
@@ -28,9 +29,24 @@ function revalidateAlgorithmViews(day?: string): void {
   revalidatePath("/practice/algorithms");
   revalidatePath("/");
   revalidatePath("/analytics");
+  revalidatePath("/assets");
   if (day) {
     revalidatePath(`/day/${day}`);
     revalidatePath("/calendar");
+  }
+}
+
+export async function setAlgorithmCurriculumChapterAction(input: {
+  problemIds: number[];
+  chapterKey: string;
+}): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    setAlgorithmCurriculumChapter(getDb(), access, input);
+    revalidateAlgorithmViews();
+    return { ok: true };
+  } catch (error) {
+    return actionFailure("algorithms", error, "课程章节保存失败");
   }
 }
 

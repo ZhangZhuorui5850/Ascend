@@ -27,6 +27,7 @@ import {
   renameAssetAction,
   renameFolderAction,
 } from "@/app/actions/library";
+import { setAlgorithmCurriculumChapterAction } from "@/app/actions/algorithms";
 import type { ExplorerFile, ExplorerFolder, ExplorerState } from "@/lib/repo/library";
 import type { CaptureSubject } from "@/lib/repo/knowledge";
 import { AssetViewer } from "@/components/AssetViewer";
@@ -179,9 +180,23 @@ export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, 
     if (!payload) return;
     if (payload.kind === "file") {
       report(await moveAssetAction({ assetId: payload.id, folderPath: targetPath }));
-    } else if (payload.path !== targetPath) {
+    } else if (payload.kind === "folder" && payload.path !== targetPath) {
       report(await moveFolderAction({ path: payload.path, newParentPath: targetPath }));
     }
+  }
+
+  async function handleAlgorithmProblemDrop(chapterKey: string, event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    const payload = dragRef.current;
+    dragRef.current = null;
+    if (payload?.kind !== "algorithm-problem") return;
+    const result = await setAlgorithmCurriculumChapterAction({
+      problemIds: [payload.problemId],
+      chapterKey,
+    });
+    if (result.ok) notify("课程章节已同步");
+    report(result);
   }
 
   function openMoveFile(file: ExplorerFile) {
@@ -246,6 +261,7 @@ export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, 
         explorer={explorer}
         isSearch={isSearch}
         onDrop={handleDropOn}
+        onAlgorithmProblemDrop={handleAlgorithmProblemDrop}
         onOpen={openFolder}
         usage={usage}
       />

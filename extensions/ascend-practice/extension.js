@@ -28,6 +28,7 @@ const {
   createPracticeSections,
   groupProblemsByPhase,
   groupProblemsByStage,
+  problemsForCourseStage,
   insertionBeforeTarget,
   moveLibraryEntriesCompat,
   smartProblemMatches,
@@ -332,11 +333,16 @@ class PracticeTreeProvider {
     if (element.group === "courses") return this.preferredCourses().map((course) => this.courseItem(course));
     if (element.group === "course") return this.coursePhaseItems(element.collectionId);
     if (element.group === "coursePhase") {
-      return this.problemItems(
-        this.courseProblems(element.collectionId).filter(
-          (problem) => (problem.phaseKey || "未分阶段") === element.phaseKey,
-        ),
-      );
+      if (element.collectionId.startsWith("course:")) {
+        return this.problemItems(problemsForCourseStage(
+          this.data.problems,
+          element.collectionId.slice("course:".length),
+          element.phaseKey,
+        ));
+      }
+      return this.problemItems(this.courseProblems(element.collectionId).filter(
+        (problem) => (problem.phaseKey || "未分阶段") === element.phaseKey,
+      ));
     }
     if (element.group === "catalog") {
       const progress = createPracticeSections(this.data).progress;
@@ -587,8 +593,8 @@ class PracticeTreeProvider {
     libraryItem = this.libraryIndex.itemByProblem.get(Number(problem.id)),
     inLibraryTree = false,
     visiblePosition = null,
+    localPaths = this.problemPaths(),
   ) {
-    const localPaths = this.problemPaths();
     return problemItem(
       problem,
       libraryItem,
@@ -601,8 +607,9 @@ class PracticeTreeProvider {
   }
 
   problemItems(problems) {
+    const localPaths = this.problemPaths();
     return this.sortProblems(problems.filter((problem) => this.matchesProblem(problem))).map((problem, index) =>
-      this.problemItem(problem, undefined, false, index + 1),
+      this.problemItem(problem, undefined, false, index + 1, localPaths),
     );
   }
 
@@ -1474,6 +1481,7 @@ async function editProblemDetails(runtime, item) {
   const field = await vscode.window.showQuickPick(
     [
       { label: "题目名称", key: "title" },
+      { label: "课程章节", key: "curriculumChapterKey" },
       { label: "技能标签", key: "tags" },
       { label: "难度", key: "difficultyBand" },
       { label: "阶段", key: "phaseKey" },
@@ -1487,14 +1495,26 @@ async function editProblemDetails(runtime, item) {
     },
   );
   if (!field) return;
-  const value = await promptProblemField(field.key, problem);
+  const value = await promptProblemField(field.key, problem, runtime);
   if (value === undefined) return;
   await runtime.api.updateProblem(problem.id, { [field.key]: value });
   await runtime.tree.refresh({ notify: true });
   vscode.window.showInformationMessage(`题目信息已更新：${problem.title}`);
 }
 
-async function promptProblemField(key, problem) {
+async function promptProblemField(key, problem, runtime) {
+  if (key === "curriculumChapterKey") {
+    const curriculum = (runtime.tree.data?.courseTree || []).find((course) => course.kind === "curriculum");
+    const picked = await vscode.window.showQuickPick(
+      (curriculum?.stages || []).map((stage) => ({
+        label: stage.key,
+        description: `${stage.problemCount || 0} 题`,
+        value: stage.chapterKey,
+      })).filter((item) => item.value),
+      { placeHolder: "选择课程章节" },
+    );
+    return picked?.value;
+  }
   if (key === "difficultyBand") {
     return (
       await vscode.window.showQuickPick(

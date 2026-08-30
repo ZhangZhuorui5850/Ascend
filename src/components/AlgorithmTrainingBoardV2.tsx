@@ -33,10 +33,12 @@ import {
   removeAlgorithmPlanAction,
   reorderAlgorithmPlansAction,
   scheduleAlgorithmProblemsAction,
+  setAlgorithmCurriculumChapterAction,
   setAlgorithmCourseAction,
 } from "@/app/actions/algorithms";
 import { useFeedback } from "@/components/FeedbackProvider";
 import { RichText } from "@/components/RichText";
+import type { AlgorithmCurriculumChapter } from "@/lib/algorithm-curriculum";
 import type { JudgeRuntimeAvailability } from "@/lib/judge-runtime";
 import type { AlgorithmDevice } from "@/lib/repo/algorithm-devices";
 import type { AlgorithmDashboard, AlgorithmProblem } from "@/lib/repo/algorithms";
@@ -47,7 +49,7 @@ import type {
 import styles from "@/styles/algorithm-training.module.css";
 
 type Section = "today" | "library";
-type LibraryFilter = "all" | "todo" | "done" | "review" | `course:${string}` | `stage:${string}` | `folder:${string}`;
+type LibraryFilter = "all" | "curriculum" | "todo" | "done" | "review" | `chapter:${string}` | `course:${string}` | `stage:${string}` | `folder:${string}`;
 type FilterOption = { value: string; label: string; count: number };
 type TableSortKey = "title" | "ext" | "course" | "status";
 type TableSort = { key: TableSortKey; dir: 1 | -1 };
@@ -164,6 +166,7 @@ export function AlgorithmTrainingBoardV2({
             "训练顺序已保存",
           )}
           plans={relations.plans}
+          curriculum={relations.curriculum}
           selectedDate={selectedDate}
           setSelectedDate={setSelectedDate}
           setShowReviews={(value) => {
@@ -186,7 +189,11 @@ export function AlgorithmTrainingBoardV2({
           )}
           onSetCourse={(problemIds, courseName, stageKey) => mutate(
             () => setAlgorithmCourseAction({ problemIds, courseName, stageKey }),
-            "课程属性已保存",
+            "来源题单已保存",
+          )}
+          onSetCurriculum={(problemIds, chapterKey) => mutate(
+            () => setAlgorithmCurriculumChapterAction({ problemIds, chapterKey }),
+            "课程章节已同步",
           )}
           relations={relations}
           selectedIds={selectedIds}
@@ -253,6 +260,7 @@ function TodayView({
   onRemove,
   onReorder,
   plans,
+  curriculum,
   selectedDate,
   setSelectedDate,
   showReviews,
@@ -266,12 +274,14 @@ function TodayView({
   onRemove: (plan: PlannedAlgorithmProblem) => void;
   onReorder: (taskIds: string[]) => void;
   plans: PlannedAlgorithmProblem[];
+  curriculum: AlgorithmTrainingRelations["curriculum"];
   selectedDate: string;
   setSelectedDate: (value: string) => void;
   showReviews: boolean;
   setShowReviews: (value: boolean) => void;
   today: string;
 }) {
+  const primaryChapterByProblem = curriculumPrimaryChapters(curriculum);
   const manualPlans = plans.filter((item) => item.day === selectedDate && item.status !== "canceled");
   const due = selectedDate === today
     ? dashboard.problems.filter((problem) => problem.reviewEnabled && problem.nextReview && problem.nextReview <= today)
@@ -325,7 +335,7 @@ function TodayView({
             </button>
             <button className={styles.planTitle} onClick={() => onOpenProblem(row.problem.id)}>
               <strong>{row.problem.title}</strong>
-              <span>{providerText(row.problem)} · {courseStageText(row.problem, null)}</span>
+              <span>{providerText(row.problem)} · {curriculumChapterText(row.problem, primaryChapterByProblem)}</span>
             </button>
             {row.review ? <span className={styles.reviewBadge}>复习</span> : null}
             {row.plan ? (
@@ -341,7 +351,7 @@ function TodayView({
           <div className={styles.emptyState}>
             <CalendarDays size={28} />
             <h3>这一天还很轻</h3>
-            <p>从题库、课程阶段或当前题目加入训练。</p>
+            <p>从课程章节、题库或当前题目加入训练。</p>
             <button className={styles.primaryButton} onClick={onOpenPicker}>选择题目</button>
           </div>
         ) : null}
@@ -355,6 +365,7 @@ function LibraryView({
   onAddPlan,
   onMove,
   onSetCourse,
+  onSetCurriculum,
   relations,
   selectedIds,
   selectedProblemId,
@@ -366,6 +377,7 @@ function LibraryView({
   onAddPlan: (ids: number[], day: string) => void;
   onMove: (ids: number[], folderId: string | null) => void;
   onSetCourse: (ids: number[], courseName: string, stageKey: string) => void;
+  onSetCurriculum: (ids: number[], chapterKey: string) => void;
   relations: AlgorithmTrainingRelations;
   selectedIds: number[];
   selectedProblemId: number | null;
@@ -373,11 +385,41 @@ function LibraryView({
   setSelectedProblemId: (id: number | null) => void;
   today: string;
 }) {
-  const [filter, setFilter] = useState<LibraryFilter>("all");
+  const curriculumChapters = useMemo(() => relations.curriculum.chapters.map((chapter) => ({
+    key: chapter.key,
+    order: chapter.sortOrder,
+    title: chapter.name,
+    weekLabel: chapter.weekLabel,
+    description: chapter.description,
+  })), [relations.curriculum.chapters]);
+  const curriculumByProblem = useMemo(
+    () => curriculumPrimaryChapters(relations.curriculum),
+    [relations.curriculum],
+  );
+  const curriculumChaptersByProblem = useMemo(
+    () => curriculumAllChapters(relations.curriculum),
+    [relations.curriculum],
+  );
+  const curriculumStats = useMemo(() => curriculumChapters.map((chapter) => {
+    const problems = dashboard.problems.filter((problem) => curriculumChaptersByProblem.get(problem.id)?.some((item) => item.key === chapter.key));
+    return {
+      chapter,
+      completed: problems.filter(isAlgorithmCompleted).length,
+      total: problems.length,
+    };
+  }), [curriculumChapters, curriculumChaptersByProblem, dashboard.problems]);
+  const currentChapter = curriculumStats.find((item) => item.total > 0 && item.completed < item.total)
+    ?? curriculumStats.find((item) => item.total > 0)
+    ?? null;
+  const initialChapter = selectedProblemId
+    ? curriculumByProblem.get(selectedProblemId) ?? currentChapter?.chapter
+    : currentChapter?.chapter;
+  const [filter, setFilter] = useState<LibraryFilter>(() => initialChapter ? `chapter:${initialChapter.key}` : "all");
   const [query, setQuery] = useState("");
   const [planDate, setPlanDate] = useState(today);
   const [courseName, setCourseName] = useState(relations.courses[0]?.name || "郭炜算法基础");
   const [stageKey, setStageKey] = useState("W1");
+  const [curriculumChapterKey, setCurriculumChapterKey] = useState(initialChapter?.key ?? curriculumChapters[0]?.key ?? "");
   const [pageIndex, setPageIndex] = useState(0);
   const [detailWidth, setDetailWidth] = useState<number | null>(null);
   const [providersSelected, setProvidersSelected] = useState<string[]>([]);
@@ -410,7 +452,9 @@ function LibraryView({
     if (filter === "done") return learningStatus(problem, today) === "done";
     if (filter === "review") return learningStatus(problem, today) === "review";
     const membershipsForProblem = membershipsByProblem.get(problem.id);
-    if (filter.startsWith("course:")) {
+    if (filter.startsWith("chapter:")) {
+      if (!curriculumChaptersByProblem.get(problem.id)?.some((item) => item.key === filter.slice(8))) return false;
+    } else if (filter.startsWith("course:")) {
       if (!membershipsForProblem?.some((item) => item.courseKey === filter.slice(7))) return false;
     } else if (filter.startsWith("stage:")) {
       const [courseKey, stageFilter] = filter.slice(6).split("||");
@@ -425,8 +469,8 @@ function LibraryView({
   });
   const statusRank: Record<"todo" | "done" | "review", number> = { todo: 0, done: 1, review: 2 };
   const courseStageLabel = (problem: AlgorithmProblem): string => {
-    const list = membershipsByProblem.get(problem.id);
-    return list?.length ? `${list[0].courseName}·${list[0].stageKey}` : problem.phaseKey || "\uffff";
+    const chapter = curriculumByProblem.get(problem.id);
+    return chapter ? `${chapter.order}·${chapter.title}` : "\uffff";
   };
   const sortedProblems = useMemo(() => {
     if (!tableSort) return filtered;
@@ -445,7 +489,7 @@ function LibraryView({
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered, tableSort, membershipsByProblem, today]);
+  }, [filtered, tableSort, curriculumByProblem, today]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / LIBRARY_PAGE_SIZE));
   const safePageIndex = Math.min(pageIndex, pageCount - 1);
   const visibleProblems = sortedProblems.slice(safePageIndex * LIBRARY_PAGE_SIZE, (safePageIndex + 1) * LIBRARY_PAGE_SIZE);
@@ -540,6 +584,10 @@ function LibraryView({
 
   const selectedProblem = dashboard.problems.find((problem) => problem.id === selectedProblemId) ?? filtered[0] ?? null;
   const targetIds = selectedIds.length ? selectedIds : selectedProblem ? [selectedProblem.id] : [];
+  const selectedChapterStats = filter.startsWith("chapter:")
+    ? curriculumStats.find((item) => item.chapter.key === filter.slice(8)) ?? null
+    : null;
+  const curriculumCompleted = dashboard.problems.filter(isAlgorithmCompleted).length;
 
   return (
     <section
@@ -551,13 +599,39 @@ function LibraryView({
         <NavButton active={filter === "todo"} count={dashboard.problems.filter((p) => learningStatus(p, today) === "todo").length} label="未做" onClick={() => applyFilter("todo")} />
         <NavButton active={filter === "done"} count={dashboard.problems.filter((p) => learningStatus(p, today) === "done").length} label="已做" onClick={() => applyFilter("done")} />
         <NavButton active={filter === "review"} count={dashboard.problems.filter((p) => learningStatus(p, today) === "review").length} label="待复习" onClick={() => applyFilter("review")} />
-        <NavGroup label="课程与阶段">
+        <NavGroup label="学习课程">
+          <div className={styles.curriculumSummary}>
+            <button aria-current={filter === "curriculum" ? "page" : undefined} onClick={() => applyFilter("curriculum")} type="button">
+              <strong>{relations.curriculum.name}</strong>
+              <span>{curriculumCompleted}/{dashboard.problems.length} 已完成</span>
+            </button>
+            <div aria-label={`课程进度 ${curriculumCompleted}/${dashboard.problems.length}`} className={styles.curriculumProgress} role="progressbar" aria-valuemin={0} aria-valuemax={dashboard.problems.length} aria-valuenow={curriculumCompleted}>
+              <span style={{ width: `${dashboard.problems.length ? curriculumCompleted / dashboard.problems.length * 100 : 0}%` }} />
+            </div>
+          </div>
+          {curriculumStats.map((item) => {
+            const scope: LibraryFilter = `chapter:${item.chapter.key}`;
+            return (
+              <button
+                aria-current={filter === scope ? "page" : undefined}
+                className={`${styles.navButton} ${styles.curriculumChapter}`}
+                key={scope}
+                onClick={() => applyFilter(scope)}
+                title={item.chapter.description}
+              >
+                <span>{item.chapter.order}. {item.chapter.title}</span>
+                <small>{item.total ? `${item.completed}/${item.total}` : "待补题"}</small>
+              </button>
+            );
+          })}
+        </NavGroup>
+        <NavGroup label="来源课程与题单">
           {relations.courses.map((course) => (
             <div className={styles.courseBlock} key={course.key}>
               <div className={styles.courseLine}>
                 <NavButton active={filter === `course:${course.key}`} count={course.problemCount} label={course.name} onClick={() => applyFilter(`course:${course.key}`)} />
                 {course.stages.length ? (
-                  <button aria-expanded={expandedCourses.includes(course.key)} aria-label={`展开 ${course.name} 的阶段`} className={styles.courseCaret} onClick={() => toggleCourseExpanded(course.key)}>
+                  <button aria-expanded={expandedCourses.includes(course.key)} aria-label={`展开 ${course.name} 的分组`} className={styles.courseCaret} onClick={() => toggleCourseExpanded(course.key)}>
                     <ChevronDown size={14} />
                   </button>
                 ) : null}
@@ -582,6 +656,16 @@ function LibraryView({
       </aside>
 
       <div className={styles.libraryMain}>
+        {selectedChapterStats ? (
+          <section className={styles.chapterContext}>
+            <div>
+              <span>{selectedChapterStats.chapter.weekLabel} · 第 {selectedChapterStats.chapter.order} 章</span>
+              <h2>{selectedChapterStats.chapter.title}</h2>
+              <p>{selectedChapterStats.chapter.description}</p>
+            </div>
+            <strong>{selectedChapterStats.total ? `${selectedChapterStats.completed}/${selectedChapterStats.total}` : "待补题"}</strong>
+          </section>
+        ) : null}
         <div className={styles.libraryHeader}>
           <label className={styles.searchField}><Search size={17} /><input placeholder="搜索名称、题号或分类" value={query} onChange={(event) => { setQuery(event.target.value); setPageIndex(0); }} /></label>
           <span>{filtered.length} 道题</span>
@@ -610,32 +694,43 @@ function LibraryView({
             <option value="">未整理</option>
             {relations.library.folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
           </select>
-          <button onClick={() => onSetCourse(selectedIds, courseName, stageKey)}>设置课程</button>
-          <input aria-label="课程名称" value={courseName} onChange={(event) => setCourseName(event.target.value)} />
-          <input aria-label="课程阶段" className={styles.shortInput} value={stageKey} onChange={(event) => setStageKey(event.target.value)} />
+          <button onClick={() => onSetCourse(selectedIds, courseName, stageKey)}>设置来源题单</button>
+          <input aria-label="来源课程或题单名称" value={courseName} onChange={(event) => setCourseName(event.target.value)} />
+          <input aria-label="题单分组" className={styles.shortInput} value={stageKey} onChange={(event) => setStageKey(event.target.value)} />
+          <select aria-label="课程章节" value={curriculumChapterKey} onChange={(event) => setCurriculumChapterKey(event.target.value)}>
+            {curriculumChapters.map((chapter) => <option key={chapter.key} value={chapter.key}>{chapter.order}. {chapter.title}</option>)}
+          </select>
+          <button onClick={() => onSetCurriculum(selectedIds, curriculumChapterKey)}>设置课程章节</button>
         </div>
         <div className={styles.problemTable} role="table" aria-label="算法题库">
           <div className={styles.tableHead} role="row">
             <input aria-label="全选当前结果" checked={filtered.length > 0 && filtered.every((item) => selectedIds.includes(item.id))} type="checkbox" onChange={(event) => setSelectedIds(event.target.checked ? filtered.map((item) => item.id) : [])} />
             {sortCell("title", "题目")}
             {sortCell("ext", "平台题号")}
-            {sortCell("course", "课程阶段")}
+            {sortCell("course", "课程章节")}
             <span>算法分类</span>
             {sortCell("status", "状态")}
           </div>
           {visibleProblems.map((problem) => {
-            const memberships = membershipsByProblem.get(problem.id) ?? [];
+            const chapter = curriculumByProblem.get(problem.id);
             return (
               <div className={styles.tableRow} data-active={selectedProblem?.id === problem.id} key={problem.id} role="row" onClick={() => setSelectedProblemId(problem.id)}>
                 <input aria-label={`选择 ${problem.title}`} checked={selectedIds.includes(problem.id)} type="checkbox" onClick={(event) => event.stopPropagation()} onChange={(event) => setSelectedIds(event.target.checked ? [...selectedIds, problem.id] : selectedIds.filter((id) => id !== problem.id))} />
                 <strong>{problem.title}</strong>
                 <span>{providerText(problem)}</span>
-                <span>{memberships.map((item) => `${item.courseName} · ${item.stageKey}`).join(" / ") || problem.phaseKey || "—"}</span>
+                <span>{chapter ? `${chapter.order}. ${chapter.title}` : problem.phaseKey || "—"}</span>
                 <span className={styles.tagList}>{problem.tags.slice(0, 2).map((tag) => <i key={tag}>{tag}</i>)}</span>
                 <StatusBadge status={learningStatus(problem, today)} />
               </div>
             );
           })}
+          {!visibleProblems.length ? (
+            <div className={styles.libraryEmpty}>
+              <LibraryBig size={24} />
+              <strong>{selectedChapterStats?.total === 0 ? "这个章节正在等待练习题" : "当前筛选下暂无题目"}</strong>
+              <span>{selectedChapterStats?.total === 0 ? "导入题目并补充算法标签后，课程会自动归类。" : "调整章节、平台、标签或搜索条件。"}</span>
+            </div>
+          ) : null}
         </div>
         {filtered.length > LIBRARY_PAGE_SIZE ? (
           <nav className={styles.pager} aria-label="题库分页">
@@ -677,7 +772,10 @@ function LibraryView({
           </div>
           <span className={styles.eyebrow}>{providerText(selectedProblem)}</span>
           <h2>{selectedProblem.title}</h2>
-          <p className={styles.detailMeta}>{(membershipsByProblem.get(selectedProblem.id) ?? []).map((item) => `${item.courseName} · ${item.stageKey}`).join(" / ") || "待设置课程"}</p>
+          <p className={styles.detailMeta}>{curriculumChapterText(selectedProblem, curriculumByProblem)} · {curriculumByProblem.get(selectedProblem.id)?.weekLabel ?? ""}</p>
+          {(membershipsByProblem.get(selectedProblem.id) ?? []).length ? (
+            <p className={styles.detailSource}>来源题单：{(membershipsByProblem.get(selectedProblem.id) ?? []).map((item) => `${item.courseName} · ${item.stageKey}`).join(" / ")}</p>
+          ) : null}
           <div className={styles.detailActions}>
             <input min={today} type="date" value={planDate} onChange={(event) => setPlanDate(event.target.value)} />
             <button className={styles.primaryButton} onClick={() => onAddPlan(targetIds, planDate)}><Plus size={16} /> 加入计划</button>
@@ -830,13 +928,13 @@ function CppImportDialog({ folders, onClose, onImported }: { folders: AlgorithmT
         <>
           <div className={styles.importBulk}>
             <label>目标文件夹<select value={folderId} onChange={(event) => setFolderId(event.target.value)}><option value="">未整理</option>{folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label>
-            <label>课程{autoAssignedCount ? <em>（自动识别的文件除外）</em> : null}<input value={courseName} onChange={(event) => setCourseName(event.target.value)} /></label>
-            <label>阶段<input value={stageKey} onChange={(event) => setStageKey(event.target.value)} /></label>
+            <label>来源课程或题单{autoAssignedCount ? <em>（自动识别的文件除外）</em> : null}<input value={courseName} onChange={(event) => setCourseName(event.target.value)} /></label>
+            <label>题单分组<input value={stageKey} onChange={(event) => setStageKey(event.target.value)} /></label>
             <label>算法分类<input placeholder="字符串, 模拟" value={topics} onChange={(event) => setTopics(event.target.value)} /></label>
           </div>
           {autoAssignedCount ? (
             <p className={styles.autoNotice}>
-              {autoAssignedCount} 个文件将按链接自动归入「程序设计实习」（例题 / 课后习题），上方课程与阶段设置只作用于其余文件。
+              {autoAssignedCount} 个文件将按链接自动归入「程序设计实习」（例题 / 课后习题），上方来源题单设置作用于其余文件。
             </p>
           ) : null}
           <div className={styles.importRows}>
@@ -858,7 +956,7 @@ function CppImportDialog({ folders, onClose, onImported }: { folders: AlgorithmT
           </div>
         </>
       ) : null}
-      <p className={styles.privacyLine}>文件保存在当前 Ascend 个人空间；题面、课程属性、训练记录和参考 CPP 跟随账号同步。</p>
+      <p className={styles.privacyLine}>文件保存在当前 Ascend 个人空间；题面、来源题单、训练记录和参考 CPP 跟随账号同步。</p>
       <footer className={styles.modalFooter}><button onClick={onClose}>取消</button><button className={styles.primaryButton} disabled={uploading || !rows.some((row) => row.preview)} onClick={() => void importAll()}>{uploading ? <RefreshCw className={styles.spin} size={16} /> : <UploadCloud size={16} />} 导入 {rows.filter((row) => row.preview).length} 个文件</button></footer>
     </Modal>
   );
@@ -974,7 +1072,11 @@ function StatusBadge({ status }: { status: "todo" | "done" | "review" }) {
 
 function learningStatus(problem: AlgorithmProblem, today: string): "todo" | "done" | "review" {
   if (problem.reviewEnabled && problem.nextReview && problem.nextReview <= today) return "review";
-  return problem.attempts.some((attempt) => attempt.verdict === "AC") ? "done" : "todo";
+  return isAlgorithmCompleted(problem) ? "done" : "todo";
+}
+
+function isAlgorithmCompleted(problem: AlgorithmProblem): boolean {
+  return problem.attempts.some((attempt) => attempt.verdict === "AC");
 }
 
 function groupMemberships(relations: AlgorithmTrainingRelations) {
@@ -991,8 +1093,45 @@ function providerText(problem: AlgorithmProblem): string {
   return `${problem.providerLabel}${problem.externalProblemId ? ` ${problem.externalProblemId}` : ""}`;
 }
 
-function courseStageText(problem: AlgorithmProblem, membership: AlgorithmTrainingRelations["courseMemberships"][number] | null): string {
-  return membership ? `${membership.courseName} · ${membership.stageKey}` : problem.phaseKey || "待设置阶段";
+function curriculumPrimaryChapters(curriculum: AlgorithmTrainingRelations["curriculum"]): Map<number, AlgorithmCurriculumChapter> {
+  const chapters = new Map(curriculum.chapters.map((chapter) => [chapter.key, {
+    key: chapter.key,
+    order: chapter.sortOrder,
+    title: chapter.name,
+    weekLabel: chapter.weekLabel,
+    description: chapter.description,
+  }]));
+  return new Map(curriculum.items
+    .filter((item) => item.membershipKind === "primary")
+    .flatMap((item) => {
+      const chapter = chapters.get(item.chapterKey);
+      return chapter ? [[item.problemId, chapter] as const] : [];
+    }));
+}
+
+function curriculumAllChapters(curriculum: AlgorithmTrainingRelations["curriculum"]): Map<number, AlgorithmCurriculumChapter[]> {
+  const chapters = new Map(curriculum.chapters.map((chapter) => [chapter.key, {
+    key: chapter.key,
+    order: chapter.sortOrder,
+    title: chapter.name,
+    weekLabel: chapter.weekLabel,
+    description: chapter.description,
+  }]));
+  const result = new Map<number, AlgorithmCurriculumChapter[]>();
+  for (const item of curriculum.items) {
+    const chapter = chapters.get(item.chapterKey);
+    if (!chapter) continue;
+    result.set(item.problemId, [...(result.get(item.problemId) ?? []), chapter]);
+  }
+  return result;
+}
+
+function curriculumChapterText(
+  problem: AlgorithmProblem,
+  chaptersByProblem: Map<number, AlgorithmCurriculumChapter>,
+): string {
+  const chapter = chaptersByProblem.get(problem.id);
+  return chapter ? `第 ${chapter.order} 章 ${chapter.title}` : "课程章节待整理";
 }
 
 function folderName(relations: AlgorithmTrainingRelations, id: string | null | undefined): string {

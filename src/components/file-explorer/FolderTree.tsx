@@ -7,14 +7,24 @@ import type { ExplorerState, ExplorerTreeNode } from "@/lib/repo/library";
 import type { DragPayload } from "@/components/file-explorer/explorer-utils";
 import { formatSize } from "@/components/file-explorer/explorer-utils";
 
-/** 左侧文件夹树 + 算法训练虚拟树 + 存储配额。纯展示，拖放通过 dragRef/onDrop 回传壳组件。 */
-export function FolderTreePanel({ explorer, isSearch, usage, dragRef, onOpen, onDrop, algorithmTree }: {
+/** 左侧文件夹树 + 算法课程树 + 存储配额；课程主章节支持题目拖放。 */
+export function FolderTreePanel({
+  explorer,
+  isSearch,
+  usage,
+  dragRef,
+  onOpen,
+  onDrop,
+  onAlgorithmProblemDrop,
+  algorithmTree,
+}: {
   explorer: ExplorerState;
   isSearch: boolean;
   usage?: { usedBytes: number; quotaBytes: number };
   dragRef: MutableRefObject<DragPayload | null>;
   onOpen: (path: string) => void;
   onDrop: (path: string, event: DragEvent<HTMLElement>) => Promise<void>;
+  onAlgorithmProblemDrop: (chapterKey: string, event: DragEvent<HTMLElement>) => Promise<void>;
   algorithmTree?: AlgorithmTrainingTree | null;
 }) {
   return (
@@ -42,14 +52,24 @@ export function FolderTreePanel({ explorer, isSearch, usage, dragRef, onOpen, on
           />
         ))}
       </div>
-      {algorithmTree?.courses.length ? <AlgorithmTrainingSection tree={algorithmTree} /> : null}
+      {algorithmTree?.courses.length ? (
+        <AlgorithmTrainingSection
+          dragRef={dragRef}
+          onProblemDrop={onAlgorithmProblemDrop}
+          tree={algorithmTree}
+        />
+      ) : null}
       {usage ? <QuotaMeter quotaBytes={usage.quotaBytes} usedBytes={usage.usedBytes} /> : null}
     </aside>
   );
 }
 
 /** 算法训练与网盘共用一棵树：课程 → 阶段 → 题目，点击题目跳算法训练详情。 */
-function AlgorithmTrainingSection({ tree }: { tree: AlgorithmTrainingTree }) {
+function AlgorithmTrainingSection({ tree, dragRef, onProblemDrop }: {
+  tree: AlgorithmTrainingTree;
+  dragRef: MutableRefObject<DragPayload | null>;
+  onProblemDrop: (chapterKey: string, event: DragEvent<HTMLElement>) => Promise<void>;
+}) {
   return (
     <div className="driveTreeList algoTree" aria-label="算法训练目录">
       <div className="driveTreeItem algoTreeHeader">
@@ -67,7 +87,11 @@ function AlgorithmTrainingSection({ tree }: { tree: AlgorithmTrainingTree }) {
           <div className="driveTreeChildren">
             {course.stages.map((stage) => (
               <details className="driveTreeBranch algoBranch" key={stage.key}>
-                <summary className="driveTreeItem">
+                <summary
+                  className="driveTreeItem"
+                  onDragOver={stage.acceptsProblems ? (event) => event.preventDefault() : undefined}
+                  onDrop={stage.acceptsProblems ? (event) => void onProblemDrop(stage.key, event) : undefined}
+                >
                   <Folder size={15} />
                   <span>{stage.name}</span>
                   <small>{stage.total}</small>
@@ -76,8 +100,15 @@ function AlgorithmTrainingSection({ tree }: { tree: AlgorithmTrainingTree }) {
                   {stage.problems.map((problem) => (
                     <a
                       className="driveTreeItem algoProblem"
+                      draggable={problem.membershipKind === "primary"}
                       href={`/practice/algorithms?problem=${problem.id}`}
-                      key={problem.id}
+                      key={`${problem.id}:${problem.membershipKind}`}
+                      onDragStart={problem.membershipKind === "primary" ? (event) => {
+                        event.stopPropagation();
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData("text/plain", String(problem.id));
+                        dragRef.current = { kind: "algorithm-problem", problemId: problem.id };
+                      } : undefined}
                       title={`${problem.label} · ${problem.title}${problem.hasAsset ? " · 已有参考 CPP" : ""}`}
                     >
                       <FileCode2 size={13} />
