@@ -87,7 +87,9 @@ describe("portable algorithm library packages", () => {
       createPackageFolder: true,
     });
     expect(imported).toMatchObject({ created: 2, rootFolderId: expect.any(String) });
-    expect(listAlgorithmLibrary(db, target).items.map((item) => item.libraryNumber)).toEqual([1, 2]);
+    // 两个题目落在不同文件夹，跨文件夹的列出顺序不构成契约；题号集合才是。
+    expect(listAlgorithmLibrary(db, target).items.map((item) => item.libraryNumber).sort((left, right) => left - right))
+      .toEqual([1, 2]);
     const targetDashboard = getAlgorithmDashboard(db, target, "2026-08-31");
     expect(targetDashboard.problems).toHaveLength(2);
     expect(targetDashboard.problems.find((problem) => problem.externalProblemId === "5001")).toMatchObject({
