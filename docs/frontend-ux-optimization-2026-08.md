@@ -19,7 +19,7 @@
 
 - `npm run typecheck`、`npm run lint`、`npm test`（133 文件 / 745 用例）全绿。
 - `npm run audit:motion` 通过（此前 14 条违规）；`npm run css:audit` 0 error。
-- `npm run build` 成功；生产实例浏览器回归见 `docs/screenshots/frontend-opt-*.png`。
+- `npm run build` 成功；生产实例浏览器回归 18/18 断言通过、0 页面错误（抽屉开合/Esc/URL 状态与回退/Cmd+K/N 键/侧栏高亮/移动端搜索入口与遮罩），证据见 `docs/screenshots/frontend-opt-*.png`。
 
 ## 遗留项（未实施，按性价比排序）
 
