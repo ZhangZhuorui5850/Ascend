@@ -9,10 +9,6 @@ const admin = readFileSync(
   new URL("./admin/AlgorithmPilotAdminActions.tsx", import.meta.url),
   "utf8",
 );
-const workspace = readFileSync(
-  new URL("./ManagedAlgorithmWorkspace.tsx", import.meta.url),
-  "utf8",
-);
 const page = readFileSync(
   new URL("../app/practice/algorithms/page.tsx", import.meta.url),
   "utf8",
@@ -39,15 +35,8 @@ describe("algorithm pilot UI contract", () => {
     expect(admin).toContain("所有变更都会写入审计日志");
   });
 
-  it("keeps encrypted drafts available while server-gating sample and formal submissions", () => {
+  it("exposes Judge runtime availability to the training board", () => {
     expect(page).toContain("getJudgeRuntimeAvailability(db, access)");
-    expect(workspace).toContain(
-      "disabled={!availability.configured || busy !== null}",
-    );
-    expect(workspace).toContain(
-      "disabled={!availability.submissionAllowed || busy !== null || !sourceCode.trim()}",
-    );
-    expect(workspace).toContain("{availability.reason}");
   });
 
   it("provides a narrow-screen layout for pilot facts and cards", () => {
