@@ -28,7 +28,13 @@ import {
 } from "@/app/actions/planner-reminders";
 import { useFeedback } from "@/components/FeedbackProvider";
 import { CalendarAgenda } from "@/components/calendar/CalendarAgenda";
-import { CalendarCanvas } from "@/components/calendar/CalendarCanvas";
+import dynamic from "next/dynamic";
+
+// FullCalendar 六个包体量大，且画布只在非 agenda 视图渲染：打开日历页时不进首屏 chunk。
+const CalendarCanvas = dynamic(
+  () => import("@/components/calendar/CalendarCanvas").then((mod) => mod.CalendarCanvas),
+  { loading: () => <div aria-label="正在加载日历" className="pageSkeleton" style={{ minHeight: 420 }} role="status" />, ssr: false },
+);
 import { CalendarContextRail } from "@/components/calendar/CalendarContextRail";
 import {
   CalendarDayPopover,

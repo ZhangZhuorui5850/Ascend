@@ -4,7 +4,13 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ViewTransition } from "react";
 import { Plus } from "lucide-react";
-import { CapturePanel } from "@/components/CapturePanel";
+import dynamic from "next/dynamic";
+
+// 收纳面板 555 行且非必需：首次打开时才拉取，减轻全站共享 chunk。
+const CapturePanel = dynamic(
+  () => import("@/components/CapturePanel").then((mod) => mod.CapturePanel),
+  { ssr: false },
+);
 import { MobileNav, Sidebar } from "@/components/Sidebar";
 import { CommandPalette } from "@/components/CommandPalette";
 import { TopBar } from "@/components/TopBar";
