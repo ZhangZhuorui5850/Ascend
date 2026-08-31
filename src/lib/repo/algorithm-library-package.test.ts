@@ -6,11 +6,7 @@ import {
   parseAlgorithmLibraryPackage,
   previewAlgorithmLibraryPackage,
 } from "./algorithm-library-package";
-import {
-  createAlgorithmLibraryFolder,
-  listAlgorithmLibrary,
-  moveAlgorithmLibraryProblem,
-} from "./algorithm-library";
+import { createAlgorithmLibraryFolder, listAlgorithmLibrary, moveAlgorithmLibraryProblem } from "./algorithm-library";
 import { getAlgorithmTrainingRelations, setAlgorithmCourseMemberships } from "./algorithm-training";
 import { createAlgorithmProblem, getAlgorithmDashboard, updateAlgorithmProblemDetails } from "./algorithms";
 import { setPluginEnabled } from "./plugins";
@@ -34,14 +30,16 @@ describe("portable algorithm library packages", () => {
       title: "第二道题",
       tags: ["字符串"],
     });
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE algorithm_problems
       SET statement_markdown = '# 第一题\n\n完整题面', input_specification = '一个整数',
           output_specification = '一个整数', examples_json = '[{"input":"1","output":"1"}]',
           supported_languages_json = '["cpp17"]',
           metadata_json = '{"starterCode":{"cpp17":"int main() {}\\n"},"referenceCode":{"cpp17":"// answer\\n"}}'
       WHERE workspace_id = ? AND id = ?
-    `).run(source.workspaceId, first.id);
+    `,
+    ).run(source.workspaceId, first.id);
     const course = createAlgorithmLibraryFolder(db, source, { name: "课程题库" });
     const dynamicProgramming = createAlgorithmLibraryFolder(db, source, {
       name: "动态规划",
@@ -74,6 +72,9 @@ describe("portable algorithm library packages", () => {
     expect(pkg.problems[0].content.referenceCode.cpp17).toContain("answer");
     expect(JSON.stringify(pkg)).not.toContain("workspaceId");
     expect(JSON.stringify(pkg)).not.toContain("attempts");
+    const duplicateNumberPackage = structuredClone(pkg);
+    duplicateNumberPackage.problems[1].sourceLibraryNumber = duplicateNumberPackage.problems[0].sourceLibraryNumber;
+    expect(() => parseAlgorithmLibraryPackage(JSON.stringify(duplicateNumberPackage))).toThrow("重复永久题号");
 
     expect(previewAlgorithmLibraryPackage(db, target, pkg)).toMatchObject({
       total: 2,
@@ -88,8 +89,11 @@ describe("portable algorithm library packages", () => {
     });
     expect(imported).toMatchObject({ created: 2, rootFolderId: expect.any(String) });
     // 两个题目落在不同文件夹，跨文件夹的列出顺序不构成契约；题号集合才是。
-    expect(listAlgorithmLibrary(db, target).items.map((item) => item.libraryNumber).sort((left, right) => left - right))
-      .toEqual([1, 2]);
+    expect(
+      listAlgorithmLibrary(db, target)
+        .items.map((item) => item.libraryNumber)
+        .sort((left, right) => left - right),
+    ).toEqual([1, 2]);
     const targetDashboard = getAlgorithmDashboard(db, target, "2026-08-31");
     expect(targetDashboard.problems).toHaveLength(2);
     expect(targetDashboard.problems.find((problem) => problem.externalProblemId === "5001")).toMatchObject({
@@ -127,12 +131,19 @@ describe("portable algorithm library packages", () => {
     importAlgorithmLibraryPackage(db, target, parsedUpdate, {
       packageSha256: createHash("sha256").update(JSON.stringify(parsedUpdate)).digest("hex"),
     });
-    expect(getAlgorithmDashboard(db, target, "2026-08-31").problems.find(
-      (problem) => problem.externalProblemId === "5001",
-    )?.title).toBe("我的自定义标题");
-    expect(db.prepare(`
+    expect(
+      getAlgorithmDashboard(db, target, "2026-08-31").problems.find((problem) => problem.externalProblemId === "5001")
+        ?.title,
+    ).toBe("我的自定义标题");
+    expect(
+      db
+        .prepare(
+          `
       SELECT title FROM algorithm_problems WHERE workspace_id = ? AND external_problem_id = '5001'
-    `).get(target.workspaceId)).toEqual({ title: "题库发布者的新标题" });
+    `,
+        )
+        .get(target.workspaceId),
+    ).toEqual({ title: "题库发布者的新标题" });
   });
 
   it("allocates around number collisions and keeps workspaces isolated", () => {
@@ -169,13 +180,56 @@ describe("portable algorithm library packages", () => {
     expect(getAlgorithmDashboard(db, other, "2026-08-31").problems).toHaveLength(0);
   });
 
+  it("reuses an existing identity and preserves its local base content", () => {
+    const db = createTestDb();
+    const source = createTestWorkspace(db, { email: "reuse-source@example.com" });
+    const target = createTestWorkspace(db, { email: "reuse-target@example.com" });
+    for (const scope of [source, target]) setPluginEnabled(db, scope, "algorithms", true);
+    const sourceProblem = createAlgorithmProblem(db, source, {
+      sourceUrl: "https://bailian.openjudge.cn/practice/7001/",
+      title: "发布者标题",
+      tags: ["图论"],
+    });
+    const localProblem = createAlgorithmProblem(db, target, {
+      sourceUrl: "https://bailian.openjudge.cn/practice/7001/",
+      title: "本地标题",
+      tags: ["本地分类"],
+    });
+    const pkg = buildAlgorithmLibraryPackage(db, source, {
+      problemIds: [sourceProblem.id],
+      name: "身份复用测试",
+      exportedAt: "2026-08-31T00:00:00.000Z",
+    });
+
+    expect(previewAlgorithmLibraryPackage(db, target, pkg)).toMatchObject({ created: 0, reused: 1 });
+    importAlgorithmLibraryPackage(db, target, pkg, {
+      packageSha256: createHash("sha256").update(JSON.stringify(pkg)).digest("hex"),
+    });
+    expect(getAlgorithmDashboard(db, target, "2026-08-31").problems).toEqual([
+      expect.objectContaining({ id: localProblem.id, title: "本地标题", tags: ["本地分类"] }),
+    ]);
+    expect(getAlgorithmTrainingRelations(db, target).courses).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "身份复用测试", problemCount: 1 })]),
+    );
+  });
+
   it("rejects corrupt and duplicate package content", () => {
     expect(() => parseAlgorithmLibraryPackage("not-json")).toThrow("有效的 JSON");
-    expect(() => parseAlgorithmLibraryPackage(JSON.stringify({
-      schema: "ascend.algorithm-library",
-      schemaVersion: 99,
-      package: {},
-      problems: [],
-    }))).toThrow();
+    expect(() =>
+      parseAlgorithmLibraryPackage(
+        JSON.stringify({
+          schema: "ascend.algorithm-library",
+          schemaVersion: 99,
+          package: {},
+          problems: [],
+        }),
+      ),
+    ).toThrow();
+    const db = createTestDb();
+    const scope = createTestWorkspace(db, { email: "invalid-hash@example.com" });
+    setPluginEnabled(db, scope, "algorithms", true);
+    expect(() => importAlgorithmLibraryPackage(db, scope, {} as never, { packageSha256: "invalid" })).toThrow(
+      "校验值无效",
+    );
   });
 });

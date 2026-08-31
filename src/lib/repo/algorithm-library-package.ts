@@ -123,6 +123,7 @@ export const algorithmLibraryPackageSchema = z
     }
     const ids = new Set<string>();
     const identities = new Set<string>();
+    const libraryNumbers = new Set<number>();
     for (const [index, problem] of value.problems.entries()) {
       if (ids.has(problem.id)) {
         context.addIssue({ code: "custom", message: "题库包包含重复题目编号", path: ["problems", index, "id"] });
@@ -133,6 +134,14 @@ export const algorithmLibraryPackageSchema = z
         context.addIssue({ code: "custom", message: "题库包包含重复平台题号", path: ["problems", index, "identity"] });
       }
       identities.add(identity);
+      if (libraryNumbers.has(problem.sourceLibraryNumber)) {
+        context.addIssue({
+          code: "custom",
+          message: "题库包包含重复永久题号",
+          path: ["problems", index, "sourceLibraryNumber"],
+        });
+      }
+      libraryNumbers.add(problem.sourceLibraryNumber);
       if (problem.contentSha256 !== hashContent(problem.content)) {
         context.addIssue({ code: "custom", message: "题目内容校验失败", path: ["problems", index, "contentSha256"] });
       }
@@ -413,6 +422,9 @@ export function importAlgorithmLibraryPackage(
   input: { packageSha256: string; targetFolderId?: string | null; createPackageFolder?: boolean },
 ): AlgorithmLibraryPackageImportResult {
   requirePluginEnabled(db, scope, "algorithms");
+  if (!/^[a-f0-9]{64}$/.test(input.packageSha256)) {
+    throw new AlgorithmLibraryPackageError("题库包文件校验值无效");
+  }
   const preview = previewAlgorithmLibraryPackage(db, scope, pkg);
   const targetFolderId = normalizeTargetFolder(db, scope, input.targetFolderId);
   const sourceId = stableId("algorithm-source", `${scope.workspaceId}:package:${pkg.package.id}`);
