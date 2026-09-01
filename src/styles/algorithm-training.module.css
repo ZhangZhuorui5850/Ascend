@@ -23,7 +23,7 @@
 .secondaryButton { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 0 13px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--muted); font-weight: 600; }
 .secondaryButton:hover { border-color: var(--accent-line); color: var(--accent); }
 .secondaryButton:disabled { opacity: 0.45; cursor: default; }
-.iconButton { display: inline-grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-sm); background: transparent; color: var(--muted); transition: color var(--motion-fast) ease, border-color var(--motion-fast) ease; }
+.iconButton { display: inline-grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-sm); background: transparent; color: var(--muted); transition: color var(--motion-fast) var(--motion-ease-standard), border-color var(--motion-fast) var(--motion-ease-standard); }
 .iconButton:hover { border-color: var(--accent-line); color: var(--accent); }
 .shell button,
 .shell input,
@@ -50,8 +50,8 @@
 .todayToolbar { justify-content: space-between; margin-bottom: 14px; }
 .switchLabel { display: flex; align-items: center; gap: 8px; color: var(--muted); cursor: pointer; }
 .switchLabel input { position: absolute; opacity: 0; pointer-events: none; }
-.switchLabel > span { position: relative; flex-shrink: 0; width: 36px; height: 20px; border-radius: 999px; background: var(--line-strong); transition: background var(--motion-quick) ease; }
-.switchLabel > span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--surface-raised); box-shadow: var(--shadow-xs); transition: transform var(--motion-quick) ease; }
+.switchLabel > span { position: relative; flex-shrink: 0; width: 36px; height: 20px; border-radius: 999px; background: var(--line-strong); transition: background var(--motion-base) var(--motion-ease-standard); }
+.switchLabel > span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--surface-raised); box-shadow: var(--shadow-xs); transition: transform var(--motion-base) var(--motion-ease-standard); }
 .switchLabel input:checked + span { background: var(--accent); }
 .switchLabel input:checked + span::after { transform: translateX(16px); }
 .switchLabel b { min-width: 22px; padding: 2px 6px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); font-size: 11px; font-weight: 600; text-align: center; }
@@ -60,7 +60,7 @@
 .planRow:last-child { border-bottom: 0; }
 .grip { display: grid; place-items: center; color: var(--quiet); cursor: grab; }
 .grip[data-static="true"] { visibility: hidden; }
-.completeCircle { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--line-strong); transition: background var(--motion-fast) ease, color var(--motion-fast) ease; }
+.completeCircle { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--line-strong); transition: background var(--motion-fast) var(--motion-ease-standard), color var(--motion-fast) var(--motion-ease-standard); }
 .completeCircle:hover { background: var(--accent-soft); color: var(--accent); }
 .completeCircle[data-completed] { background: var(--ok-soft); color: var(--ok); }
 .planTitle { display: grid; gap: 4px; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
@@ -90,7 +90,7 @@
 .navGroup { margin-top: 18px; }
 .navGroupToggle { display: flex; align-items: center; gap: 5px; width: 100%; margin: 0 8px 5px; padding: 4px 2px; border: 0; background: transparent; color: var(--quiet); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-align: left; text-transform: uppercase; }
 .navGroupToggle:hover { color: var(--ink); }
-.navGroupToggle svg { transition: transform var(--motion-fast) ease; }
+.navGroupToggle svg { transition: transform var(--motion-fast) var(--motion-ease-standard); }
 .navGroupToggle[aria-expanded="false"] svg { transform: rotate(-90deg); }
 .curriculumSummary { margin: 0 2px 7px; padding: 9px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-raised); }
 .curriculumSummary > button { display: grid; gap: 3px; width: 100%; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
@@ -106,7 +106,7 @@
 .courseLine > .navButton { flex: 1; min-width: 0; }
 .courseCaret { display: grid; flex-shrink: 0; place-items: center; width: 24px; height: 26px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--quiet); }
 .courseCaret:hover { background: var(--accent-soft); color: var(--accent); }
-.courseCaret svg { transition: transform var(--motion-fast) ease; }
+.courseCaret svg { transition: transform var(--motion-fast) var(--motion-ease-standard); }
 .courseCaret[aria-expanded="false"] svg { transform: rotate(-90deg); }
 .navSubButton { min-height: 30px; padding-left: 26px; font-size: 13px; }
 
@@ -203,7 +203,7 @@
 
 .detailDrawer { position: relative; overflow-y: auto; max-height: 720px; padding: 22px; border-left: 1px solid var(--line); background: var(--surface-soft); }
 .drawerHandle { position: absolute; top: 0; bottom: 0; left: -4px; z-index: 6; width: 8px; cursor: col-resize; touch-action: none; }
-.drawerHandle::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; border-radius: 2px; background: transparent; transition: background var(--motion-fast) ease; }
+.drawerHandle::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; border-radius: 2px; background: transparent; transition: background var(--motion-fast) var(--motion-ease-standard); }
 .drawerHandle:hover::after { background: color-mix(in srgb, var(--accent) 55%, transparent); }
 body[data-alg-resizing] { user-select: none; cursor: col-resize; }
 body[data-alg-resizing] .drawerHandle::after { background: var(--accent); }
@@ -311,14 +311,11 @@ body[data-alg-resizing] .drawerHandle::after { background: var(--accent); }
 .deviceRevoke:hover { border-color: var(--danger); color: var(--danger); }
 .deviceRevoke:disabled { opacity: 0.5; cursor: not-allowed; }
 .deviceRow small { color: var(--muted); }
-.spin { animation: algSpin var(--motion-page) linear infinite; }
-@keyframes algSpin {
-  to { transform: rotate(360deg); }
-}
-
 .detailPlaceholder { display: grid; place-content: center; justify-items: center; gap: 6px; padding: 22px; border-left: 1px solid var(--line); background: var(--surface-soft); color: var(--quiet); text-align: center; }
 .detailPlaceholder strong { color: var(--muted); font-size: 13.5px; }
 .detailPlaceholder span { font-size: 12px; }
+.spin { animation: algorithm-training-spin var(--motion-loop) linear infinite; }
+@keyframes algorithm-training-spin { to { transform: rotate(360deg); } }
 
 /* ---------- 响应式 ---------- */
 

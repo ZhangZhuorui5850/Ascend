@@ -175,7 +175,7 @@ export function CommandPalette({
 
   function go(href: string) {
     setOpen(false);
-    router.push(href);
+    router.push(href, { transitionTypes: ["nav-switch"] });
   }
 
   function execute(index: number) {
@@ -241,6 +241,7 @@ export function CommandPalette({
             finalFocus={returnFocusRef}
             initialFocus={inputRef}
           >
+            <Dialog.Title className="srOnly">命令菜单</Dialog.Title>
         <div className="commandSearch">
           <Search size={18} />
           <input

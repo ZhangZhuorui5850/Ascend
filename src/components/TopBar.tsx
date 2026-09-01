@@ -55,10 +55,10 @@ export function TopBar({
         <div><small>{context}</small><strong>{title}</strong></div>
       </div>
       <div className="topbarActions">
-        {role === "user" ? <Link className="topbarDate" href="/"><CalendarRange size={15} /><span>{dayLabel}</span></Link> : null}
+        {role === "user" ? <Link className="topbarDate" href="/" transitionTypes={["nav-switch"]}><CalendarRange size={15} /><span>{dayLabel}</span></Link> : null}
         <button className="commandTrigger" onClick={onCommand} title="搜索或快速操作（Ctrl/⌘+K）" type="button"><Search size={15} /><span>搜索或快速操作<small className="commandHint">Ctrl/⌘K</small></span></button>
         <ThemeSwitcher />
-        <Link aria-label={role === "admin" ? "用户管理" : "设置"} className="topbarIconButton" href={role === "admin" ? "/admin/users" : "/settings"} title={role === "admin" ? "用户管理" : "设置"}>
+        <Link aria-label={role === "admin" ? "用户管理" : "设置"} className="topbarIconButton" href={role === "admin" ? "/admin/users" : "/settings"} title={role === "admin" ? "用户管理" : "设置"} transitionTypes={["nav-switch"]}>
           {role === "admin" ? <Users size={17} /> : <Settings size={17} />}
         </Link>
         <AccountMenu accounts={accounts} current={account} />

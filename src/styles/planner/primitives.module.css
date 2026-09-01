@@ -12,6 +12,11 @@
   opacity: 0;
 }
 
+.backdrop[data-ending-style] {
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--motion-ease-exit);
+}
+
 .drawerViewport {
   position: fixed;
   z-index: calc(var(--planner-z-drawer) + 1);
@@ -32,6 +37,10 @@
   color: var(--ink);
   outline: 0;
   pointer-events: auto;
+  opacity: 1;
+  transition:
+    opacity var(--motion-panel) var(--motion-ease-enter),
+    transform var(--motion-panel) var(--motion-ease-enter);
 }
 
 .drawerPopup[data-planner-surface="drawer"] {
@@ -47,6 +56,23 @@
   margin-top: auto;
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   transform: translateY(calc(var(--drawer-snap-point-offset) + var(--drawer-swipe-movement-y)));
+}
+
+.drawerPopup[data-planner-surface="drawer"][data-starting-style],
+.drawerPopup[data-planner-surface="drawer"][data-ending-style] {
+  opacity: 0;
+  transform: translateX(calc(100% + var(--drawer-swipe-movement-x)));
+}
+
+.drawerPopup[data-planner-surface="sheet"][data-starting-style],
+.drawerPopup[data-planner-surface="sheet"][data-ending-style] {
+  opacity: 0;
+  transform: translateY(calc(100% + var(--drawer-snap-point-offset) + var(--drawer-swipe-movement-y)));
+}
+
+.drawerPopup[data-ending-style] {
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--motion-ease-exit);
 }
 
 .sheetDragArea {
@@ -109,12 +135,21 @@
   color: var(--muted);
   cursor: pointer;
   place-items: center;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard),
+    color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard);
 }
 
 .iconButton:hover {
   border-color: var(--line);
   background: var(--surface-soft);
   color: var(--ink);
+}
+
+.iconButton:active {
+  transform: scale(0.94);
 }
 
 .iconButton:focus-visible,
@@ -148,6 +183,11 @@
 .popoverPopup[data-ending-style] {
   opacity: 0;
   transform: translateY(var(--space-2)) scale(0.98);
+}
+
+.popoverPopup[data-ending-style] {
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--motion-ease-exit);
 }
 
 .popoverContent {
@@ -234,6 +274,15 @@
   background: transparent;
   color: var(--muted);
   cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    border-color var(--motion-fast) var(--motion-ease-standard),
+    color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard);
+}
+
+.segmentedControl button:active {
+  transform: scale(0.97);
 }
 
 .segmentedControl .segmentActive {
@@ -295,6 +344,11 @@
 .toast[data-ending-style] {
   opacity: 0;
   transform: translateY(var(--space-3));
+}
+
+.toast[data-ending-style] {
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--motion-ease-exit);
 }
 
 .toast[data-kind="error"],
@@ -374,6 +428,12 @@
   opacity: 0;
 }
 
+.dialogBackdrop[data-ending-style],
+.dialogPopup[data-ending-style] {
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--motion-ease-exit);
+}
+
 .dialogPopup[data-starting-style],
 .dialogPopup[data-ending-style] {
   transform: translateY(var(--space-2)) scale(0.98);
@@ -434,6 +494,7 @@
   background: var(--planner-field);
   color: var(--ink);
   font: inherit;
+  transition: box-shadow var(--motion-fast) var(--motion-ease-standard);
 }
 
 .propertyRow input,
@@ -537,4 +598,20 @@
     bottom: calc(var(--mobile-nav-height) + var(--space-3) + env(safe-area-inset-bottom));
     width: calc(100vw - var(--space-6));
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawerPopup,
+  .popoverPopup,
+  .dialogPopup,
+  .toast {
+    transform: none;
+  }
+}
+
+:global(html[data-motion="reduce"]) .drawerPopup,
+:global(html[data-motion="reduce"]) .popoverPopup,
+:global(html[data-motion="reduce"]) .dialogPopup,
+:global(html[data-motion="reduce"]) .toast {
+  transform: none;
 }

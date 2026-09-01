@@ -17,7 +17,7 @@ describe("minimal onboarding contract", () => {
   it("submits one idempotent transaction and routes directly to Today", () => {
     expect(wizard).toContain("completeOnboardingAction");
     expect(wizard).toContain("clientMutationId");
-    expect(wizard).toContain('router.push("/")');
+    expect(wizard).toContain('router.push("/", { transitionTypes: ["nav-forward"] })');
     expect(wizard).not.toContain("router.refresh()");
   });
 

@@ -62,14 +62,14 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
         <div className="dayHeaderTitle">
           <span className="eyebrow">{isToday ? "ARCHIVE · 今日记录" : "HISTORY · 历史记录"}</span>
           <div className="dayNav">
-            <Link aria-label="前一天" href={`/day/${shiftDateKey(date, -1)}`}><ChevronLeft size={18} /></Link>
+            <Link aria-label="前一天" href={`/day/${shiftDateKey(date, -1)}`} transitionTypes={["nav-back"]}><ChevronLeft size={18} /></Link>
             <h1>{formatDayTitle(date)}</h1>
-            <Link aria-label="后一天" href={`/day/${shiftDateKey(date, 1)}`}><ChevronRight size={18} /></Link>
+            <Link aria-label="后一天" href={`/day/${shiftDateKey(date, 1)}`} transitionTypes={["nav-forward"]}><ChevronRight size={18} /></Link>
           </div>
         </div>
         <div className="dayHeaderActions">
-          <Link className="secondaryButton" href="/">回到今天</Link>
-          <Link className="secondaryButton" href="/calendar"><CalendarDays size={15} />日历</Link>
+          <Link className="secondaryButton" href="/" transitionTypes={["nav-back"]}>回到今天</Link>
+          <Link className="secondaryButton" href="/calendar" transitionTypes={["nav-switch"]}><CalendarDays size={15} />日历</Link>
         </div>
       </header>
 

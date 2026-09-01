@@ -86,7 +86,7 @@ try {
   await page.waitForURL(`${baseUrl}/calendar`, { timeout: 10_000 });
   await page.locator('[data-planner-workspace="calendar"]').waitFor({ timeout: 15_000 });
   const inboxTask = page.getByText(inboxTaskName, { exact: true }).locator("xpath=ancestor::article");
-  await inboxTask.getByRole("button", { name: "安排…" }).click();
+  await inboxTask.getByRole("button", { name: "安排", exact: true }).click();
   await page.getByRole("button", { name: `排入 ${inboxTaskName}` }).click();
   await inboxTask.waitFor({ state: "detached", timeout: 10_000 });
   pass("Tasks and Calendar share the Planner shell");

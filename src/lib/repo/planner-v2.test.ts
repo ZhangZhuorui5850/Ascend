@@ -1,24 +1,19 @@
 import { describe, expect, it } from "vitest";
+import { filterPlannerTaskView, type PlannerTaskView } from "../planner/task-views";
 import { createTestDb, createTestWorkspace } from "./testing";
-import {
-  createTaskList,
-  ensurePlannerDefaults,
-  listTaskLists,
-} from "./planner-lists";
+import { createTaskList, ensurePlannerDefaults, listTaskLists } from "./planner-lists";
 import {
   batchUpdatePlannerTasks,
   createPlannerTask,
   getPlannerTask,
   listTaskView,
+  listTaskViewSource,
   listPlannerTasks,
   restorePlannerTask,
   softDeletePlannerTask,
   updatePlannerTask,
 } from "./planner-tasks";
-import {
-  createPlannerCalendar,
-  listPlannerCalendars,
-} from "./planner-calendars";
+import { createPlannerCalendar, listPlannerCalendars } from "./planner-calendars";
 import {
   createCalendarEvent,
   listCalendarEventRange,
@@ -41,11 +36,7 @@ describe("Planner v2 repository isolation and concurrency", () => {
 
     expect(listTaskLists(db, a).map((list) => list.name)).toEqual(["Inbox", "A 项目"]);
     expect(listTaskLists(db, b).map((list) => list.name)).toEqual(["Inbox", "B 项目"]);
-    expect(listPlannerCalendars(db, a).map((calendar) => calendar.name)).toEqual([
-      "个人日历",
-      "学习里程碑",
-      "A 课程",
-    ]);
+    expect(listPlannerCalendars(db, a).map((calendar) => calendar.name)).toEqual(["个人日历", "学习里程碑", "A 课程"]);
   });
 
   it("keeps due and scheduled fields independent and makes creates idempotent", () => {
@@ -139,43 +130,49 @@ describe("Planner v2 repository isolation and concurrency", () => {
       endDateExclusive: "2026-08-01",
     });
 
-    expect(listCalendarEventRange(db, a, {
-      start: "2026-07-31T00:00:00.000Z",
-      end: "2026-08-01T00:00:00.000Z",
-      startDate: "2026-07-31",
-      endDateExclusive: "2026-08-01",
-    }).map((event) => event.title)).toEqual(["A 多日事件", "A 跨午夜事件", "A 定时事件"]);
-    expect(updateCalendarEvent(db, a, {
-      id: timed.id,
-      expectedVersion: timed.version,
-      location: "图书馆",
-    }).entity).toMatchObject({ location: "图书馆", version: 2 });
+    expect(
+      listCalendarEventRange(db, a, {
+        start: "2026-07-31T00:00:00.000Z",
+        end: "2026-08-01T00:00:00.000Z",
+        startDate: "2026-07-31",
+        endDateExclusive: "2026-08-01",
+      }).map((event) => event.title),
+    ).toEqual(["A 多日事件", "A 跨午夜事件", "A 定时事件"]);
+    expect(
+      updateCalendarEvent(db, a, {
+        id: timed.id,
+        expectedVersion: timed.version,
+        location: "图书馆",
+      }).entity,
+    ).toMatchObject({ location: "图书馆", version: 2 });
     const deleted = softDeleteCalendarEvent(db, a, {
       id: timed.id,
       expectedVersion: 2,
       clientMutationId: "delete-event-1",
     });
     expect(deleted.entity?.deleted_at).toBeTruthy();
-    expect(softDeleteCalendarEvent(db, a, {
-      id: timed.id,
-      expectedVersion: 2,
-      clientMutationId: "delete-event-1",
-    }).entity?.id).toBe(timed.id);
-    expect(listCalendarEventRange(db, b, {
-      start: "2026-07-31T00:00:00.000Z",
-      end: "2026-08-01T00:00:00.000Z",
-      startDate: "2026-07-31",
-      endDateExclusive: "2026-08-01",
-    }).map((event) => event.title)).toEqual(["B 的事件"]);
+    expect(
+      softDeleteCalendarEvent(db, a, {
+        id: timed.id,
+        expectedVersion: 2,
+        clientMutationId: "delete-event-1",
+      }).entity?.id,
+    ).toBe(timed.id);
+    expect(
+      listCalendarEventRange(db, b, {
+        start: "2026-07-31T00:00:00.000Z",
+        end: "2026-08-01T00:00:00.000Z",
+        startDate: "2026-07-31",
+        endDateExclusive: "2026-08-01",
+      }).map((event) => event.title),
+    ).toEqual(["B 的事件"]);
   });
 
   it("projects legacy exam countdowns into stable all-day milestone events", () => {
     const db = createTestDb();
     const scope = createTestWorkspace(db);
     ensurePlannerDefaults(db, scope);
-    saveExamCountdowns(db, scope, [
-      { name: "期末考试", date: "2026-12-20", targetScore: 120 },
-    ]);
+    saveExamCountdowns(db, scope, [{ name: "期末考试", date: "2026-12-20", targetScore: 120 }]);
     const range = {
       start: "2026-12-01T00:00:00.000Z",
       end: "2027-01-01T00:00:00.000Z",
@@ -212,7 +209,8 @@ describe("Planner v2 repository isolation and concurrency", () => {
       timezone: "America/New_York",
       recurrenceRule: "FREQ=WEEKLY;COUNT=3",
     });
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO calendar_events
         (id, workspace_id, calendar_id, title, kind, busy_status,
          start_at, end_at, timezone, all_day, recurring_event_id,
@@ -220,7 +218,8 @@ describe("Planner v2 repository isolation and concurrency", () => {
       VALUES (?, ?, ?, '取消实例', 'meeting', 'busy',
               '2026-03-15T13:00:00.000Z', '2026-03-15T14:00:00.000Z',
               'America/New_York', 0, ?, '2026-03-15T13:00:00.000Z', 'cancel')
-    `).run("cancel-instance", scope.workspaceId, calendar.id, master.id);
+    `,
+    ).run("cancel-instance", scope.workspaceId, calendar.id, master.id);
     const events = listCalendarEventRange(db, scope, {
       start: "2026-03-07T00:00:00.000Z",
       end: "2026-03-17T00:00:00.000Z",
@@ -273,12 +272,13 @@ describe("Planner v2 repository isolation and concurrency", () => {
     expect(child.depth).toBe(1);
 
     const viewInput = { today: "2026-07-31", now: "2026-07-31T04:00:00.000Z" };
-    expect(listTaskView(db, scope, { view: "today", ...viewInput }).map((task) => task.title))
-      .toEqual(expect.arrayContaining(["今天到期", "今天排期"]));
-    expect(listTaskView(db, scope, { view: "anytime", ...viewInput }).map((task) => task.title))
-      .toEqual(expect.arrayContaining(["随时可做", "子任务"]));
-    expect(listTaskView(db, scope, { view: "overdue", ...viewInput }).map((task) => task.title))
-      .toEqual(["已经逾期"]);
+    expect(listTaskView(db, scope, { view: "today", ...viewInput }).map((task) => task.title)).toEqual(
+      expect.arrayContaining(["今天到期", "今天排期"]),
+    );
+    expect(listTaskView(db, scope, { view: "anytime", ...viewInput }).map((task) => task.title)).toEqual(
+      expect.arrayContaining(["随时可做", "子任务"]),
+    );
+    expect(listTaskView(db, scope, { view: "overdue", ...viewInput }).map((task) => task.title)).toEqual(["已经逾期"]);
 
     const batch = batchUpdatePlannerTasks(db, scope, {
       clientMutationId: "batch-complete-1",
@@ -303,5 +303,28 @@ describe("Planner v2 repository isolation and concurrency", () => {
     expect(restored.entity?.deleted_at).toBeNull();
     expect(listTaskView(db, scope, { view: "anytime", ...viewInput }).map((task) => task.id)).toContain(anytime.id);
     expect(getPlannerTask(db, scope, overdue.id)?.due_date).toBe("2026-07-30");
+
+    const source = listTaskViewSource(db, scope);
+    const views: PlannerTaskView[] = [
+      "inbox",
+      "today",
+      "upcoming",
+      "anytime",
+      "overdue",
+      "waiting",
+      "completed",
+      "trash",
+      "all",
+    ];
+    for (const view of views) {
+      expect(
+        filterPlannerTaskView(source.tasks, view, {
+          inboxId: source.inboxId,
+          now: viewInput.now,
+          today: viewInput.today,
+          upcomingEnd: "2026-08-30",
+        }),
+      ).toEqual(listTaskView(db, scope, { view, ...viewInput }));
+    }
   });
 });

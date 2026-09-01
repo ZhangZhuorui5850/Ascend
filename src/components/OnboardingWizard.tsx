@@ -66,7 +66,7 @@ export function OnboardingWizard({ initial, subjects }: { initial: AppSettings; 
           setError(result.error || "保存失败，可以重试");
           return;
         }
-        router.push("/");
+        router.push("/", { transitionTypes: ["nav-forward"] });
       } catch (reason) {
         console.error("完成引导失败", reason);
         setError("网络异常，内容未丢失，可以重试");

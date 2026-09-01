@@ -1,14 +1,10 @@
 import type Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 import type { WorkspaceScope } from "../access-context";
-import { utcToZonedDateTime } from "../planner/time";
 import { shiftDateKey } from "../dates";
-import type {
-  PlannerActionConflict,
-  PlannerPriority,
-  PlannerTask,
-  PlannerTaskStatus,
-} from "../planner/types";
+import { utcToZonedDateTime } from "../planner/time";
+import { filterPlannerTaskView, type PlannerTaskView, type PlannerTaskViewContext } from "../planner/task-views";
+import type { PlannerActionConflict, PlannerPriority, PlannerTask, PlannerTaskStatus } from "../planner/types";
 import { plannerTaskDraftSchema } from "../planner/validation";
 import type { DayTask } from "./planner";
 import { advanceTaskSeriesAfterCompletion } from "./planner-series";
@@ -44,23 +40,21 @@ export type PlannerTaskMutation = {
   conflict?: PlannerActionConflict<PlannerTask>;
 };
 
-export type PlannerTaskView =
-  | "inbox"
-  | "today"
-  | "upcoming"
-  | "anytime"
-  | "overdue"
-  | "waiting"
-  | "completed"
-  | "trash"
-  | "all";
+export type { PlannerTaskView } from "../planner/task-views";
+
+export type PlannerTaskViewSource = {
+  tasks: PlannerTask[];
+  inboxId?: string;
+};
 
 export function listPlannerTasks(
   db: Database.Database,
   scope: WorkspaceScope,
   input: { includeDeleted?: boolean } = {},
 ): PlannerTask[] {
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT ${TASK_COLUMNS}
     FROM planner_tasks
     WHERE workspace_id = @workspaceId
@@ -71,10 +65,12 @@ export function listPlannerTasks(
       CASE WHEN due_at IS NULL AND due_date IS NULL THEN 1 ELSE 0 END ASC,
       COALESCE(due_at, due_date) ASC,
       priority ASC, sort_order ASC, id ASC
-  `).all({
-    workspaceId: scope.workspaceId,
-    includeDeleted: input.includeDeleted ? 1 : 0,
-  }) as PlannerTask[];
+  `,
+    )
+    .all({
+      workspaceId: scope.workspaceId,
+      includeDeleted: input.includeDeleted ? 1 : 0,
+    }) as PlannerTask[];
 }
 
 export function listTaskView(
@@ -88,43 +84,59 @@ export function listTaskView(
     limit?: number;
   },
 ): PlannerTask[] {
-  const limit = Math.min(Math.max(input.limit ?? 500, 1), 1000);
-  const tasks = db.prepare(`
+  const source = listTaskViewSource(db, scope, { listId: input.listId });
+  const context: PlannerTaskViewContext = {
+    today: input.today,
+    upcomingEnd: shiftDateKey(input.today, 30),
+    now: input.now ?? new Date().toISOString(),
+    inboxId: source.inboxId,
+  };
+  return filterPlannerTaskView(source.tasks, input.view, context, { limit: input.limit });
+}
+
+export function listTaskViewSource(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: { listId?: string } = {},
+): PlannerTaskViewSource {
+  const tasks = db
+    .prepare(
+      `
     SELECT ${TASK_COLUMNS}
     FROM planner_tasks
     WHERE workspace_id = @workspaceId
       AND (@listId IS NULL OR list_id = @listId)
     ORDER BY updated_at DESC, id ASC
     LIMIT 2000
-  `).all({
-    workspaceId: scope.workspaceId,
-    listId: input.listId ?? null,
-  }) as PlannerTask[];
-  const inboxId = (db.prepare(`
+  `,
+    )
+    .all({
+      workspaceId: scope.workspaceId,
+      listId: input.listId ?? null,
+    }) as PlannerTask[];
+  const inboxId = (
+    db
+      .prepare(
+        `
     SELECT id FROM task_lists WHERE workspace_id = ? AND is_inbox = 1
-  `).get(scope.workspaceId) as { id: string } | undefined)?.id;
-  const now = new Date(input.now ?? new Date().toISOString());
-  const upcomingEnd = shiftDateKey(input.today, 30);
-  return tasks
-    .filter((task) => taskMatchesView(task, input.view, {
-      today: input.today,
-      upcomingEnd,
-      now,
-      inboxId,
-    }))
-    .sort(comparePlannerTasks)
-    .slice(0, limit);
+  `,
+      )
+      .get(scope.workspaceId) as { id: string } | undefined
+  )?.id;
+  return { tasks, inboxId };
 }
 
-export function getPlannerTask(
-  db: Database.Database,
-  scope: WorkspaceScope,
-  id: string,
-): PlannerTask | null {
-  return (db.prepare(`
+export function getPlannerTask(db: Database.Database, scope: WorkspaceScope, id: string): PlannerTask | null {
+  return (
+    (db
+      .prepare(
+        `
     SELECT ${TASK_COLUMNS}
     FROM planner_tasks WHERE workspace_id = ? AND id = ?
-  `).get(scope.workspaceId, id) as PlannerTask | undefined) ?? null;
+  `,
+      )
+      .get(scope.workspaceId, id) as PlannerTask | undefined) ?? null
+  );
 }
 
 export function createPlannerTask(
@@ -136,10 +148,14 @@ export function createPlannerTask(
   if (!clientMutationId) throw new Error("clientMutationId 必填");
   const opId = plannerOperationId(scope.workspaceId, clientMutationId);
   return db.transaction(() => {
-    const replay = db.prepare(`
+    const replay = db
+      .prepare(
+        `
       SELECT entity_id FROM entity_changes
       WHERE workspace_id = ? AND op_id = ? AND entity_type = 'planner_task'
-    `).get(scope.workspaceId, opId) as { entity_id: string } | undefined;
+    `,
+      )
+      .get(scope.workspaceId, opId) as { entity_id: string } | undefined;
     if (replay) {
       const existing = getPlannerTask(db, scope, replay.entity_id);
       if (!existing) throw new Error("幂等任务记录缺少实体");
@@ -153,13 +169,15 @@ export function createPlannerTask(
     if (depth > 3) throw new Error("子任务最多三层");
     assertTaskList(db, scope, parsed.listId);
     const id = randomUUID();
-    const sortOrder = input.sortOrder === undefined
-      ? nextTaskSortOrder(db, scope, parsed.listId, parsed.parentTaskId ?? null)
-      : normalizeSortOrder(input.sortOrder);
+    const sortOrder =
+      input.sortOrder === undefined
+        ? nextTaskSortOrder(db, scope, parsed.listId, parsed.parentTaskId ?? null)
+        : normalizeSortOrder(input.sortOrder);
     const now = new Date().toISOString();
     const completedAt = parsed.status === "completed" ? now : null;
     const canceledAt = parsed.status === "canceled" ? now : null;
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO planner_tasks
         (id, workspace_id, list_id, parent_task_id, depth, title, notes, subject_code,
          status, priority, due_date, due_at, due_timezone,
@@ -170,7 +188,8 @@ export function createPlannerTask(
          @status, @priority, @dueDate, @dueAt, @dueTimezone,
          @scheduledStartAt, @scheduledEndAt, @scheduledTimezone, @scheduledAllDay,
          @estimatedMinutes, @sortOrder, @completedAt, @canceledAt, 1, @now, @now)
-    `).run({
+    `,
+    ).run({
       id,
       workspaceId: scope.workspaceId,
       listId: parsed.listId,
@@ -235,13 +254,9 @@ export function updatePlannerTask(
       dueDate: input.dueDate === undefined ? current.due_date : input.dueDate,
       dueAt: input.dueAt === undefined ? current.due_at : input.dueAt,
       dueTimezone: input.dueTimezone === undefined ? current.due_timezone : input.dueTimezone,
-      scheduledStartAt: input.scheduledStartAt === undefined
-        ? current.scheduled_start_at
-        : input.scheduledStartAt,
+      scheduledStartAt: input.scheduledStartAt === undefined ? current.scheduled_start_at : input.scheduledStartAt,
       scheduledEndAt: input.scheduledEndAt === undefined ? current.scheduled_end_at : input.scheduledEndAt,
-      scheduledTimezone: input.scheduledTimezone === undefined
-        ? current.scheduled_timezone
-        : input.scheduledTimezone,
+      scheduledTimezone: input.scheduledTimezone === undefined ? current.scheduled_timezone : input.scheduledTimezone,
       scheduledAllDay: input.scheduledAllDay ?? current.scheduled_all_day === 1,
       estimatedMinutes: input.estimatedMinutes ?? current.estimated_minutes,
     });
@@ -254,7 +269,9 @@ export function updatePlannerTask(
     const now = new Date().toISOString();
     const completedAt = draft.status === "completed" ? (current.completed_at ?? now) : null;
     const canceledAt = draft.status === "canceled" ? (current.canceled_at ?? now) : null;
-    const result = db.prepare(`
+    const result = db
+      .prepare(
+        `
       UPDATE planner_tasks
       SET list_id = @listId, parent_task_id = @parentTaskId, depth = @depth,
           title = @title, notes = @notes, subject_code = @subjectCode,
@@ -265,31 +282,33 @@ export function updatePlannerTask(
           estimated_minutes = @estimatedMinutes, sort_order = @sortOrder, completed_at = @completedAt,
           canceled_at = @canceledAt, version = version + 1, updated_at = @now
       WHERE workspace_id = @workspaceId AND id = @id AND version = @expectedVersion
-    `).run({
-      workspaceId: scope.workspaceId,
-      id: current.id,
-      expectedVersion: input.expectedVersion,
-      listId: draft.listId,
-      parentTaskId: draft.parentTaskId ?? null,
-      depth,
-      title: draft.title,
-      notes: draft.notes,
-      subjectCode: draft.subjectCode ?? null,
-      status: draft.status,
-      priority: draft.priority,
-      dueDate: draft.dueDate ?? null,
-      dueAt: draft.dueAt ?? null,
-      dueTimezone: draft.dueTimezone ?? null,
-      scheduledStartAt: draft.scheduledStartAt ?? null,
-      scheduledEndAt: draft.scheduledEndAt ?? null,
-      scheduledTimezone: draft.scheduledTimezone ?? null,
-      scheduledAllDay: draft.scheduledAllDay ? 1 : 0,
-      estimatedMinutes: draft.estimatedMinutes,
-      sortOrder: input.sortOrder ?? current.sort_order,
-      completedAt,
-      canceledAt,
-      now,
-    });
+    `,
+      )
+      .run({
+        workspaceId: scope.workspaceId,
+        id: current.id,
+        expectedVersion: input.expectedVersion,
+        listId: draft.listId,
+        parentTaskId: draft.parentTaskId ?? null,
+        depth,
+        title: draft.title,
+        notes: draft.notes,
+        subjectCode: draft.subjectCode ?? null,
+        status: draft.status,
+        priority: draft.priority,
+        dueDate: draft.dueDate ?? null,
+        dueAt: draft.dueAt ?? null,
+        dueTimezone: draft.dueTimezone ?? null,
+        scheduledStartAt: draft.scheduledStartAt ?? null,
+        scheduledEndAt: draft.scheduledEndAt ?? null,
+        scheduledTimezone: draft.scheduledTimezone ?? null,
+        scheduledAllDay: draft.scheduledAllDay ? 1 : 0,
+        estimatedMinutes: draft.estimatedMinutes,
+        sortOrder: input.sortOrder ?? current.sort_order,
+        completedAt,
+        canceledAt,
+        now,
+      });
     if (!result.changes) {
       const latest = getPlannerTask(db, scope, current.id)!;
       return {
@@ -381,11 +400,15 @@ export function purgeDeletedPlannerTasks(
 ): { purged: number; retained: number; purgedTaskIds: string[] } {
   if (!input.confirm) throw new Error("永久清理需明确确认");
   return db.transaction(() => {
-    const rows = db.prepare(`
+    const rows = db
+      .prepare(
+        `
       SELECT id FROM planner_tasks
       WHERE workspace_id = ? AND deleted_at IS NOT NULL AND deleted_at < ?
       ORDER BY depth DESC, id ASC
-    `).all(scope.workspaceId, input.deletedBefore) as Array<{ id: string }>;
+    `,
+      )
+      .all(scope.workspaceId, input.deletedBefore) as Array<{ id: string }>;
     if (!rows.length) return { purged: 0, retained: 0, purgedTaskIds: [] };
     const hasEvidence = db.prepare(`
       SELECT 1 FROM learning_evidence
@@ -426,23 +449,25 @@ export function purgeDeletedPlannerTasks(
   })();
 }
 
-export function listLegacyDayTaskProjection(
-  db: Database.Database,
-  scope: WorkspaceScope,
-): DayTask[] {
-  const rows = db.prepare(`
+export function listLegacyDayTaskProjection(db: Database.Database, scope: WorkspaceScope): DayTask[] {
+  const rows = db
+    .prepare(
+      `
     SELECT ${TASK_COLUMNS}
     FROM planner_tasks
     WHERE workspace_id = ? AND legacy_day_task_id IS NOT NULL
     ORDER BY legacy_day_task_id ASC
-  `).all(scope.workspaceId) as PlannerTask[];
+  `,
+    )
+    .all(scope.workspaceId) as PlannerTask[];
   return rows.map((task) => projectPlannerTaskToDayTask(task, task.legacy_day_task_id!));
 }
 
 export function projectPlannerTaskToDayTask(task: PlannerTask, compatibilityId: number): DayTask {
-  const scheduled = task.scheduled_start_at && task.scheduled_timezone
-    ? utcToZonedDateTime(task.scheduled_start_at, task.scheduled_timezone)
-    : null;
+  const scheduled =
+    task.scheduled_start_at && task.scheduled_timezone
+      ? utcToZonedDateTime(task.scheduled_start_at, task.scheduled_timezone)
+      : null;
   return {
     id: compatibilityId,
     day: scheduled?.date ?? task.due_date ?? "",
@@ -477,7 +502,8 @@ const TASK_COLUMNS = `
 `;
 
 function assertTaskList(db: Database.Database, scope: WorkspaceScope, listId: string): void {
-  const list = db.prepare("SELECT 1 FROM task_lists WHERE workspace_id = ? AND id = ? AND archived_at IS NULL")
+  const list = db
+    .prepare("SELECT 1 FROM task_lists WHERE workspace_id = ? AND id = ? AND archived_at IS NULL")
     .get(scope.workspaceId, listId);
   if (!list) throw new Error("任务清单不存在");
 }
@@ -488,16 +514,22 @@ function nextTaskSortOrder(
   listId: string,
   parentTaskId: string | null,
 ): number {
-  return (db.prepare(`
+  return (
+    db
+      .prepare(
+        `
     SELECT COALESCE(MAX(sort_order), 0) + 1 AS value
     FROM planner_tasks
     WHERE workspace_id = @workspaceId AND list_id = @listId
       AND parent_task_id IS @parentTaskId
-  `).get({
-    workspaceId: scope.workspaceId,
-    listId,
-    parentTaskId,
-  }) as { value: number }).value;
+  `,
+      )
+      .get({
+        workspaceId: scope.workspaceId,
+        listId,
+        parentTaskId,
+      }) as { value: number }
+  ).value;
 }
 
 function normalizeSortOrder(value: number): number {
@@ -518,10 +550,14 @@ function setPlannerTaskDeletedAt(
 ): PlannerTaskMutation {
   const opId = plannerOperationId(scope.workspaceId, input.clientMutationId);
   return db.transaction(() => {
-    const replay = db.prepare(`
+    const replay = db
+      .prepare(
+        `
       SELECT snapshot_json FROM entity_changes
       WHERE workspace_id = ? AND op_id = ? AND entity_type = 'planner_task'
-    `).get(scope.workspaceId, opId) as { snapshot_json: string } | undefined;
+    `,
+      )
+      .get(scope.workspaceId, opId) as { snapshot_json: string } | undefined;
     if (replay) return { entity: JSON.parse(replay.snapshot_json) as PlannerTask };
     const current = getPlannerTask(db, scope, input.id);
     if (!current) throw new Error("任务不存在");
@@ -536,11 +572,15 @@ function setPlannerTaskDeletedAt(
       };
     }
     const now = new Date().toISOString();
-    const result = db.prepare(`
+    const result = db
+      .prepare(
+        `
       UPDATE planner_tasks
       SET deleted_at = ?, version = version + 1, updated_at = ?
       WHERE workspace_id = ? AND id = ? AND version = ?
-    `).run(deletedAt, now, scope.workspaceId, current.id, input.expectedVersion);
+    `,
+      )
+      .run(deletedAt, now, scope.workspaceId, current.id, input.expectedVersion);
     if (!result.changes) {
       const latest = getPlannerTask(db, scope, current.id)!;
       return {
@@ -564,52 +604,6 @@ function setPlannerTaskDeletedAt(
   })();
 }
 
-function taskMatchesView(
-  task: PlannerTask,
-  view: PlannerTaskView,
-  context: {
-    today: string;
-    upcomingEnd: string;
-    now: Date;
-    inboxId?: string;
-  },
-): boolean {
-  if (view === "trash") return task.deleted_at !== null;
-  if (task.deleted_at) return false;
-  if (view === "completed") return task.status === "completed";
-  if (view === "all") return true;
-  if (view === "waiting") return task.status === "waiting";
-  if (task.status !== "open" && task.status !== "waiting") return false;
-  const dueDate = task.due_date
-    ?? (task.due_at && task.due_timezone ? utcToZonedDateTime(task.due_at, task.due_timezone).date : null);
-  const scheduledDate = task.scheduled_start_at && task.scheduled_timezone
-    ? utcToZonedDateTime(task.scheduled_start_at, task.scheduled_timezone).date
-    : null;
-  if (view === "inbox") return task.list_id === context.inboxId;
-  if (view === "today") return dueDate === context.today || scheduledDate === context.today;
-  if (view === "upcoming") {
-    return [dueDate, scheduledDate].some((date) =>
-      date !== null && date > context.today && date <= context.upcomingEnd);
-  }
-  if (view === "anytime") return !dueDate && !scheduledDate;
-  if (view === "overdue") {
-    return (task.due_date !== null && task.due_date < context.today)
-      || (task.due_at !== null && new Date(task.due_at) < context.now);
-  }
-  return false;
-}
-
-function comparePlannerTasks(a: PlannerTask, b: PlannerTask): number {
-  const aTime = a.scheduled_start_at ?? a.due_at ?? a.due_date ?? "";
-  const bTime = b.scheduled_start_at ?? b.due_at ?? b.due_date ?? "";
-  if (aTime && !bTime) return -1;
-  if (!aTime && bTime) return 1;
-  return aTime.localeCompare(bTime)
-    || a.priority - b.priority
-    || a.sort_order - b.sort_order
-    || a.id.localeCompare(b.id);
-}
-
 function recordTaskChange(
   db: Database.Database,
   scope: WorkspaceScope,
@@ -621,11 +615,13 @@ function recordTaskChange(
     patch: unknown;
   },
 ): void {
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO entity_changes
       (workspace_id, op_id, entity_type, entity_id, op, base_version, patch_json, snapshot_json)
     VALUES (?, ?, 'planner_task', ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     scope.workspaceId,
     input.opId,
     input.entity.id,

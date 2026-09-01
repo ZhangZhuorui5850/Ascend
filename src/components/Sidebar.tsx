@@ -1,5 +1,6 @@
 "use client";
 
+import { Dialog } from "@base-ui/react/dialog";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -24,6 +25,7 @@ import {
   MoreHorizontal,
   Puzzle,
   RotateCcw,
+  X,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { AccountMenu } from "@/components/AccountMenu";
@@ -156,7 +158,7 @@ export function Sidebar({
           return (
             <div className="navItemWrap" key={item.href}>
               {index === 0 || links[index - 1].group !== item.group ? <span className="navGroupLabel">{item.group}</span> : null}
-              <Link className={isLinkActive(pathname, item) ? "active" : ""} href={item.href} onClick={onNavigate} prefetch={true} transitionTypes={["nav-forward"]}>
+              <Link className={isLinkActive(pathname, item) ? "active" : ""} href={item.href} onClick={onNavigate} prefetch={true} transitionTypes={["nav-switch"]}>
                 <Icon size={17} />
                 <span className="navLabel">{item.label}</span>
               </Link>
@@ -167,7 +169,7 @@ export function Sidebar({
       <div className="sidebarFooter">
         <AccountMenu accounts={accounts} current={account} direction="up" label={displayName} />
         <div className="sidebarFooterActions">
-          <Link aria-label="设置" className={pathname === "/settings" ? "active" : ""} href="/settings" onClick={onNavigate} prefetch={true} title="设置">
+          <Link aria-label="设置" className={pathname === "/settings" ? "active" : ""} href="/settings" onClick={onNavigate} prefetch={true} title="设置" transitionTypes={["nav-switch"]}>
             <Settings size={15} />
           </Link>
           <form action={logoutWithOfflineCleanup}>
@@ -206,11 +208,12 @@ export function MobileNav({
     : links.filter((item) => item.group !== "主要" || item.mobileOverflow);
 
   return (
-    <nav className="mobileNav" aria-label="移动端主导航" data-testid="mobile-nav">
+    <Dialog.Root onOpenChange={setMoreOpen} open={moreOpen}>
+      <nav className="mobileNav" aria-label="移动端主导航" data-testid="mobile-nav">
       {mobileLinks.map((item) => {
         const Icon = item.icon;
         return (
-          <Link className={isLinkActive(pathname, item) ? "active" : ""} href={item.href} key={item.href} onClick={() => setMoreOpen(false)} prefetch={true} transitionTypes={["nav-forward"]}>
+          <Link className={isLinkActive(pathname, item) ? "active" : ""} href={item.href} key={item.href} onClick={() => setMoreOpen(false)} prefetch={true} transitionTypes={["nav-switch"]}>
             <Icon size={18} />
             <span>{item.label}</span>
           </Link>
@@ -228,23 +231,27 @@ export function MobileNav({
           <span>更多</span>
         </button>
       ) : null}
-      {moreOpen ? (
-        <>
-          <button aria-label="关闭更多菜单" className="mobileMoreBackdrop" onClick={() => setMoreOpen(false)} type="button" />
-          <div className="mobileMoreSheet">
+      <Dialog.Portal>
+        <Dialog.Backdrop className="mobileMoreBackdrop" />
+        <Dialog.Viewport className="mobileMoreViewport">
+          <Dialog.Popup aria-label="更多功能" className="mobileMoreSheet" finalFocus initialFocus>
             <div className="mobileMoreHandle" />
-            <strong>更多功能</strong>
+            <Dialog.Title>更多功能</Dialog.Title>
+            <Dialog.Close aria-label="关闭更多菜单" className="mobileMoreClose">
+              <X size={17} />
+            </Dialog.Close>
             <div className="mobileMoreGrid">
               {moreLinks.map((item) => {
                 const Icon = item.icon;
-                return <Link href={item.href} key={item.href} onClick={() => setMoreOpen(false)}><Icon size={18} /><span>{item.label}</span></Link>;
+                return <Link href={item.href} key={item.href} onClick={() => setMoreOpen(false)} transitionTypes={["nav-switch"]}><Icon size={18} /><span>{item.label}</span></Link>;
               })}
-              <Link href="/settings" onClick={() => setMoreOpen(false)}><Settings size={18} /><span>设置</span></Link>
+              <Link href="/settings" onClick={() => setMoreOpen(false)} transitionTypes={["nav-switch"]}><Settings size={18} /><span>设置</span></Link>
               <form action={logoutWithOfflineCleanup}><button type="submit"><LogOut size={18} /><span>退出</span></button></form>
             </div>
-          </div>
-        </>
-      ) : null}
-    </nav>
+          </Dialog.Popup>
+        </Dialog.Viewport>
+      </Dialog.Portal>
+      </nav>
+    </Dialog.Root>
   );
 }

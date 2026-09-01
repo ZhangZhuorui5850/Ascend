@@ -24,16 +24,20 @@
   --chrome-line: rgba(255, 255, 255, 0.09);
   --chrome-accent: color-mix(in srgb, var(--accent) 52%, #f9dcc8);
   /* 动效 token：皮肤只换色不换动，禁止在 [data-skin] 覆盖，禁止裸写 cubic-bezier / ms */
-  --motion-instant: var(--motion-fast);
-  --motion-base: var(--motion-quick);
-  --motion-panel: var(--motion-quick);
+  --motion-instant: 90ms; /* 选中态、悬停颜色 */
+  --motion-base: 180ms; /* 常规控件反馈 */
+  --motion-panel: 220ms; /* 浮层、折叠与抽屉进入 */
   --motion-ease-standard: var(--motion-ease);
   --motion-fast: 120ms; /* hover、按压、focus ring */
-  --motion-quick: 200ms; /* 组件展开、行进出 */
-  --motion-page: 360ms; /* 页面过渡 */
-  --motion-slow: 400ms; /* 入场编排单元素 */
-  --motion-reward: 550ms; /* 印章、清零等成就时刻 */
-  --motion-stagger: 45ms;
+  --motion-quick: 180ms; /* 行进出、局部内容替换 */
+  --motion-page: 280ms; /* 页面主体进入 */
+  --motion-slow: 360ms; /* 低频入场编排 */
+  --motion-reward: 520ms; /* 印章、清零等成就时刻 */
+  --motion-loop: 900ms; /* 仅用于真实进行中的旋转状态 */
+  --motion-stagger: 36ms;
+  --motion-distance-1: 4px;
+  --motion-distance-2: 8px;
+  --motion-distance-3: 12px;
   --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --motion-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
   --motion-ease-exit: cubic-bezier(0.4, 0, 1, 0.8);
@@ -354,6 +358,47 @@ a.primaryButton {
 .primaryButton:hover,
 .secondaryButton:hover {
   transform: translateY(-2px);
+}
+
+.captureFab,
+.commandTrigger,
+.topbarDate,
+.topbarIconButton,
+.themeSwitcher > button,
+.commandResultPrimary,
+.commandTrainingAction,
+.mobileNav > a,
+.mobileNav > button {
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease),
+    transform var(--motion-base) var(--motion-ease);
+}
+
+.primaryButton:active:not(:disabled),
+.secondaryButton:active:not(:disabled),
+.dangerButton:active:not(:disabled),
+.captureFab:active:not(:disabled),
+.commandTrigger:active:not(:disabled),
+.topbarDate:active,
+.topbarIconButton:active,
+.themeSwitcher > button:active:not(:disabled),
+.commandResultPrimary:active:not(:disabled),
+.commandTrainingAction:active:not(:disabled),
+.mobileNav > a:active,
+.mobileNav > button:active:not(:disabled) {
+  transform: translateY(1px) scale(0.97);
+  transition-duration: var(--motion-fast);
+}
+
+.commandResultPrimary > svg:last-child {
+  transition: transform var(--motion-base) var(--motion-ease);
+}
+
+.commandResultPrimary:is(:hover, :focus-visible, .active) > svg:last-child {
+  transform: translateX(var(--motion-distance-1));
 }
 
 input,
@@ -1674,348 +1719,6 @@ a.homeFocusFigure:hover small {
 }
 
 
-.calendarDayPopoverPositioner {
-  position: fixed;
-  z-index: var(--z-popover);
-  width: min(340px, calc(100vw - 24px));
-}
-
-.calendarDayPopoverPositioner.above {
-  transform: translateY(-100%);
-}
-
-.calendarDayPopover {
-  position: relative;
-  display: grid;
-  max-height: min(430px, calc(100dvh - 24px));
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--accent-line) 62%, var(--line));
-  border-radius: 17px;
-  background: color-mix(in srgb, var(--surface-raised) 96%, transparent);
-  box-shadow: 0 22px 54px rgba(31, 28, 20, 0.2), 0 5px 16px rgba(31, 28, 20, 0.1);
-  backdrop-filter: blur(18px);
-}
-
-.calendarDayPopoverPositioner.below .calendarDayPopover {
-  transform-origin: var(--calendar-popover-arrow-x) top;
-  animation: calendar-popover-in-below 220ms var(--summit-ease) both;
-}
-
-.calendarDayPopoverPositioner.above .calendarDayPopover {
-  transform-origin: var(--calendar-popover-arrow-x) bottom;
-  animation: calendar-popover-in-above 220ms var(--summit-ease) both;
-}
-
-.calendarDayPopover::before {
-  position: absolute;
-  left: var(--calendar-popover-arrow-x);
-  width: 12px;
-  height: 12px;
-  border: 1px solid color-mix(in srgb, var(--accent-line) 62%, var(--line));
-  background: var(--surface-raised);
-  content: "";
-  transform: translateX(-50%) rotate(45deg);
-}
-
-.calendarDayPopoverPositioner.below .calendarDayPopover::before {
-  top: -7px;
-  border-right: 0;
-  border-bottom: 0;
-}
-
-.calendarDayPopoverPositioner.above .calendarDayPopover::before {
-  bottom: -7px;
-  border-top: 0;
-  border-left: 0;
-}
-
-.calendarDayPopoverHeader {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 17px 17px 13px;
-  background: linear-gradient(145deg, color-mix(in srgb, var(--accent-soft) 62%, var(--surface-raised)), var(--surface-raised));
-}
-
-.calendarDayPopoverHeader > div {
-  display: grid;
-  gap: 2px;
-}
-
-.calendarDayPopoverHeader span {
-  color: var(--accent);
-  font-size: 9px;
-  font-weight: 750;
-  letter-spacing: 0.08em;
-}
-
-.calendarDayPopoverHeader h2 {
-  margin: 0;
-  font-family: var(--font-serif);
-  font-size: 21px;
-}
-
-.calendarDayPopoverHeader button {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  place-items: center;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--surface-raised) 74%, transparent);
-  color: var(--muted);
-}
-
-.calendarDayPopoverHeader button:hover {
-  border-color: var(--accent-line);
-  color: var(--accent);
-}
-
-.calendarDayProgress {
-  display: grid;
-  gap: 7px;
-  padding: 13px 17px;
-  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
-  border-bottom: 1px solid var(--line);
-  background: var(--surface-soft);
-}
-
-.calendarDayProgress > div:first-child {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.calendarDayProgress > div:first-child span {
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 650;
-}
-
-.calendarDayProgress > div:first-child strong {
-  color: var(--accent);
-  font-family: var(--font-num);
-  font-size: 12px;
-}
-
-.calendarDayProgressTrack {
-  height: 4px;
-  overflow: hidden;
-  border-radius: 99px;
-  background: var(--line);
-}
-
-.calendarDayProgressTrack span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--accent);
-  transform-origin: left center;
-  transition: transform var(--motion-quick) var(--motion-ease);
-}
-
-.calendarDayProgress small {
-  color: var(--quiet);
-  font-size: 9px;
-}
-
-.calendarDayTaskList {
-  display: grid;
-  gap: 6px;
-  max-height: 218px;
-  padding: 10px;
-  overflow-y: auto;
-}
-
-.calendarDayTask,
-.calendarDayMilestone {
-  position: relative;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 9px;
-  min-height: 48px;
-  padding: 8px 9px 8px 12px;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  background: var(--surface-raised);
-}
-
-.calendarDayTask::before {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--muted);
-  content: "";
-}
-
-.calendarDayTask.priority1::before { background: var(--accent); }
-.calendarDayTask.priority2::before { background: var(--summit-blue); }
-
-.calendarDayTaskCheck {
-  display: grid;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  place-items: center;
-  border: 1px solid var(--accent-line);
-  border-radius: 6px;
-  background: var(--surface-raised);
-  color: var(--accent-ink);
-}
-
-.calendarDayTask.done .calendarDayTaskCheck {
-  border-color: var(--ok);
-  background: var(--ok);
-}
-
-.calendarDayTask > div,
-.calendarDayMilestone > div {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.calendarDayTask > div strong,
-.calendarDayMilestone strong {
-  overflow: hidden;
-  font-size: 11px;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.calendarDayTask > div small,
-.calendarDayMilestone small {
-  overflow: hidden;
-  color: var(--quiet);
-  font-size: 9px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.calendarDayTask > span {
-  color: var(--quiet);
-  font-family: var(--font-mono);
-  font-size: 8px;
-  font-weight: 700;
-}
-
-.calendarDayTaskRemove {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--quiet);
-}
-
-.calendarDayTaskRemove:hover {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.calendarDayComposer {
-  display: flex;
-  gap: 7px;
-  padding: 0 10px 10px;
-}
-
-.calendarDayComposer input {
-  flex: 1;
-  min-width: 0;
-  height: 38px;
-  padding-inline: 11px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface-raised);
-  font-size: 12px;
-}
-
-.calendarDayComposer button {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  padding: 0;
-  border: 0;
-  border-radius: 10px;
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-
-.calendarDayComposer button:disabled {
-  opacity: 0.45;
-}
-
-.calendarDayTask.done {
-  opacity: 0.62;
-}
-
-.calendarDayTask.done strong {
-  text-decoration: line-through;
-}
-
-.calendarDayMilestone {
-  grid-template-columns: auto minmax(0, 1fr);
-  color: var(--warn);
-  background: color-mix(in srgb, var(--warn-soft) 38%, var(--surface-raised));
-}
-
-.calendarDayMilestone small {
-  color: color-mix(in srgb, var(--warn) 64%, var(--muted));
-}
-
-.calendarDayEmpty {
-  display: grid;
-  place-items: center;
-  gap: 4px;
-  padding: 24px 12px;
-  color: var(--accent);
-  text-align: center;
-}
-
-.calendarDayEmpty strong { color: var(--ink); font-size: 12px; }
-.calendarDayEmpty span { color: var(--quiet); font-size: 10px; }
-
-.calendarDayDetailLink {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 42px;
-  padding: 10px 17px;
-  border-top: 1px solid var(--line);
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.calendarDayDetailLink:hover {
-  background: var(--accent-soft);
-}
-
-@keyframes calendar-popover-in-below {
-  from { opacity: 0; transform: translateY(-7px) scale(0.96); }
-}
-
-@keyframes calendar-popover-in-above {
-  from { opacity: 0; transform: translateY(7px) scale(0.96); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .calendarDayPopoverPositioner .calendarDayPopover {
-    animation-duration: 0.001ms;
-  }
-}
-
 .capturePanel,
 .commandPalette,
 .mobileMoreSheet,
@@ -2024,10 +1727,136 @@ a.homeFocusFigure:hover small {
   box-shadow: var(--shadow-lg);
 }
 
-/* Native route transitions */
+/* Dialog / sheet presence. Base UI keeps nodes mounted through ending-style,
+   so entry and exit share one accessible focus/inertness contract. */
+.commandBackdrop,
+.mobileMoreBackdrop {
+  opacity: 1;
+  transition: opacity var(--motion-panel) var(--motion-ease-enter);
+}
+
+.commandBackdrop[data-starting-style],
+.commandBackdrop[data-ending-style],
+.mobileMoreBackdrop[data-starting-style],
+.mobileMoreBackdrop[data-ending-style] {
+  opacity: 0;
+}
+
+.commandBackdrop[data-ending-style],
+.mobileMoreBackdrop[data-ending-style] {
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--motion-ease-exit);
+}
+
+.commandViewport {
+  position: fixed;
+  inset: 0;
+  z-index: 101;
+  display: grid;
+  padding: min(18vh, 150px) 16px 16px;
+  place-items: start center;
+}
+
+.commandPalette {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    opacity var(--motion-panel) var(--motion-ease-enter),
+    transform var(--motion-panel) var(--motion-ease-enter);
+}
+
+.commandPalette[data-starting-style],
+.commandPalette[data-ending-style] {
+  opacity: 0;
+  transform: translateY(calc(-1 * var(--motion-distance-2))) scale(0.985);
+}
+
+.commandPalette[data-ending-style] {
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--motion-ease-exit);
+}
+
+.mobileMoreViewport {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  align-items: end;
+  padding: 8px 8px calc(76px + env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+
+.mobileMoreSheet {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  width: 100%;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+  transition:
+    opacity var(--motion-panel) var(--motion-ease-enter),
+    transform var(--motion-panel) var(--motion-ease-enter);
+}
+
+.mobileMoreSheet > h2 {
+  margin: 0;
+  font: inherit;
+  font-weight: 680;
+}
+
+.mobileMoreClose {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-muted);
+  transition:
+    color var(--motion-fast) var(--motion-ease-standard),
+    background-color var(--motion-fast) var(--motion-ease-standard),
+    transform var(--motion-fast) var(--motion-ease-standard);
+}
+
+.mobileMoreClose:hover {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.mobileMoreClose:active {
+  transform: scale(0.94);
+}
+
+.mobileMoreSheet[data-starting-style],
+.mobileMoreSheet[data-ending-style] {
+  opacity: 0;
+  transform: translateY(var(--motion-distance-3));
+}
+
+.mobileMoreSheet[data-ending-style] {
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--motion-ease-exit);
+}
+
+/* Native route transitions: 同级切换、深入、返回使用不同的空间语义。
+   Topbar 是稳定锚点；退出短、进入长，且只动 opacity/transform。 */
 ::view-transition-group(ascend-topbar) {
-  animation-duration: 240ms;
-  animation-timing-function: var(--summit-ease);
+  z-index: 25;
+  animation: none;
+}
+
+::view-transition-old(ascend-topbar) {
+  display: none;
+}
+
+::view-transition-new(ascend-topbar) {
+  animation: none;
 }
 
 ::view-transition-old(ascend-page) {
@@ -2038,19 +1867,62 @@ a.homeFocusFigure:hover small {
   animation: summit-page-in var(--motion-page) var(--motion-ease-enter) both;
 }
 
+:active-view-transition-type(nav-switch)::view-transition-old(ascend-page) {
+  animation-name: summit-page-switch-out;
+}
+
+:active-view-transition-type(nav-switch)::view-transition-new(ascend-page) {
+  animation-name: summit-page-switch-in;
+}
+
+:active-view-transition-type(nav-forward)::view-transition-old(ascend-page) {
+  animation-name: summit-page-forward-out;
+}
+
 :active-view-transition-type(nav-forward)::view-transition-new(ascend-page) {
-  animation-name: summit-page-forward;
+  animation-name: summit-page-forward-in;
+}
+
+:active-view-transition-type(nav-back)::view-transition-old(ascend-page) {
+  animation-name: summit-page-back-out;
+}
+
+:active-view-transition-type(nav-back)::view-transition-new(ascend-page) {
+  animation-name: summit-page-back-in;
 }
 
 @keyframes summit-page-out {
-  to { opacity: 0; transform: translateY(-4px) scale(0.997); }
+  to { opacity: 0; transform: translateY(calc(-1 * var(--motion-distance-1))); }
 }
 
 @keyframes summit-page-in {
-  from { opacity: 0; transform: translateY(9px) scale(0.997); }
+  from { opacity: 0; transform: translateY(var(--motion-distance-2)); }
 }
 
-.commandPalette,
+@keyframes summit-page-switch-out {
+  to { opacity: 0; transform: translateY(calc(-1 * var(--motion-distance-1))); }
+}
+
+@keyframes summit-page-switch-in {
+  from { opacity: 0; transform: translateY(var(--motion-distance-1)); }
+}
+
+@keyframes summit-page-forward-out {
+  to { opacity: 0; transform: translateX(calc(-1 * var(--motion-distance-2))); }
+}
+
+@keyframes summit-page-forward-in {
+  from { opacity: 0; transform: translateX(var(--motion-distance-3)); }
+}
+
+@keyframes summit-page-back-out {
+  to { opacity: 0; transform: translateX(var(--motion-distance-2)); }
+}
+
+@keyframes summit-page-back-in {
+  from { opacity: 0; transform: translateX(calc(-1 * var(--motion-distance-3))); }
+}
+
 .confirmDialog {
   animation: captureMenuIn var(--motion-fast) var(--motion-ease-enter) both;
 }
@@ -2100,7 +1972,6 @@ a.homeFocusFigure:hover small {
 /* 所有数值进度使用完整轨道 + scaleX，端点布局保持稳定。 */
 .progressTrack span,
 .taskProgress span,
-.calendarDayProgressTrack span,
 .mockScoreProgress i,
 .uploadProgress > span,
 .quotaTrack span,
@@ -2109,10 +1980,6 @@ a.homeFocusFigure:hover small {
   width: 100%;
   transform-origin: left center;
   transition: transform var(--motion-quick) var(--motion-ease);
-}
-
-@keyframes summit-page-forward {
-  from { opacity: 0; transform: translateX(12px); }
 }
 
 /* 首页入场编排：按决策顺序错峰，每日首次冷加载播一次。
@@ -2133,8 +2000,9 @@ a.homeFocusFigure:hover small {
   from { transform: scaleX(0); }
 }
 
-/* 首页退订旧层 riseIn：编排（冷加载）与 ViewTransition（页内导航）各司其职，避免双重位移 */
-.mainPane > .pageStack.homePage > * {
+/* 所有正式页面退订旧层逐卡 riseIn：路由由 ViewTransition 统一接管；
+   首页仅保留每日首次、由 data-intro 门控的决策顺序编排。 */
+.mainPane > .pageStack > * {
   animation: none;
 }
 
@@ -2304,6 +2172,17 @@ html[data-intro="play"] .homeFocus[data-state="summit"] .homeSeal {
 }
 
 @media (max-width: 640px) {
+  .commandViewport {
+    align-items: end;
+    padding: max(10px, var(--app-safe-top)) max(10px, var(--app-safe-right))
+      max(10px, var(--app-safe-bottom)) max(10px, var(--app-safe-left));
+  }
+
+  .commandPalette[data-starting-style],
+  .commandPalette[data-ending-style] {
+    transform: translateY(var(--motion-distance-3)) scale(0.99);
+  }
+
   .card {
     padding: 18px;
     border-radius: 15px;

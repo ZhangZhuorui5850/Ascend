@@ -7,6 +7,8 @@ import styles from "@/styles/planner/primitives.module.css";
 
 export type PlannerDrawerSurface = "drawer" | "sheet";
 
+const SHEET_SNAP_POINTS: Drawer.Root.SnapPoint[] = [0.42, 0.92];
+
 export function PlannerDrawer({
   children,
   description,
@@ -27,7 +29,7 @@ export function PlannerDrawer({
   triggerRef?: RefObject<HTMLElement | null>;
 }) {
   const sheet = surface === "sheet";
-  const snapPoints: Drawer.Root.SnapPoint[] | undefined = sheet ? [0.42, 0.92] : undefined;
+  const snapPoints = sheet ? SHEET_SNAP_POINTS : undefined;
   const portal = (
     <Drawer.Portal>
       <Drawer.Backdrop className={styles.backdrop} data-planner-backdrop />
@@ -65,6 +67,7 @@ export function PlannerDrawer({
   return (
     <Drawer.Root
       defaultSnapPoint={sheet ? snapPoints?.[0] : undefined}
+      key={surface}
       onOpenChange={onOpenChange}
       open={open}
       snapPoints={snapPoints}

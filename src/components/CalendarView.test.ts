@@ -6,6 +6,7 @@ const compatibility = readFileSync(new URL("./CalendarView.tsx", import.meta.url
 const canvas = readFileSync(new URL("./calendar/CalendarCanvas.tsx", import.meta.url), "utf8");
 const eventContent = readFileSync(new URL("./calendar/CalendarEventContent.tsx", import.meta.url), "utf8");
 const dayPopover = readFileSync(new URL("./calendar/CalendarDayPopover.tsx", import.meta.url), "utf8");
+const taskActions = readFileSync(new URL("../app/actions/calendar-tasks.ts", import.meta.url), "utf8");
 const contextRail = readFileSync(new URL("./calendar/CalendarContextRail.tsx", import.meta.url), "utf8");
 const mobileSheet = readFileSync(new URL("./calendar/CalendarMobileSheet.tsx", import.meta.url), "utf8");
 const inspector = readFileSync(new URL("./calendar/CalendarEventInspector.tsx", import.meta.url), "utf8");
@@ -13,7 +14,6 @@ const composer = readFileSync(new URL("./calendar/CalendarEventComposer.tsx", im
 const inbox = readFileSync(new URL("./calendar/CalendarTaskInbox.tsx", import.meta.url), "utf8");
 const calendarStyles = readFileSync(new URL("../styles/planner/calendar.module.css", import.meta.url), "utf8");
 const page = readFileSync(new URL("../app/calendar/page.tsx", import.meta.url), "utf8");
-const styles = readFileSync(new URL("../styles/summit.css", import.meta.url), "utf8");
 const plannerFields = readFileSync(new URL("./ui/PlannerFormFields.tsx", import.meta.url), "utf8");
 const primitiveStyles = readFileSync(new URL("../styles/planner/primitives.module.css", import.meta.url), "utf8");
 const globalStyles = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
@@ -25,7 +25,15 @@ describe("calendar day schedule popover", () => {
     expect(source).toContain("onOpenDay={(day, trigger) => openDay(day, trigger)}");
     expect(dayPopover).toContain('from "@base-ui/react/popover"');
     expect(dayPopover).toContain("Popover.Portal");
-    expect(dayPopover).toContain("finalFocus={() => popover.anchorElement}");
+    expect(dayPopover).toContain("popover.anchorElement.isConnected ? popover.anchorElement : false");
+    expect(source).toContain("const rect = anchorElement.getBoundingClientRect()");
+    expect(source).toContain("anchorRect:");
+    expect(dayPopover).toContain("anchor={virtualAnchor}");
+    expect(dayPopover).toContain("onOpenChangeComplete");
+    expect(dayPopover).toContain("useState(false)");
+    expect(dayPopover).toContain("window.requestAnimationFrame");
+    expect(dayPopover).toContain("setOpen(true)");
+    expect(dayPopover).toContain("if (!nextOpen && hasOpenedRef.current) onClose()");
   });
 
   it("keeps task completion and full-detail navigation in the day card", () => {
@@ -33,7 +41,7 @@ describe("calendar day schedule popover", () => {
     expect(source).toContain("expectedVersion: task.version");
     expect(source).toContain('applyOptimisticTask({ type: "patch"');
     expect(dayPopover).toContain('role="checkbox"');
-    expect(dayPopover).toContain('href={`/day/${popover.day}`}');
+    expect(dayPopover).toContain("href={`/day/${popover.day}`}");
     expect(dayPopover).toContain("进入当日详情");
     expect(source).not.toContain("router.refresh()");
   });
@@ -43,10 +51,18 @@ describe("calendar day schedule popover", () => {
     expect(source).toContain("deleteCalendarTaskAction");
     expect(source).toContain("useOptimistic(");
     expect(source).toContain("startTransition(");
-    expect(dayPopover).toContain("calendarDayComposer");
-    expect(dayPopover).toContain("calendarDayTaskRemove");
-    expect(styles).toContain(".calendarDayComposer");
-    expect(styles).toContain(".calendarDayTaskRemove");
+    expect(dayPopover).toContain("styles.dayComposer");
+    expect(dayPopover).toContain("styles.dayTaskRemove");
+    expect(dayPopover).toContain("key={task.clientKey ?? task.id}");
+    expect(dayPopover).toContain("data-entering={Boolean(task.clientKey)}");
+    expect(dayPopover).toContain("data-pending={Boolean(task.pending)}");
+    expect(dayPopover).toContain("list.scrollTo");
+    expect(dayPopover).toContain('aria-live="polite"');
+    expect(calendarStyles).toContain(".dayComposer");
+    expect(calendarStyles).toContain(".dayTaskRemove");
+    expect(calendarStyles).toContain("day-task-draft-in");
+    expect(taskActions).toContain('import { after } from "next/server"');
+    expect(taskActions).toContain("after(revalidateTaskViews)");
   });
 
   it("keeps Calendar tasks on canonical UUID and versioned Planner mutations", () => {
@@ -79,11 +95,25 @@ describe("calendar day schedule popover", () => {
     expect(source).toContain("location");
   });
 
-  it("anchors and animates the card above or below the clicked date", () => {
-    expect(styles).toContain(".calendarDayPopoverPositioner.above");
-    expect(styles).toContain("calendar-popover-in-below");
-    expect(styles).toContain("calendar-popover-in-above");
-    expect(styles).toContain("--calendar-popover-arrow-x");
+  it("uses Base UI side and presence attributes for enter and exit motion", () => {
+    expect(calendarStyles).toContain('.dayPopover[data-side="bottom"][data-starting-style]');
+    expect(calendarStyles).toContain('.dayPopover[data-side="top"][data-starting-style]');
+    expect(calendarStyles).toContain("@starting-style");
+    expect(calendarStyles).toContain('.dayPopover[data-side="bottom"][data-ending-style]');
+    expect(calendarStyles).toContain('.dayPopover[data-side="top"][data-ending-style]');
+    for (const side of ["bottom", "top", "left", "right"]) {
+      expect(calendarStyles).toContain(`.dayPopover[data-open][data-side="${side}"]`);
+      expect(calendarStyles).toContain(`day-popover-enter-${side}`);
+    }
+    expect(calendarStyles).toMatch(
+      /\.dayPopover\[data-ending-style\][\s\S]*?var\(--motion-fast\)[\s\S]*?var\(--motion-ease-exit\)/,
+    );
+    expect(calendarStyles).toContain("grid-template-rows: auto auto minmax(0, 1fr) auto auto");
+    expect(calendarStyles).toContain("height: min(500px, calc(100dvh - 24px))");
+    expect(calendarStyles).toContain("height: min(390px, calc(100dvh - 24px))");
+    expect(calendarStyles).toContain('.dayTask[data-entering="true"]');
+    expect(dayPopover).toContain("className={styles.dayPopoverClose}");
+    expect(dayPopover).toContain('<X aria-hidden="true"');
   });
 
   it("keeps CalendarView as a small compatibility entry over the split workspace", () => {
@@ -158,14 +188,16 @@ describe("calendar day schedule popover", () => {
   });
 
   it("resets the event reschedule form when selection changes", () => {
-    expect(inspector).toContain('key={`${event.id}:${event.version}:reschedule`}');
+    expect(inspector).toContain("key={`${event.id}:${event.version}:reschedule`}");
   });
 
   it("keeps overview as one quiet summary and leaves task scheduling compact until requested", () => {
     const overview = readFileSync(new URL("./calendar/CalendarOverview.tsx", import.meta.url), "utf8");
     expect(overview).not.toContain("overviewItem");
     expect(overview).toContain("已安排");
-    expect(inbox).toContain('editing ? <div className={styles.scheduleControls}>');
+    expect(inbox).toContain("editing ? (");
+    expect(inbox).toContain("className={styles.scheduleControls}");
+    expect(inbox).toContain("aria-expanded={editing}");
     expect(calendarStyles).toContain(".scheduleToggle");
   });
 

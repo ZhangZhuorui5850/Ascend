@@ -6,7 +6,9 @@ const actions = readFileSync(new URL("../app/actions/planner-tasks.ts", import.m
 const page = readFileSync(new URL("../app/tasks/page.tsx", import.meta.url), "utf8");
 const sidebar = readFileSync(new URL("./Sidebar.tsx", import.meta.url), "utf8");
 const workspace = readFileSync(new URL("./planner/PlannerTasksWorkspace.tsx", import.meta.url), "utf8");
+const plannerSidebar = readFileSync(new URL("./planner/PlannerSidebar.tsx", import.meta.url), "utf8");
 const quickCapture = readFileSync(new URL("./planner/PlannerQuickCapture.tsx", import.meta.url), "utf8");
+const taskList = readFileSync(new URL("./planner/PlannerTaskList.tsx", import.meta.url), "utf8");
 const taskRow = readFileSync(new URL("./planner/PlannerTaskRow.tsx", import.meta.url), "utf8");
 const batchBar = readFileSync(new URL("./planner/PlannerBatchBar.tsx", import.meta.url), "utf8");
 const taskSheet = readFileSync(new URL("./planner/PlannerTaskSheet.tsx", import.meta.url), "utf8");
@@ -42,7 +44,7 @@ describe("Planner Tasks Phase 2 surface", () => {
 
   it("exposes the tasks route and navigation entry", () => {
     expect(page).toContain('requirePageWorkspace("/tasks")');
-    expect(page).toContain("listTaskView(");
+    expect(page).toContain("listTaskViewSource(");
     expect(sidebar).toContain('href: "/tasks"');
   });
 
@@ -58,10 +60,27 @@ describe("Planner Tasks Phase 2 surface", () => {
   it("uses Motion layout semantics for task insertion, completion, deletion, and selection", () => {
     expect(taskRow).toContain('from "motion/react"');
     expect(taskRow).toContain('layout={reduced ? false : "position"}');
+    expect(taskRow).toContain("initial={contract.enter}");
     expect(taskRow).toContain("layoutId");
-    expect(workspace).toContain("AnimatePresence");
-    expect(workspace).toContain('mode="popLayout"');
+    expect(taskList).toContain("AnimatePresence");
+    expect(taskList).toContain('mode="popLayout"');
     expect(workspace).toContain("LayoutGroup");
+  });
+
+  it("switches task views inside the mounted workspace while preserving URL history", () => {
+    expect(workspace).toContain("filterPlannerTaskView(");
+    expect(workspace).toContain("window.history.pushState");
+    expect(workspace).toContain('window.addEventListener("popstate"');
+    expect(workspace).not.toContain("startViewTransition");
+    expect(workspace).toContain('key={activeListId ? `list:${activeListId}` : `view:${activeView}`}');
+    expect(workspace).toContain("const selected = tasks.find");
+    expect(workspace).not.toContain("const selected = visibleTasks.find");
+    expect(workspace).not.toContain("router.refresh()");
+    expect(plannerSidebar).not.toContain('from "next/link"');
+    expect(plannerSidebar).not.toContain("href={`/tasks?view=");
+    expect(plannerSidebar).toContain("onViewChange(item.id)");
+    expect(page).toContain("taskSource.tasks");
+    expect(page).toContain("taskViewContext");
   });
 
   it("uses a right Drawer on tablet and a keyboard-aware bottom Sheet on mobile", () => {
@@ -139,11 +158,17 @@ describe("Planner Tasks Phase 2 surface", () => {
     expect(workspace).toContain('waiting: "等待"');
     expect(workspace).toContain('completed: "已完成"');
     expect(workspace).toContain('canceled: "已取消"');
-    expect(workspace).not.toContain('return `${task.status}');
+    expect(workspace).not.toContain("return `${task.status}");
     expect(taskStyles).toContain("var(--planner-field)");
-    expect(taskStyles).toMatch(/\.taskTitleField input\[data-planner-field-variant="underline"\]\s*\{[^}]*border-top-color: transparent;[^}]*border-right-color: transparent;[^}]*border-bottom-color: var\(--planner-field-line\);[^}]*border-left-color: transparent;/s);
-    expect(taskStyles).toMatch(/\.taskTitleField input\[data-planner-field-variant="underline"\]:hover\s*\{[^}]*border-top-color: transparent;[^}]*border-right-color: transparent;[^}]*border-bottom-color: var\(--line-strong\);[^}]*border-left-color: transparent;/s);
-    expect(taskStyles).toMatch(/\.taskTitleField input\[data-planner-field-variant="underline"\]:focus-visible\s*\{[^}]*border-top-color: transparent;[^}]*border-right-color: transparent;[^}]*border-bottom-color: var\(--accent\);[^}]*border-left-color: transparent;/s);
+    expect(taskStyles).toMatch(
+      /\.taskTitleField input\[data-planner-field-variant="underline"\]\s*\{[^}]*border-top-color: transparent;[^}]*border-right-color: transparent;[^}]*border-bottom-color: var\(--planner-field-line\);[^}]*border-left-color: transparent;/s,
+    );
+    expect(taskStyles).toMatch(
+      /\.taskTitleField input\[data-planner-field-variant="underline"\]:hover\s*\{[^}]*border-top-color: transparent;[^}]*border-right-color: transparent;[^}]*border-bottom-color: var\(--line-strong\);[^}]*border-left-color: transparent;/s,
+    );
+    expect(taskStyles).toMatch(
+      /\.taskTitleField input\[data-planner-field-variant="underline"\]:focus-visible\s*\{[^}]*border-top-color: transparent;[^}]*border-right-color: transparent;[^}]*border-bottom-color: var\(--accent\);[^}]*border-left-color: transparent;/s,
+    );
   });
 
   it("shows Inspector save only for the current dirty task version and preserves failure retry", () => {
@@ -161,12 +186,14 @@ describe("Planner Tasks Phase 2 surface", () => {
     expect(footerRule).not.toMatch(/position:\s*(sticky|fixed)/);
     expect(footerRule).not.toContain("bottom:");
     expect(footerRule).not.toContain("z-index:");
-    expect(bodyRule).toContain("padding: 14px 16px;");
+    expect(bodyRule).toContain("padding: 16px;");
     expect(bodyRule).not.toContain("88px");
   });
 
   it("does not keep a nested sticky header over mobile Sheet form fields", () => {
-    expect(taskStyles).toMatch(/:global\(\[data-planner-surface="sheet"\]\) \.inspectorHeader\s*\{\s*position: static;/);
+    expect(taskStyles).toMatch(
+      /:global\(\[data-planner-surface="sheet"\]\) \.inspectorHeader\s*\{\s*position: static;/,
+    );
   });
 
   it("consumes the reduced semantic contracts instead of leaving them as dead presets", () => {
