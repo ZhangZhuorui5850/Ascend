@@ -161,12 +161,16 @@
 .chapterContext > strong { flex-shrink: 0; color: var(--accent); font-size: 20px; font-variant-numeric: tabular-nums; }
 .libraryHeader { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; color: var(--muted); font-size: 12.5px; }
 .libraryHeaderActions { display: flex; align-items: center; flex-shrink: 0; gap: 10px; }
+.selectAll { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+.selectAll input { margin: 0; accent-color: var(--accent); }
 .searchField { display: flex; align-items: center; gap: 8px; flex: 1; min-height: 38px; padding: 0 11px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--muted); }
 .searchField:focus-within { border-color: var(--accent); }
 .searchField input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); }
 .bulkBar[data-visible="true"] { display: flex; }
 .bulkBar button { min-height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--ink); }
 .bulkBar button:hover { border-color: var(--accent); color: var(--accent); }
+.bulkBar .bulkDelete { border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); color: var(--danger); }
+.bulkBar .bulkDelete:hover { border-color: var(--danger); color: var(--danger); }
 .bulkBar input,
 .bulkBar select { min-height: 32px; max-width: 135px; }
 .bulkBar .shortInput { max-width: 62px; }

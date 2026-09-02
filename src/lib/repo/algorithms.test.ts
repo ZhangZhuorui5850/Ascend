@@ -1,14 +1,50 @@
 import { describe, expect, it } from "vitest";
 import {
   createAlgorithmProblem,
+  deleteAlgorithmProblems,
   getAlgorithmDashboard,
   recordAlgorithmAttempt,
   updateAlgorithmProblemDetails,
 } from "./algorithms";
+import { getAlgorithmTrainingRelations, scheduleAlgorithmProblems } from "./algorithm-training";
 import { setPluginEnabled } from "./plugins";
 import { createTestDb, createTestWorkspace } from "./testing";
 
 describe("algorithm training repo", () => {
+  it("deletes selected problems and their active plans within the current workspace", () => {
+    const db = createTestDb();
+    const scope = createTestWorkspace(db);
+    const other = createTestWorkspace(db, { email: "algorithm-delete-other@example.com" });
+    setPluginEnabled(db, scope, "algorithms", true);
+    setPluginEnabled(db, other, "algorithms", true);
+    const removed = createAlgorithmProblem(db, scope, { sourceUrl: "https://example.com/remove", title: "待删除", tags: ["动态规划"] });
+    const kept = createAlgorithmProblem(db, scope, { sourceUrl: "https://example.com/keep", title: "保留", tags: ["动态规划"] });
+    const foreign = createAlgorithmProblem(db, other, { sourceUrl: "https://example.com/foreign", title: "其他空间" });
+    scheduleAlgorithmProblems(db, scope, { problemIds: [removed.id, kept.id], day: "2026-09-02" });
+    const removedPlan = getAlgorithmTrainingRelations(db, scope).plans.find((plan) => plan.problemId === removed.id)!;
+    recordAlgorithmAttempt(db, scope, {
+      problemId: removed.id,
+      day: "2026-09-01",
+      verdict: "AC",
+    });
+    recordAlgorithmAttempt(db, scope, {
+      problemId: kept.id,
+      day: "2026-09-02",
+      verdict: "AC",
+      reviewKind: "unseen_variant",
+      transferSourceProblemId: removed.id,
+    });
+
+    expect(() => deleteAlgorithmProblems(db, scope, { problemIds: [foreign.id] })).toThrow("删除范围包含无效题目");
+    deleteAlgorithmProblems(db, scope, { problemIds: [removed.id] });
+
+    expect(getAlgorithmDashboard(db, scope, "2026-09-02").problems.map((problem) => problem.id)).toEqual([kept.id]);
+    expect(getAlgorithmDashboard(db, other, "2026-09-02").problems.map((problem) => problem.id)).toEqual([foreign.id]);
+    expect(getAlgorithmTrainingRelations(db, scope).plans.map((plan) => plan.problemId)).toEqual([kept.id]);
+    expect(db.prepare("SELECT deleted_at IS NOT NULL AS deleted FROM planner_tasks WHERE id = ?").get(removedPlan.taskId)).toEqual({ deleted: 1 });
+    expect(db.prepare("SELECT transfer_source_problem_id AS source FROM algorithm_attempts WHERE workspace_id = ? AND problem_id = ?").get(scope.workspaceId, kept.id)).toEqual({ source: null });
+  });
+
   it("updates VS Code quick-edit metadata within the active workspace", () => {
     const db = createTestDb();
     const scope = createTestWorkspace(db);

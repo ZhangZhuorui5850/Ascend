@@ -10,7 +10,7 @@ import { getDb } from "@/lib/db";
 import { importAlgorithmScan } from "@/lib/repo/algorithm-import";
 import { approveAlgorithmDevicePairing } from "@/lib/repo/algorithm-device-pairings";
 import { createAlgorithmDevice, revokeAlgorithmDevice } from "@/lib/repo/algorithm-devices";
-import { createAlgorithmProblem, updateAlgorithmProblemDetails } from "@/lib/repo/algorithms";
+import { createAlgorithmProblem, deleteAlgorithmProblems, updateAlgorithmProblemDetails } from "@/lib/repo/algorithms";
 import { setAlgorithmCurriculumChapter } from "@/lib/repo/algorithm-curriculum";
 import {
   completeAlgorithmPlan,
@@ -175,6 +175,17 @@ export async function createAlgorithmProblemAction(input: {
     return { ok: true };
   } catch (error) {
     return actionFailure("algorithms", error, "题目保存失败");
+  }
+}
+
+export async function deleteAlgorithmProblemsAction(input: { problemIds: number[] }): Promise<ActionResult> {
+  try {
+    const access = await requireWorkspace();
+    deleteAlgorithmProblems(getDb(), access, input);
+    revalidateAlgorithmViews();
+    return { ok: true };
+  } catch (error) {
+    return actionFailure("algorithms", error, "题目删除失败");
   }
 }
 

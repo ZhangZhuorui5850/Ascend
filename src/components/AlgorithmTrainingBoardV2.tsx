@@ -1,10 +1,10 @@
 "use client";
 
-import { CalendarDays, Check, ChevronDown, Circle, Code2, FileDown, FileCode2, FileUp, FolderOpen, GripVertical, LibraryBig, Plus, RefreshCw, Search, Settings2, UploadCloud, X } from "lucide-react";
+import { CalendarDays, Check, ChevronDown, Circle, Code2, FileDown, FileCode2, FileUp, FolderOpen, GripVertical, LibraryBig, Plus, RefreshCw, Search, Settings2, Trash2, UploadCloud, X } from "lucide-react";
 import { Dialog } from "@base-ui/react/dialog";
 import { useRouter, useSearchParams } from "next/navigation";
 import { startTransition, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { finishAlgorithmPlanAction, finishDueAlgorithmReviewAction, moveAlgorithmProblemsAction, removeAlgorithmPlanAction, reorderAlgorithmPlansAction, scheduleAlgorithmProblemsAction, revokeAlgorithmDeviceAction, setAlgorithmCurriculumChapterAction, setAlgorithmCourseAction } from "@/app/actions/algorithms";
+import { deleteAlgorithmProblemsAction, finishAlgorithmPlanAction, finishDueAlgorithmReviewAction, moveAlgorithmProblemsAction, removeAlgorithmPlanAction, reorderAlgorithmPlansAction, scheduleAlgorithmProblemsAction, revokeAlgorithmDeviceAction, setAlgorithmCurriculumChapterAction, setAlgorithmCourseAction } from "@/app/actions/algorithms";
 import { useFeedback } from "@/components/FeedbackProvider";
 import { MarkdownContent } from "@/components/MarkdownContent";
 import plannerStyles from "@/styles/planner/primitives.module.css";
@@ -60,8 +60,8 @@ function parseUrlId(value: string | null): number | null {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-function normalizeLibraryFilter(value: string | null, initialChapter: { key: string } | null | undefined): LibraryFilter {
-  if (!value) return initialChapter ? `chapter:${initialChapter.key}` : "all";
+function normalizeLibraryFilter(value: string | null): LibraryFilter {
+  if (!value) return "all";
   if (value === "all" || value === "curriculum" || value === "todo" || value === "done" || value === "review" || value.startsWith("chapter:") || value.startsWith("course:") || value.startsWith("stage:") || value.startsWith("folder:")) {
     return value as LibraryFilter;
   }
@@ -130,7 +130,7 @@ export function AlgorithmTrainingBoardV2({ dashboard, devices, judgeAvailability
     updateUrl({ problem: String(id), tab: "library" }, "push");
   };
 
-  function mutate(action: () => Promise<{ ok: boolean; error?: string }>, success: string) {
+  function mutate(action: () => Promise<{ ok: boolean; error?: string }>, success: string, onSuccess?: () => void) {
     if (pending) return;
     setPending(true);
     startTransition(async () => {
@@ -140,6 +140,7 @@ export function AlgorithmTrainingBoardV2({ dashboard, devices, judgeAvailability
           notify(result.error || "操作失败", "error");
           return;
         }
+        onSuccess?.();
         notify(success);
         router.refresh();
       } catch (reason) {
@@ -148,6 +149,21 @@ export function AlgorithmTrainingBoardV2({ dashboard, devices, judgeAvailability
       } finally {
         setPending(false);
       }
+    });
+  }
+
+  function deleteProblems(problemIds: number[]) {
+    void confirm({
+      title: `删除 ${problemIds.length} 道题？`,
+      description: "题面、参考代码、算法训练记录、题库关系及关联训练计划会被删除。已完成的学习证据继续保留。此操作无法撤销。",
+      confirmLabel: "删除题目",
+      danger: true,
+    }).then((accepted) => {
+      if (!accepted) return;
+      mutate(() => deleteAlgorithmProblemsAction({ problemIds }), `已删除 ${problemIds.length} 道题`, () => {
+        setSelectedIds([]);
+        if (selectedProblemId && problemIds.includes(selectedProblemId)) openProblem(null);
+      });
     });
   }
 
@@ -209,7 +225,7 @@ export function AlgorithmTrainingBoardV2({ dashboard, devices, judgeAvailability
         />
       </div>
       <div hidden={section !== "library"}>
-        <LibraryView dashboard={dashboard} onAddPlan={(problemIds, day) => mutate(() => scheduleAlgorithmProblemsAction({ problemIds, day }), `已加入 ${day} 的训练计划`)} onMove={(problemIds, folderId) => mutate(() => moveAlgorithmProblemsAction({ problemIds, folderId }), "题目位置已更新")} onSetCourse={(problemIds, courseName, stageKey) => mutate(() => setAlgorithmCourseAction({ problemIds, courseName, stageKey }), "来源题单已保存")} onSetCurriculum={(problemIds, chapterKey) => mutate(() => setAlgorithmCurriculumChapterAction({ problemIds, chapterKey }), "课程章节已同步")} relations={relations} selectedIds={selectedIds} selectedProblemId={selectedProblemId} setSelectedIds={setSelectedIds} setOpenProblem={openProblem} today={today} filterParam={searchParams.get("filter")} queryParam={searchParams.get("q") ?? ""} sortParam={searchParams.get("sort")} pageParam={searchParams.get("page")} updateUrl={updateUrl} />
+        <LibraryView dashboard={dashboard} onAddPlan={(problemIds, day) => mutate(() => scheduleAlgorithmProblemsAction({ problemIds, day }), `已加入 ${day} 的训练计划`)} onDelete={deleteProblems} onMove={(problemIds, folderId) => mutate(() => moveAlgorithmProblemsAction({ problemIds, folderId }), "题目位置已更新")} onSetCourse={(problemIds, courseName, stageKey) => mutate(() => setAlgorithmCourseAction({ problemIds, courseName, stageKey }), "来源题单已保存")} onSetCurriculum={(problemIds, chapterKey) => mutate(() => setAlgorithmCurriculumChapterAction({ problemIds, chapterKey }), "课程章节已同步")} relations={relations} selectedIds={selectedIds} selectedProblemId={selectedProblemId} setSelectedIds={setSelectedIds} setOpenProblem={openProblem} today={today} filterParam={searchParams.get("filter")} queryParam={searchParams.get("q") ?? ""} sortParam={searchParams.get("sort")} pageParam={searchParams.get("page")} updateUrl={updateUrl} />
       </div>
 
       {pickerOpen ? (
@@ -469,7 +485,7 @@ function TodayView({ dashboard, onComplete, onOpenPicker, onOpenProblem, onRemov
   );
 }
 
-function LibraryView({ dashboard, onAddPlan, onMove, onSetCourse, onSetCurriculum, relations, selectedIds, selectedProblemId, setSelectedIds, setOpenProblem, today, filterParam, queryParam, sortParam, pageParam, updateUrl }: { dashboard: AlgorithmDashboard; onAddPlan: (ids: number[], day: string) => void; onMove: (ids: number[], folderId: string | null) => void; onSetCourse: (ids: number[], courseName: string, stageKey: string) => void; onSetCurriculum: (ids: number[], chapterKey: string) => void; relations: AlgorithmTrainingRelations; selectedIds: number[]; selectedProblemId: number | null; setSelectedIds: (ids: number[]) => void; setOpenProblem: (id: number | null) => void; today: string; filterParam: string | null; queryParam: string; sortParam: string | null; pageParam: string | null; updateUrl: (entries: Record<string, string | null>, mode: "push" | "replace") => void }) {
+function LibraryView({ dashboard, onAddPlan, onDelete, onMove, onSetCourse, onSetCurriculum, relations, selectedIds, selectedProblemId, setSelectedIds, setOpenProblem, today, filterParam, queryParam, sortParam, pageParam, updateUrl }: { dashboard: AlgorithmDashboard; onAddPlan: (ids: number[], day: string) => void; onDelete: (ids: number[]) => void; onMove: (ids: number[], folderId: string | null) => void; onSetCourse: (ids: number[], courseName: string, stageKey: string) => void; onSetCurriculum: (ids: number[], chapterKey: string) => void; relations: AlgorithmTrainingRelations; selectedIds: number[]; selectedProblemId: number | null; setSelectedIds: (ids: number[]) => void; setOpenProblem: (id: number | null) => void; today: string; filterParam: string | null; queryParam: string; sortParam: string | null; pageParam: string | null; updateUrl: (entries: Record<string, string | null>, mode: "push" | "replace") => void }) {
   const curriculumChapters = useMemo(
     () =>
       relations.curriculum.chapters.map((chapter) => ({
@@ -498,7 +514,7 @@ function LibraryView({ dashboard, onAddPlan, onMove, onSetCourse, onSetCurriculu
   const currentChapter = curriculumStats.find((item) => item.total > 0 && item.completed < item.total) ?? curriculumStats.find((item) => item.total > 0) ?? null;
   const initialChapter = selectedProblemId ? (curriculumByProblem.get(selectedProblemId) ?? currentChapter?.chapter) : currentChapter?.chapter;
   // 筛选/搜索/排序/页码由 URL 驱动（见主组件契约），刷新与回退都能保住现场。
-  const filter = normalizeLibraryFilter(filterParam, initialChapter);
+  const filter = normalizeLibraryFilter(filterParam);
   const query = queryParam;
   const tableSort = parseTableSortParam(sortParam);
   const pageIndex = Math.max(0, Number.parseInt(pageParam ?? "0", 10) || 0);
@@ -688,6 +704,7 @@ function LibraryView({ dashboard, onAddPlan, onMove, onSetCourse, onSetCurriculu
   const selectedChapterStats = filter.startsWith("chapter:") ? (curriculumStats.find((item) => item.chapter.key === filter.slice(8)) ?? null) : null;
   const curriculumCompleted = dashboard.problems.filter(isAlgorithmCompleted).length;
   const hiddenSelectedCount = selectedIds.filter((id) => !filtered.some((problem) => problem.id === id)).length;
+  const allFilteredSelected = filtered.length > 0 && filtered.every((item) => selectedIds.includes(item.id));
 
   return (
     <section className={styles.libraryLayout} data-detail-open={selectedProblem ? "true" : undefined} style={detailWidth ? ({ "--alg-detail-w": `${detailWidth}px` } as React.CSSProperties) : undefined}>
@@ -778,7 +795,10 @@ function LibraryView({ dashboard, onAddPlan, onMove, onSetCourse, onSetCurriculu
             <input placeholder="搜索名称、题号或分类" value={query} onChange={(event) => changeQuery(event.target.value)} />
           </label>
           <div className={styles.libraryHeaderActions}>
-            <span>{filtered.length} 道题</span>
+            <label className={styles.selectAll}>
+              <input checked={allFilteredSelected} disabled={!filtered.length} type="checkbox" onChange={(event) => setSelectedIds(event.target.checked ? filtered.map((problem) => problem.id) : [])} />
+              全选 {filtered.length} 道题
+            </label>
             <button className={styles.secondaryButton} disabled={!filtered.length} onClick={() => setExportProblemIds(filtered.map((problem) => problem.id))}>
               <FileDown size={15} /> 导出当前结果
             </button>
@@ -797,11 +817,14 @@ function LibraryView({ dashboard, onAddPlan, onMove, onSetCourse, onSetCurriculu
           <strong>已选 {selectedIds.length}</strong>
           {hiddenSelectedCount > 0 ? <span className={styles.bulkHint}>其中 {hiddenSelectedCount} 道不在当前筛选内</span> : null}
           <button className={styles.bulkClear} onClick={() => setSelectedIds([])} type="button">
-            清除
+            取消选择
           </button>
           <span className={styles.bulkDivider} aria-hidden />
           <button onClick={() => setExportProblemIds(selectedIds)}>
             <FileDown size={15} /> 导出题库包
+          </button>
+          <button className={styles.bulkDelete} onClick={() => onDelete(selectedIds)} type="button">
+            <Trash2 size={15} /> 删除题目
           </button>
           <input min={today} type="date" value={planDate} onChange={(event) => setPlanDate(event.target.value)} />
           <button
@@ -880,7 +903,7 @@ function LibraryView({ dashboard, onAddPlan, onMove, onSetCourse, onSetCurriculu
         </div>
         <div className={styles.problemTable} role="table" aria-label="算法题库">
           <div className={styles.tableHead} role="row">
-            <input aria-label={`全选筛选结果（共 ${filtered.length} 题，含未显示页）`} checked={filtered.length > 0 && filtered.every((item) => selectedIds.includes(item.id))} type="checkbox" onChange={(event) => setSelectedIds(event.target.checked ? filtered.map((item) => item.id) : [])} />
+            <span aria-hidden />
             {sortCell("title", "题目")}
             {sortCell("ext", "平台题号")}
             {sortCell("course", "课程章节")}

@@ -280,6 +280,51 @@ export function createAlgorithmProblem(
   return getAlgorithmProblem(db, scope, problemId);
 }
 
+export function deleteAlgorithmProblems(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: { problemIds: number[] },
+): void {
+  requirePluginEnabled(db, scope, "algorithms");
+  const problemIds = [...new Set(input.problemIds)];
+  if (!problemIds.length || problemIds.length > 200 || problemIds.some((id) => !Number.isSafeInteger(id) || id < 1)) {
+    throw new Error("请选择 1 到 200 道题");
+  }
+  const placeholders = problemIds.map(() => "?").join(",");
+  db.transaction(() => {
+    const existing = db.prepare(`
+      SELECT COUNT(*) AS count FROM algorithm_problems
+      WHERE workspace_id = ? AND id IN (${placeholders})
+    `).get(scope.workspaceId, ...problemIds) as { count: number };
+    if (existing.count !== problemIds.length) throw new Error("删除范围包含无效题目");
+
+    db.prepare(`
+      UPDATE planner_tasks
+      SET deleted_at = CURRENT_TIMESTAMP, version = version + 1, updated_at = CURRENT_TIMESTAMP
+      WHERE workspace_id = ? AND deleted_at IS NULL AND id IN (
+        SELECT task_id FROM learning_task_links
+        WHERE workspace_id = ? AND source_type = 'plugin:algorithms'
+          AND source_id IN (${placeholders})
+      )
+    `).run(scope.workspaceId, scope.workspaceId, ...problemIds.map(String));
+    db.prepare(`
+      UPDATE algorithm_reviews SET attempt_id = NULL
+      WHERE workspace_id = ? AND attempt_id IN (
+        SELECT id FROM algorithm_attempts
+        WHERE workspace_id = ? AND problem_id IN (${placeholders})
+      )
+    `).run(scope.workspaceId, scope.workspaceId, ...problemIds);
+    db.prepare(`
+      UPDATE algorithm_attempts SET transfer_source_problem_id = NULL
+      WHERE workspace_id = ? AND transfer_source_problem_id IN (${placeholders})
+    `).run(scope.workspaceId, ...problemIds);
+    db.prepare(`
+      DELETE FROM algorithm_problems
+      WHERE workspace_id = ? AND id IN (${placeholders})
+    `).run(scope.workspaceId, ...problemIds);
+  })();
+}
+
 export function updateAlgorithmProblemDetails(
   db: Database.Database,
   scope: WorkspaceScope,
