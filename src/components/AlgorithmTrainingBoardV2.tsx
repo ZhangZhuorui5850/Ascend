@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, Check, ChevronDown, Circle, Code2, FileDown, FileCode2, FileUp, FolderOpen, GripVertical, LibraryBig, Plus, RefreshCw, Search, Settings2, Trash2, UploadCloud, X } from "lucide-react";
+import { BookOpenCheck, CalendarDays, Check, CheckCircle2, ChevronDown, Circle, Clock3, Code2, FileDown, FileCode2, FileUp, FolderInput, FolderOpen, GripVertical, Inbox, Layers3, LibraryBig, Plus, RefreshCw, Search, Settings2, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import { Dialog } from "@base-ui/react/dialog";
 import { useRouter, useSearchParams } from "next/navigation";
 import { startTransition, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
@@ -170,6 +170,15 @@ export function AlgorithmTrainingBoardV2({ dashboard, devices, judgeAvailability
   return (
     <main className={styles.shell} aria-busy={pending}>
       <header className={styles.topbar}>
+        <div className={styles.moduleIdentity}>
+          <span className={styles.moduleMark} aria-hidden>
+            <Code2 size={18} />
+          </span>
+          <span>
+            <strong>算法训练</strong>
+            <small>Practice workspace</small>
+          </span>
+        </div>
         <nav className={styles.tabs} aria-label="算法训练主导航">
           <button aria-current={section === "today" ? "page" : undefined} onClick={() => setSection("today")}>
             <CalendarDays size={17} /> 今日训练
@@ -183,7 +192,7 @@ export function AlgorithmTrainingBoardV2({ dashboard, devices, judgeAvailability
             <FileUp size={17} /> 导入题库包
           </button>
           <button className={styles.primaryButton} onClick={() => setImportOpen(true)}>
-            <Plus size={17} /> 添加 CPP
+            <Plus size={17} /> 添加题目
           </button>
           <button aria-label="连接与设置" className={styles.iconButton} onClick={() => setSettingsOpen(true)}>
             <Settings2 size={18} />
@@ -705,15 +714,24 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onMove, onSetCourse, onSe
   const curriculumCompleted = dashboard.problems.filter(isAlgorithmCompleted).length;
   const hiddenSelectedCount = selectedIds.filter((id) => !filtered.some((problem) => problem.id === id)).length;
   const allFilteredSelected = filtered.length > 0 && filtered.every((item) => selectedIds.includes(item.id));
+  const activeCourse = filter.startsWith("course:") ? relations.courses.find((course) => course.key === filter.slice(7)) : null;
+  const activeFolder = filter.startsWith("folder:") ? relations.library.folders.find((folder) => folder.id === filter.slice(7)) : null;
+  const activeScopeTitle = selectedChapterStats?.chapter.title ?? activeCourse?.name ?? activeFolder?.name ?? ({ all: "全部题目", curriculum: "学习路线", todo: "未做题目", done: "已完成", review: "待复习" } as const)[filter as "all" | "curriculum" | "todo" | "done" | "review"] ?? (filter === "folder:root" ? "未整理" : filter.startsWith("stage:") ? filter.slice(6).split("||")[1] : "题库");
 
   return (
     <section className={styles.libraryLayout} data-detail-open={selectedProblem ? "true" : undefined} style={detailWidth ? ({ "--alg-detail-w": `${detailWidth}px` } as React.CSSProperties) : undefined}>
       <aside className={styles.libraryNav}>
-        <NavButton active={filter === "all"} count={dashboard.problems.length} label="全部题目" onClick={() => applyFilter("all")} />
-        <NavButton active={filter === "todo"} count={dashboard.problems.filter((p) => learningStatus(p, today) === "todo").length} label="未做" onClick={() => applyFilter("todo")} />
-        <NavButton active={filter === "done"} count={dashboard.problems.filter((p) => learningStatus(p, today) === "done").length} label="已做" onClick={() => applyFilter("done")} />
-        <NavButton active={filter === "review"} count={dashboard.problems.filter((p) => learningStatus(p, today) === "review").length} label="待复习" onClick={() => applyFilter("review")} />
-        <NavGroup label="学习课程">
+        <div className={styles.navIntro}>
+          <span>题库导航</span>
+          <small>{dashboard.problems.length} 道题</small>
+        </div>
+        <div className={styles.navPrimaryList}>
+          <NavButton active={filter === "all"} count={dashboard.problems.length} icon={<Inbox size={16} />} label="全部题目" onClick={() => applyFilter("all")} />
+          <NavButton active={filter === "todo"} count={dashboard.problems.filter((p) => learningStatus(p, today) === "todo").length} icon={<Circle size={16} />} label="未做" onClick={() => applyFilter("todo")} />
+          <NavButton active={filter === "done"} count={dashboard.problems.filter((p) => learningStatus(p, today) === "done").length} icon={<CheckCircle2 size={16} />} label="已完成" onClick={() => applyFilter("done")} />
+          <NavButton active={filter === "review"} count={dashboard.problems.filter((p) => learningStatus(p, today) === "review").length} icon={<Clock3 size={16} />} label="待复习" onClick={() => applyFilter("review")} />
+        </div>
+        <NavGroup icon={<BookOpenCheck size={15} />} label="学习路线">
           <div className={styles.curriculumSummary}>
             <button aria-current={filter === "curriculum" ? "page" : undefined} onClick={() => applyFilter("curriculum")} type="button">
               <strong>{relations.curriculum.name}</strong>
@@ -733,15 +751,16 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onMove, onSetCourse, onSe
             const scope: LibraryFilter = `chapter:${item.chapter.key}`;
             return (
               <button aria-current={filter === scope ? "page" : undefined} className={`${styles.navButton} ${styles.curriculumChapter}`} key={scope} onClick={() => applyFilter(scope)} title={item.chapter.description}>
-                <span>
-                  {item.chapter.order}. {item.chapter.title}
+                <span className={styles.chapterLabel}>
+                  <i>{item.chapter.order}</i>
+                  <b>{item.chapter.title}</b>
                 </span>
                 <small>{item.total ? `${item.completed}/${item.total}` : "待补题"}</small>
               </button>
             );
           })}
         </NavGroup>
-        <NavGroup label="来源课程与题单">
+        <NavGroup icon={<Layers3 size={15} />} label="来源与题单">
           {relations.courses.map((course) => (
             <div className={styles.courseBlock} key={course.key}>
               <div className={styles.courseLine}>
@@ -768,15 +787,25 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onMove, onSetCourse, onSe
             </div>
           ))}
         </NavGroup>
-        <NavGroup label="我的文件夹">
-          <NavButton active={filter === "folder:root"} label="未整理" onClick={() => applyFilter("folder:root")} />
+        <NavGroup icon={<FolderOpen size={15} />} label="我的文件夹">
+          <NavButton active={filter === "folder:root"} icon={<FolderInput size={15} />} label="未整理" onClick={() => applyFilter("folder:root")} />
           {relations.library.folders.map((folder) => (
-            <NavButton key={folder.id} active={filter === `folder:${folder.id}`} label={folder.name} onClick={() => applyFilter(`folder:${folder.id}`)} />
+            <NavButton key={folder.id} active={filter === `folder:${folder.id}`} icon={<FolderOpen size={15} />} label={folder.name} onClick={() => applyFilter(`folder:${folder.id}`)} />
           ))}
         </NavGroup>
       </aside>
 
       <div className={styles.libraryMain}>
+        <header className={styles.workspaceHeader}>
+          <div>
+            <span className={styles.workspaceEyebrow}>题库 / {activeScopeTitle}</span>
+            <h2>{activeScopeTitle}</h2>
+            <p>当前 {filtered.length} 道 · 题库共 {dashboard.problems.length} 道</p>
+          </div>
+          <button className={styles.secondaryButton} disabled={!filtered.length} onClick={() => setExportProblemIds(filtered.map((problem) => problem.id))}>
+            <FileDown size={15} /> 导出结果
+          </button>
+        </header>
         {selectedChapterStats ? (
           <section className={styles.chapterContext}>
             <div>
@@ -789,117 +818,79 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onMove, onSetCourse, onSe
             <strong>{selectedChapterStats.total ? `${selectedChapterStats.completed}/${selectedChapterStats.total}` : "待补题"}</strong>
           </section>
         ) : null}
-        <div className={styles.libraryHeader}>
+        <div className={styles.libraryToolbar}>
           <label className={styles.searchField}>
             <Search size={17} />
             <input placeholder="搜索名称、题号或分类" value={query} onChange={(event) => changeQuery(event.target.value)} />
           </label>
           <div className={styles.libraryHeaderActions}>
+            <FilterDropdown label="平台" options={platformOptions} selected={providersSelected} onToggle={(value) => toggleProvider(value)} />
+            <FilterDropdown label="标签" options={tagOptions} selected={tagsSelected} onToggle={(value) => toggleTag(value)} />
+            {hasActiveRefiners || query ? (
+              <button aria-label="清除筛选" className={styles.filterReset} onClick={resetAllFilters} title="清除筛选">
+                <X size={15} />
+              </button>
+            ) : null}
             <label className={styles.selectAll}>
               <input checked={allFilteredSelected} disabled={!filtered.length} type="checkbox" onChange={(event) => setSelectedIds(event.target.checked ? filtered.map((problem) => problem.id) : [])} />
-              全选 {filtered.length} 道题
+              全选
             </label>
-            <button className={styles.secondaryButton} disabled={!filtered.length} onClick={() => setExportProblemIds(filtered.map((problem) => problem.id))}>
-              <FileDown size={15} /> 导出当前结果
-            </button>
           </div>
         </div>
-        <div className={styles.filterBar}>
-          <FilterDropdown label="平台" options={platformOptions} selected={providersSelected} onToggle={(value) => toggleProvider(value)} />
-          <FilterDropdown label="标签" options={tagOptions} selected={tagsSelected} onToggle={(value) => toggleTag(value)} />
-          {hasActiveRefiners || query ? (
-            <button className={styles.filterReset} onClick={resetAllFilters}>
-              清除筛选
-            </button>
-          ) : null}
-        </div>
         <div className={styles.bulkBar} data-visible={selectedIds.length > 0}>
-          <strong>已选 {selectedIds.length}</strong>
-          {hiddenSelectedCount > 0 ? <span className={styles.bulkHint}>其中 {hiddenSelectedCount} 道不在当前筛选内</span> : null}
-          <button className={styles.bulkClear} onClick={() => setSelectedIds([])} type="button">
-            取消选择
-          </button>
-          <span className={styles.bulkDivider} aria-hidden />
-          <button onClick={() => setExportProblemIds(selectedIds)}>
-            <FileDown size={15} /> 导出题库包
-          </button>
-          <button className={styles.bulkDelete} onClick={() => onDelete(selectedIds)} type="button">
-            <Trash2 size={15} /> 删除题目
-          </button>
-          <input min={today} type="date" value={planDate} onChange={(event) => setPlanDate(event.target.value)} />
-          <button
-            onClick={() => {
-              onAddPlan(selectedIds, planDate);
-              setSelectedIds([]);
-            }}
-          >
-            加入计划
-          </button>
-          <select
-            aria-label="移动到文件夹"
-            defaultValue=""
-            onChange={(event) => {
-              onMove(selectedIds, event.target.value || null);
-              event.currentTarget.value = "";
-              setSelectedIds([]);
-            }}
-          >
-            <option value="">移动文件夹…</option>
-            <option value="">未整理</option>
-            {relations.library.folders.map((folder) => (
-              <option key={folder.id} value={folder.id}>
-                {folder.name}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="来源题单"
-            value={courseName}
-            onChange={(event) => {
-              setCourseName(event.target.value);
-              const course = relations.courses.find((item) => item.name === event.target.value);
-              setStageKey(course?.stages[0]?.key ?? stageKey);
-            }}
-          >
-            {relations.courses.length ? (
-              relations.courses.map((course) => (
-                <option key={course.key} value={course.name}>
-                  {course.name}
-                </option>
-              ))
-            ) : (
-              <option value={courseName}>{courseName}</option>
-            )}
-          </select>
-          <input aria-label="题单分组" className={styles.shortInput} list="alg-stage-options" value={stageKey} onChange={(event) => setStageKey(event.target.value)} />
-          <datalist id="alg-stage-options">
-            {(relations.courses.find((course) => course.name === courseName)?.stages ?? []).map((stage) => (
-              <option key={stage.key} value={stage.key} />
-            ))}
-          </datalist>
-          <button
-            onClick={() => {
-              onSetCourse(selectedIds, courseName, stageKey);
-              setSelectedIds([]);
-            }}
-          >
-            设置来源题单
-          </button>
-          <select aria-label="课程章节" value={curriculumChapterKey} onChange={(event) => setCurriculumChapterKey(event.target.value)}>
-            {curriculumChapters.map((chapter) => (
-              <option key={chapter.key} value={chapter.key}>
-                {chapter.order}. {chapter.title}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={() => {
-              onSetCurriculum(selectedIds, curriculumChapterKey);
-              setSelectedIds([]);
-            }}
-          >
-            设置课程章节
-          </button>
+          <div className={styles.bulkSelection}>
+            <span>{selectedIds.length}</span>
+            <div>
+              <strong>已选择题目</strong>
+              {hiddenSelectedCount > 0 ? <small>{hiddenSelectedCount} 道不在当前结果中</small> : <small>可批量加入计划或整理</small>}
+            </div>
+          </div>
+          <div className={styles.bulkActions}>
+            <div className={styles.bulkSchedule}>
+              <input aria-label="计划日期" min={today} type="date" value={planDate} onChange={(event) => setPlanDate(event.target.value)} />
+              <button className={styles.bulkPrimary} onClick={() => { onAddPlan(selectedIds, planDate); setSelectedIds([]); }}>
+                <CalendarDays size={15} /> 加入计划
+              </button>
+            </div>
+            <button onClick={() => setExportProblemIds(selectedIds)}>
+              <FileDown size={15} /> 导出
+            </button>
+            <details className={styles.bulkOrganize}>
+              <summary><SlidersHorizontal size={15} /> 整理 <ChevronDown size={14} /></summary>
+              <div className={styles.bulkPanel}>
+                <label>
+                  <span>移动到文件夹</span>
+                  <select aria-label="移动到文件夹" defaultValue="" onChange={(event) => { onMove(selectedIds, event.target.value || null); event.currentTarget.value = ""; setSelectedIds([]); }}>
+                    <option value="" disabled>选择文件夹…</option>
+                    <option value="">未整理</option>
+                    {relations.library.folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
+                  </select>
+                </label>
+                <div className={styles.bulkPanelField}>
+                  <span>来源题单</span>
+                  <div>
+                    <select aria-label="来源题单" value={courseName} onChange={(event) => { setCourseName(event.target.value); const course = relations.courses.find((item) => item.name === event.target.value); setStageKey(course?.stages[0]?.key ?? stageKey); }}>
+                      {relations.courses.length ? relations.courses.map((course) => <option key={course.key} value={course.name}>{course.name}</option>) : <option value={courseName}>{courseName}</option>}
+                    </select>
+                    <input aria-label="题单分组" className={styles.shortInput} list="alg-stage-options" value={stageKey} onChange={(event) => setStageKey(event.target.value)} />
+                    <datalist id="alg-stage-options">{(relations.courses.find((course) => course.name === courseName)?.stages ?? []).map((stage) => <option key={stage.key} value={stage.key} />)}</datalist>
+                    <button onClick={() => { onSetCourse(selectedIds, courseName, stageKey); setSelectedIds([]); }}>应用</button>
+                  </div>
+                </div>
+                <div className={styles.bulkPanelField}>
+                  <span>学习路线章节</span>
+                  <div>
+                    <select aria-label="课程章节" value={curriculumChapterKey} onChange={(event) => setCurriculumChapterKey(event.target.value)}>
+                      {curriculumChapters.map((chapter) => <option key={chapter.key} value={chapter.key}>{chapter.order}. {chapter.title}</option>)}
+                    </select>
+                    <button onClick={() => { onSetCurriculum(selectedIds, curriculumChapterKey); setSelectedIds([]); }}>应用</button>
+                  </div>
+                </div>
+                <button className={styles.bulkDelete} onClick={() => onDelete(selectedIds)} type="button"><Trash2 size={15} /> 删除所选题目</button>
+              </div>
+            </details>
+            <button aria-label="取消选择" className={styles.bulkClear} onClick={() => setSelectedIds([])} title="取消选择" type="button"><X size={16} /></button>
+          </div>
         </div>
         <div className={styles.problemTable} role="table" aria-label="算法题库">
           <div className={styles.tableHead} role="row">
@@ -1576,10 +1567,10 @@ function Modal({ children, onClose, title, wide = false }: { children: React.Rea
   );
 }
 
-function NavButton({ active, count, label, onClick }: { active: boolean; count?: number; label: string; onClick: () => void }) {
+function NavButton({ active, count, icon, label, onClick }: { active: boolean; count?: number; icon?: React.ReactNode; label: string; onClick: () => void }) {
   return (
     <button aria-current={active ? "page" : undefined} className={styles.navButton} onClick={onClick}>
-      <span>{label}</span>
+      <span>{icon}{label}</span>
       {count === undefined ? null : <small>{count}</small>}
     </button>
   );
@@ -1627,12 +1618,12 @@ function FilterDropdown({ label, options, selected, onToggle }: { label: string;
   );
 }
 
-function NavGroup({ children, label }: { children: React.ReactNode; label: string }) {
+function NavGroup({ children, icon, label }: { children: React.ReactNode; icon?: React.ReactNode; label: string }) {
   const [open, setOpen] = useState(true);
   return (
     <section className={styles.navGroup}>
       <button aria-expanded={open} className={styles.navGroupToggle} onClick={() => setOpen(!open)} type="button">
-        <ChevronDown size={14} /> {label}
+        <span>{icon}{label}</span><ChevronDown size={14} />
       </button>
       {open ? children : null}
     </section>
