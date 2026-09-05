@@ -8,7 +8,8 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const db = getDb();
     const context = requireAlgorithmDeviceRequest(db, request);
-    return vscodeJson({ ok: true, ...getAlgorithmDeviceQueuePayload(db, context) });
+    const day = new URL(request.url).searchParams.get("day") || undefined;
+    return vscodeJson({ ok: true, ...getAlgorithmDeviceQueuePayload(db, context, day) });
   } catch (error) {
     return vscodeApiError(error);
   }

@@ -3,9 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { AlgorithmTrainingTree } from "@/lib/repo/algorithm-training";
+import type { AlgorithmTrainingRelations } from "@/lib/repo/algorithm-training";
+import type { AlgorithmDashboard } from "@/lib/repo/algorithms";
+import type { AlgorithmProblemAsset } from "@/lib/repo/algorithm-assets";
 import {
   ChevronRight,
+  FileCode2,
+  Folder,
   FolderInput,
   FolderPlus,
   Grid3X3,
@@ -27,7 +31,7 @@ import {
   renameAssetAction,
   renameFolderAction,
 } from "@/app/actions/library";
-import { setAlgorithmCurriculumChapterAction } from "@/app/actions/algorithms";
+import { createAlgorithmFolderAction, deleteAlgorithmFolderAction, moveAlgorithmProblemsAction, renameAlgorithmFolderAction } from "@/app/actions/algorithms";
 import type { ExplorerFile, ExplorerFolder, ExplorerState } from "@/lib/repo/library";
 import type { CaptureSubject } from "@/lib/repo/knowledge";
 import { AssetViewer } from "@/components/AssetViewer";
@@ -48,13 +52,17 @@ import {
   sortFiles,
 } from "@/components/file-explorer/explorer-utils";
 
-export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, usage, algorithmTree }: {
+type AlgorithmAssetsProjection = { relations: AlgorithmTrainingRelations; dashboard: AlgorithmDashboard; assetsByProblem?: Record<number, AlgorithmProblemAsset[]> };
+
+export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, usage, algorithmData, algorithmFolderId, algorithmScope = false }: {
   explorer: ExplorerState;
   hierarchy: CaptureSubject[];
   searchQuery: string;
   searchResults: ExplorerFile[] | null;
   usage?: { usedBytes: number; quotaBytes: number };
-  algorithmTree?: AlgorithmTrainingTree | null;
+  algorithmData?: AlgorithmAssetsProjection | null;
+  algorithmFolderId?: string | null;
+  algorithmScope?: boolean;
 }) {
   const router = useRouter();
   const { confirm, notify } = useFeedback();
@@ -185,20 +193,6 @@ export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, 
     }
   }
 
-  async function handleAlgorithmProblemDrop(chapterKey: string, event: DragEvent<HTMLElement>) {
-    event.preventDefault();
-    event.stopPropagation();
-    const payload = dragRef.current;
-    dragRef.current = null;
-    if (payload?.kind !== "algorithm-problem") return;
-    const result = await setAlgorithmCurriculumChapterAction({
-      problemIds: [payload.problemId],
-      chapterKey,
-    });
-    if (result.ok) notify("课程章节已同步");
-    report(result);
-  }
-
   function openMoveFile(file: ExplorerFile) {
     setMoveDestination(file.folder_path || "");
     setMoveTarget({ kind: "file", id: file.id, name: file.original_name });
@@ -241,6 +235,10 @@ export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, 
     report(result);
   }
 
+  if (algorithmScope && algorithmData) {
+    return <AlgorithmAssetsExplorer data={algorithmData} explorer={explorer} folderId={algorithmFolderId ?? null} searchQuery={searchQuery} usage={usage} />;
+  }
+
   return (
     <section
       className={dropActive ? "driveExplorer dropActive" : "driveExplorer"}
@@ -256,12 +254,14 @@ export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, 
       }}
     >
       <FolderTreePanel
-        algorithmTree={algorithmTree}
+        algorithmActive={false}
+        algorithmFolderId={null}
+        algorithmLibrary={algorithmData?.relations.library}
         dragRef={dragRef}
         explorer={explorer}
         isSearch={isSearch}
         onDrop={handleDropOn}
-        onAlgorithmProblemDrop={handleAlgorithmProblemDrop}
+        onAlgorithmOpen={(folderId) => router.push(`/assets?scope=algorithms${folderId ? `&folder=${encodeURIComponent(folderId)}` : ""}`)}
         onOpen={openFolder}
         usage={usage}
       />
@@ -400,4 +400,123 @@ export function FileExplorer({ explorer, hierarchy, searchQuery, searchResults, 
       ) : null}
     </section>
   );
+}
+
+function AlgorithmAssetsExplorer({ data, explorer, folderId, searchQuery, usage }: { data: AlgorithmAssetsProjection; explorer: ExplorerState; folderId: string | null; searchQuery: string; usage?: { usedBytes: number; quotaBytes: number } }) {
+  const router = useRouter();
+  const { confirm, notify } = useFeedback();
+  const dragRef = useRef<DragPayload | null>(null);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [editingFolder, setEditingFolder] = useState<{ id: string; name: string } | null>(null);
+  const [selectedProblemId, setSelectedProblemId] = useState<number | null>(null);
+  const library = data.relations.library;
+  const problemById = useMemo(() => new Map(data.dashboard.problems.map((problem) => [problem.id, problem])), [data.dashboard.problems]);
+  const currentFolder = library.folders.find((folder) => folder.id === folderId) ?? null;
+  const query = searchQuery.trim().toLowerCase();
+  const childFolders = query ? [] : library.folders.filter((folder) => folder.parentId === folderId).sort((a, b) => a.sortOrder - b.sortOrder);
+  const visibleProblems = library.items
+    .filter((item) => query ? true : item.folderId === folderId)
+    .map((item) => ({ item, problem: problemById.get(item.problemId) }))
+    .filter((entry): entry is { item: typeof entry.item; problem: NonNullable<typeof entry.problem> } => Boolean(entry.problem))
+    .filter(({ problem }) => !query || `${problem.title} ${problem.externalProblemId} ${problem.tags.join(" ")} ${problem.notes}`.toLowerCase().includes(query))
+    .sort((a, b) => a.item.sortOrder - b.item.sortOrder || a.item.libraryNumber - b.item.libraryNumber);
+  const selectedProblem = selectedProblemId ? problemById.get(selectedProblemId) ?? null : null;
+  const breadcrumbs = currentFolder ? algorithmFolderBreadcrumbs(library.folders, currentFolder.id) : [];
+
+  const openAlgorithmFolder = (targetId: string | null) => router.push(`/assets?scope=algorithms${targetId ? `&folder=${encodeURIComponent(targetId)}` : ""}`);
+  const report = (result: ActionResult, success: string) => {
+    if (result.ok) {
+      notify(success);
+      router.refresh();
+    } else notify(result.error || "操作失败", "error");
+  };
+  async function moveDroppedProblem(targetFolderId: string | null, event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    const payload = dragRef.current;
+    dragRef.current = null;
+    if (payload?.kind !== "algorithm-problem") return;
+    report(await moveAlgorithmProblemsAction({ problemIds: [payload.problemId], folderId: targetFolderId }), "题目位置已更新");
+  }
+  async function submitFolder() {
+    const name = newFolderName.trim();
+    if (!name) return;
+    const result = await createAlgorithmFolderAction({ name, parentId: folderId });
+    if (result.ok) { setCreating(false); setNewFolderName(""); }
+    report(result, "文件夹已创建");
+  }
+  async function submitFolderRename(folderId: string) {
+    const name = editingFolder?.name.trim() ?? "";
+    if (!name) return;
+    const result = await renameAlgorithmFolderAction({ folderId, name });
+    if (result.ok) setEditingFolder(null);
+    report(result, "文件夹已重命名");
+  }
+
+  return (
+    <section className="driveExplorer algorithmDriveExplorer" aria-label="算法训练资料目录">
+      <FolderTreePanel
+        algorithmActive
+        algorithmFolderId={folderId}
+        algorithmLibrary={library}
+        dragRef={dragRef}
+        explorer={explorer}
+        isSearch={Boolean(query)}
+        onDrop={async () => {}}
+        onOpen={(path) => router.push(path ? `/assets?folder=${encodeURIComponent(path)}` : "/assets")}
+        onAlgorithmOpen={openAlgorithmFolder}
+        usage={usage}
+      />
+      <div className="driveMain">
+        <div className="driveToolbar">
+          <div className="drivePath" aria-label="当前位置">
+            <button onClick={() => router.push("/assets")} type="button">资料库</button><ChevronRight size={13} /><button onClick={() => openAlgorithmFolder(null)} type="button">算法训练</button>
+            {breadcrumbs.map((folder) => <button key={folder.id} onClick={() => openAlgorithmFolder(folder.id)} type="button"><ChevronRight size={13} />{folder.name}</button>)}
+          </div>
+          <div className="driveActions">
+            <form action="/assets" className="driveSearch" role="search"><input name="scope" type="hidden" value="algorithms" />{folderId ? <input name="folder" type="hidden" value={folderId} /> : null}<Search size={14} /><input defaultValue={searchQuery} name="q" placeholder="搜索题目、题号、标签和备注" />{searchQuery ? <Link aria-label="清除搜索" className="driveSearchClear" href={`/assets?scope=algorithms${folderId ? `&folder=${encodeURIComponent(folderId)}` : ""}`}><X size={13} /></Link> : null}</form>
+            <button className="secondaryButton" onClick={() => setCreating(true)} type="button"><FolderPlus size={15} />新建文件夹</button>
+            <Link className="primaryButton" href="/practice/algorithms?tab=library">打开题库工作台</Link>
+          </div>
+        </div>
+        <div className="driveContent">
+          <div className="algorithmDriveList">
+            {creating ? <div className="algorithmDriveRow"><Folder size={17} /><input autoFocus placeholder="文件夹名称" value={newFolderName} onChange={(event) => setNewFolderName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void submitFolder(); if (event.key === "Escape") setCreating(false); }} /><button onClick={() => void submitFolder()} type="button">创建</button><button onClick={() => setCreating(false)} type="button">取消</button></div> : null}
+            {childFolders.map((folder) => (
+              <div className="algorithmDriveRow" key={folder.id} onDragOver={(event) => event.preventDefault()} onDrop={(event) => void moveDroppedProblem(folder.id, event)}>
+                {editingFolder?.id === folder.id ? <div className="algorithmDriveName algorithmDriveRename"><Folder size={17} /><input autoFocus aria-label="文件夹名称" value={editingFolder.name} onChange={(event) => setEditingFolder({ id: folder.id, name: event.target.value })} onKeyDown={(event) => { if (event.key === "Enter") void submitFolderRename(folder.id); if (event.key === "Escape") setEditingFolder(null); }} /></div> : <button className="algorithmDriveName" onClick={() => openAlgorithmFolder(folder.id)} type="button"><Folder size={17} /><strong>{folder.name}</strong></button>}
+                <small>{library.items.filter((item) => item.folderId === folder.id).length} 道题</small>
+                {editingFolder?.id === folder.id ? <span className="algorithmDriveInlineActions"><button onClick={() => void submitFolderRename(folder.id)} type="button">保存</button><button onClick={() => setEditingFolder(null)} type="button">取消</button></span> : <button onClick={() => setEditingFolder({ id: folder.id, name: folder.name })} type="button">重命名</button>}
+                <button className="iconDanger" onClick={() => void confirm({ title: `删除“${folder.name}”？`, description: "子目录和题目会提升到当前目录。", confirmLabel: "删除并提升内容", danger: true }).then((ok) => { if (ok) return deleteAlgorithmFolderAction({ folderId: folder.id, promoteContents: true }).then((result) => report(result, "文件夹已删除")); })} type="button">删除</button>
+              </div>
+            ))}
+            {visibleProblems.map(({ item, problem }) => (
+              <button className={selectedProblemId === problem.id ? "algorithmDriveRow algorithmProblemRow active" : "algorithmDriveRow algorithmProblemRow"} draggable key={problem.id} onClick={() => setSelectedProblemId(problem.id)} onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; dragRef.current = { kind: "algorithm-problem", problemId: problem.id }; }} type="button">
+                <FileCode2 size={17} /><strong>{problem.title}</strong><span>{problem.providerLabel} {problem.externalProblemId}</span><span>{folderPathForProblem(library.folders, item.folderId)} · {problem.tags.slice(0, 2).join(" · ")}</span><small>#{item.libraryNumber}</small>
+              </button>
+            ))}
+            {!childFolders.length && !visibleProblems.length ? <p className="empty">当前目录为空。</p> : null}
+          </div>
+          <aside className="driveDetails" aria-label="题目详情">
+            {selectedProblem ? <><small>{selectedProblem.providerLabel} · {selectedProblem.externalProblemId}</small><h2>{selectedProblem.title}</h2><p>{selectedProblem.notes || "暂无备注"}</p><div className="algorithmDetailTags">{selectedProblem.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>{(data.assetsByProblem?.[selectedProblem.id] ?? []).length ? <div className="algorithmLinkedAssets"><strong>关联资料</strong>{data.assetsByProblem?.[selectedProblem.id]?.map((asset) => <a href={`/api/assets/${asset.id}/file`} key={asset.id}><FileCode2 size={14} />{asset.name}<small>{asset.role}</small></a>)}</div> : null}<Link className="primaryButton" href={`/practice/algorithms?tab=library&problem=${selectedProblem.id}`}>查看完整题面</Link></> : <p className="empty">选择一道题查看详情。目录位置与算法工作台、VS Code 保持一致。</p>}
+          </aside>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function algorithmFolderBreadcrumbs(folders: AlgorithmTrainingRelations["library"]["folders"], folderId: string) {
+  const result: typeof folders = [];
+  let current = folders.find((folder) => folder.id === folderId);
+  while (current) {
+    result.unshift(current);
+    current = current.parentId ? folders.find((folder) => folder.id === current?.parentId) : undefined;
+  }
+  return result;
+}
+
+function folderPathForProblem(folders: AlgorithmTrainingRelations["library"]["folders"], folderId: string | null): string {
+  return folderId ? `算法训练 / ${algorithmFolderBreadcrumbs(folders, folderId).map((folder) => folder.name).join(" / ")}` : "算法训练 / 未整理";
 }

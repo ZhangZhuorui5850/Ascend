@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { WorkspaceScope } from "../access-context";
 import { getAlgorithmProviderDescriptor, identifyAlgorithmProvider } from "../algorithm-providers";
 import { assertDateKey, shiftDateKey } from "../dates";
@@ -147,14 +147,21 @@ export function getAlgorithmDashboard(db: Database.Database, scope: WorkspaceSco
   const problemRows = db
     .prepare(
       `
-    SELECT p.id, p.provider_id, p.external_problem_id, p.source_url,
+    SELECT p.id, COALESCE(o.provider_id, p.provider_id) AS provider_id,
+           COALESCE(o.external_problem_id, p.external_problem_id) AS external_problem_id,
+           COALESCE(o.source_url, p.source_url) AS source_url,
            COALESCE(o.title, p.title) AS title,
            COALESCE(o.difficulty_band, p.difficulty_band) AS difficulty_band,
            COALESCE(o.tags_json, p.tags_json) AS tags_json,
            COALESCE(o.notes, p.notes) AS notes,
            p.evidence_status, p.next_review, p.problem_mode,
-           p.statement_markdown, p.input_specification, p.output_specification,
-           p.examples_json, p.judge_problem_ref, p.time_limit_ms, p.memory_limit_kb,
+           COALESCE(o.statement_markdown, p.statement_markdown) AS statement_markdown,
+           COALESCE(o.input_specification, p.input_specification) AS input_specification,
+           COALESCE(o.output_specification, p.output_specification) AS output_specification,
+           COALESCE(o.examples_json, p.examples_json) AS examples_json,
+           p.judge_problem_ref,
+           COALESCE(o.time_limit_ms, p.time_limit_ms) AS time_limit_ms,
+           COALESCE(o.memory_limit_kb, p.memory_limit_kb) AS memory_limit_kb,
            p.supported_languages_json, p.metadata_json, p.content_mode, p.evaluation_mode,
            COALESCE(o.material_status, p.material_status) AS material_status,
            COALESCE(o.priority_band, p.priority_band) AS priority_band,
@@ -229,23 +236,78 @@ export function getAlgorithmDashboard(db: Database.Database, scope: WorkspaceSco
   };
 }
 
+/** Lightweight list model for the Web workbench. Rich content and attempts load per problem. */
+export function getAlgorithmDashboardSummary(db: Database.Database, scope: WorkspaceScope, today: string): AlgorithmDashboard {
+  requirePluginEnabled(db, scope, "algorithms");
+  assertDateKey(today);
+  const rows = db.prepare(`
+    SELECT p.id, COALESCE(o.provider_id, p.provider_id) AS provider_id,
+           COALESCE(o.external_problem_id, p.external_problem_id) AS external_problem_id,
+           COALESCE(o.source_url, p.source_url) AS source_url,
+           COALESCE(o.title, p.title) AS title,
+           COALESCE(o.difficulty_band, p.difficulty_band) AS difficulty_band,
+           COALESCE(o.tags_json, p.tags_json) AS tags_json,
+           COALESCE(o.notes, p.notes) AS notes,
+           p.evidence_status, p.next_review, p.problem_mode,
+           '' AS statement_markdown, '' AS input_specification, '' AS output_specification,
+           '[]' AS examples_json, p.judge_problem_ref,
+           COALESCE(o.time_limit_ms, p.time_limit_ms) AS time_limit_ms,
+           COALESCE(o.memory_limit_kb, p.memory_limit_kb) AS memory_limit_kb,
+           p.supported_languages_json, '{}' AS metadata_json, p.content_mode, p.evaluation_mode,
+           COALESCE(o.material_status, p.material_status) AS material_status,
+           COALESCE(o.priority_band, p.priority_band) AS priority_band,
+           COALESCE(o.phase_key, p.phase_key) AS phase_key,
+           p.review_enabled, p.review_step
+    FROM algorithm_problems p
+    LEFT JOIN algorithm_problem_overrides o
+      ON o.workspace_id = p.workspace_id AND o.problem_id = p.id
+    WHERE p.workspace_id = ?
+    ORDER BY
+      CASE WHEN p.next_review IS NOT NULL AND p.next_review <= ? THEN 0 ELSE 1 END,
+      p.updated_at DESC, p.id DESC
+  `).all(scope.workspaceId, today) as ProblemRow[];
+  const attemptedIds = new Set((db.prepare(`
+    SELECT DISTINCT problem_id AS problemId FROM algorithm_attempts
+    WHERE workspace_id = ? AND outcome NOT IN ('in_progress', 'JE', 'CANCELLED')
+  `).all(scope.workspaceId) as Array<{ problemId: number }>).map((row) => row.problemId));
+  const problems = rows.map((row) => mapProblem(row, [], []));
+  return {
+    problems,
+    dueProblems: problems.filter((problem) => problem.reviewEnabled && problem.nextReview !== null && problem.nextReview <= today),
+    metrics: {
+      problemCount: problems.length,
+      attemptedCount: attemptedIds.size,
+      independentCount: problems.filter((problem) => (["independent_completed", "delayed_stable", "transfer_verified"] as AlgorithmEvidenceStatus[]).includes(problem.evidenceStatus)).length,
+      transferCount: problems.filter((problem) => problem.evidenceStatus === "transfer_verified").length,
+      dueCount: problems.filter((problem) => problem.reviewEnabled && problem.nextReview !== null && problem.nextReview <= today).length,
+    },
+  };
+}
+
 export function createAlgorithmProblem(
   db: Database.Database,
   scope: WorkspaceScope,
   input: {
-    sourceUrl: string;
+    sourceUrl?: string;
     title: string;
     externalProblemId?: string;
     difficultyBand?: string;
     tags?: string[];
     notes?: string;
+    statementMarkdown?: string;
+    inputSpecification?: string;
+    outputSpecification?: string;
+    examples?: AlgorithmProblem["examples"];
+    timeLimitMs?: number;
+    memoryLimitKb?: number;
   },
 ): AlgorithmProblem {
   requirePluginEnabled(db, scope, "algorithms");
-  const sourceUrl = normalizeSourceUrl(input.sourceUrl);
+  const manualId = randomUUID();
+  const sourceUrl = input.sourceUrl?.trim() ? normalizeSourceUrl(input.sourceUrl) : `https://ascend.local/algorithm/${manualId}`;
   const title = input.title.trim().slice(0, 160);
   if (!title) throw new Error("请填写题目名称");
-  const providerId = inferProviderId(sourceUrl);
+  const providerId = input.sourceUrl?.trim() ? inferProviderId(sourceUrl) : "ascend";
   const externalProblemId = (
     input.externalProblemId ||
     inferExternalProblemId(sourceUrl) ||
@@ -261,8 +323,10 @@ export function createAlgorithmProblem(
       `
     INSERT INTO algorithm_problems
       (workspace_id, provider_id, external_problem_id, source_url, title,
-       difficulty_band, tags_json, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       difficulty_band, tags_json, notes, problem_mode, content_mode,
+       statement_markdown, input_specification, output_specification, examples_json,
+       time_limit_ms, memory_limit_kb)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'managed', 'managed', ?, ?, ?, ?, ?, ?)
   `,
     )
     .run(
@@ -274,6 +338,12 @@ export function createAlgorithmProblem(
       difficultyBand,
       JSON.stringify(tags),
       notes,
+      (input.statementMarkdown || "").slice(0, 200_000),
+      (input.inputSpecification || "").slice(0, 50_000),
+      (input.outputSpecification || "").slice(0, 50_000),
+      JSON.stringify(input.examples ?? []),
+      boundedInteger(input.timeLimitMs ?? 1000, 1, 3_600_000, "时间限制"),
+      boundedInteger(input.memoryLimitKb ?? 262144, 1024, 16_777_216, "内存限制"),
     );
   const problemId = Number(result.lastInsertRowid);
   ensureAlgorithmCurriculumProblem(db, scope, problemId);
@@ -338,6 +408,14 @@ export function updateAlgorithmProblemDetails(
     priorityBand?: string;
     phaseKey?: string;
     nextReview?: string | null;
+    sourceUrl?: string;
+    externalProblemId?: string;
+    statementMarkdown?: string;
+    inputSpecification?: string;
+    outputSpecification?: string;
+    examples?: AlgorithmProblem["examples"];
+    timeLimitMs?: number;
+    memoryLimitKb?: number;
   },
 ): AlgorithmProblem {
   requirePluginEnabled(db, scope, "algorithms");
@@ -360,13 +438,25 @@ export function updateAlgorithmProblemDetails(
       : input.nextReview === null || input.nextReview === ""
         ? null
         : assertDateKey(input.nextReview);
+  const sourceUrl = input.sourceUrl === undefined ? current.sourceUrl : normalizeSourceUrl(input.sourceUrl);
+  const providerId = input.sourceUrl === undefined ? current.providerId : inferProviderId(sourceUrl);
+  const externalProblemId = input.externalProblemId === undefined ? current.externalProblemId : input.externalProblemId.trim().slice(0, 120);
+  if (!externalProblemId) throw new Error("平台题号必填");
+  const statementMarkdown = input.statementMarkdown === undefined ? current.statementMarkdown : input.statementMarkdown.slice(0, 200_000);
+  const inputSpecification = input.inputSpecification === undefined ? current.inputSpecification : input.inputSpecification.slice(0, 50_000);
+  const outputSpecification = input.outputSpecification === undefined ? current.outputSpecification : input.outputSpecification.slice(0, 50_000);
+  const examples = input.examples === undefined ? current.examples : parseExamples(JSON.stringify(input.examples));
+  const timeLimitMs = input.timeLimitMs === undefined ? current.timeLimitMs : boundedInteger(input.timeLimitMs, 1, 3_600_000, "时间限制");
+  const memoryLimitKb = input.memoryLimitKb === undefined ? current.memoryLimitKb : boundedInteger(input.memoryLimitKb, 1024, 16_777_216, "内存限制");
   db.transaction(() => {
     db.prepare(
       `
       INSERT INTO algorithm_problem_overrides
         (workspace_id, problem_id, title, difficulty_band, tags_json, notes,
-         material_status, priority_band, phase_key)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         material_status, priority_band, phase_key, provider_id, external_problem_id,
+         source_url, statement_markdown, input_specification, output_specification,
+         examples_json, time_limit_ms, memory_limit_kb)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(workspace_id, problem_id) DO UPDATE SET
         title = COALESCE(excluded.title, title),
         difficulty_band = COALESCE(excluded.difficulty_band, difficulty_band),
@@ -375,6 +465,15 @@ export function updateAlgorithmProblemDetails(
         material_status = COALESCE(excluded.material_status, material_status),
         priority_band = COALESCE(excluded.priority_band, priority_band),
         phase_key = COALESCE(excluded.phase_key, phase_key),
+        provider_id = COALESCE(excluded.provider_id, provider_id),
+        external_problem_id = COALESCE(excluded.external_problem_id, external_problem_id),
+        source_url = COALESCE(excluded.source_url, source_url),
+        statement_markdown = COALESCE(excluded.statement_markdown, statement_markdown),
+        input_specification = COALESCE(excluded.input_specification, input_specification),
+        output_specification = COALESCE(excluded.output_specification, output_specification),
+        examples_json = COALESCE(excluded.examples_json, examples_json),
+        time_limit_ms = COALESCE(excluded.time_limit_ms, time_limit_ms),
+        memory_limit_kb = COALESCE(excluded.memory_limit_kb, memory_limit_kb),
         updated_at = CURRENT_TIMESTAMP
     `,
     ).run(
@@ -387,15 +486,29 @@ export function updateAlgorithmProblemDetails(
       input.materialStatus === undefined ? null : materialStatus,
       input.priorityBand === undefined ? null : priorityBand,
       input.phaseKey === undefined ? null : phaseKey,
+      input.sourceUrl === undefined ? null : providerId,
+      input.externalProblemId === undefined ? null : externalProblemId,
+      input.sourceUrl === undefined ? null : sourceUrl,
+      input.statementMarkdown === undefined ? null : statementMarkdown,
+      input.inputSpecification === undefined ? null : inputSpecification,
+      input.outputSpecification === undefined ? null : outputSpecification,
+      input.examples === undefined ? null : JSON.stringify(examples),
+      input.timeLimitMs === undefined ? null : timeLimitMs,
+      input.memoryLimitKb === undefined ? null : memoryLimitKb,
     );
     db.prepare(
       `
       UPDATE algorithm_problems
-      SET title = ?, difficulty_band = ?, tags_json = ?, notes = ?, material_status = ?,
-          priority_band = ?, phase_key = ?, next_review = ?, updated_at = CURRENT_TIMESTAMP
+      SET provider_id = ?, external_problem_id = ?, source_url = ?, title = ?, difficulty_band = ?,
+          tags_json = ?, notes = ?, material_status = ?, priority_band = ?, phase_key = ?,
+          next_review = ?, statement_markdown = ?, input_specification = ?, output_specification = ?,
+          examples_json = ?, time_limit_ms = ?, memory_limit_kb = ?, updated_at = CURRENT_TIMESTAMP
       WHERE workspace_id = ? AND id = ?
     `,
     ).run(
+      providerId,
+      externalProblemId,
+      sourceUrl,
       title,
       difficultyBand,
       JSON.stringify(tags),
@@ -404,6 +517,12 @@ export function updateAlgorithmProblemDetails(
       priorityBand,
       phaseKey,
       nextReview,
+      statementMarkdown,
+      inputSpecification,
+      outputSpecification,
+      JSON.stringify(examples),
+      timeLimitMs,
+      memoryLimitKb,
       scope.workspaceId,
       problemId,
     );
@@ -460,7 +579,6 @@ export function recordAlgorithmAttempt(
       if (replay.outcome === "in_progress") {
         if (
           replay.problem_id !== problemId
-          || replay.day !== day
           || replay.review_kind !== reviewKind
           || (replay.pre_confidence !== null && replay.pre_confidence !== preConfidence)
           || replay.transfer_source_problem_id !== requestedTransferSourceProblemId
@@ -524,13 +642,14 @@ export function recordAlgorithmAttempt(
     if (replay?.outcome === "in_progress") {
       db.prepare(`
         UPDATE algorithm_attempts
-        SET verdict = ?, duration_minutes = MAX(duration_minutes, ?),
+        SET day = ?, verdict = ?, duration_minutes = MAX(duration_minutes, ?),
             max_hint_level = MAX(max_hint_level, ?),
             pre_confidence = COALESCE(pre_confidence, ?), independent = ?,
             review_kind = ?, error_category = ?, reflection = ?,
             transfer_source_problem_id = ?, outcome = ?, ended_at = CURRENT_TIMESTAMP
         WHERE workspace_id = ? AND id = ? AND outcome = 'in_progress'
       `).run(
+        day,
         verdict,
         durationMinutes,
         maxHintLevel,
@@ -613,14 +732,21 @@ export function getAlgorithmProblem(db: Database.Database, scope: WorkspaceScope
   const row = db
     .prepare(
       `
-    SELECT p.id, p.provider_id, p.external_problem_id, p.source_url,
+    SELECT p.id, COALESCE(o.provider_id, p.provider_id) AS provider_id,
+           COALESCE(o.external_problem_id, p.external_problem_id) AS external_problem_id,
+           COALESCE(o.source_url, p.source_url) AS source_url,
            COALESCE(o.title, p.title) AS title,
            COALESCE(o.difficulty_band, p.difficulty_band) AS difficulty_band,
            COALESCE(o.tags_json, p.tags_json) AS tags_json,
            COALESCE(o.notes, p.notes) AS notes,
            p.evidence_status, p.next_review, p.problem_mode,
-           p.statement_markdown, p.input_specification, p.output_specification,
-           p.examples_json, p.judge_problem_ref, p.time_limit_ms, p.memory_limit_kb,
+           COALESCE(o.statement_markdown, p.statement_markdown) AS statement_markdown,
+           COALESCE(o.input_specification, p.input_specification) AS input_specification,
+           COALESCE(o.output_specification, p.output_specification) AS output_specification,
+           COALESCE(o.examples_json, p.examples_json) AS examples_json,
+           p.judge_problem_ref,
+           COALESCE(o.time_limit_ms, p.time_limit_ms) AS time_limit_ms,
+           COALESCE(o.memory_limit_kb, p.memory_limit_kb) AS memory_limit_kb,
            p.supported_languages_json, p.metadata_json, p.content_mode, p.evaluation_mode,
            COALESCE(o.material_status, p.material_status) AS material_status,
            COALESCE(o.priority_band, p.priority_band) AS priority_band,
@@ -645,6 +771,20 @@ export function getAlgorithmProblem(db: Database.Database, scope: WorkspaceScope
     .all(scope.workspaceId, id)
     .map((item) => (item as { collection_id: string }).collection_id);
   return mapProblem(row, [], collectionIds);
+}
+
+export function getAlgorithmProblemDetail(db: Database.Database, scope: WorkspaceScope, id: number): AlgorithmProblem {
+  const problem = getAlgorithmProblem(db, scope, id);
+  const attempts = db.prepare(`
+    SELECT id, problem_id, day, verdict, duration_minutes, max_hint_level,
+           pre_confidence, independent, review_kind, error_category,
+           reflection, source_verification, transfer_source_problem_id, outcome
+    FROM algorithm_attempts
+    WHERE workspace_id = ? AND problem_id = ?
+      AND outcome NOT IN ('in_progress', 'JE', 'CANCELLED')
+    ORDER BY day DESC, id DESC
+  `).all(scope.workspaceId, id) as AttemptRow[];
+  return { ...problem, attempts: attempts.map(mapAttempt) };
 }
 
 function normalizeOperationId(value: string | undefined): string | null {

@@ -57,6 +57,7 @@ const EXPANDED_FOLDERS_KEY = "ascendPractice.expandedFolders.v1";
 const LIBRARY_SORT_KEY = "ascendPractice.librarySort.v1";
 const LIBRARY_SELECTION_KEY = "ascendPractice.librarySelection.v1";
 const CURRENT_COURSE_KEY = "ascendPractice.currentCourse.v1";
+const SELECTED_DAY_KEY = "ascendPractice.selectedDay.v1";
 const META_FILE = ".ascend.json";
 const LIBRARY_DRAG_MIME = "application/vnd.code.tree.ascendpractice.library";
 
@@ -156,6 +157,7 @@ class PracticeTreeProvider {
     this.libraryIndex = createLibraryIndex(null);
     this.query = "";
     this.sortMode = context.workspaceState.get(LIBRARY_SORT_KEY, "manual");
+    this.selectedDay = context.workspaceState.get(SELECTED_DAY_KEY, localDateKey(0));
     this.currentCourseId = context.workspaceState.get(CURRENT_COURSE_KEY, "");
     this.lastMove = null;
     this.expandedFolderIds = new Set(context.workspaceState.get(EXPANDED_FOLDERS_KEY, []));
@@ -168,7 +170,7 @@ class PracticeTreeProvider {
 
   async refresh(options = {}) {
     try {
-      this.data = await this.api.queue();
+      this.data = await this.api.queue(this.selectedDay);
       this.libraryIndex = createLibraryIndex(this.data);
       if (!this.preferredCourses().some((collection) => collection.id === this.currentCourseId)) {
         this.currentCourseId = this.preferredCourses()[0]?.id || "";
@@ -260,6 +262,12 @@ class PracticeTreeProvider {
     this.emitter.fire();
   }
 
+  async setSelectedDay(day) {
+    this.selectedDay = day;
+    await this.context.workspaceState.update(SELECTED_DAY_KEY, day);
+    await this.refresh({ notify: true });
+  }
+
   async setCurrentCourse(collectionId) {
     if (!this.findCourseNode(collectionId)) {
       throw new Error("课程或题单已经不存在");
@@ -291,18 +299,16 @@ class PracticeTreeProvider {
           }),
         ];
       }
-      const sections = createPracticeSections(this.data);
+      const dayQueue = this.data.dayQueue || this.data.todayQueue || [];
+      const due = this.data.due || [];
       return [
-        groupItem("今日训练", "todayPlan", sections.todayPlan.length, "calendar", "ascendTodayRoot", {
+        groupItem(`训练计划 · ${this.data.selectedDay || this.selectedDay}`, "todayPlan", dayQueue.length, "calendar", "ascendTodayRoot", {
           expanded: true,
-          tooltip: "网页端手动加入的今日训练",
+          tooltip: "网页端同一日期的训练队列",
         }),
-        groupItem("到期复习", "smartView", sections.due.length, "history", "ascendReviewRoot", {
+        groupItem("到期复习", "smartView", due.length, "history", "ascendReviewRoot", {
           smartKey: "due",
           tooltip: "今天到期的复习题",
-        }),
-        groupItem("题库", "catalogAll", this.data.problems.length, "library", "ascendCatalogRoot", {
-          tooltip: "Ascend 中的全部算法题",
         }),
         personalDirectoryItem(this.data, this.libraryIndex),
       ];
@@ -322,8 +328,9 @@ class PracticeTreeProvider {
       ];
     }
     if (element.group === "todayPlan") {
-      const plan = this.problemItems(createPracticeSections(this.data).todayPlan);
-      return plan.length ? plan : [infoItem("今日任务已完成", "pass-filled")];
+      const queue = this.data.dayQueue || this.data.todayQueue || [];
+      const plan = this.problemItems(queue);
+      return plan.length ? plan : [infoItem("这一天还没有训练题", "calendar")];
     }
     if (element.group === "continueLearning") {
       const problems = this.problemItems(createPracticeSections(this.data).continueLearning);
@@ -894,7 +901,7 @@ function groupItem(label, group, count, icon, contextValue = "", options = {}) {
 function personalDirectoryItem(data, index) {
   const folderCount = data?.library?.folders?.length || 0;
   const unfiledCount = index.itemsByFolder.get("")?.length || 0;
-  return groupItem("我的文件夹", "library", null, "root-folder", "ascendDirectoryRoot", {
+  return groupItem("题库目录", "library", null, "root-folder", "ascendDirectoryRoot", {
     expanded: false,
     description: `${folderCount} 个文件夹 · ${unfiledCount} 未整理`,
     tooltip: "与 Ascend 网盘同步的个人题目文件夹",
@@ -1010,6 +1017,10 @@ function problemItem(
   item.contextValue = inLibraryTree ? "ascendLibraryProblem" : "ascendProblem";
   item.problemId = problem.id;
   item.problemTitle = problem.title;
+  item.planTaskId = problem.planTaskId;
+  item.planVersion = problem.planVersion;
+  item.planDay = problem.planDay;
+  if (problem.planTaskId) item.contextValue = "ascendPlanProblem";
   if (inLibraryTree) item.id = `ascend-library-problem:${problem.id}`;
   item.libraryFolderId = inLibraryTree ? libraryItem?.folderId || null : undefined;
   item.command = { command: "ascendPractice.openProblem", title: "开始训练", arguments: [item] };
@@ -1159,6 +1170,11 @@ async function activate(context) {
     register("ascendPractice.switchServer", () => switchServer(runtime)),
     register("ascendPractice.manageConnections", () => manageConnections(runtime)),
     register("ascendPractice.refresh", () => tree.refresh({ notify: true })),
+    register("ascendPractice.selectDate", () => selectTrainingDate(runtime)),
+    register("ascendPractice.addToday", (item) => addProblemToDate(runtime, item, localDateKey(0))),
+    register("ascendPractice.addToDate", (item) => addProblemToPickedDate(runtime, item)),
+    register("ascendPractice.movePlanToday", (item) => movePlanToToday(runtime, item)),
+    register("ascendPractice.removePlan", (item) => removePlan(runtime, item)),
     register("ascendPractice.createFolder", (item) => createLibraryFolder(runtime, item)),
     register("ascendPractice.selectCurrentCourse", (item) => selectCurrentCourse(runtime, item)),
     register("ascendPractice.renameFolder", (item) => renameLibraryFolder(runtime, item)),
@@ -1780,12 +1796,62 @@ async function pickProblemId(tree) {
   return picked?.problemId;
 }
 
+async function selectTrainingDate(runtime) {
+  const day = await pickTrainingDay(runtime.tree.selectedDay);
+  if (day) await runtime.tree.setSelectedDay(day);
+}
+
+async function pickTrainingDay(currentDay) {
+  const options = [
+    { label: "今天", day: localDateKey(0) },
+    { label: "昨天", day: localDateKey(-1) },
+    { label: "前天", day: localDateKey(-2) },
+    { label: "明天", day: localDateKey(1) },
+    { label: "自定义日期…", day: "" },
+  ];
+  const picked = await vscode.window.showQuickPick(options.map((item) => ({ ...item, description: item.day })), { placeHolder: "选择训练计划日期" });
+  if (!picked) return null;
+  let day = picked.day;
+  if (!day) {
+    day = await vscode.window.showInputBox({ prompt: "训练日期（YYYY-MM-DD）", value: currentDay, validateInput: (value) => /^\d{4}-\d{2}-\d{2}$/.test(value) ? null : "请输入 YYYY-MM-DD" });
+  }
+  return day || null;
+}
+
+async function addProblemToPickedDate(runtime, item) {
+  const day = await pickTrainingDay(runtime.tree.selectedDay);
+  if (day) await addProblemToDate(runtime, item, day);
+}
+
+async function addProblemToDate(runtime, item, day) {
+  const problemId = Number(item?.problemId || (await pickProblemId(runtime.tree)));
+  if (!problemId) return;
+  await runtime.api.createPlans({ operationId: `vscode-plan:${randomUUID()}`, problemIds: [problemId], day });
+  await runtime.tree.refresh();
+  vscode.window.showInformationMessage(`已加入 ${day} 的训练计划`);
+}
+
+async function movePlanToToday(runtime, item) {
+  if (!item?.planTaskId) throw new Error("请选择训练计划中的题目");
+  await runtime.api.reschedulePlan(item.planTaskId, { operationId: `vscode-reschedule:${randomUUID()}`, expectedVersion: item.planVersion, targetDay: localDateKey(0) });
+  await runtime.tree.refresh();
+  vscode.window.showInformationMessage("已移到今天");
+}
+
+async function removePlan(runtime, item) {
+  if (!item?.planTaskId) throw new Error("请选择训练计划中的题目");
+  await runtime.api.removePlan(item.planTaskId, item.planVersion);
+  await runtime.tree.refresh();
+  vscode.window.showInformationMessage("已移出训练计划");
+}
+
 async function openProblem(runtime, problemId) {
   const payload = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: "正在准备 Ascend 刷题会话" },
     () => runtime.api.problem(problemId),
   );
   const problem = payload.problem;
+  const linkedPlan = (runtime.tree.data?.dayQueue || runtime.tree.data?.todayQueue || []).find((item) => Number(item.id) === Number(problem.id));
   runtime.capabilities ||= await runtime.api.capabilities();
   const scope = scopeIdentity(runtime, problem.id, payload);
   const sessionKey = localProblemKey(scope.scopeKey, problem.id, "cpp17");
@@ -1797,20 +1863,34 @@ async function openProblem(runtime, problemId) {
   const legacyProblemDir = path.join(root, slug);
   const organizedProblemDir = path.join(root, problem.phaseKey || "Extra", slug);
   const expectedScope = { ...scope, problemId: problem.id };
+  const mappedProblemDir = problemPathValue(runtime.tree.problemPaths()[problem.id]);
+  const mappedMeta = mappedProblemDir ? await readJson(path.join(mappedProblemDir, META_FILE)) : {};
   const legacyMeta = await readJson(path.join(legacyProblemDir, META_FILE));
   const organizedMeta = await readJson(path.join(organizedProblemDir, META_FILE));
+  const mappedMatches = mappedProblemDir && localMetadataBelongsToConnection(mappedMeta, expectedScope, runtime.api.baseUrl);
   const legacyMatches = localMetadataBelongsToConnection(legacyMeta, expectedScope, runtime.api.baseUrl);
   const organizedMatches = localMetadataBelongsToConnection(organizedMeta, expectedScope, runtime.api.baseUrl);
+  const localLayout = vscode.workspace.getConfiguration("ascendPractice").get("localLayout", "library");
+  const librarySegments = libraryFolderSegments(runtime.tree.libraryIndex, problem.id);
+  const configuredProblemDir = localLayout === "phase"
+    ? organizedProblemDir
+    : path.join(root, "Algorithm Library", ...librarySegments, slug);
+  const configuredMeta = await readJson(path.join(configuredProblemDir, META_FILE));
+  const configuredMatches = localMetadataBelongsToConnection(configuredMeta, expectedScope, runtime.api.baseUrl);
   const scopedProblemDir = path.join(
     root,
     problem.phaseKey || "Extra",
     `${slug}-${createHash("sha256").update(scope.scopeKey).digest("hex").slice(0, 8)}`,
   );
-  const problemDir = legacyMatches
-    ? legacyProblemDir
-    : organizedMatches || !Object.keys(organizedMeta).length
-      ? organizedProblemDir
-      : scopedProblemDir;
+  const problemDir = mappedMatches
+    ? mappedProblemDir
+    : legacyMatches
+      ? legacyProblemDir
+      : organizedMatches
+        ? organizedProblemDir
+        : configuredMatches || !Object.keys(configuredMeta).length
+          ? configuredProblemDir
+          : scopedProblemDir;
   const sampleDir = path.join(problemDir, "samples");
   const mainPath = path.join(problemDir, "main.cpp");
   const customInputPath = path.join(problemDir, "custom.in");
@@ -1853,7 +1933,10 @@ async function openProblem(runtime, problemId) {
     preConfidence: priorMeta.preConfidence === undefined ? null : Number(priorMeta.preConfidence),
     planText: String(priorMeta.planText || ""),
     activeSeconds: Number(priorMeta.activeSeconds || 0),
-    day: String(runtime.tree.data?.today || new Date().toISOString().slice(0, 10)),
+    day: String(linkedPlan?.planDay || runtime.tree.data?.selectedDay || runtime.tree.data?.today || localDateKey(0)),
+    planTaskId: String(priorMeta.planTaskId || linkedPlan?.planTaskId || ""),
+    planVersion: Number(priorMeta.planVersion ?? linkedPlan?.planVersion ?? 0),
+    planDay: String(priorMeta.planDay || linkedPlan?.planDay || ""),
     draftRevision: Number(priorMeta.draftRevision ?? (mainExisted ? 0 : problem.draftRevision || 0)),
     draftSha256: String(priorMeta.draftSha256 || problem.draftSha256 || ""),
   };
@@ -2015,7 +2098,7 @@ async function resolveLocalRoot(context) {
   const saved = context.globalState.get("ascendPractice.localRoot", "");
   if (saved) return saved;
   const proceed = await vscode.window.showInformationMessage(
-    "请选择刷题工作区。扩展会在这里按阶段创建题目目录、main.cpp、样例和自测文件；原始题库目录继续作为资料源。",
+    "请选择刷题工作区。扩展会按“题库目录”或“训练阶段”布局创建新题目录、main.cpp、样例和自测文件，并保留现有题目的路径映射。",
     { modal: true },
     "选择刷题工作区",
   );
@@ -2404,6 +2487,8 @@ async function recordResult(api, current, runtime) {
     maxHintLevel: Number(current.metadata.maxHintLevel || 0),
     errorCategory,
     reflection,
+    attemptDayMode: "now",
+    ...(current.metadata.planTaskId ? { plan: { taskId: current.metadata.planTaskId, expectedVersion: current.metadata.planVersion } } : {}),
   });
   current.metadata.startedAt = new Date().toISOString();
   current.metadata.lastVerdict = verdict;
@@ -2664,6 +2749,16 @@ function localMetadataBelongsToConnection(metadata, expected, activeBaseUrl) {
   }
 }
 
+function localDateKey(offsetDays = 0) {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + offsetDays);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function problemPathValue(value) {
   if (typeof value === "string") return value;
   return value && typeof value.path === "string" ? value.path : "";
@@ -2671,6 +2766,20 @@ function problemPathValue(value) {
 
 function problemPathTimestamp(value) {
   return value && typeof value.lastOpenedAt === "string" ? value.lastOpenedAt : "";
+}
+
+function libraryFolderSegments(index, problemId) {
+  const segments = [];
+  let folderId = index.itemByProblem.get(Number(problemId))?.folderId || null;
+  const visited = new Set();
+  while (folderId && !visited.has(folderId)) {
+    visited.add(folderId);
+    const folder = index.foldersById.get(folderId);
+    if (!folder) break;
+    segments.unshift(safeSegment(folder.name));
+    folderId = folder.parentId || null;
+  }
+  return segments.length ? segments : ["Unfiled"];
 }
 
 async function exists(filePath) {

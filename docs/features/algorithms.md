@@ -1,6 +1,8 @@
 # 算法训练工作台
 
-当前网页入口为 `/practice/algorithms`，由 `AlgorithmTrainingBoardV2` 提供今日训练、课程章节、题库、CPP 上传导入、来源题单、个人文件夹、训练结果记录（完成即记一次 AC）、设备管理与撤销。网页草稿、样例运行与 Judge 提交在 VS Code 扩展内完成；网页端不承载草稿编辑。
+当前网页入口为 `/practice/algorithms`，由 `AlgorithmTrainingBoardV2` 提供任意日期训练计划、逾期处理、统一题库目录、完整题目编辑、CPP 上传导入、训练结果记录、设备管理与撤销。网页草稿、样例运行与 Judge 提交在 VS Code 扩展内完成。
+
+`algorithm_library_folders` 与 `algorithm_library_items` 是物理目录的唯一数据源。算法工作台、网盘 `/assets?scope=algorithms&folder=<folderId>` 和 VS Code「题库目录」读取同一组目录 ID、父子关系与排序。网盘根目录中的“算法训练”使用普通文件夹交互，目录内同时显示子文件夹、题目和题目关联资料。
 
 ## 课程主线
 
@@ -13,9 +15,9 @@
 1. 在「算法训练」点击「添加 CPP」，选择多个 `.cpp` / `.cc` / `.cxx` 文件或整个文件夹。
 2. 导入预览从文件头注释、文件名和题号提取标题、来源题单建议、训练阶段与标签；用户可在提交前修正字段。
 3. 导入结果进入当前 workspace 的题库。内容哈希命中已有题目时更新元数据并保留训练证据。
-4. 在题库按课程章节、全部、未做、已做、待复习、来源题单、平台、标签或个人文件夹筛选，再加入指定日期的训练计划。
-5. 今日训练保存顺序、完成结果和次日安排；题库状态（tab、筛选、搜索、排序、页码、选中题目）保存在 URL，可刷新、回退与分享。题目详情展示 Markdown 题面、参考代码与训练记录。
-6. 资料库左侧的“算法训练”是课程章节主编辑入口；把主章节中的题目拖到另一个章节即可保存调整。网页题库批量编辑和 VS Code“编辑题目信息 → 课程章节”写入同一关系表。
+4. 在题库按目录、状态、课程章节、来源题单、平台和标签筛选，再加入任意日期的训练计划。筛选状态通过 `tab`、`day`、`folder`、`problem`、`q`、`status`、`course`、`source`、`platform`、`tag`、`sort`、`page` 参数保存。
+5. 训练计划通过上一天、下一天、日期输入和“回到今天”导航。今天页聚合全部逾期未完成项，支持逐题或原子批量移到今天。历史计划可按当天完成、移到今天或补记原日期完成。
+6. 题库使用目录、题目列表和详情检查器三栏结构。列表读取摘要，打开题目后按题加载 Markdown 题面、样例、参考资料和训练记录。文件夹支持创建、重命名、移动、排序、删除空目录、删除并提升内容；题目支持完整 CRUD、拖放和批量操作。
 
 服务器永久题号保存在 `algorithm_library_items.library_number`。课程、来源、知识点、文件夹和每日计划属于组织关系，同一道题可出现在多个训练视图中。
 
@@ -45,14 +47,19 @@
 
 打开题目后，侧边面板显示只读题面和训练工具栏，编辑区使用普通 `main.cpp`。工作区包含 `problem.md`、公开样例、`custom.in` 与 `.ascend.json`。保存后同步云端加密草稿；修订冲突提供载入云端和保留本地两条显式路径。
 
+侧栏包含“训练计划 · 日期”“到期复习”“题库目录”三个浅层根节点。日期选择包含今天、昨天、前天、明天和自定义日期，并按 workspace 记忆。AC 结果通过统一事务同时落训练证据、复习状态和关联 Planner 任务；WA、CE、TLE、MLE、RE 保留计划项。
+
 本地作答目录可配置为：
 
 ```json
 {
   "ascendPractice.localRoot": "/mnt/c/Users/example/algorithm-workspace",
-  "ascendPractice.templatePath": "/mnt/c/Users/example/algorithm/template.cpp"
+  "ascendPractice.templatePath": "/mnt/c/Users/example/algorithm/template.cpp",
+  "ascendPractice.localDirectoryLayout": "library"
 }
 ```
+
+`library` 按服务端题库目录创建首次打开的新题，`phase` 延续 W1/W2 阶段布局。已有本地作答目录继续沿用 `.ascend.json` 路径映射。
 
 ## 数据、安全与备份
 

@@ -3,6 +3,8 @@ import {
   createAlgorithmProblem,
   deleteAlgorithmProblems,
   getAlgorithmDashboard,
+  getAlgorithmDashboardSummary,
+  getAlgorithmProblemDetail,
   recordAlgorithmAttempt,
   updateAlgorithmProblemDetails,
 } from "./algorithms";
@@ -103,6 +105,27 @@ describe("algorithm training repo", () => {
     expect(() => getAlgorithmDashboard(db, second, "2026-07-26")).toThrow("扩展未启用");
     setPluginEnabled(db, second, "algorithms", true);
     expect(getAlgorithmDashboard(db, second, "2026-07-26").problems).toEqual([]);
+  });
+
+  it("keeps list reads compact and loads rich problem detail on demand", () => {
+    const db = createTestDb();
+    const scope = createTestWorkspace(db);
+    setPluginEnabled(db, scope, "algorithms", true);
+    const problem = createAlgorithmProblem(db, scope, {
+      title: "懒加载题目",
+      statementMarkdown: "# 一段很长的题面",
+      examples: [{ input: "1", output: "2" }],
+    });
+    recordAlgorithmAttempt(db, scope, { problemId: problem.id, day: "2026-09-03", verdict: "WA" });
+
+    const summary = getAlgorithmDashboardSummary(db, scope, "2026-09-04");
+    expect(summary.metrics.attemptedCount).toBe(1);
+    expect(summary.problems[0]).toMatchObject({ statementMarkdown: "", examples: [], attempts: [] });
+    expect(getAlgorithmProblemDetail(db, scope, problem.id)).toMatchObject({
+      statementMarkdown: "# 一段很长的题面",
+      examples: [{ input: "1", output: "2" }],
+      attempts: [expect.objectContaining({ verdict: "WA" })],
+    });
   });
 
   it("distinguishes guided, independent, delayed and transfer evidence", () => {

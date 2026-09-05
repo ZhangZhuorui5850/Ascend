@@ -1,10 +1,10 @@
 "use client";
 
-import { BookOpenCheck, CalendarDays, Check, CheckCircle2, ChevronDown, Circle, Clock3, Code2, FileDown, FileCode2, FileUp, FolderInput, FolderOpen, GripVertical, Inbox, Layers3, LibraryBig, Plus, RefreshCw, Search, Settings2, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
+import { AlertCircle, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, Code2, FileDown, FileCode2, FileUp, Folder, FolderOpen, FolderPlus, GripVertical, LibraryBig, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Settings2, Trash2, UploadCloud, X } from "lucide-react";
 import { Dialog } from "@base-ui/react/dialog";
 import { useRouter, useSearchParams } from "next/navigation";
 import { startTransition, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { deleteAlgorithmProblemsAction, finishAlgorithmPlanAction, finishDueAlgorithmReviewAction, moveAlgorithmProblemsAction, removeAlgorithmPlanAction, reorderAlgorithmPlansAction, scheduleAlgorithmProblemsAction, revokeAlgorithmDeviceAction, setAlgorithmCurriculumChapterAction, setAlgorithmCourseAction } from "@/app/actions/algorithms";
+import { createAlgorithmFolderAction, createAlgorithmProblemAction, deleteAlgorithmFolderAction, deleteAlgorithmProblemsAction, finishAlgorithmPlanAction, finishDueAlgorithmReviewAction, getAlgorithmProblemDetailAction, moveAlgorithmFolderAction, moveAlgorithmProblemsAction, removeAlgorithmPlanAction, renameAlgorithmFolderAction, reorderAlgorithmFolderAction, reorderAlgorithmPlansAction, rescheduleAlgorithmPlanAction, rescheduleAlgorithmPlansAction, scheduleAlgorithmProblemsAction, revokeAlgorithmDeviceAction, setAlgorithmCurriculumChapterAction, setAlgorithmCourseAction, updateAlgorithmProblemAction } from "@/app/actions/algorithms";
 import { useFeedback } from "@/components/FeedbackProvider";
 import { MarkdownContent } from "@/components/MarkdownContent";
 import plannerStyles from "@/styles/planner/primitives.module.css";
@@ -13,6 +13,8 @@ import type { JudgeRuntimeAvailability } from "@/lib/judge-runtime";
 import type { AlgorithmDevice } from "@/lib/repo/algorithm-devices";
 import type { AlgorithmDashboard, AlgorithmProblem } from "@/lib/repo/algorithms";
 import type { AlgorithmTrainingRelations, PlannedAlgorithmProblem } from "@/lib/repo/algorithm-training";
+import type { AlgorithmLibraryFolder } from "@/lib/repo/algorithm-library";
+import { shiftDateKey } from "@/lib/dates";
 import styles from "@/styles/algorithm-training.module.css";
 
 type Section = "today" | "library";
@@ -21,6 +23,14 @@ type FilterOption = { value: string; label: string; count: number };
 type TableSortKey = "title" | "ext" | "course" | "status";
 type TableSort = { key: TableSortKey; dir: 1 | -1 };
 type CompletionTarget = { problem: AlgorithmProblem; plan: PlannedAlgorithmProblem | null };
+type FolderEditorState = { mode: "create"; parentId: string | null } | { mode: "edit"; folder: AlgorithmLibraryFolder };
+type ProblemEditorValue = {
+  title: string; sourceUrl: string; externalProblemId: string; difficultyBand: string; tags: string[]; notes: string;
+  statementMarkdown: string; inputSpecification: string; outputSpecification: string;
+  examples: Array<{ input: string; output: string; explanation?: string }>;
+  timeLimitMs: number; memoryLimitKb: number; folderId: string | null; chapterKey: string;
+  courseName: string; stageKey: string; phaseKey: string; priorityBand: string; nextReview: string | null;
+};
 type ImportPreview = {
   sourcePath: string;
   title: string;
@@ -68,6 +78,10 @@ function normalizeLibraryFilter(value: string | null): LibraryFilter {
   return "all";
 }
 
+function normalizeDateParam(value: string | null, fallback: string): string {
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : fallback;
+}
+
 function parseTableSortParam(value: string | null): TableSort | null {
   if (!value) return null;
   const [key, dir] = value.split(":");
@@ -86,7 +100,7 @@ export function AlgorithmTrainingBoardV2({ dashboard, devices, judgeAvailability
   const router = useRouter();
   const searchParams = useSearchParams();
   const { notify, confirm } = useFeedback();
-  const [selectedDate, setSelectedDate] = useState(today);
+  const selectedDate = normalizeDateParam(searchParams.get("day"), today);
   const [showReviews, setShowReviews] = useState(true);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -94,6 +108,7 @@ export function AlgorithmTrainingBoardV2({ dashboard, devices, judgeAvailability
   const [packageImportOpen, setPackageImportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [completion, setCompletion] = useState<CompletionTarget | null>(null);
+  const [problemEditor, setProblemEditor] = useState<AlgorithmProblem | "new" | null>(null);
   const [pending, setPending] = useState(false);
   const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
   // 撤销请求发出后、设备列表刷新前，按钮保持忙碌；设备消失即视为完成。
@@ -106,21 +121,22 @@ export function AlgorithmTrainingBoardV2({ dashboard, devices, judgeAvailability
 
   // URL 状态契约：tab/主筛选/problem 可回退（push），q/sort/page 连续操作不刷历史（replace）。
   function updateUrl(entries: Record<string, string | null>, mode: "push" | "replace") {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(searchParams.toString());
     for (const [key, value] of Object.entries(entries)) {
       if (value === null || value === "") params.delete(key);
       else params.set(key, value);
     }
     const query = params.toString();
-    const url = `${window.location.pathname}${query ? `?${query}` : ""}`;
-    if (mode === "push") window.history.pushState(null, "", url);
-    else window.history.replaceState(null, "", url);
+    const url = `/practice/algorithms${query ? `?${query}` : ""}`;
+    if (mode === "push") router.push(url, { scroll: false });
+    else router.replace(url, { scroll: false });
   }
 
   const urlProblem = parseUrlId(searchParams.get("problem"));
   const section: Section = searchParams.get("tab") === "library" || (!searchParams.has("tab") && urlProblem !== null) ? "library" : "today";
   const selectedProblemId = urlProblem;
   const setSection = (next: Section) => updateUrl({ tab: next === "library" ? "library" : null, problem: null }, "push");
+  const setSelectedDate = (day: string) => updateUrl({ day: day === today ? null : day }, "push");
   const openProblem = (id: number | null) => {
     if (id === null) {
       // 关闭详情不离开题库：仅当前不在题库时才移除 tab
@@ -167,32 +183,69 @@ export function AlgorithmTrainingBoardV2({ dashboard, devices, judgeAvailability
     });
   }
 
+  function saveProblem(value: ProblemEditorValue) {
+    const editing = problemEditor === "new" ? null : problemEditor;
+    let savedId = editing?.id ?? null;
+    mutate(async () => {
+      const payload = {
+        title: value.title,
+        sourceUrl: value.sourceUrl || undefined,
+        externalProblemId: value.externalProblemId || undefined,
+        difficultyBand: value.difficultyBand,
+        tags: value.tags,
+        notes: value.notes,
+        statementMarkdown: value.statementMarkdown,
+        inputSpecification: value.inputSpecification,
+        outputSpecification: value.outputSpecification,
+        examples: value.examples,
+        timeLimitMs: value.timeLimitMs,
+        memoryLimitKb: value.memoryLimitKb,
+      };
+      if (editing) {
+        const saved = await updateAlgorithmProblemAction({ problemId: editing.id, ...payload, priorityBand: value.priorityBand, phaseKey: value.phaseKey, nextReview: value.nextReview });
+        if (!saved.ok) return saved;
+        savedId = editing.id;
+      } else {
+        const saved = await createAlgorithmProblemAction(payload);
+        if (!saved.ok) return saved;
+        savedId = saved.problemId ?? null;
+      }
+      if (!savedId) return { ok: false, error: "题目已保存，目录关系等待刷新" };
+      const moved = await moveAlgorithmProblemsAction({ problemIds: [savedId], folderId: value.folderId });
+      if (!moved.ok) return moved;
+      if (value.chapterKey) {
+        const chapter = await setAlgorithmCurriculumChapterAction({ problemIds: [savedId], chapterKey: value.chapterKey });
+        if (!chapter.ok) return chapter;
+      }
+      if (value.courseName.trim()) {
+        const source = await setAlgorithmCourseAction({ problemIds: [savedId], courseName: value.courseName, stageKey: value.stageKey });
+        if (!source.ok) return source;
+      }
+      return { ok: true };
+    }, editing ? "题目已更新" : "题目已创建", () => {
+      setProblemEditor(null);
+      if (savedId) openProblem(savedId);
+    });
+  }
+
   return (
     <main className={styles.shell} aria-busy={pending}>
       <header className={styles.topbar}>
-        <div className={styles.moduleIdentity}>
-          <span className={styles.moduleMark} aria-hidden>
-            <Code2 size={18} />
-          </span>
-          <span>
-            <strong>算法训练</strong>
-            <small>Practice workspace</small>
-          </span>
-        </div>
         <nav className={styles.tabs} aria-label="算法训练主导航">
           <button aria-current={section === "today" ? "page" : undefined} onClick={() => setSection("today")}>
-            <CalendarDays size={17} /> 今日训练
+            <CalendarDays size={17} /> 训练计划
           </button>
           <button aria-current={section === "library" ? "page" : undefined} onClick={() => setSection("library")}>
             <LibraryBig size={17} /> 题库
           </button>
         </nav>
         <div className={styles.topActions}>
+          {section === "library" ? <button className={styles.primaryButton} onClick={() => setProblemEditor("new")}><Plus size={17} /> 新建题目</button> : null}
           <button className={styles.secondaryButton} onClick={() => setPackageImportOpen(true)}>
             <FileUp size={17} /> 导入题库包
           </button>
-          <button className={styles.primaryButton} onClick={() => setImportOpen(true)}>
-            <Plus size={17} /> 添加题目
+          <button className={styles.secondaryButton} onClick={() => setImportOpen(true)}>
+            <Plus size={17} /> 添加 CPP
           </button>
           <button aria-label="连接与设置" className={styles.iconButton} onClick={() => setSettingsOpen(true)}>
             <Settings2 size={18} />
@@ -231,10 +284,22 @@ export function AlgorithmTrainingBoardV2({ dashboard, devices, judgeAvailability
           }}
           showReviews={showReviews}
           today={today}
+          onReschedule={(plan, targetDay) => mutate(
+            () => rescheduleAlgorithmPlanAction({ taskId: plan.taskId, expectedVersion: plan.version, fromDay: plan.day, targetDay }),
+            `已移到 ${targetDay}`,
+          )}
+          onRescheduleAll={(items) => mutate(
+            () => rescheduleAlgorithmPlansAction({
+              plans: items.map((plan) => ({ taskId: plan.taskId, expectedVersion: plan.version })),
+              fromDays: items.map((plan) => plan.day),
+              targetDay: today,
+            }),
+            `已将 ${items.length} 道逾期题移到今天`,
+          )}
         />
       </div>
       <div hidden={section !== "library"}>
-        <LibraryView dashboard={dashboard} onAddPlan={(problemIds, day) => mutate(() => scheduleAlgorithmProblemsAction({ problemIds, day }), `已加入 ${day} 的训练计划`)} onDelete={deleteProblems} onMove={(problemIds, folderId) => mutate(() => moveAlgorithmProblemsAction({ problemIds, folderId }), "题目位置已更新")} onSetCourse={(problemIds, courseName, stageKey) => mutate(() => setAlgorithmCourseAction({ problemIds, courseName, stageKey }), "来源题单已保存")} onSetCurriculum={(problemIds, chapterKey) => mutate(() => setAlgorithmCurriculumChapterAction({ problemIds, chapterKey }), "课程章节已同步")} relations={relations} selectedIds={selectedIds} selectedProblemId={selectedProblemId} setSelectedIds={setSelectedIds} setOpenProblem={openProblem} today={today} filterParam={searchParams.get("filter")} queryParam={searchParams.get("q") ?? ""} sortParam={searchParams.get("sort")} pageParam={searchParams.get("page")} updateUrl={updateUrl} />
+        <LibraryView dashboard={dashboard} onAddPlan={(problemIds, day) => mutate(() => scheduleAlgorithmProblemsAction({ problemIds, day }), `已加入 ${day} 的训练计划`)} onDelete={deleteProblems} onEditProblem={setProblemEditor} onMove={(problemIds, folderId) => mutate(() => moveAlgorithmProblemsAction({ problemIds, folderId }), "题目位置已更新")} onSetCourse={(problemIds, courseName, stageKey) => mutate(() => setAlgorithmCourseAction({ problemIds, courseName, stageKey }), "来源题单已保存")} onSetCurriculum={(problemIds, chapterKey) => mutate(() => setAlgorithmCurriculumChapterAction({ problemIds, chapterKey }), "课程章节已同步")} relations={relations} selectedIds={selectedIds} selectedProblemId={selectedProblemId} setSelectedIds={setSelectedIds} setOpenProblem={openProblem} today={today} filterParam={searchParams.get("filter")} queryParam={searchParams.get("q") ?? ""} sortParam={searchParams.get("sort")} pageParam={searchParams.get("page")} updateUrl={updateUrl} />
       </div>
 
       {pickerOpen ? (
@@ -252,8 +317,9 @@ export function AlgorithmTrainingBoardV2({ dashboard, devices, judgeAvailability
       {completion ? (
         <CompletionDialog
           target={completion}
+          today={today}
           onClose={() => setCompletion(null)}
-          onChoose={(choice) => {
+          onChoose={(choice, attemptDayMode) => {
             const target = completion;
             setCompletion(null);
             mutate(
@@ -265,6 +331,7 @@ export function AlgorithmTrainingBoardV2({ dashboard, devices, judgeAvailability
                       problemId: target.problem.id,
                       day: selectedDate,
                       choice,
+                      attemptDayMode,
                     })
                   : finishDueAlgorithmReviewAction({ problemId: target.problem.id, day: selectedDate, choice }),
               choice === "tomorrow" ? "已安排到明天" : "训练结果已记录",
@@ -292,6 +359,14 @@ export function AlgorithmTrainingBoardV2({ dashboard, devices, judgeAvailability
           }}
         />
       ) : null}
+      {problemEditor ? (
+        <ProblemEditorDialog
+          problem={problemEditor === "new" ? null : problemEditor}
+          relations={relations}
+          onClose={() => setProblemEditor(null)}
+          onSubmit={saveProblem}
+        />
+      ) : null}
       {settingsOpen ? (
         <SettingsDialog
           devices={devices}
@@ -316,11 +391,14 @@ export function AlgorithmTrainingBoardV2({ dashboard, devices, judgeAvailability
   );
 }
 
-function TodayView({ dashboard, onComplete, onOpenPicker, onOpenProblem, onRemove, onReorder, onReorderSettled, plans, curriculum, selectedDate, setSelectedDate, showReviews, setShowReviews, today }: { dashboard: AlgorithmDashboard; onComplete: (target: CompletionTarget) => void; onOpenPicker: () => void; onOpenProblem: (id: number) => void; onRemove: (plan: PlannedAlgorithmProblem) => void; onReorder: (taskIds: string[]) => Promise<{ ok: boolean; error?: string }>; onReorderSettled: () => void; plans: PlannedAlgorithmProblem[]; curriculum: AlgorithmTrainingRelations["curriculum"]; selectedDate: string; setSelectedDate: (value: string) => void; showReviews: boolean; setShowReviews: (value: boolean) => void; today: string }) {
+function TodayView({ dashboard, onComplete, onOpenPicker, onOpenProblem, onRemove, onReorder, onReorderSettled, onReschedule, onRescheduleAll, plans, curriculum, selectedDate, setSelectedDate, showReviews, setShowReviews, today }: { dashboard: AlgorithmDashboard; onComplete: (target: CompletionTarget) => void; onOpenPicker: () => void; onOpenProblem: (id: number) => void; onRemove: (plan: PlannedAlgorithmProblem) => void; onReorder: (taskIds: string[]) => Promise<{ ok: boolean; error?: string }>; onReorderSettled: () => void; onReschedule: (plan: PlannedAlgorithmProblem, targetDay: string) => void; onRescheduleAll: (plans: PlannedAlgorithmProblem[]) => void; plans: PlannedAlgorithmProblem[]; curriculum: AlgorithmTrainingRelations["curriculum"]; selectedDate: string; setSelectedDate: (value: string) => void; showReviews: boolean; setShowReviews: (value: boolean) => void; today: string }) {
   const router = useRouter();
   const { notify } = useFeedback();
   const primaryChapterByProblem = curriculumPrimaryChapters(curriculum);
   const manualPlans = plans.filter((item) => item.day === selectedDate && item.status !== "canceled");
+  const overduePlans = selectedDate === today
+    ? plans.filter((item) => item.day < today && item.status !== "completed" && item.status !== "canceled").sort((a, b) => a.day.localeCompare(b.day))
+    : [];
   // 排序乐观化：本地顺序立即生效，服务端确认前单飞串行提交，失败恢复服务端真值。
   const [orderOverride, setOrderOverride] = useState<string[] | null>(null);
   const [completedCollapsed, setCompletedCollapsed] = useState(false);
@@ -341,6 +419,7 @@ function TodayView({ dashboard, onComplete, onOpenPicker, onOpenProblem, onRemov
     plan: PlannedAlgorithmProblem | null;
     review: boolean;
     planIndex: number;
+    overdue?: boolean;
   }> = orderedPlans
     .map((plan, planIndex) => ({ plan, planIndex }))
     .filter((entry) => !(completedCollapsed && entry.plan.status === "completed"))
@@ -361,6 +440,10 @@ function TodayView({ dashboard, onComplete, onOpenPicker, onOpenProblem, onRemov
     for (const problem of due) {
       if (!rows.some((row) => row.problem.id === problem.id)) rows.push({ problem, plan: null, review: true, planIndex: -1 });
     }
+  }
+  for (const plan of overduePlans) {
+    const problem = dashboard.problems.find((item) => item.id === plan.problemId);
+    if (problem) rows.unshift({ problem, plan, review: false, planIndex: -1, overdue: true });
   }
   const completedCount = manualPlans.filter((plan) => plan.status === "completed").length;
 
@@ -400,8 +483,8 @@ function TodayView({ dashboard, onComplete, onOpenPicker, onOpenProblem, onRemov
     <section className={styles.todayPage}>
       <div className={styles.heroRow}>
         <div>
-          <span className={styles.eyebrow}>DAILY TRAINING</span>
-          <h2>{selectedDate === today ? "今天练什么" : `${selectedDate} 的训练`}</h2>
+          <span className={styles.eyebrow}>训练计划</span>
+          <h2>{selectedDate === today ? "今天" : selectedDate}</h2>
           <p>
             {rows.length ? `${completedCount}/${orderedPlans.length} 已完成，按你的顺序逐题处理。` : "先从题库加入几道题。"}
             {completedCount > 0 ? (
@@ -412,15 +495,19 @@ function TodayView({ dashboard, onComplete, onOpenPicker, onOpenProblem, onRemov
           </p>
         </div>
         <div className={styles.heroSide}>
-          {selectedDate !== today ? (
-            <button className={styles.backToday} onClick={() => setSelectedDate(today)} type="button">
-              回到今天
-            </button>
-          ) : null}
+          <button aria-label="上一天" className={styles.iconButton} onClick={() => setSelectedDate(shiftDateKey(selectedDate, -1))} title="上一天" type="button">
+            <ChevronLeft size={18} />
+          </button>
           <label className={styles.dateField}>
-            <span>训练日期</span>
-            <input min={today} type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
+            <span className={styles.srOnly}>训练日期</span>
+            <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
           </label>
+          <button aria-label="下一天" className={styles.iconButton} onClick={() => setSelectedDate(shiftDateKey(selectedDate, 1))} title="下一天" type="button">
+            <ChevronRight size={18} />
+          </button>
+          <button className={styles.backToday} disabled={selectedDate === today} onClick={() => setSelectedDate(today)} type="button">
+            回到今天
+          </button>
         </div>
       </div>
       <div aria-label="题库证据概览" className={styles.metricBand}>
@@ -447,8 +534,17 @@ function TodayView({ dashboard, onComplete, onOpenPicker, onOpenProblem, onRemov
         </label>
       </div>
       <div className={styles.planList}>
+        {overduePlans.length ? (
+          <div className={styles.overdueHeader}>
+            <span><AlertCircle size={16} /> 逾期未完成 · {overduePlans.length}</span>
+            <span className={styles.overdueActions}>
+              <small>按原计划日期排列</small>
+              <button onClick={() => onRescheduleAll(overduePlans)} type="button">全部移到今天</button>
+            </span>
+          </div>
+        ) : null}
         {rows.map((row) => (
-          <article className={styles.planRow} key={`${row.problem.id}:${row.plan?.taskId ?? "review"}`}>
+          <article className={styles.planRow} data-overdue={row.overdue || undefined} key={`${row.problem.id}:${row.plan?.taskId ?? "review"}`}>
             <span className={styles.grip} data-static={row.plan ? undefined : "true"}>
               <GripVertical size={17} />
             </span>
@@ -462,14 +558,17 @@ function TodayView({ dashboard, onComplete, onOpenPicker, onOpenProblem, onRemov
               </span>
             </button>
             {row.review ? <span className={styles.reviewBadge}>复习</span> : null}
+            {row.overdue && row.plan ? <span className={styles.overdueBadge}>{row.plan.day}</span> : null}
             {row.plan ? (
               <span className={styles.rowActions}>
-                <button aria-label="上移" disabled={row.planIndex === 0} onClick={() => move(row.planIndex, -1)}>
-                  ↑
-                </button>
-                <button aria-label="下移" disabled={row.planIndex >= orderedPlans.length - 1} onClick={() => move(row.planIndex, 1)}>
-                  ↓
-                </button>
+                {row.plan.day < today && (row.plan.status === "open" || row.plan.status === "waiting") ? (
+                  <button className={styles.moveTodayButton} onClick={() => onReschedule(row.plan!, today)} type="button">移到今天</button>
+                ) : (
+                  <>
+                    <button aria-label="上移" disabled={row.planIndex === 0} onClick={() => move(row.planIndex, -1)}>↑</button>
+                    <button aria-label="下移" disabled={row.planIndex >= orderedPlans.length - 1} onClick={() => move(row.planIndex, 1)}>↓</button>
+                  </>
+                )}
                 <button aria-label="移出计划" onClick={() => onRemove(row.plan!)}>
                   <X size={16} />
                 </button>
@@ -494,7 +593,10 @@ function TodayView({ dashboard, onComplete, onOpenPicker, onOpenProblem, onRemov
   );
 }
 
-function LibraryView({ dashboard, onAddPlan, onDelete, onMove, onSetCourse, onSetCurriculum, relations, selectedIds, selectedProblemId, setSelectedIds, setOpenProblem, today, filterParam, queryParam, sortParam, pageParam, updateUrl }: { dashboard: AlgorithmDashboard; onAddPlan: (ids: number[], day: string) => void; onDelete: (ids: number[]) => void; onMove: (ids: number[], folderId: string | null) => void; onSetCourse: (ids: number[], courseName: string, stageKey: string) => void; onSetCurriculum: (ids: number[], chapterKey: string) => void; relations: AlgorithmTrainingRelations; selectedIds: number[]; selectedProblemId: number | null; setSelectedIds: (ids: number[]) => void; setOpenProblem: (id: number | null) => void; today: string; filterParam: string | null; queryParam: string; sortParam: string | null; pageParam: string | null; updateUrl: (entries: Record<string, string | null>, mode: "push" | "replace") => void }) {
+function LibraryView({ dashboard, onAddPlan, onDelete, onEditProblem, onMove, onSetCourse, onSetCurriculum, relations, selectedIds, selectedProblemId, setSelectedIds, setOpenProblem, today, filterParam, queryParam, sortParam, pageParam, updateUrl }: { dashboard: AlgorithmDashboard; onAddPlan: (ids: number[], day: string) => void; onDelete: (ids: number[]) => void; onEditProblem: (problem: AlgorithmProblem) => void; onMove: (ids: number[], folderId: string | null) => void; onSetCourse: (ids: number[], courseName: string, stageKey: string) => void; onSetCurriculum: (ids: number[], chapterKey: string) => void; relations: AlgorithmTrainingRelations; selectedIds: number[]; selectedProblemId: number | null; setSelectedIds: (ids: number[]) => void; setOpenProblem: (id: number | null) => void; today: string; filterParam: string | null; queryParam: string; sortParam: string | null; pageParam: string | null; updateUrl: (entries: Record<string, string | null>, mode: "push" | "replace") => void }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { confirm, notify } = useFeedback();
   const curriculumChapters = useMemo(
     () =>
       relations.curriculum.chapters.map((chapter) => ({
@@ -523,8 +625,14 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onMove, onSetCourse, onSe
   const currentChapter = curriculumStats.find((item) => item.total > 0 && item.completed < item.total) ?? curriculumStats.find((item) => item.total > 0) ?? null;
   const initialChapter = selectedProblemId ? (curriculumByProblem.get(selectedProblemId) ?? currentChapter?.chapter) : currentChapter?.chapter;
   // 筛选/搜索/排序/页码由 URL 驱动（见主组件契约），刷新与回退都能保住现场。
-  const filter = normalizeLibraryFilter(filterParam);
+  const folderParam = searchParams.get("folder");
+  const filter = folderParam ? (`folder:${folderParam}` as LibraryFilter) : normalizeLibraryFilter(filterParam);
   const query = queryParam;
+  const statusFilter = searchParams.get("status") ?? "";
+  const courseFilter = searchParams.get("course") ?? "";
+  const sourceFilter = searchParams.get("source") ?? "";
+  const providersSelected = (searchParams.get("platform") ?? "").split(",").filter(Boolean);
+  const tagsSelected = (searchParams.get("tag") ?? "").split(",").filter(Boolean);
   const tableSort = parseTableSortParam(sortParam);
   const pageIndex = Math.max(0, Number.parseInt(pageParam ?? "0", 10) || 0);
   const [planDate, setPlanDate] = useState(today);
@@ -532,10 +640,11 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onMove, onSetCourse, onSe
   const [stageKey, setStageKey] = useState("W1");
   const [curriculumChapterKey, setCurriculumChapterKey] = useState(initialChapter?.key ?? curriculumChapters[0]?.key ?? "");
   const [detailWidth, setDetailWidth] = useState<number | null>(null);
-  const [providersSelected, setProvidersSelected] = useState<string[]>([]);
-  const [tagsSelected, setTagsSelected] = useState<string[]>([]);
-  const [expandedCourses, setExpandedCourses] = useState<string[]>([]);
   const [exportProblemIds, setExportProblemIds] = useState<number[] | null>(null);
+  const [folderEditor, setFolderEditor] = useState<FolderEditorState | null>(null);
+  const [folderDrawerOpen, setFolderDrawerOpen] = useState(false);
+  const [detailProblem, setDetailProblem] = useState<AlgorithmProblem | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const membershipsByProblem = useMemo(() => groupMemberships(relations), [relations]);
   const folderByProblem = useMemo(() => new Map(relations.library.items.map((item) => [item.problemId, item.folderId])), [relations.library.items]);
   const topics = [...new Set(dashboard.problems.flatMap((problem) => problem.tags))].sort();
@@ -563,12 +672,15 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onMove, onSetCourse, onSe
     [topics, dashboard.problems],
   );
   const filtered = dashboard.problems.filter((problem) => {
-    const text = `${problem.title} ${problem.externalProblemId} ${problem.tags.join(" ")}`.toLowerCase();
+    const text = `${problem.title} ${problem.externalProblemId} ${problem.providerLabel} ${problem.tags.join(" ")} ${problem.notes}`.toLowerCase();
     if (query && !text.includes(query.toLowerCase())) return false;
     if (filter === "todo") return learningStatus(problem, today) === "todo";
     if (filter === "done") return learningStatus(problem, today) === "done";
     if (filter === "review") return learningStatus(problem, today) === "review";
+    if (statusFilter && learningStatus(problem, today) !== statusFilter) return false;
+    if (courseFilter && !curriculumChaptersByProblem.get(problem.id)?.some((item) => item.key === courseFilter)) return false;
     const membershipsForProblem = membershipsByProblem.get(problem.id);
+    if (sourceFilter && !membershipsForProblem?.some((item) => item.courseKey === sourceFilter)) return false;
     if (filter.startsWith("chapter:")) {
       if (!curriculumChaptersByProblem.get(problem.id)?.some((item) => item.key === filter.slice(8))) return false;
     } else if (filter.startsWith("course:")) {
@@ -618,7 +730,10 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onMove, onSetCourse, onSe
   }, []);
 
   function applyFilter(next: LibraryFilter) {
-    updateUrl({ filter: next === "all" ? null : next, page: null }, "push");
+    setFolderDrawerOpen(false);
+    if (next === "all") updateUrl({ folder: null, filter: null, page: null }, "push");
+    else if (next.startsWith("folder:")) updateUrl({ folder: next.slice(7), filter: null, page: null }, "push");
+    else updateUrl({ filter: next, folder: null, page: null }, "push");
   }
 
   function toggleTableSort(key: TableSortKey) {
@@ -639,25 +754,19 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onMove, onSetCourse, onSe
   }
 
   function toggleProvider(value: string) {
-    setProvidersSelected((current) => toggleSelection(current, value));
-    changePage(0);
+    const next = toggleSelection(providersSelected, value);
+    updateUrl({ platform: next.length ? next.join(",") : null, page: null }, "replace");
   }
 
   function toggleTag(value: string) {
-    setTagsSelected((current) => toggleSelection(current, value));
-    changePage(0);
+    const next = toggleSelection(tagsSelected, value);
+    updateUrl({ tag: next.length ? next.join(",") : null, page: null }, "replace");
   }
 
-  function toggleCourseExpanded(courseKey: string) {
-    setExpandedCourses((current) => (current.includes(courseKey) ? current.filter((key) => key !== courseKey) : [...current, courseKey]));
-  }
-
-  const hasActiveRefiners = providersSelected.length > 0 || tagsSelected.length > 0;
+  const hasActiveRefiners = Boolean(statusFilter || courseFilter || sourceFilter || providersSelected.length || tagsSelected.length);
 
   function resetAllFilters() {
-    updateUrl({ filter: null, q: null, page: null }, "push");
-    setProvidersSelected([]);
-    setTagsSelected([]);
+    updateUrl({ filter: null, folder: null, q: null, status: null, course: null, source: null, platform: null, tag: null, page: null }, "push");
   }
 
   const sortCell = (key: TableSortKey, label: string) => (
@@ -698,7 +807,23 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onMove, onSetCourse, onSe
     grabber.addEventListener("pointercancel", onEnd, { once: true });
   }
 
-  const selectedProblem = dashboard.problems.find((problem) => problem.id === selectedProblemId) ?? null;
+  const selectedProblemSummary = dashboard.problems.find((problem) => problem.id === selectedProblemId) ?? null;
+  const selectedProblem = detailProblem?.id === selectedProblemId ? detailProblem : selectedProblemSummary;
+  useEffect(() => {
+    if (!selectedProblemId) {
+      queueMicrotask(() => setDetailProblem(null));
+      return;
+    }
+    let active = true;
+    queueMicrotask(() => setDetailLoading(true));
+    void getAlgorithmProblemDetailAction(selectedProblemId).then((result) => {
+      if (!active) return;
+      if (result.ok && result.problem) setDetailProblem(result.problem);
+      else notify(result.error || "题目详情加载失败", "error");
+      setDetailLoading(false);
+    });
+    return () => { active = false; };
+  }, [selectedProblemId, notify]);
   useEffect(() => {
     if (!selectedProblemId) return;
     function onKeyDown(event: KeyboardEvent) {
@@ -711,101 +836,100 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onMove, onSetCourse, onSe
   }, [selectedProblemId, setOpenProblem]);
   const targetIds = selectedIds.length ? selectedIds : selectedProblem ? [selectedProblem.id] : [];
   const selectedChapterStats = filter.startsWith("chapter:") ? (curriculumStats.find((item) => item.chapter.key === filter.slice(8)) ?? null) : null;
-  const curriculumCompleted = dashboard.problems.filter(isAlgorithmCompleted).length;
   const hiddenSelectedCount = selectedIds.filter((id) => !filtered.some((problem) => problem.id === id)).length;
   const allFilteredSelected = filtered.length > 0 && filtered.every((item) => selectedIds.includes(item.id));
-  const activeCourse = filter.startsWith("course:") ? relations.courses.find((course) => course.key === filter.slice(7)) : null;
-  const activeFolder = filter.startsWith("folder:") ? relations.library.folders.find((folder) => folder.id === filter.slice(7)) : null;
-  const activeScopeTitle = selectedChapterStats?.chapter.title ?? activeCourse?.name ?? activeFolder?.name ?? ({ all: "全部题目", curriculum: "学习路线", todo: "未做题目", done: "已完成", review: "待复习" } as const)[filter as "all" | "curriculum" | "todo" | "done" | "review"] ?? (filter === "folder:root" ? "未整理" : filter.startsWith("stage:") ? filter.slice(6).split("||")[1] : "题库");
+
+  async function runFolderMutation(action: () => Promise<{ ok: boolean; error?: string }>, message: string) {
+    const result = await action();
+    if (!result.ok) {
+      notify(result.error || "文件夹操作失败", "error");
+      return;
+    }
+    notify(message, "success");
+    setFolderEditor(null);
+    router.refresh();
+  }
+
+  function folderProblemCount(folderId: string | null): number {
+    return relations.library.items.filter((item) => item.folderId === folderId).length;
+  }
+
+  function renderFolders(parentId: string | null, depth = 0): React.ReactNode {
+    return relations.library.folders
+      .filter((folder) => folder.parentId === parentId)
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+      .map((folder) => (
+        <div key={folder.id} role="treeitem" aria-level={depth + 2} aria-selected={filter === `folder:${folder.id}`}>
+          <div
+            className={styles.folderRow}
+            data-active={filter === `folder:${folder.id}` || undefined}
+            style={{ paddingLeft: `${10 + depth * 16}px` }}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              const problemId = Number(event.dataTransfer.getData("application/x-ascend-algorithm-problem"));
+              if (Number.isSafeInteger(problemId) && problemId > 0) onMove([problemId], folder.id);
+            }}
+          >
+            <button className={styles.folderSelect} data-folder-id={folder.id} data-folder-node data-parent-folder-id={folder.parentId ?? ""} onClick={() => applyFilter(`folder:${folder.id}`)} type="button">
+              <Folder size={15} /> <span>{folder.name}</span><small>{folderProblemCount(folder.id)}</small>
+            </button>
+            <details className={styles.folderMenu}>
+              <summary aria-label={`${folder.name} 更多操作`}><MoreHorizontal size={15} /></summary>
+              <div>
+                <button onClick={() => setFolderEditor({ mode: "create", parentId: folder.id })} type="button"><FolderPlus size={14} /> 新建子文件夹</button>
+                <button onClick={() => setFolderEditor({ mode: "edit", folder })} type="button"><Pencil size={14} /> 重命名或移动</button>
+                <button onClick={() => void runFolderMutation(() => reorderAlgorithmFolderAction({ folderId: folder.id, direction: "up" }), "文件夹已上移")} type="button">↑ 上移</button>
+                <button onClick={() => void runFolderMutation(() => reorderAlgorithmFolderAction({ folderId: folder.id, direction: "down" }), "文件夹已下移")} type="button">↓ 下移</button>
+                <button onClick={() => void confirm({ title: `删除空文件夹「${folder.name}」？`, description: "仅空文件夹可以直接删除。", confirmLabel: "删除空文件夹", danger: true }).then((ok) => { if (ok) return runFolderMutation(() => deleteAlgorithmFolderAction({ folderId: folder.id }), "空文件夹已删除"); })} type="button"><Trash2 size={14} /> 删除空文件夹</button>
+                <button onClick={() => void confirm({ title: `删除「${folder.name}」？`, description: "文件夹中的子目录和题目会提升到上一级。", confirmLabel: "删除并提升内容", danger: true }).then((ok) => { if (ok) return runFolderMutation(() => deleteAlgorithmFolderAction({ folderId: folder.id, promoteContents: true }), "文件夹已删除"); })} type="button"><Trash2 size={14} /> 删除并提升内容</button>
+              </div>
+            </details>
+          </div>
+          {renderFolders(folder.id, depth + 1)}
+        </div>
+      ));
+  }
 
   return (
     <section className={styles.libraryLayout} data-detail-open={selectedProblem ? "true" : undefined} style={detailWidth ? ({ "--alg-detail-w": `${detailWidth}px` } as React.CSSProperties) : undefined}>
-      <aside className={styles.libraryNav}>
-        <div className={styles.navIntro}>
-          <span>题库导航</span>
-          <small>{dashboard.problems.length} 道题</small>
+      {folderDrawerOpen ? <button aria-label="关闭目录" className={styles.mobileFolderBackdrop} onClick={() => setFolderDrawerOpen(false)} type="button" /> : null}
+      <aside className={styles.libraryNav} data-open={folderDrawerOpen || undefined}>
+        <div className={styles.folderTreeHeader}>
+          <button className={styles.folderRoot} onClick={() => applyFilter("all")} type="button"><FolderOpen size={17} /><strong>算法训练</strong><small>{dashboard.problems.length}</small></button>
+          <button aria-label="新建文件夹" className={styles.folderAdd} onClick={() => setFolderEditor({ mode: "create", parentId: null })} title="新建文件夹" type="button"><FolderPlus size={16} /></button>
+          <button aria-label="关闭目录" className={styles.mobileFolderClose} onClick={() => setFolderDrawerOpen(false)} type="button"><X size={16} /></button>
         </div>
-        <div className={styles.navPrimaryList}>
-          <NavButton active={filter === "all"} count={dashboard.problems.length} icon={<Inbox size={16} />} label="全部题目" onClick={() => applyFilter("all")} />
-          <NavButton active={filter === "todo"} count={dashboard.problems.filter((p) => learningStatus(p, today) === "todo").length} icon={<Circle size={16} />} label="未做" onClick={() => applyFilter("todo")} />
-          <NavButton active={filter === "done"} count={dashboard.problems.filter((p) => learningStatus(p, today) === "done").length} icon={<CheckCircle2 size={16} />} label="已完成" onClick={() => applyFilter("done")} />
-          <NavButton active={filter === "review"} count={dashboard.problems.filter((p) => learningStatus(p, today) === "review").length} icon={<Clock3 size={16} />} label="待复习" onClick={() => applyFilter("review")} />
-        </div>
-        <NavGroup icon={<BookOpenCheck size={15} />} label="学习路线">
-          <div className={styles.curriculumSummary}>
-            <button aria-current={filter === "curriculum" ? "page" : undefined} onClick={() => applyFilter("curriculum")} type="button">
-              <strong>{relations.curriculum.name}</strong>
-              <span>
-                {curriculumCompleted}/{dashboard.problems.length} 已完成
-              </span>
-            </button>
-            <div aria-label={`课程进度 ${curriculumCompleted}/${dashboard.problems.length}`} className={styles.curriculumProgress} role="progressbar" aria-valuemin={0} aria-valuemax={dashboard.problems.length} aria-valuenow={curriculumCompleted}>
-              <span
-                style={{
-                  width: `${dashboard.problems.length ? (curriculumCompleted / dashboard.problems.length) * 100 : 0}%`,
-                }}
-              />
-            </div>
+        <div aria-label="算法训练目录" className={styles.folderTree} role="tree" onKeyDown={(event) => {
+          if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+          const nodes = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("[data-folder-node]")];
+          const current = nodes.indexOf(document.activeElement as HTMLButtonElement);
+          if (current < 0) {
+            event.preventDefault();
+            nodes[0]?.focus();
+            return;
+          }
+          let next = event.key === "Home" ? 0 : event.key === "End" ? nodes.length - 1 : Math.max(0, Math.min(nodes.length - 1, current + (event.key === "ArrowDown" ? 1 : -1)));
+          if (event.key === "ArrowRight") {
+            const child = nodes.findIndex((node) => node.dataset.parentFolderId === nodes[current]?.dataset.folderId);
+            next = child >= 0 ? child : current;
+          } else if (event.key === "ArrowLeft") {
+            const parentId = nodes[current]?.dataset.parentFolderId;
+            const parent = nodes.findIndex((node) => node.dataset.folderId === parentId);
+            next = parent >= 0 ? parent : current;
+          }
+          event.preventDefault();
+          nodes[next]?.focus();
+        }}>
+          <div className={styles.folderRow} data-active={filter === "folder:root" || undefined} role="treeitem" aria-level={2} aria-selected={filter === "folder:root"} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const id = Number(event.dataTransfer.getData("application/x-ascend-algorithm-problem")); if (Number.isSafeInteger(id) && id > 0) onMove([id], null); }}>
+            <button className={styles.folderSelect} data-folder-id="__unfiled" data-folder-node data-parent-folder-id="" onClick={() => applyFilter("folder:root")} type="button"><Folder size={15} /><span>未整理</span><small>{folderProblemCount(null)}</small></button>
           </div>
-          {curriculumStats.map((item) => {
-            const scope: LibraryFilter = `chapter:${item.chapter.key}`;
-            return (
-              <button aria-current={filter === scope ? "page" : undefined} className={`${styles.navButton} ${styles.curriculumChapter}`} key={scope} onClick={() => applyFilter(scope)} title={item.chapter.description}>
-                <span className={styles.chapterLabel}>
-                  <i>{item.chapter.order}</i>
-                  <b>{item.chapter.title}</b>
-                </span>
-                <small>{item.total ? `${item.completed}/${item.total}` : "待补题"}</small>
-              </button>
-            );
-          })}
-        </NavGroup>
-        <NavGroup icon={<Layers3 size={15} />} label="来源与题单">
-          {relations.courses.map((course) => (
-            <div className={styles.courseBlock} key={course.key}>
-              <div className={styles.courseLine}>
-                <NavButton active={filter === `course:${course.key}`} count={course.problemCount} label={course.name} onClick={() => applyFilter(`course:${course.key}`)} />
-                {course.stages.length ? (
-                  <button aria-expanded={expandedCourses.includes(course.key)} aria-label={`展开 ${course.name} 的分组`} className={styles.courseCaret} onClick={() => toggleCourseExpanded(course.key)}>
-                    <ChevronDown size={14} />
-                  </button>
-                ) : null}
-              </div>
-              {expandedCourses.includes(course.key)
-                ? [...course.stages]
-                    .sort((left, right) => left.key.localeCompare(right.key, "zh-Hans-CN", { numeric: true }))
-                    .map((stage) => {
-                      const scope: LibraryFilter = `stage:${course.key}||${stage.key}`;
-                      return (
-                        <button aria-current={filter === scope ? "page" : undefined} className={`${styles.navButton} ${styles.navSubButton}`} key={scope} onClick={() => applyFilter(scope)}>
-                          <span>{stage.key}</span>
-                          {stage.problemCount === undefined ? null : <small>{stage.problemCount}</small>}
-                        </button>
-                      );
-                    })
-                : null}
-            </div>
-          ))}
-        </NavGroup>
-        <NavGroup icon={<FolderOpen size={15} />} label="我的文件夹">
-          <NavButton active={filter === "folder:root"} icon={<FolderInput size={15} />} label="未整理" onClick={() => applyFilter("folder:root")} />
-          {relations.library.folders.map((folder) => (
-            <NavButton key={folder.id} active={filter === `folder:${folder.id}`} icon={<FolderOpen size={15} />} label={folder.name} onClick={() => applyFilter(`folder:${folder.id}`)} />
-          ))}
-        </NavGroup>
+          {renderFolders(null)}
+        </div>
       </aside>
 
       <div className={styles.libraryMain}>
-        <header className={styles.workspaceHeader}>
-          <div>
-            <span className={styles.workspaceEyebrow}>题库 / {activeScopeTitle}</span>
-            <h2>{activeScopeTitle}</h2>
-            <p>当前 {filtered.length} 道 · 题库共 {dashboard.problems.length} 道</p>
-          </div>
-          <button className={styles.secondaryButton} disabled={!filtered.length} onClick={() => setExportProblemIds(filtered.map((problem) => problem.id))}>
-            <FileDown size={15} /> 导出结果
-          </button>
-        </header>
+        <button className={styles.mobileFolderTrigger} onClick={() => setFolderDrawerOpen(true)} type="button"><FolderOpen size={16} /> 浏览题库目录</button>
         {selectedChapterStats ? (
           <section className={styles.chapterContext}>
             <div>
@@ -818,79 +942,83 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onMove, onSetCourse, onSe
             <strong>{selectedChapterStats.total ? `${selectedChapterStats.completed}/${selectedChapterStats.total}` : "待补题"}</strong>
           </section>
         ) : null}
-        <div className={styles.libraryToolbar}>
+        <div className={styles.libraryHeader}>
           <label className={styles.searchField}>
             <Search size={17} />
             <input placeholder="搜索名称、题号或分类" value={query} onChange={(event) => changeQuery(event.target.value)} />
           </label>
           <div className={styles.libraryHeaderActions}>
-            <FilterDropdown label="平台" options={platformOptions} selected={providersSelected} onToggle={(value) => toggleProvider(value)} />
-            <FilterDropdown label="标签" options={tagOptions} selected={tagsSelected} onToggle={(value) => toggleTag(value)} />
-            {hasActiveRefiners || query ? (
-              <button aria-label="清除筛选" className={styles.filterReset} onClick={resetAllFilters} title="清除筛选">
-                <X size={15} />
-              </button>
-            ) : null}
             <label className={styles.selectAll}>
               <input checked={allFilteredSelected} disabled={!filtered.length} type="checkbox" onChange={(event) => setSelectedIds(event.target.checked ? filtered.map((problem) => problem.id) : [])} />
-              全选
+              全选 {filtered.length} 道题
             </label>
+            <button className={styles.secondaryButton} disabled={!filtered.length} onClick={() => setExportProblemIds(filtered.map((problem) => problem.id))}>
+              <FileDown size={15} /> 导出当前结果
+            </button>
           </div>
         </div>
-        <div className={styles.bulkBar} data-visible={selectedIds.length > 0}>
-          <div className={styles.bulkSelection}>
-            <span>{selectedIds.length}</span>
-            <div>
-              <strong>已选择题目</strong>
-              {hiddenSelectedCount > 0 ? <small>{hiddenSelectedCount} 道不在当前结果中</small> : <small>可批量加入计划或整理</small>}
-            </div>
-          </div>
-          <div className={styles.bulkActions}>
-            <div className={styles.bulkSchedule}>
-              <input aria-label="计划日期" min={today} type="date" value={planDate} onChange={(event) => setPlanDate(event.target.value)} />
-              <button className={styles.bulkPrimary} onClick={() => { onAddPlan(selectedIds, planDate); setSelectedIds([]); }}>
-                <CalendarDays size={15} /> 加入计划
-              </button>
-            </div>
-            <button onClick={() => setExportProblemIds(selectedIds)}>
-              <FileDown size={15} /> 导出
+        <div className={styles.filterBar}>
+          <label className={styles.compactSelect}><span>状态</span><select value={statusFilter} onChange={(event) => updateUrl({ status: event.target.value || null, page: null }, "replace")}><option value="">全部状态</option><option value="todo">未做</option><option value="done">已做</option><option value="review">待复习</option></select></label>
+          <label className={styles.compactSelect}><span>课程</span><select value={courseFilter} onChange={(event) => updateUrl({ course: event.target.value || null, page: null }, "replace")}><option value="">全部章节</option>{curriculumChapters.map((chapter) => <option key={chapter.key} value={chapter.key}>{chapter.order}. {chapter.title}</option>)}</select></label>
+          <label className={styles.compactSelect}><span>来源</span><select value={sourceFilter} onChange={(event) => updateUrl({ source: event.target.value || null, page: null }, "replace")}><option value="">全部题单</option>{relations.courses.map((course) => <option key={course.key} value={course.key}>{course.name}</option>)}</select></label>
+          <FilterDropdown label="平台" options={platformOptions} selected={providersSelected} onToggle={(value) => toggleProvider(value)} />
+          <FilterDropdown label="标签" options={tagOptions} selected={tagsSelected} onToggle={(value) => toggleTag(value)} />
+          {hasActiveRefiners || query ? (
+            <button className={styles.filterReset} onClick={resetAllFilters}>
+              清除筛选
             </button>
-            <details className={styles.bulkOrganize}>
-              <summary><SlidersHorizontal size={15} /> 整理 <ChevronDown size={14} /></summary>
-              <div className={styles.bulkPanel}>
-                <label>
-                  <span>移动到文件夹</span>
-                  <select aria-label="移动到文件夹" defaultValue="" onChange={(event) => { onMove(selectedIds, event.target.value || null); event.currentTarget.value = ""; setSelectedIds([]); }}>
-                    <option value="" disabled>选择文件夹…</option>
-                    <option value="">未整理</option>
-                    {relations.library.folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
-                  </select>
-                </label>
-                <div className={styles.bulkPanelField}>
-                  <span>来源题单</span>
-                  <div>
-                    <select aria-label="来源题单" value={courseName} onChange={(event) => { setCourseName(event.target.value); const course = relations.courses.find((item) => item.name === event.target.value); setStageKey(course?.stages[0]?.key ?? stageKey); }}>
-                      {relations.courses.length ? relations.courses.map((course) => <option key={course.key} value={course.name}>{course.name}</option>) : <option value={courseName}>{courseName}</option>}
-                    </select>
-                    <input aria-label="题单分组" className={styles.shortInput} list="alg-stage-options" value={stageKey} onChange={(event) => setStageKey(event.target.value)} />
-                    <datalist id="alg-stage-options">{(relations.courses.find((course) => course.name === courseName)?.stages ?? []).map((stage) => <option key={stage.key} value={stage.key} />)}</datalist>
-                    <button onClick={() => { onSetCourse(selectedIds, courseName, stageKey); setSelectedIds([]); }}>应用</button>
-                  </div>
-                </div>
-                <div className={styles.bulkPanelField}>
-                  <span>学习路线章节</span>
-                  <div>
-                    <select aria-label="课程章节" value={curriculumChapterKey} onChange={(event) => setCurriculumChapterKey(event.target.value)}>
-                      {curriculumChapters.map((chapter) => <option key={chapter.key} value={chapter.key}>{chapter.order}. {chapter.title}</option>)}
-                    </select>
-                    <button onClick={() => { onSetCurriculum(selectedIds, curriculumChapterKey); setSelectedIds([]); }}>应用</button>
-                  </div>
-                </div>
-                <button className={styles.bulkDelete} onClick={() => onDelete(selectedIds)} type="button"><Trash2 size={15} /> 删除所选题目</button>
-              </div>
-            </details>
-            <button aria-label="取消选择" className={styles.bulkClear} onClick={() => setSelectedIds([])} title="取消选择" type="button"><X size={16} /></button>
-          </div>
+          ) : null}
+        </div>
+        <div className={styles.bulkBar} data-visible={selectedIds.length > 0}>
+          <strong>已选 {selectedIds.length}</strong>
+          {hiddenSelectedCount > 0 ? <span className={styles.bulkHint}>其中 {hiddenSelectedCount} 道不在当前筛选内</span> : null}
+          <button className={styles.bulkClear} onClick={() => setSelectedIds([])} type="button">
+            取消选择
+          </button>
+          <span className={styles.bulkDivider} aria-hidden />
+          <input aria-label="计划日期" type="date" value={planDate} onChange={(event) => setPlanDate(event.target.value)} />
+          <button className={styles.bulkPrimary}
+            onClick={() => {
+              onAddPlan(selectedIds, planDate);
+              setSelectedIds([]);
+            }}
+          >
+            加入计划
+          </button>
+          <select
+            aria-label="移动到文件夹"
+            defaultValue=""
+            onChange={(event) => {
+              onMove(selectedIds, event.target.value || null);
+              event.currentTarget.value = "";
+              setSelectedIds([]);
+            }}
+          >
+            <option value="">移动到…</option>
+            <option value="">未整理</option>
+            {relations.library.folders.map((folder) => (
+              <option key={folder.id} value={folder.id}>
+                {folderPathLabel(relations.library.folders, folder)}
+              </option>
+            ))}
+          </select>
+          <details className={styles.bulkMenu}>
+            <summary>设置属性 <ChevronDown size={13} /></summary>
+            <div>
+              <label><span>来源题单</span><select value={courseName} onChange={(event) => { setCourseName(event.target.value); const course = relations.courses.find((item) => item.name === event.target.value); setStageKey(course?.stages[0]?.key ?? stageKey); }}>{relations.courses.length ? relations.courses.map((course) => <option key={course.key} value={course.name}>{course.name}</option>) : <option value={courseName}>{courseName}</option>}</select></label>
+              <label><span>题单分组</span><input value={stageKey} onChange={(event) => setStageKey(event.target.value)} /></label>
+              <button onClick={() => { onSetCourse(selectedIds, courseName, stageKey); setSelectedIds([]); }} type="button">应用来源题单</button>
+              <label><span>课程章节</span><select value={curriculumChapterKey} onChange={(event) => setCurriculumChapterKey(event.target.value)}>{curriculumChapters.map((chapter) => <option key={chapter.key} value={chapter.key}>{chapter.order}. {chapter.title}</option>)}</select></label>
+              <button onClick={() => { onSetCurriculum(selectedIds, curriculumChapterKey); setSelectedIds([]); }} type="button">应用课程章节</button>
+            </div>
+          </details>
+          <details className={styles.bulkMenu}>
+            <summary aria-label="更多批量操作"><MoreHorizontal size={16} /> 更多</summary>
+            <div className={styles.bulkMoreMenu}>
+              <button onClick={() => setExportProblemIds(selectedIds)} type="button"><FileDown size={15} /> 导出题库包</button>
+              <button className={styles.bulkDelete} onClick={() => onDelete(selectedIds)} type="button"><Trash2 size={15} /> 删除题目</button>
+            </div>
+          </details>
         </div>
         <div className={styles.problemTable} role="table" aria-label="算法题库">
           <div className={styles.tableHead} role="row">
@@ -908,10 +1036,12 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onMove, onSetCourse, onSe
               <div
                 className={styles.tableRow}
                 data-active={selectedProblem?.id === problem.id}
+                draggable
                 key={problem.id}
                 role="row"
                 tabIndex={0}
                 aria-selected={selectedProblem?.id === problem.id}
+                onDragStart={(event) => event.dataTransfer.setData("application/x-ascend-algorithm-problem", String(problem.id))}
                 onClick={openDetail}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
@@ -981,10 +1111,12 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onMove, onSetCourse, onSe
           />
           <div className={styles.detailTop}>
             <span className={styles.statusDot} data-status={learningStatus(selectedProblem, today)} />
-            <button aria-label="关闭详情" onClick={() => setOpenProblem(null)}>
-              <X size={18} />
-            </button>
+            <span className={styles.detailTopActions}>
+              <button aria-label="编辑题目" disabled={detailLoading || detailProblem?.id !== selectedProblem.id} onClick={() => onEditProblem(selectedProblem)} title="编辑题目"><Pencil size={17} /></button>
+              <button aria-label="关闭详情" onClick={() => setOpenProblem(null)}><X size={18} /></button>
+            </span>
           </div>
+          {detailLoading ? <p aria-live="polite" className={styles.detailLoading}><RefreshCw className={styles.spin} size={15} /> 正在加载题面与训练记录</p> : null}
           <span className={styles.eyebrow}>{providerText(selectedProblem)}</span>
           <h2>{selectedProblem.title}</h2>
           <p className={styles.detailMeta}>
@@ -997,7 +1129,7 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onMove, onSetCourse, onSe
             </p>
           ) : null}
           <div className={styles.detailActions}>
-            <input min={today} type="date" value={planDate} onChange={(event) => setPlanDate(event.target.value)} />
+            <input aria-label="计划日期" type="date" value={planDate} onChange={(event) => setPlanDate(event.target.value)} />
             <button className={styles.primaryButton} onClick={() => onAddPlan(targetIds, planDate)}>
               <Plus size={16} /> 加入计划
             </button>
@@ -1035,8 +1167,152 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onMove, onSetCourse, onSe
         </aside>
       )}
       {exportProblemIds ? <PackageExportDialog problemIds={exportProblemIds} onClose={() => setExportProblemIds(null)} /> : null}
+      {folderEditor ? (
+        <FolderEditorDialog
+          editor={folderEditor}
+          folders={relations.library.folders}
+          onClose={() => setFolderEditor(null)}
+          onSubmit={(name, parentId) => {
+            if (folderEditor.mode === "create") {
+              void runFolderMutation(() => createAlgorithmFolderAction({ name, parentId }), "文件夹已创建");
+              return;
+            }
+            const folder = folderEditor.folder;
+            void runFolderMutation(async () => {
+              const renamed = await renameAlgorithmFolderAction({ folderId: folder.id, name });
+              if (!renamed.ok || parentId === folder.parentId) return renamed;
+              return moveAlgorithmFolderAction({ folderId: folder.id, targetParentId: parentId });
+            }, "文件夹已更新");
+          }}
+        />
+      ) : null}
     </section>
   );
+}
+
+function FolderEditorDialog({ editor, folders, onClose, onSubmit }: { editor: FolderEditorState; folders: AlgorithmLibraryFolder[]; onClose: () => void; onSubmit: (name: string, parentId: string | null) => void }) {
+  const [name, setName] = useState(editor.mode === "edit" ? editor.folder.name : "");
+  const [parentId, setParentId] = useState(editor.mode === "edit" ? editor.folder.parentId ?? "" : editor.parentId ?? "");
+  const blockedIds = editor.mode === "edit" ? collectFolderDescendants(folders, editor.folder.id) : new Set<string>();
+  if (editor.mode === "edit") blockedIds.add(editor.folder.id);
+  return (
+    <Modal title={editor.mode === "create" ? "新建文件夹" : "编辑文件夹"} onClose={onClose}>
+      <div className={styles.formGrid}>
+        <label><span>名称</span><input autoFocus maxLength={80} value={name} onChange={(event) => setName(event.target.value)} /></label>
+        <label><span>上级目录</span><select value={parentId} onChange={(event) => setParentId(event.target.value)}><option value="">算法训练</option>{folders.filter((folder) => !blockedIds.has(folder.id)).map((folder) => <option key={folder.id} value={folder.id}>{folderPathLabel(folders, folder)}</option>)}</select></label>
+      </div>
+      <footer className={styles.modalFooter}>
+        <button onClick={onClose} type="button">取消</button>
+        <button className={styles.primaryButton} disabled={!name.trim()} onClick={() => onSubmit(name.trim(), parentId || null)} type="button">保存</button>
+      </footer>
+    </Modal>
+  );
+}
+
+function ProblemEditorDialog({ problem, relations, onClose, onSubmit }: { problem: AlgorithmProblem | null; relations: AlgorithmTrainingRelations; onClose: () => void; onSubmit: (value: ProblemEditorValue) => void }) {
+  const membership = problem ? relations.courseMemberships.find((item) => item.problemId === problem.id) : null;
+  const chapter = problem ? relations.curriculum.items.find((item) => item.problemId === problem.id && item.membershipKind === "primary") : null;
+  const currentFolder = problem ? relations.library.items.find((item) => item.problemId === problem.id)?.folderId ?? "" : "";
+  const firstCourse = membership?.courseName ?? relations.courses[0]?.name ?? "";
+  const firstStage = membership?.stageKey ?? relations.courses.find((item) => item.name === firstCourse)?.stages[0]?.key ?? "W1";
+  const [value, setValue] = useState<ProblemEditorValue>({
+    title: problem?.title ?? "",
+    sourceUrl: problem?.providerId === "ascend" ? "" : problem?.sourceUrl ?? "",
+    externalProblemId: problem?.providerId === "ascend" ? "" : problem?.externalProblemId ?? "",
+    difficultyBand: problem?.difficultyBand ?? "",
+    tags: problem?.tags ?? [],
+    notes: problem?.notes ?? "",
+    statementMarkdown: problem?.statementMarkdown ?? "",
+    inputSpecification: problem?.inputSpecification ?? "",
+    outputSpecification: problem?.outputSpecification ?? "",
+    examples: problem?.examples.length ? problem.examples : [{ input: "", output: "" }],
+    timeLimitMs: problem?.timeLimitMs ?? 1000,
+    memoryLimitKb: problem?.memoryLimitKb ?? 262144,
+    folderId: currentFolder || null,
+    chapterKey: chapter?.chapterKey ?? relations.curriculum.chapters[0]?.key ?? "",
+    courseName: firstCourse,
+    stageKey: firstStage,
+    phaseKey: problem?.phaseKey ?? "",
+    priorityBand: problem?.priorityBand ?? "",
+    nextReview: problem?.nextReview ?? null,
+  });
+  const update = <K extends keyof ProblemEditorValue>(key: K, next: ProblemEditorValue[K]) => setValue((current) => ({ ...current, [key]: next }));
+  const updateExample = (index: number, patch: Partial<ProblemEditorValue["examples"][number]>) => update("examples", value.examples.map((example, current) => current === index ? { ...example, ...patch } : example));
+  return (
+    <Modal title={problem ? "编辑题目" : "新建题目"} onClose={onClose} wide>
+      <div className={styles.problemEditorGrid}>
+        <section>
+          <h3>基础信息</h3>
+          <div className={styles.formGrid}>
+            <label className={styles.spanTwo}><span>题目名称</span><input autoFocus maxLength={160} value={value.title} onChange={(event) => update("title", event.target.value)} /></label>
+            <label className={styles.spanTwo}><span>来源链接</span><input placeholder="可留空，创建 Ascend 原创题" type="url" value={value.sourceUrl} onChange={(event) => update("sourceUrl", event.target.value)} /></label>
+            <label><span>平台题号</span><input value={value.externalProblemId} onChange={(event) => update("externalProblemId", event.target.value)} /></label>
+            <label><span>难度</span><select value={value.difficultyBand} onChange={(event) => update("difficultyBand", event.target.value)}><option value="">未设置</option><option value="foundation">基础</option><option value="standard">标准</option><option value="challenge">挑战</option></select></label>
+            <label className={styles.spanTwo}><span>标签</span><input placeholder="双指针, 二分, 边界" value={value.tags.join(", ")} onChange={(event) => update("tags", event.target.value.split(/[,，]/).map((item) => item.trim()).filter(Boolean))} /></label>
+            <label className={styles.spanTwo}><span>备注</span><textarea value={value.notes} onChange={(event) => update("notes", event.target.value)} /></label>
+          </div>
+        </section>
+        <section>
+          <h3>组织与计划</h3>
+          <div className={styles.formGrid}>
+            <label><span>目录</span><select value={value.folderId ?? ""} onChange={(event) => update("folderId", event.target.value || null)}><option value="">未整理</option>{relations.library.folders.map((folder) => <option key={folder.id} value={folder.id}>{folderPathLabel(relations.library.folders, folder)}</option>)}</select></label>
+            <label><span>课程章节</span><select value={value.chapterKey} onChange={(event) => update("chapterKey", event.target.value)}>{relations.curriculum.chapters.map((item) => <option key={item.key} value={item.key}>{item.sortOrder}. {item.name}</option>)}</select></label>
+            <label><span>来源题单</span><input list="problem-course-options" value={value.courseName} onChange={(event) => update("courseName", event.target.value)} /><datalist id="problem-course-options">{relations.courses.map((item) => <option key={item.key} value={item.name} />)}</datalist></label>
+            <label><span>题单分组</span><input value={value.stageKey} onChange={(event) => update("stageKey", event.target.value)} /></label>
+            <label><span>训练阶段</span><input placeholder="W1" value={value.phaseKey} onChange={(event) => update("phaseKey", event.target.value)} /></label>
+            <label><span>优先级</span><select value={value.priorityBand} onChange={(event) => update("priorityBand", event.target.value)}><option value="">普通</option><option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option></select></label>
+            <label className={styles.spanTwo}><span>复习日期</span><input type="date" value={value.nextReview ?? ""} onChange={(event) => update("nextReview", event.target.value || null)} /></label>
+          </div>
+        </section>
+        <section className={styles.spanTwo}>
+          <h3>题面内容</h3>
+          <div className={styles.formGrid}>
+            <label className={styles.spanTwo}><span>题面 Markdown</span><textarea className={styles.statementEditor} value={value.statementMarkdown} onChange={(event) => update("statementMarkdown", event.target.value)} /></label>
+            <label><span>输入说明</span><textarea value={value.inputSpecification} onChange={(event) => update("inputSpecification", event.target.value)} /></label>
+            <label><span>输出说明</span><textarea value={value.outputSpecification} onChange={(event) => update("outputSpecification", event.target.value)} /></label>
+            <div className={`${styles.spanTwo} ${styles.examplesEditor}`}>
+              <div className={styles.examplesHeader}><strong>样例</strong><button className={styles.secondaryButton} onClick={() => update("examples", [...value.examples, { input: "", output: "" }])} type="button"><Plus size={14} /> 添加样例</button></div>
+              {value.examples.map((example, index) => (
+                <section className={styles.exampleCard} key={index}>
+                  <header><strong>样例 {index + 1}</strong><button aria-label={`删除样例 ${index + 1}`} disabled={value.examples.length === 1} onClick={() => update("examples", value.examples.filter((_, current) => current !== index))} type="button"><Trash2 size={14} /></button></header>
+                  <label><span>输入</span><textarea value={example.input} onChange={(event) => updateExample(index, { input: event.target.value })} /></label>
+                  <label><span>输出</span><textarea value={example.output} onChange={(event) => updateExample(index, { output: event.target.value })} /></label>
+                  <label className={styles.spanTwo}><span>说明</span><input value={example.explanation ?? ""} onChange={(event) => updateExample(index, { explanation: event.target.value })} /></label>
+                </section>
+              ))}
+            </div>
+            <label><span>时间限制（ms）</span><input min={1} type="number" value={value.timeLimitMs} onChange={(event) => update("timeLimitMs", Number(event.target.value))} /></label>
+            <label><span>内存限制（KB）</span><input min={1024} type="number" value={value.memoryLimitKb} onChange={(event) => update("memoryLimitKb", Number(event.target.value))} /></label>
+          </div>
+        </section>
+      </div>
+      <footer className={styles.modalFooter}><button onClick={onClose} type="button">取消</button><button className={styles.primaryButton} disabled={!value.title.trim()} onClick={() => onSubmit(value)} type="button">保存题目</button></footer>
+    </Modal>
+  );
+}
+
+function collectFolderDescendants(folders: AlgorithmLibraryFolder[], folderId: string): Set<string> {
+  const result = new Set<string>();
+  const visit = (parentId: string) => {
+    for (const folder of folders.filter((item) => item.parentId === parentId)) {
+      result.add(folder.id);
+      visit(folder.id);
+    }
+  };
+  visit(folderId);
+  return result;
+}
+
+function folderPathLabel(folders: AlgorithmLibraryFolder[], folder: AlgorithmLibraryFolder): string {
+  const parts = [folder.name];
+  let parentId = folder.parentId;
+  while (parentId) {
+    const parent = folders.find((item) => item.id === parentId);
+    if (!parent) break;
+    parts.unshift(parent.name);
+    parentId = parent.parentId;
+  }
+  return parts.join(" / ");
 }
 
 function ProblemPicker({ plannedProblemIds, problems, selectedDate, onClose, onSubmit }: { plannedProblemIds: number[]; problems: AlgorithmProblem[]; selectedDate: string; onClose: () => void; onSubmit: (ids: number[]) => void }) {
@@ -1091,23 +1367,43 @@ function ProblemPicker({ plannedProblemIds, problems, selectedDate, onClose, onS
   );
 }
 
-function CompletionDialog({ target, onClose, onChoose }: { target: CompletionTarget; onClose: () => void; onChoose: (choice: "review" | "tomorrow" | "stop-review") => void }) {
+function CompletionDialog({ target, today, onClose, onChoose }: { target: CompletionTarget; today: string; onClose: () => void; onChoose: (choice: "review" | "tomorrow" | "stop-review", attemptDayMode?: "now" | "backfill") => void }) {
+  const historical = Boolean(target.plan && target.plan.day < today);
   return (
     <Modal title={`完成「${target.problem.title}」`} onClose={onClose}>
-      <p className={styles.modalLead}>选择这道题接下来的安排。</p>
+      <p className={styles.modalLead}>{historical ? `原计划日期为 ${target.plan?.day}，请选择实际完成日期。` : "选择这道题接下来的安排。"}</p>
       <div className={styles.choiceList}>
-        <button onClick={() => onChoose("review")}>
-          <strong>完成并安排复习</strong>
-          <span>按 3 → 7 → 14 → 30 → 60 天推进</span>
-        </button>
-        <button onClick={() => onChoose("tomorrow")}>
-          <strong>明天继续</strong>
-          <span>保留训练状态，安排到次日</span>
-        </button>
-        <button onClick={() => onChoose("stop-review")}>
-          <strong>完成并退出复习计划</strong>
-          <span>保留完成记录，停止自动安排</span>
-        </button>
+        {historical ? (
+          <>
+            <button onClick={() => onChoose("review", "now")}>
+              <strong>今天完成并安排复习</strong>
+              <span>实际完成日记为今天，原计划日期保留在任务记录中</span>
+            </button>
+            <button onClick={() => onChoose("review", "backfill")}>
+              <strong>补记为 {target.plan?.day} 完成</strong>
+              <span>复习周期从补记日期开始计算</span>
+            </button>
+            <button onClick={() => onChoose("stop-review", "now")}>
+              <strong>今天完成并结束复习</strong>
+              <span>记录今天完成，停止自动复习安排</span>
+            </button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => onChoose("review", "now")}>
+              <strong>完成并安排复习</strong>
+              <span>按 3 → 7 → 14 → 30 → 60 天推进</span>
+            </button>
+            <button onClick={() => onChoose("tomorrow", "now")}>
+              <strong>明天继续</strong>
+              <span>保留训练状态，安排到次日</span>
+            </button>
+            <button onClick={() => onChoose("stop-review", "now")}>
+              <strong>完成并退出复习计划</strong>
+              <span>保留完成记录，停止自动安排</span>
+            </button>
+          </>
+        )}
       </div>
       <p className={styles.modalFootnote}>「完成」会记录一次 AC（独立通过）结果；未通过的作答请先不要点完成，等修正后再记录。</p>
     </Modal>
@@ -1567,15 +1863,6 @@ function Modal({ children, onClose, title, wide = false }: { children: React.Rea
   );
 }
 
-function NavButton({ active, count, icon, label, onClick }: { active: boolean; count?: number; icon?: React.ReactNode; label: string; onClick: () => void }) {
-  return (
-    <button aria-current={active ? "page" : undefined} className={styles.navButton} onClick={onClick}>
-      <span>{icon}{label}</span>
-      {count === undefined ? null : <small>{count}</small>}
-    </button>
-  );
-}
-
 function FilterDropdown({ label, options, selected, onToggle }: { label: string; options: FilterOption[]; selected: string[]; onToggle: (value: string) => void }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -1618,18 +1905,6 @@ function FilterDropdown({ label, options, selected, onToggle }: { label: string;
   );
 }
 
-function NavGroup({ children, icon, label }: { children: React.ReactNode; icon?: React.ReactNode; label: string }) {
-  const [open, setOpen] = useState(true);
-  return (
-    <section className={styles.navGroup}>
-      <button aria-expanded={open} className={styles.navGroupToggle} onClick={() => setOpen(!open)} type="button">
-        <span>{icon}{label}</span><ChevronDown size={14} />
-      </button>
-      {open ? children : null}
-    </section>
-  );
-}
-
 function StatusBadge({ status }: { status: "todo" | "done" | "review" }) {
   const labels = { todo: "未做", done: "已做", review: "待复习" };
   return (
@@ -1659,6 +1934,7 @@ function groupMemberships(relations: AlgorithmTrainingRelations) {
 }
 
 function providerText(problem: AlgorithmProblem): string {
+  if (problem.providerId === "ascend") return problem.providerLabel;
   return `${problem.providerLabel}${problem.externalProblemId ? ` ${problem.externalProblemId}` : ""}`;
 }
 

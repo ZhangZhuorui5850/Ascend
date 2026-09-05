@@ -4,6 +4,7 @@ import {
   completeAlgorithmPlan,
   continueAlgorithmPlanTomorrow,
   getAlgorithmTrainingRelations,
+  rescheduleAlgorithmPlans,
   scheduleAlgorithmProblems,
   setAlgorithmCourseMemberships,
 } from "./algorithm-training";
@@ -52,6 +53,13 @@ describe("simplified algorithm training", () => {
       reviewStep: 1,
       nextReview: "2026-08-30",
     });
+    scheduleAlgorithmProblems(db, scope, { problemIds: [first.id], day: "2026-08-29" });
+    const replanned = getAlgorithmTrainingRelations(db, scope).plans.filter((plan) => plan.problemId === first.id);
+    expect(replanned).toHaveLength(2);
+    expect(replanned.map((plan) => [plan.day, plan.status])).toEqual([
+      ["2026-08-27", "completed"],
+      ["2026-08-29", "open"],
+    ]);
   });
 
   it("moves an unfinished plan to the next day", () => {
@@ -69,5 +77,29 @@ describe("simplified algorithm training", () => {
       day: plan.day,
     });
     expect(getAlgorithmTrainingRelations(db, scope).plans[0].day).toBe("2026-08-28");
+  });
+
+  it("moves overdue plans atomically and rolls the whole batch back on a version conflict", () => {
+    const db = createTestDb();
+    const scope = createTestWorkspace(db);
+    setPluginEnabled(db, scope, "algorithms", true);
+    const first = createAlgorithmProblem(db, scope, { sourceUrl: "https://example.com/a", title: "A" });
+    const second = createAlgorithmProblem(db, scope, { sourceUrl: "https://example.com/b", title: "B" });
+    const plans = scheduleAlgorithmProblems(db, scope, { problemIds: [first.id, second.id], day: "2026-08-20" });
+
+    expect(() => rescheduleAlgorithmPlans(db, scope, {
+      plans: [
+        { taskId: plans[0].taskId, expectedVersion: plans[0].version },
+        { taskId: plans[1].taskId, expectedVersion: plans[1].version + 1 },
+      ],
+      targetDay: "2026-08-28",
+    })).toThrow("计划已经更新");
+    expect(getAlgorithmTrainingRelations(db, scope).plans.map((plan) => plan.day)).toEqual(["2026-08-20", "2026-08-20"]);
+
+    rescheduleAlgorithmPlans(db, scope, {
+      plans: plans.map((plan) => ({ taskId: plan.taskId, expectedVersion: plan.version })),
+      targetDay: "2026-08-28",
+    });
+    expect(getAlgorithmTrainingRelations(db, scope).plans.map((plan) => plan.day)).toEqual(["2026-08-28", "2026-08-28"]);
   });
 });

@@ -2320,6 +2320,32 @@ const migrations: Migration[] = [
       }
     },
   },
+  {
+    version: "0043_algorithm_problem_content_overrides",
+    sql: `
+      ALTER TABLE algorithm_problem_overrides ADD COLUMN provider_id TEXT;
+      ALTER TABLE algorithm_problem_overrides ADD COLUMN external_problem_id TEXT;
+      ALTER TABLE algorithm_problem_overrides ADD COLUMN source_url TEXT;
+      ALTER TABLE algorithm_problem_overrides ADD COLUMN statement_markdown TEXT;
+      ALTER TABLE algorithm_problem_overrides ADD COLUMN input_specification TEXT;
+      ALTER TABLE algorithm_problem_overrides ADD COLUMN output_specification TEXT;
+      ALTER TABLE algorithm_problem_overrides ADD COLUMN examples_json TEXT;
+      ALTER TABLE algorithm_problem_overrides ADD COLUMN time_limit_ms INTEGER;
+      ALTER TABLE algorithm_problem_overrides ADD COLUMN memory_limit_kb INTEGER;
+    `,
+  },
+  {
+    version: "0044_repeatable_algorithm_plans",
+    sql: `
+      DROP INDEX idx_learning_task_links_source;
+      CREATE UNIQUE INDEX idx_learning_task_links_source
+        ON learning_task_links(workspace_id, source_type, source_id)
+        WHERE source_type != '' AND source_id != '' AND source_type != 'plugin:algorithms';
+      CREATE INDEX idx_learning_task_links_algorithm_source
+        ON learning_task_links(workspace_id, source_type, source_id, task_id)
+        WHERE source_type = 'plugin:algorithms';
+    `,
+  },
 ];
 
 function migrateLegacyDayTasks(database: Database.Database): void {

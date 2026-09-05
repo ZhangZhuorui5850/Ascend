@@ -83,7 +83,10 @@ export class AscendApi {
     return this.readPublicResponse(response);
   }
 
-  queue() { return this.request("/api/algorithm/v1/queue"); }
+  queue(day?: string) { return this.request(`/api/algorithm/v1/queue${day ? `?day=${encodeURIComponent(day)}` : ""}`); }
+  createPlans(input: unknown) { return this.post("/api/algorithm/v1/plans", input); }
+  reschedulePlan(taskId: string, input: unknown) { return this.patch(`/api/algorithm/v1/plans/${encodeURIComponent(taskId)}`, input); }
+  removePlan(taskId: string, expectedVersion: number) { return this.request(`/api/algorithm/v1/plans/${encodeURIComponent(taskId)}`, { method: "DELETE", body: JSON.stringify({ operationId: `vscode-remove:${Date.now()}`, expectedVersion }) }); }
   problem(id: number) { return this.request(`/api/algorithm/v1/problems/${id}`); }
   saveDraft(input: unknown) { return this.put("/api/algorithm/v1/drafts", input); }
   capabilities() { return this.request("/api/algorithm/v1/capabilities"); }

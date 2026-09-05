@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 import type { WorkspaceScope } from "../../access-context";
-import { assertDateKey } from "../../dates";
+import { assertDateKey, todayKey } from "../../dates";
 import type { JudgeLanguage } from "../../judge-gateway";
 import {
   ALGORITHM_REVIEW_KINDS,
@@ -10,6 +10,7 @@ import {
 } from "../../repo/algorithms";
 import { requirePluginEnabled } from "../../repo/plugins";
 import { recordAlgorithmAttemptCommand } from "./record-attempt";
+import { finalizeAlgorithmTrainingResult } from "./finalize-training-result";
 
 export type PracticeClientKind = "web" | "vscode" | "agent";
 
@@ -143,10 +144,33 @@ export function finishPracticeSession(
     maxHintLevel?: number;
     errorCategory?: string;
     reflection?: string;
+    reviewChoice?: "schedule" | "stop" | "unchanged";
+    attemptDayMode?: "now" | "backfill";
+    plan?: { taskId: string; expectedVersion: number };
   },
 ): AlgorithmAttempt {
   const session = getPracticeSession(db, scope, normalizeSessionId(input.sessionId));
   const activeSeconds = Math.max(session.activeSeconds, boundedInteger(input.activeSeconds ?? 0, 0, 86_400, "有效作答时长"));
+  if (input.plan) {
+    return finalizeAlgorithmTrainingResult(db, scope, {
+      operationId: session.sessionId,
+      problemId: session.problemId,
+      attemptDay: input.attemptDayMode === "backfill" ? session.day : todayKey(),
+      verdict: input.verdict,
+      durationMinutes: Math.ceil(activeSeconds / 60),
+      maxHintLevel: Math.max(session.maxHintLevel, boundedInteger(input.maxHintLevel ?? 0, 0, 4, "提示级别")),
+      preConfidence: session.preConfidence,
+      reviewKind: session.reviewKind,
+      transferSourceProblemId: session.transferSourceProblemId,
+      errorCategory: input.errorCategory,
+      reflection: input.reflection,
+      reviewChoice: input.reviewChoice,
+      plan: {
+        ...input.plan,
+        disposition: input.verdict === "AC" ? "complete" : "keep",
+      },
+    });
+  }
   return recordAlgorithmAttemptCommand(db, scope, {
     operationId: session.sessionId,
     problemId: session.problemId,

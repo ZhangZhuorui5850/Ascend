@@ -9,7 +9,8 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const db = getDb();
     const context = requireAlgorithmDeviceRequest(db, request);
-    return algorithmApiSuccess(request, getAlgorithmDeviceQueuePayload(db, context));
+    const day = new URL(request.url).searchParams.get("day") || undefined;
+    return algorithmApiSuccess(request, getAlgorithmDeviceQueuePayload(db, context, day));
   } catch (error) {
     return algorithmApiFailure(request, error);
   }

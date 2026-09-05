@@ -48,12 +48,35 @@ export const practiceFinishSchema = z.object({
   maxHintLevel: z.coerce.number().int().min(0).max(4).optional(),
   errorCategory: z.string().max(80).optional(),
   reflection: z.string().max(2_000).optional(),
+  reviewChoice: z.enum(["schedule", "stop", "unchanged"]).optional(),
+  attemptDayMode: z.enum(["now", "backfill"]).optional(),
+  plan: z.object({
+    taskId: z.string().trim().min(1).max(160),
+    expectedVersion: z.coerce.number().int().min(0),
+  }).optional(),
 });
 
 export const practiceHintSchema = z.object({
   problemId: positiveId,
   sessionId: operationId,
   level: z.coerce.number().int().min(1).max(4),
+});
+
+export const algorithmPlanCreateSchema = z.object({
+  operationId,
+  problemIds: z.array(positiveId).min(1).max(200),
+  day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export const algorithmPlanUpdateSchema = z.object({
+  operationId,
+  expectedVersion: z.coerce.number().int().min(0),
+  targetDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export const algorithmPlanDeleteSchema = z.object({
+  operationId,
+  expectedVersion: z.coerce.number().int().min(0),
 });
 
 export const practiceSubmissionSchema = z.object({

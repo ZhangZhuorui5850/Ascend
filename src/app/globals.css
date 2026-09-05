@@ -2577,6 +2577,28 @@ body[data-dragging] .mapCard::after {
   min-height: 0;
 }
 
+.algorithmDriveList { min-width: 0; overflow: auto; border-right: 1px solid var(--line); }
+.algorithmDriveRow { display: grid; grid-template-columns: minmax(220px, 1fr) auto auto auto; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px 14px; border: 0; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: left; }
+.algorithmDriveRow:hover,
+.algorithmDriveRow.active { background: var(--surface-soft); }
+.algorithmDriveRow.active { box-shadow: inset 3px 0 var(--accent); }
+.algorithmDriveRow > small,
+.algorithmDriveRow > span { color: var(--muted); font-size: 12px; }
+.algorithmDriveRow > button { min-height: 30px; padding: 0 9px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--muted); }
+.algorithmDriveRow > input { min-height: 34px; padding: 0 9px; border: 1px solid var(--accent); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--ink); }
+.algorithmDriveName { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 0; border: 0 !important; background: transparent !important; color: var(--ink) !important; text-align: left; }
+.algorithmDriveRename input { min-width: 0; min-height: 34px; flex: 1; padding: 0 9px; border: 1px solid var(--accent); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--ink); }
+.algorithmDriveInlineActions { display: flex; gap: 5px; }
+.algorithmDriveInlineActions button { min-height: 30px; padding: 0 9px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--muted); }
+.algorithmProblemRow { grid-template-columns: 20px minmax(180px, 1fr) minmax(130px, .7fr) minmax(120px, .8fr) auto; cursor: pointer; }
+.algorithmProblemRow strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.algorithmDetailTags { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 20px; }
+.algorithmDetailTags span { padding: 3px 8px; border-radius: 999px; background: var(--surface-soft); color: var(--muted); font-size: 11px; }
+.algorithmLinkedAssets { display: grid; gap: 6px; margin: 0 0 18px; }
+.algorithmLinkedAssets > strong { font-size: 12px; }
+.algorithmLinkedAssets a { display: flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink); font-size: 12px; }
+.algorithmLinkedAssets a small { margin-left: auto; color: var(--quiet); }
+
 .driveListPanel {
   min-width: 0;
   overflow-y: auto;

@@ -6,7 +6,7 @@ import { todayKey } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { getJudgeRuntimeAvailability } from "@/lib/judge-runtime";
 import { requirePageWorkspace } from "@/lib/page-auth";
-import { getAlgorithmDashboard } from "@/lib/repo/algorithms";
+import { getAlgorithmDashboardSummary } from "@/lib/repo/algorithms";
 import { listAlgorithmDevices } from "@/lib/repo/algorithm-devices";
 import { getAlgorithmTrainingRelations } from "@/lib/repo/algorithm-training";
 import { requirePluginEnabled } from "@/lib/repo/plugins";
@@ -40,7 +40,7 @@ export default async function AlgorithmTrainingPage() {
     );
   }
   const today = todayKey();
-  const dashboard = getAlgorithmDashboard(db, access, today);
+  const dashboard = getAlgorithmDashboardSummary(db, access, today);
   const relations = getAlgorithmTrainingRelations(db, access);
   const devices = listAlgorithmDevices(db, access);
   const judgeAvailability = getJudgeRuntimeAvailability(db, access);
@@ -66,4 +66,3 @@ export default async function AlgorithmTrainingPage() {
     </div>
   );
 }
-

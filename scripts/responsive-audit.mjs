@@ -59,7 +59,7 @@ try {
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
-  await page.keyboard.press("Control+K");
+  await page.keyboard.press("N");
   await expectVisible('[data-testid="capture-panel"]', "keyboard capture opens");
   await page.getByRole("button", { name: "关闭记录" }).click();
   console.log("universal capture keyboard shortcut passed");

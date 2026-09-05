@@ -21,36 +21,31 @@ try {
   await login();
   await ensurePluginEnabled();
 
-  await page.goto(`${baseUrl}/practice/algorithms`, { waitUntil: "networkidle" });
-  const managedProblems = page.locator(".algorithmProblemCard").filter({ hasText: "Ascend 原创" });
-  if (await managedProblems.count() !== 0) {
-    throw new Error(`expected an empty managed catalog, found ${await managedProblems.count()}`);
-  }
-
-  await page.getByLabel("题目链接").fill(`https://bailian.openjudge.cn/practice/${unique}/`);
-  await page.getByLabel("题目名称").fill(problemTitle);
-  await page.getByLabel("平台题号").fill(unique);
-  await page.getByLabel("难度").selectOption("foundation");
-  await page.getByLabel("技能标签").fill("基础，边界");
-  await page.getByLabel("训练备注").fill("隔离端到端验证数据");
-  await page.getByRole("button", { name: "加入训练" }).click();
-  const problem = page.locator(".algorithmProblemCard").filter({ hasText: problemTitle });
+  await page.goto(`${baseUrl}/practice/algorithms?tab=library`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "新建题目" }).click();
+  const editor = page.getByRole("dialog");
+  await editor.getByLabel("题目名称").fill(problemTitle);
+  await editor.getByLabel("来源链接").fill(`https://bailian.openjudge.cn/practice/${unique}/`);
+  await editor.getByLabel("平台题号").fill(unique);
+  await editor.getByLabel("难度").selectOption("foundation");
+  await editor.getByLabel("标签").fill("基础，边界");
+  await editor.getByLabel("备注").fill("隔离端到端验证数据");
+  await editor.getByLabel("题面 Markdown").fill("# A+B\n\n读取两个整数并输出和。");
+  await editor.getByRole("button", { name: "保存题目" }).click();
+  const problem = page.getByRole("row").filter({ hasText: problemTitle });
   await problem.waitFor({ state: "visible" });
-
-  await problem.getByRole("button", { name: "记录本次训练" }).click();
-  await problem.getByLabel("训练类型").selectOption("initial");
-  await problem.getByLabel("结果").selectOption("AC");
-  await problem.getByLabel("有效训练分钟").fill("37");
-  await problem.getByLabel("最高提示级别").selectOption("0");
-  await problem.getByLabel("提交前信心").selectOption("2");
-  await problem.getByLabel("纠正规则与复盘").fill("先核对输入范围，再覆盖空集与边界。");
-  await problem.getByRole("button", { name: "保存证据" }).click();
-  await problem.getByText("独立完成", { exact: true }).waitFor({ state: "visible" });
-  await expectText(problem, "1 次记录", "algorithm attempt persisted");
-
-  await problem.getByRole("button", { name: "加入今日" }).click();
-  await page.goto(`${baseUrl}/day/${day}`, { waitUntil: "networkidle" });
-  await expectText(page.locator("main"), `算法训练：${problemTitle}`, "algorithm task linked to today");
+  await problem.click();
+  await page.waitForFunction(() => {
+    const button = document.querySelector('button[aria-label="编辑题目"]');
+    return button instanceof HTMLButtonElement && !button.disabled;
+  });
+  const inspector = page.locator("aside").filter({ hasText: problemTitle });
+  await inspector.getByLabel("计划日期").fill(day);
+  await inspector.getByRole("button", { name: "加入计划" }).click();
+  await page.goto(`${baseUrl}/practice/algorithms?day=${day}`, { waitUntil: "networkidle" });
+  await expectText(page.locator("main").last(), problemTitle, "algorithm plan linked to selected day");
+  await page.getByRole("button", { name: `完成 ${problemTitle}` }).click();
+  await page.getByRole("dialog").getByRole("button", { name: /完成并安排复习|今天完成并安排复习/ }).click();
 
   await page.goto(`${baseUrl}/analytics`, { waitUntil: "networkidle" });
   const analytics = page.locator('[data-plugin="algorithms"]');
@@ -65,15 +60,13 @@ try {
     return input instanceof HTMLInputElement && !input.disabled;
   });
   const disabledResponse = await page.goto(`${baseUrl}/practice/algorithms`, { waitUntil: "networkidle" });
-  const renderedAlgorithmBoard = await page.locator(".algorithmBoard").count();
-  if (renderedAlgorithmBoard > 0) {
-    throw new Error(`disabled algorithm route rendered protected content (HTTP ${disabledResponse?.status() ?? "unknown"})`);
-  }
+  await expectText(page.locator("main"), "算法训练插件还没有启用", `disabled route protected (HTTP ${disabledResponse?.status() ?? "unknown"})`);
 
   await page.goto(`${baseUrl}/extensions`, { waitUntil: "networkidle" });
   await page.getByLabel("启用算法训练").check();
   await page.goto(`${baseUrl}/practice/algorithms`, { waitUntil: "networkidle" });
-  await expectText(page.locator(".algorithmProblemList"), problemTitle, "plugin data survives disable and re-enable");
+  await page.getByRole("button", { name: "题库", exact: true }).click();
+  await expectText(page.locator("main").last(), problemTitle, "plugin data survives disable and re-enable");
   await assertNoHorizontalOverflow();
   console.log(`plugin algorithm audit passed for ${baseUrl}`);
 } finally {

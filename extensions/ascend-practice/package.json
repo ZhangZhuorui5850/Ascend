@@ -80,6 +80,32 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "ascendPractice.selectDate",
+        "title": "选择训练日期",
+        "shortTitle": "选择日期",
+        "icon": "$(calendar)"
+      },
+      {
+        "command": "ascendPractice.addToday",
+        "title": "加入今天",
+        "shortTitle": "加入今天"
+      },
+      {
+        "command": "ascendPractice.addToDate",
+        "title": "加入指定日期",
+        "shortTitle": "加入指定日期"
+      },
+      {
+        "command": "ascendPractice.movePlanToday",
+        "title": "移到今天",
+        "shortTitle": "移到今天"
+      },
+      {
+        "command": "ascendPractice.removePlan",
+        "title": "移出计划",
+        "shortTitle": "移出计划"
+      },
+      {
         "command": "ascendPractice.createFolder",
         "title": "新建个人文件夹",
         "shortTitle": "新建文件夹",
@@ -248,9 +274,14 @@
           "group": "navigation@1"
         },
         {
+          "command": "ascendPractice.selectDate",
+          "when": "view == ascendPractice.today",
+          "group": "navigation@1"
+        },
+        {
           "command": "ascendPractice.switchServer",
           "when": "view == ascendPractice.today",
-          "group": "navigation@4"
+          "group": "settings@1"
         },
         {
           "command": "ascendPractice.searchProblems",
@@ -265,8 +296,28 @@
       ],
       "view/item/context": [
         {
-          "command": "ascendPractice.openProblem",
+          "command": "ascendPractice.addToday",
           "when": "view == ascendPractice.today && (viewItem == ascendProblem || viewItem == ascendLibraryProblem)",
+          "group": "plan@1"
+        },
+        {
+          "command": "ascendPractice.addToDate",
+          "when": "view == ascendPractice.today && (viewItem == ascendProblem || viewItem == ascendLibraryProblem)",
+          "group": "plan@2"
+        },
+        {
+          "command": "ascendPractice.movePlanToday",
+          "when": "view == ascendPractice.today && viewItem == ascendPlanProblem",
+          "group": "plan@1"
+        },
+        {
+          "command": "ascendPractice.removePlan",
+          "when": "view == ascendPractice.today && viewItem == ascendPlanProblem",
+          "group": "plan@2"
+        },
+        {
+          "command": "ascendPractice.openProblem",
+          "when": "view == ascendPractice.today && (viewItem == ascendProblem || viewItem == ascendLibraryProblem || viewItem == ascendPlanProblem)",
           "group": "inline@1"
         },
         {
@@ -392,6 +443,13 @@
           "type": "string",
           "default": "",
           "description": "刷题工作区绝对路径；扩展在这里按阶段创建 main.cpp、样例和自测文件"
+        },
+        "ascendPractice.localLayout": {
+          "type": "string",
+          "enum": ["library", "phase"],
+          "default": "library",
+          "enumDescriptions": ["按服务端题库目录创建新题目录", "按 W1/W2 训练阶段创建新题目录"],
+          "description": "首次打开题目时使用的本地目录布局；已有题目继续使用现有路径映射"
         },
         "ascendPractice.templatePath": {
           "type": "string",

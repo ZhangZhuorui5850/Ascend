@@ -1,8 +1,8 @@
 "use client";
 
 import type { DragEvent, MutableRefObject } from "react";
-import { FileCode2, Folder, GraduationCap, HardDrive } from "lucide-react";
-import type { AlgorithmTrainingTree } from "@/lib/repo/algorithm-training";
+import { Folder, HardDrive } from "lucide-react";
+import type { AlgorithmLibrary } from "@/lib/repo/algorithm-library";
 import type { ExplorerState, ExplorerTreeNode } from "@/lib/repo/library";
 import type { DragPayload } from "@/components/file-explorer/explorer-utils";
 import { formatSize } from "@/components/file-explorer/explorer-utils";
@@ -15,8 +15,10 @@ export function FolderTreePanel({
   dragRef,
   onOpen,
   onDrop,
-  onAlgorithmProblemDrop,
-  algorithmTree,
+  algorithmLibrary,
+  algorithmActive,
+  algorithmFolderId,
+  onAlgorithmOpen,
 }: {
   explorer: ExplorerState;
   isSearch: boolean;
@@ -24,8 +26,10 @@ export function FolderTreePanel({
   dragRef: MutableRefObject<DragPayload | null>;
   onOpen: (path: string) => void;
   onDrop: (path: string, event: DragEvent<HTMLElement>) => Promise<void>;
-  onAlgorithmProblemDrop: (chapterKey: string, event: DragEvent<HTMLElement>) => Promise<void>;
-  algorithmTree?: AlgorithmTrainingTree | null;
+  algorithmLibrary?: AlgorithmLibrary | null;
+  algorithmActive?: boolean;
+  algorithmFolderId?: string | null;
+  onAlgorithmOpen: (folderId: string | null) => void;
 }) {
   return (
     <aside className="driveTree" aria-label="文件夹树">
@@ -51,77 +55,34 @@ export function FolderTreePanel({
             onOpen={onOpen}
           />
         ))}
+        {algorithmLibrary ? (
+          <AlgorithmLibraryBranch active={Boolean(algorithmActive)} activeFolderId={algorithmFolderId ?? null} library={algorithmLibrary} onOpen={onAlgorithmOpen} />
+        ) : null}
       </div>
-      {algorithmTree?.courses.length ? (
-        <AlgorithmTrainingSection
-          dragRef={dragRef}
-          onProblemDrop={onAlgorithmProblemDrop}
-          tree={algorithmTree}
-        />
-      ) : null}
       {usage ? <QuotaMeter quotaBytes={usage.quotaBytes} usedBytes={usage.usedBytes} /> : null}
     </aside>
   );
 }
 
-/** 算法训练与网盘共用一棵树：课程 → 阶段 → 题目，点击题目跳算法训练详情。 */
-function AlgorithmTrainingSection({ tree, dragRef, onProblemDrop }: {
-  tree: AlgorithmTrainingTree;
-  dragRef: MutableRefObject<DragPayload | null>;
-  onProblemDrop: (chapterKey: string, event: DragEvent<HTMLElement>) => Promise<void>;
-}) {
-  return (
-    <div className="driveTreeList algoTree" aria-label="算法训练目录">
-      <div className="driveTreeItem algoTreeHeader">
-        <GraduationCap size={15} />
-        <span>算法训练</span>
-        <small>{tree.problemTotal}</small>
+/** 算法训练作为资料库中的普通领域文件夹，内部直接投影题库物理目录。 */
+function AlgorithmLibraryBranch({ active, activeFolderId, library, onOpen }: { active: boolean; activeFolderId: string | null; library: AlgorithmLibrary; onOpen: (folderId: string | null) => void }) {
+  const renderChildren = (parentId: string | null): React.ReactNode => library.folders
+    .filter((folder) => folder.parentId === parentId)
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+    .map((folder) => (
+      <div className="driveTreeBranch" key={folder.id}>
+        <button className={active && activeFolderId === folder.id ? "driveTreeItem active" : "driveTreeItem"} onClick={() => onOpen(folder.id)} type="button">
+          <Folder size={15} /><span>{folder.name}</span><small>{library.items.filter((item) => item.folderId === folder.id).length || ""}</small>
+        </button>
+        <div className="driveTreeChildren">{renderChildren(folder.id)}</div>
       </div>
-      {tree.courses.map((course) => (
-        <details className="driveTreeBranch algoBranch" key={course.key} open={tree.courses.length <= 3}>
-          <summary className="driveTreeItem">
-            <Folder size={15} />
-            <span>{course.name}</span>
-            <small>{course.total}</small>
-          </summary>
-          <div className="driveTreeChildren">
-            {course.stages.map((stage) => (
-              <details className="driveTreeBranch algoBranch" key={stage.key}>
-                <summary
-                  className="driveTreeItem"
-                  onDragOver={stage.acceptsProblems ? (event) => event.preventDefault() : undefined}
-                  onDrop={stage.acceptsProblems ? (event) => void onProblemDrop(stage.key, event) : undefined}
-                >
-                  <Folder size={15} />
-                  <span>{stage.name}</span>
-                  <small>{stage.total}</small>
-                </summary>
-                <div className="driveTreeChildren">
-                  {stage.problems.map((problem) => (
-                    <a
-                      className="driveTreeItem algoProblem"
-                      draggable={problem.membershipKind === "primary"}
-                      href={`/practice/algorithms?problem=${problem.id}`}
-                      key={`${problem.id}:${problem.membershipKind}`}
-                      onDragStart={problem.membershipKind === "primary" ? (event) => {
-                        event.stopPropagation();
-                        event.dataTransfer.effectAllowed = "move";
-                        event.dataTransfer.setData("text/plain", String(problem.id));
-                        dragRef.current = { kind: "algorithm-problem", problemId: problem.id };
-                      } : undefined}
-                      title={`${problem.label} · ${problem.title}${problem.hasAsset ? " · 已有参考 CPP" : ""}`}
-                    >
-                      <FileCode2 size={13} />
-                      <span>{problem.title}</span>
-                      {problem.hasAsset ? <small>CPP</small> : null}
-                    </a>
-                  ))}
-                </div>
-              </details>
-            ))}
-          </div>
-        </details>
-      ))}
+    ));
+  return (
+    <div className="driveTreeBranch" aria-label="算法训练目录">
+      <button className={active && !activeFolderId ? "driveTreeItem active" : "driveTreeItem"} onClick={() => onOpen(null)} type="button">
+        <Folder size={15} /><span>算法训练</span><small>{library.items.length}</small>
+      </button>
+      <div className="driveTreeChildren">{renderChildren(null)}</div>
     </div>
   );
 }

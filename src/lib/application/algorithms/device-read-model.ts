@@ -1,12 +1,12 @@
 import type Database from "better-sqlite3";
 import { loadJudgeCodeKeys } from "../../algorithm-code-crypto";
 import { ALGORITHM_CURRICULUM_COURSE_KEY } from "../../algorithm-curriculum";
-import { todayKey } from "../../dates";
+import { assertDateKey, todayKey } from "../../dates";
 import type { AlgorithmDeviceContext } from "../../repo/algorithm-devices";
 import { listAlgorithmCollections } from "../../repo/algorithm-import";
 import { getAlgorithmTrainingRelations } from "../../repo/algorithm-training";
 import { getAlgorithmDraft } from "../../repo/algorithm-submissions";
-import { getAlgorithmDashboard, getAlgorithmProblem, type AlgorithmProblem } from "../../repo/algorithms";
+import { getAlgorithmDashboard, getAlgorithmProblemDetail, type AlgorithmProblem } from "../../repo/algorithms";
 import { getServerInstanceId } from "../../server-identity";
 
 type DeviceCourseMembership = {
@@ -19,8 +19,10 @@ type DeviceCourseMembership = {
 export function getAlgorithmDeviceQueuePayload(
   db: Database.Database,
   context: AlgorithmDeviceContext,
+  selectedDayInput?: string,
 ) {
   const today = todayKey();
+  const selectedDay = assertDateKey(selectedDayInput || today);
   const dashboard = getAlgorithmDashboard(db, context, today);
   const collections = listAlgorithmCollections(db, context);
   const training = getAlgorithmTrainingRelations(db, context);
@@ -54,23 +56,36 @@ export function getAlgorithmDeviceQueuePayload(
   );
   const problemsById = new Map(dashboard.problems.map((problem) => [problem.id, problem]));
   const courseTree = buildCourseTree(courseMemberships, problemsById, training.curriculum);
-  const queue = training.plans
-    .filter((plan) => plan.day === today && plan.status !== "canceled")
+  const queueForDay = (day: string) => training.plans
+    .filter((plan) => plan.day === day && plan.status !== "canceled")
     .sort((left, right) => left.sortOrder - right.sortOrder)
     .map((plan) => ({ plan, problem: problemsById.get(plan.problemId) }))
     .filter((item): item is typeof item & { problem: AlgorithmProblem } => Boolean(item.problem));
+  const queue = queueForDay(selectedDay);
+  const todayQueue = selectedDay === today ? queue : queueForDay(today);
+  const overdueQueue = training.plans
+    .filter((plan) => plan.day < today && (plan.status === "open" || plan.status === "waiting"))
+    .sort((left, right) => left.day.localeCompare(right.day) || left.sortOrder - right.sortOrder)
+    .map((plan) => ({ plan, problem: problemsById.get(plan.problemId) }))
+    .filter((item): item is typeof item & { problem: AlgorithmProblem } => Boolean(item.problem));
+  const queueItem = (item: (typeof queue)[number]) => ({
+    ...problemSummary(item.problem, libraryNumbers, draftProblemIds, coursesByProblem),
+    planTaskId: item.plan.taskId,
+    planDay: item.plan.day,
+    planVersion: item.plan.version,
+    planStatus: item.plan.status,
+    planSortOrder: item.plan.sortOrder,
+  });
   return {
     server: { instanceId: getServerInstanceId(db) },
     workspace: { id: context.workspaceId },
     device: { id: context.deviceId, name: context.deviceName },
     today,
+    selectedDay,
     metrics: dashboard.metrics,
-    todayQueue: queue.map((item) => ({
-      ...problemSummary(item.problem, libraryNumbers, draftProblemIds, coursesByProblem),
-      planTaskId: item.plan.taskId,
-      planStatus: item.plan.status,
-      planSortOrder: item.plan.sortOrder,
-    })),
+    dayQueue: queue.map(queueItem),
+    todayQueue: todayQueue.map(queueItem),
+    overdueQueue: overdueQueue.map(queueItem),
     due: dashboard.dueProblems.map((problem) => problemSummary(problem, libraryNumbers, draftProblemIds, coursesByProblem)),
     collections,
     courseTree,
@@ -154,7 +169,7 @@ export function getAlgorithmDeviceProblemPayload(
   context: AlgorithmDeviceContext,
   problemId: number,
 ) {
-  const problem = getAlgorithmProblem(db, context, problemId);
+  const problem = getAlgorithmProblemDetail(db, context, problemId);
   const keys = loadJudgeCodeKeys();
   const draft = keys.length && problem.problemMode !== "external"
     ? getAlgorithmDraft(db, context, { problemId, language: "cpp17" }, keys)

@@ -97,7 +97,7 @@ export function getAlgorithmTrainingRelations(
 export function scheduleAlgorithmProblems(
   db: Database.Database,
   scope: WorkspaceScope,
-  input: { problemIds: number[]; day: string },
+  input: { problemIds: number[]; day: string; operationId?: string },
 ): PlannedAlgorithmProblem[] {
   requirePluginEnabled(db, scope, "algorithms");
   const day = assertDateKey(input.day);
@@ -119,7 +119,7 @@ export function scheduleAlgorithmProblems(
   for (const problem of rows) {
     if (existing.has(problem.id)) continue;
     createTask(db, scope, {
-      clientMutationId: `algorithm-plan:${day}:${problem.id}:${randomUUID()}`,
+      clientMutationId: input.operationId ? `${input.operationId}:${problem.id}` : `algorithm-plan:${day}:${problem.id}:${randomUUID()}`,
       title: problem.title,
       dueDate: day,
       estimatedMinutes: 35,
@@ -163,6 +163,35 @@ export function continueAlgorithmPlanTomorrow(
     dueDate: shiftDateKey(assertDateKey(input.day), 1),
   });
   if (result.conflict) throw new Error("计划已经更新，请刷新后重试");
+}
+
+export function rescheduleAlgorithmPlan(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: { taskId: string; expectedVersion: number; targetDay: string },
+): void {
+  assertAlgorithmTask(db, scope, input.taskId);
+  const result = rescheduleTask(db, scope, {
+    id: input.taskId,
+    expectedVersion: input.expectedVersion,
+    schedule: { kind: "none" },
+    dueDate: assertDateKey(input.targetDay),
+  });
+  if (result.conflict) throw new Error("计划已经更新，请刷新后重试");
+}
+
+export function rescheduleAlgorithmPlans(
+  db: Database.Database,
+  scope: WorkspaceScope,
+  input: { plans: Array<{ taskId: string; expectedVersion: number }>; targetDay: string },
+): void {
+  requirePluginEnabled(db, scope, "algorithms");
+  const targetDay = assertDateKey(input.targetDay);
+  const plans = [...new Map(input.plans.map((plan) => [plan.taskId, plan])).values()];
+  if (!plans.length || plans.length > 200) throw new Error("请选择 1 到 200 条训练计划");
+  db.transaction(() => {
+    for (const plan of plans) rescheduleAlgorithmPlan(db, scope, { ...plan, targetDay });
+  })();
 }
 
 export function completeAlgorithmPlan(
@@ -328,7 +357,7 @@ export function moveAlgorithmProblemsToFolder(
   }
 }
 
-function assertAlgorithmTask(db: Database.Database, scope: WorkspaceScope, taskId: string): number {
+export function assertAlgorithmTask(db: Database.Database, scope: WorkspaceScope, taskId: string): number {
   const task = getPlannerTask(db, scope, taskId);
   if (!task || task.deleted_at) throw new Error("算法训练计划不存在");
   const link = db.prepare(`
