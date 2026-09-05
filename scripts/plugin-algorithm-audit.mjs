@@ -34,6 +34,20 @@ try {
   await editor.getByRole("button", { name: "保存题目" }).click();
   const problem = page.getByRole("row").filter({ hasText: problemTitle });
   await problem.waitFor({ state: "visible" });
+  const table = page.getByRole("table", { name: "算法题库" });
+  const selectAll = table.getByRole("row").first().getByRole("checkbox", { name: /全选当前筛选结果/ });
+  await selectAll.click();
+  await page.getByText(/已选 \d+/).waitFor({ state: "visible" });
+  const settingsMenu = page.locator("details").filter({ has: page.getByText("设置属性", { exact: true }) });
+  const moreMenu = page.locator("details").filter({ has: page.locator('summary[aria-label="更多批量操作"]') });
+  await settingsMenu.locator("summary").click();
+  if (!(await settingsMenu.evaluate((node) => node.open))) throw new Error("settings menu did not open");
+  await moreMenu.locator("summary").click();
+  if (await settingsMenu.evaluate((node) => node.open)) throw new Error("opening another menu did not close the previous menu");
+  await page.getByPlaceholder("搜索名称、题号或分类").click();
+  if (await moreMenu.evaluate((node) => node.open)) throw new Error("outside click did not close the open menu");
+  await selectAll.click();
+  console.log("algorithm menu dismissal and table select-all passed");
   await problem.click();
   await page.waitForFunction(() => {
     const button = document.querySelector('button[aria-label="编辑题目"]');

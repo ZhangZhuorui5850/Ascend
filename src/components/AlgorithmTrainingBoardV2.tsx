@@ -728,6 +728,36 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onEditProblem, onMove, on
       queueMicrotask(() => setDetailWidth(saved));
     }
   }, []);
+  useEffect(() => {
+    const selector = "details[data-dismissible-menu][open]";
+    function closeMenusOutside(event: PointerEvent) {
+      if (!(event.target instanceof Node)) return;
+      document.querySelectorAll<HTMLDetailsElement>(selector).forEach((menu) => {
+        if (!menu.contains(event.target as Node)) menu.open = false;
+      });
+    }
+    function closeMenuAfterAction(event: MouseEvent) {
+      if (!(event.target instanceof Element)) return;
+      event.target.closest<HTMLButtonElement>(`${selector} button`)?.closest<HTMLDetailsElement>("details")?.removeAttribute("open");
+    }
+    function closeMenuWithEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      const menu = [...document.querySelectorAll<HTMLDetailsElement>(selector)].at(-1);
+      if (!menu) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      menu.open = false;
+      menu.querySelector<HTMLElement>("summary")?.focus();
+    }
+    document.addEventListener("pointerdown", closeMenusOutside);
+    document.addEventListener("click", closeMenuAfterAction);
+    document.addEventListener("keydown", closeMenuWithEscape, true);
+    return () => {
+      document.removeEventListener("pointerdown", closeMenusOutside);
+      document.removeEventListener("click", closeMenuAfterAction);
+      document.removeEventListener("keydown", closeMenuWithEscape, true);
+    };
+  }, []);
 
   function applyFilter(next: LibraryFilter) {
     setFolderDrawerOpen(false);
@@ -874,7 +904,7 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onEditProblem, onMove, on
             <button className={styles.folderSelect} data-folder-id={folder.id} data-folder-node data-parent-folder-id={folder.parentId ?? ""} onClick={() => applyFilter(`folder:${folder.id}`)} type="button">
               <Folder size={15} /> <span>{folder.name}</span><small>{folderProblemCount(folder.id)}</small>
             </button>
-            <details className={styles.folderMenu}>
+            <details className={styles.folderMenu} data-dismissible-menu name="algorithm-library-menu">
               <summary aria-label={`${folder.name} 更多操作`}><MoreHorizontal size={15} /></summary>
               <div>
                 <button onClick={() => setFolderEditor({ mode: "create", parentId: folder.id })} type="button"><FolderPlus size={14} /> 新建子文件夹</button>
@@ -948,10 +978,6 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onEditProblem, onMove, on
             <input placeholder="搜索名称、题号或分类" value={query} onChange={(event) => changeQuery(event.target.value)} />
           </label>
           <div className={styles.libraryHeaderActions}>
-            <label className={styles.selectAll}>
-              <input checked={allFilteredSelected} disabled={!filtered.length} type="checkbox" onChange={(event) => setSelectedIds(event.target.checked ? filtered.map((problem) => problem.id) : [])} />
-              全选 {filtered.length} 道题
-            </label>
             <button className={styles.secondaryButton} disabled={!filtered.length} onClick={() => setExportProblemIds(filtered.map((problem) => problem.id))}>
               <FileDown size={15} /> 导出当前结果
             </button>
@@ -1002,7 +1028,7 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onEditProblem, onMove, on
               </option>
             ))}
           </select>
-          <details className={styles.bulkMenu}>
+          <details className={styles.bulkMenu} data-dismissible-menu name="algorithm-library-menu">
             <summary>设置属性 <ChevronDown size={13} /></summary>
             <div>
               <label><span>来源题单</span><select value={courseName} onChange={(event) => { setCourseName(event.target.value); const course = relations.courses.find((item) => item.name === event.target.value); setStageKey(course?.stages[0]?.key ?? stageKey); }}>{relations.courses.length ? relations.courses.map((course) => <option key={course.key} value={course.name}>{course.name}</option>) : <option value={courseName}>{courseName}</option>}</select></label>
@@ -1012,7 +1038,7 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onEditProblem, onMove, on
               <button onClick={() => { onSetCurriculum(selectedIds, curriculumChapterKey); setSelectedIds([]); }} type="button">应用课程章节</button>
             </div>
           </details>
-          <details className={styles.bulkMenu}>
+          <details className={styles.bulkMenu} data-dismissible-menu name="algorithm-library-menu">
             <summary aria-label="更多批量操作"><MoreHorizontal size={16} /> 更多</summary>
             <div className={styles.bulkMoreMenu}>
               <button onClick={() => setExportProblemIds(selectedIds)} type="button"><FileDown size={15} /> 导出题库包</button>
@@ -1022,7 +1048,9 @@ function LibraryView({ dashboard, onAddPlan, onDelete, onEditProblem, onMove, on
         </div>
         <div className={styles.problemTable} role="table" aria-label="算法题库">
           <div className={styles.tableHead} role="row">
-            <span aria-hidden />
+            <label className={styles.tableSelectAll} title={`全选当前筛选结果，共 ${filtered.length} 道题`}>
+              <input aria-label={`全选当前筛选结果，共 ${filtered.length} 道题`} checked={allFilteredSelected} disabled={!filtered.length} type="checkbox" onChange={(event) => setSelectedIds(event.target.checked ? filtered.map((problem) => problem.id) : [])} />
+            </label>
             {sortCell("title", "题目")}
             {sortCell("ext", "平台题号")}
             {sortCell("course", "课程章节")}

@@ -214,8 +214,9 @@
 .chapterContext > strong { flex-shrink: 0; color: var(--accent); font-size: 20px; font-variant-numeric: tabular-nums; }
 .libraryHeader { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; color: var(--muted); font-size: 12.5px; }
 .libraryHeaderActions { display: flex; align-items: center; flex-shrink: 0; gap: 10px; }
-.selectAll { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
-.selectAll input { margin: 0; accent-color: var(--accent); }
+.tableSelectAll { display: grid; place-items: center; width: 24px; height: 32px; cursor: pointer; }
+.tableSelectAll input { margin: 0; accent-color: var(--accent); }
+.tableSelectAll:focus-within { border-radius: var(--radius-xs); outline: 2px solid var(--accent); outline-offset: -2px; }
 .searchField { display: flex; align-items: center; gap: 8px; flex: 1; min-height: 38px; padding: 0 11px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--muted); }
 .searchField:focus-within { border-color: var(--accent); }
 .searchField input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); }
@@ -229,7 +230,7 @@
 .bulkBar input,
 .bulkBar select { min-height: 32px; max-width: 135px; }
 .bulkBar .shortInput { max-width: 62px; }
-.bulkMenu { position: relative; }
+.bulkMenu { position: static; }
 .bulkMenu > summary { display: flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 11px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--ink); cursor: pointer; list-style: none; font-size: 12.5px; }
 .bulkMenu > summary::-webkit-details-marker { display: none; }
 .bulkMenu > div { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; display: grid; gap: 8px; min-width: 250px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-raised); box-shadow: var(--shadow-lg); }
@@ -462,7 +463,7 @@ body[data-alg-resizing] .drawerHandle::after { background: var(--accent); }
   .bulkBar select { flex: 1; max-width: none; }
   .bulkMenu { flex: 1; }
   .bulkMenu > summary { justify-content: center; }
-  .bulkMenu > div { max-width: calc(100vw - 40px); }
+  .bulkMenu > div { top: auto; bottom: calc(100% + 6px); max-width: calc(100vw - 40px); }
   .bulkMenu:first-of-type > div { right: auto; left: 0; }
   .modalBackdrop { padding: 8px; }
   .modal { max-height: calc(100vh - 16px); padding: 16px; }
