@@ -63,6 +63,8 @@ export function CommandPalette({
   const router = useRouter();
   const { notify } = useFeedback();
   const inputRef = useRef<HTMLInputElement>(null);
+  const activeEntryRef = useRef<HTMLButtonElement>(null);
+  const keyboardNavigationRef = useRef(false);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -153,6 +155,7 @@ export function CommandPalette({
           error?: string;
         };
         if (!response.ok) throw new Error(payload.error || "搜索失败");
+        if (controller.signal.aborted) return;
         setSearchState({ query: term, results: payload.results || [] });
       } catch (error) {
         if (controller.signal.aborted) return;
@@ -172,6 +175,12 @@ export function CommandPalette({
   }, [open, query, role]);
 
   const safeActiveIndex = Math.max(0, Math.min(activeIndex, Math.max(0, entries.length - 1)));
+
+  useEffect(() => {
+    if (open && keyboardNavigationRef.current) {
+      activeEntryRef.current?.scrollIntoView({ block: "nearest", behavior: "instant" });
+    }
+  }, [open, safeActiveIndex]);
 
   function go(href: string) {
     setOpen(false);
@@ -251,6 +260,11 @@ export function CommandPalette({
               setActiveIndex(0);
             }}
             onKeyDown={(event) => {
+              // 输入法确认候选词的 Enter 不应执行搜索结果。
+              if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+              if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                keyboardNavigationRef.current = true;
+              }
               if (event.key === "ArrowDown") {
                 event.preventDefault();
                 setActiveIndex((index) => Math.min(Math.max(0, entries.length - 1), index + 1));
@@ -281,7 +295,11 @@ export function CommandPalette({
                     <button
                       className={safeActiveIndex === index ? "commandResultPrimary active" : "commandResultPrimary"}
                       onClick={() => execute(index)}
-                      onMouseEnter={() => setActiveIndex(index)}
+                      onMouseEnter={() => {
+                        keyboardNavigationRef.current = false;
+                        setActiveIndex(index);
+                      }}
+                      ref={safeActiveIndex === index ? activeEntryRef : undefined}
                       type="button"
                     >
                       <Icon size={17} />

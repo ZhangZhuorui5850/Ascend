@@ -4,7 +4,7 @@ import type { DragEvent, MutableRefObject } from "react";
 import { Eye, FileText, Folder, FolderInput, ImageIcon, Pencil, Trash2 } from "lucide-react";
 import type { ExplorerFile, ExplorerFolder } from "@/lib/repo/library";
 import { assetFileUrl } from "@/lib/asset-url";
-import { previewKind } from "@/components/AssetViewer";
+import { previewKind } from "@/components/file-explorer/preview-kind";
 import type { DragPayload, SortKey } from "@/components/file-explorer/explorer-utils";
 import { formatSize } from "@/components/file-explorer/explorer-utils";
 

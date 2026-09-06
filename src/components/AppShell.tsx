@@ -6,13 +6,7 @@ import { ViewTransition } from "react";
 import { Plus } from "lucide-react";
 import dynamic from "next/dynamic";
 
-// 收纳面板 555 行且非必需：首次打开时才拉取，减轻全站共享 chunk。
-const CapturePanel = dynamic(
-  () => import("@/components/CapturePanel").then((mod) => mod.CapturePanel),
-  { ssr: false },
-);
 import { MobileNav, Sidebar } from "@/components/Sidebar";
-import { CommandPalette } from "@/components/CommandPalette";
 import { TopBar } from "@/components/TopBar";
 import type { DeviceAccount } from "@/lib/auth";
 import { setActiveOfflineWorkspace } from "@/lib/offline-review";
@@ -20,6 +14,17 @@ import type { PluginId } from "@/lib/plugins/registry";
 import type { CaptureSubject } from "@/lib/repo/knowledge";
 import type { ModulePref } from "@/lib/repo/settings";
 import type { CaptureKind } from "@/lib/capture/parser";
+
+// 记录面板保持挂载以接收全局粘贴；搜索面板在首次打开时加载。
+const CapturePanel = dynamic(
+  () => import("@/components/CapturePanel").then((mod) => mod.CapturePanel),
+  { ssr: false },
+);
+
+const CommandPalette = dynamic(
+  () => import("@/components/CommandPalette").then((mod) => mod.CommandPalette),
+  { ssr: false },
+);
 
 type AppShellProps = {
   user: { displayName: string; role: "admin" | "user"; workspaceKey: string | null; account: DeviceAccount; accounts: DeviceAccount[] } | null;
@@ -44,6 +49,8 @@ export function AppShell({ user, hierarchy, enabledPluginIds, modulePrefs, child
   const [captureOpen, setCaptureOpen] = useState(false);
   const [captureIntent, setCaptureIntent] = useState<CaptureKind | undefined>();
   const [commandOpen, setCommandOpen] = useState(false);
+  const [commandMounted, setCommandMounted] = useState(false);
+  if (commandOpen && !commandMounted) setCommandMounted(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -65,6 +72,7 @@ export function AppShell({ user, hierarchy, enabledPluginIds, modulePrefs, child
 
   useEffect(() => {
     function onShortcut(event: KeyboardEvent) {
+      if (event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         // Cmd/Ctrl+K 保留给全局搜索/命令面板（行业惯例），录入走 N 键或记录按钮。
         event.preventDefault();
@@ -164,10 +172,10 @@ export function AppShell({ user, hierarchy, enabledPluginIds, modulePrefs, child
         setCaptureIntent(undefined);
         setCaptureOpen(true);
       }} role={user.role} />
-      <CommandPalette enabledPluginIds={enabledPluginIds} modulePrefs={modulePrefs} onCapture={() => {
+      {commandMounted ? <CommandPalette enabledPluginIds={enabledPluginIds} modulePrefs={modulePrefs} onCapture={() => {
         setCaptureIntent(undefined);
         setCaptureOpen(true);
-      }} open={commandOpen} role={user.role} setOpen={setCommandOpen} />
+      }} open={commandOpen} role={user.role} setOpen={setCommandOpen} /> : null}
     </div>
   );
 }

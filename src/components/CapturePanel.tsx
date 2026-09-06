@@ -151,6 +151,7 @@ export function CapturePanel({
 
   useEffect(() => {
     function onPaste(event: globalThis.ClipboardEvent) {
+      if (event.defaultPrevented) return;
       const target = event.target as Element | null;
       if (target?.closest("input, textarea, select, [contenteditable=true]")) return;
       const files = event.clipboardData?.files;
@@ -171,10 +172,14 @@ export function CapturePanel({
       if (!hasFiles(event)) return;
       event.preventDefault();
       dragDepthRef.current += 1;
-      setIsDragging(true);
     }
     function onDragOver(event: DragEvent) {
       if (!hasFiles(event)) return;
+      if (event.defaultPrevented) {
+        setIsDragging(false);
+        return;
+      }
+      setIsDragging(true);
       event.preventDefault();
       if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
     }
@@ -186,23 +191,23 @@ export function CapturePanel({
     function onDrop(event: DragEvent) {
       dragDepthRef.current = 0;
       setIsDragging(false);
-      if (!hasFiles(event)) return;
+      // 局部上传区优先处理文件；全局记录只接收尚未被消费的拖放。
+      if (event.defaultPrevented || !hasFiles(event)) return;
       event.preventDefault();
-      event.stopPropagation();
       if (event.dataTransfer?.files.length) {
         addFiles(event.dataTransfer.files);
         onOpenChange(true);
       }
     }
     window.addEventListener("dragenter", onDragEnter, true);
-    window.addEventListener("dragover", onDragOver, true);
+    window.addEventListener("dragover", onDragOver);
     window.addEventListener("dragleave", onDragLeave, true);
-    window.addEventListener("drop", onDrop, true);
+    window.addEventListener("drop", onDrop);
     return () => {
       window.removeEventListener("dragenter", onDragEnter, true);
-      window.removeEventListener("dragover", onDragOver, true);
+      window.removeEventListener("dragover", onDragOver);
       window.removeEventListener("dragleave", onDragLeave, true);
-      window.removeEventListener("drop", onDrop, true);
+      window.removeEventListener("drop", onDrop);
     };
   }, [addFiles, onOpenChange]);
 

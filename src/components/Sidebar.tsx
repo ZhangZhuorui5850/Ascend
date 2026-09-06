@@ -1,7 +1,7 @@
 "use client";
 
 import { Dialog } from "@base-ui/react/dialog";
-import Link from "next/link";
+import { IntentLink as Link } from "@/components/IntentLink";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
@@ -158,7 +158,7 @@ export function Sidebar({
           return (
             <div className="navItemWrap" key={item.href}>
               {index === 0 || links[index - 1].group !== item.group ? <span className="navGroupLabel">{item.group}</span> : null}
-              <Link className={isLinkActive(pathname, item) ? "active" : ""} href={item.href} onClick={onNavigate} prefetch={true} transitionTypes={["nav-switch"]}>
+              <Link className={isLinkActive(pathname, item) ? "active" : ""} href={item.href} onClick={onNavigate} transitionTypes={["nav-switch"]}>
                 <Icon size={17} />
                 <span className="navLabel">{item.label}</span>
               </Link>
@@ -169,7 +169,7 @@ export function Sidebar({
       <div className="sidebarFooter">
         <AccountMenu accounts={accounts} current={account} direction="up" label={displayName} />
         <div className="sidebarFooterActions">
-          <Link aria-label="设置" className={pathname === "/settings" ? "active" : ""} href="/settings" onClick={onNavigate} prefetch={true} title="设置" transitionTypes={["nav-switch"]}>
+          <Link aria-label="设置" className={pathname === "/settings" ? "active" : ""} href="/settings" onClick={onNavigate} title="设置" transitionTypes={["nav-switch"]}>
             <Settings size={15} />
           </Link>
           <form action={logoutWithOfflineCleanup}>
@@ -213,7 +213,7 @@ export function MobileNav({
       {mobileLinks.map((item) => {
         const Icon = item.icon;
         return (
-          <Link className={isLinkActive(pathname, item) ? "active" : ""} href={item.href} key={item.href} onClick={() => setMoreOpen(false)} prefetch={true} transitionTypes={["nav-switch"]}>
+          <Link className={isLinkActive(pathname, item) ? "active" : ""} href={item.href} key={item.href} onClick={() => setMoreOpen(false)} transitionTypes={["nav-switch"]}>
             <Icon size={18} />
             <span>{item.label}</span>
           </Link>

@@ -6,7 +6,7 @@ import { updateAssetMetadataAction } from "@/app/actions/library";
 import type { ExplorerFile } from "@/lib/repo/library";
 import type { CaptureSubject } from "@/lib/repo/knowledge";
 import { assetFileUrl } from "@/lib/asset-url";
-import { previewKind } from "@/components/AssetViewer";
+import { previewKind } from "@/components/file-explorer/preview-kind";
 import type { ActionResult } from "@/components/file-explorer/explorer-utils";
 import { formatSize } from "@/components/file-explorer/explorer-utils";
 

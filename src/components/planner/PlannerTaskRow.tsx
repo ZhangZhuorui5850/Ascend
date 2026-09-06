@@ -85,6 +85,7 @@ export function PlannerTaskRow({
       ) : (
         <button
           aria-label={task.status === "completed" ? `恢复 ${task.title}` : `完成 ${task.title}`}
+          aria-pressed={task.status === "completed"}
           className={styles.completeButton}
           onClick={onToggle}
           type="button"

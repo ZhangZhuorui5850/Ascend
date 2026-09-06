@@ -34,7 +34,8 @@ import {
 import { createAlgorithmFolderAction, deleteAlgorithmFolderAction, moveAlgorithmProblemsAction, renameAlgorithmFolderAction } from "@/app/actions/algorithms";
 import type { ExplorerFile, ExplorerFolder, ExplorerState } from "@/lib/repo/library";
 import type { CaptureSubject } from "@/lib/repo/knowledge";
-import { AssetViewer } from "@/components/AssetViewer";
+import dynamic from "next/dynamic";
+
 import { useFeedback } from "@/components/FeedbackProvider";
 import { FolderTreePanel } from "@/components/file-explorer/FolderTree";
 import { FileListView } from "@/components/file-explorer/FileListView";
@@ -51,6 +52,11 @@ import {
   flattenFolders,
   sortFiles,
 } from "@/components/file-explorer/explorer-utils";
+
+const AssetViewer = dynamic(
+  () => import("@/components/AssetViewer").then((mod) => mod.AssetViewer),
+  { loading: () => <p className="viewerLoading" role="status">正在打开预览…</p> },
+);
 
 type AlgorithmAssetsProjection = { relations: AlgorithmTrainingRelations; dashboard: AlgorithmDashboard; assetsByProblem?: Record<number, AlgorithmProblemAsset[]> };
 

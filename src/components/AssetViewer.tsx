@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Dialog } from "@base-ui/react/dialog";
 import { Download, ExternalLink, FileText, Loader2, X } from "lucide-react";
-import { MarkdownContent } from "@/components/MarkdownContent";
+import dynamic from "next/dynamic";
+import { previewKind } from "@/components/file-explorer/preview-kind";
 import { assetFileUrl } from "@/lib/asset-url";
 import { detectIOS } from "@/components/file-explorer/detect-ios";
 
-const TEXT_EXTENSIONS = new Set([
-  "txt", "json", "csv", "log", "py", "js", "ts", "tsx", "jsx", "c", "cpp", "h", "hpp",
-  "java", "sql", "sh", "bat", "yml", "yaml", "xml", "toml", "ini", "tex", "r", "go", "rs",
-]);
+const MarkdownContent = dynamic(
+  () => import("@/components/MarkdownContent").then((mod) => mod.MarkdownContent),
+  { loading: () => <p className="viewerLoading" role="status">正在渲染文档…</p> },
+);
+
 const TEXT_PREVIEW_LIMIT = 1024 * 1024;
 
 const subscribeNoop = () => () => {};
@@ -22,20 +25,6 @@ export type ViewerFile = {
   size: number;
 };
 
-export type PreviewKind = "image" | "pdf" | "markdown" | "text" | "none";
-
-export function previewKind(file: { original_name: string; mime_type: string }): PreviewKind {
-  const mime = (file.mime_type || "").toLowerCase();
-  const ext = file.original_name.includes(".")
-    ? file.original_name.split(".").pop()!.toLowerCase()
-    : "";
-  if (mime.startsWith("image/")) return "image";
-  if (mime === "application/pdf" || ext === "pdf") return "pdf";
-  if (mime === "text/markdown" || ext === "md" || ext === "markdown") return "markdown";
-  if (mime.startsWith("text/") || TEXT_EXTENSIONS.has(ext)) return "text";
-  return "none";
-}
-
 export function AssetViewer({ file, onClose }: { file: ViewerFile; onClose: () => void }) {
   const kind = previewKind(file);
   const url = assetFileUrl(file.id);
@@ -44,25 +33,21 @@ export function AssetViewer({ file, onClose }: { file: ViewerFile; onClose: () =
   // SSR 快照恒为 false，客户端首次渲染即读 UA（UA 不会中途变化，订阅为空操作）。
   const isIOS = useSyncExternalStore(subscribeNoop, detectIOS, getServerIsIOS);
 
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  const closeRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <div aria-label="文件预览" className="viewerBackdrop" onClick={onClose} role="dialog">
-      <div className="assetViewer" onClick={(event) => event.stopPropagation()}>
+    <Dialog.Root open onOpenChange={(next) => { if (!next) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Viewport className="viewerBackdrop">
+      <Dialog.Popup aria-label="文件预览" className="assetViewer" initialFocus={closeRef} finalFocus>
         <header className="viewerHead">
-          <h2 title={file.original_name}>{file.original_name}</h2>
+          <Dialog.Title title={file.original_name}>{file.original_name}</Dialog.Title>
           <div className="viewerHeadActions">
             <a className="secondaryButton" href={url} rel="noopener" target="_blank">
               <ExternalLink size={14} />
               新窗口打开
             </a>
-            <button aria-label="关闭预览" className="viewerClose" onClick={onClose} type="button">
+            <button ref={closeRef} aria-label="关闭预览" className="viewerClose" onClick={onClose} type="button">
               <X size={17} />
             </button>
           </div>
@@ -101,13 +86,15 @@ export function AssetViewer({ file, onClose }: { file: ViewerFile; onClose: () =
               </div>
             </>
           ) : null}
-          {kind === "markdown" || kind === "text" ? <TextPreview kind={kind} size={file.size} url={url} /> : null}
+          {kind === "markdown" || kind === "text" ? <TextPreview key={`${url}:${file.size}`} kind={kind} size={file.size} url={url} /> : null}
           {kind === "none" ? (
             <p className="empty">这个文件类型暂不支持预览，可以在新窗口打开。</p>
           ) : null}
         </div>
-      </div>
-    </div>
+      </Dialog.Popup>
+        </Dialog.Viewport>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
@@ -117,21 +104,22 @@ function TextPreview({ url, kind, size }: { url: string; kind: "markdown" | "tex
 
   useEffect(() => {
     if (size > TEXT_PREVIEW_LIMIT) return;
-    let cancelled = false;
-    fetch(url)
+    const controller = new AbortController();
+    fetch(url, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error("读取文件失败");
         return response.text();
       })
       .then((text) => {
-        if (!cancelled) setContent(text);
+        if (!controller.signal.aborted) setContent(text);
       })
       .catch((err: unknown) => {
+        if (controller.signal.aborted) return;
         console.error("读取文本预览失败", url, err);
-        if (!cancelled) setError(err instanceof Error ? err.message : "读取文件失败");
+        setError(err instanceof Error ? err.message : "读取文件失败");
       });
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [url, size]);
 
